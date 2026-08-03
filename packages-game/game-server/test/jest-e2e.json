@@ -1,0 +1,24 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": ".",
+  "testEnvironment": "node",
+  "testRegex": ".e2e-spec.ts$",
+  "transform": {
+    "^.+\\.(t|j)s$": "ts-jest"
+  },
+  "moduleNameMapper": {
+    "^@common/(.*)$": "<rootDir>/../src/common/$1",
+    "^@config/(.*)$": "<rootDir>/../src/config/$1",
+    "^@modules/(.*)$": "<rootDir>/../src/modules/$1",
+    "^@shared/(.*)$": "<rootDir>/../src/shared/$1",
+    "^@health/(.*)$": "<rootDir>/../src/health/$1",
+    "^@utils/(.*)$": "<rootDir>/../src/utils/$1",
+    "^@cache/(.*)$": "<rootDir>/../src/cache/$1",
+    "^@queue/(.*)$": "<rootDir>/../src/queue/$1",
+    "^@event-bus/(.*)$": "<rootDir>/../src/event-bus/$1",
+    "^@constants/(.*)$": "<rootDir>/../src/constants/$1",
+    "^@logger/(.*)$": "<rootDir>/../src/logger/$1",
+    "^@app-types/(.*)$": "<rootDir>/../src/types/$1",
+    "^@scheduler/(.*)$": "<rootDir>/../src/scheduler/$1"
+  }
+}

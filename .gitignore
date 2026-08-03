@@ -41,6 +41,13 @@ yarn-error.log
 /example_dist
 /example
 
+# game packages
+packages-game/**/node_modules/
+packages-game/**/dist/
+packages-game/**/*.js
+packages-game/**/*.d.ts
+packages-game/**/package-lock.json
+
 # tests
 /test
 /benchmarks/memory

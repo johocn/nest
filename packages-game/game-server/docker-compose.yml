@@ -1,0 +1,92 @@
+services:
+  # ===== Game Server =====
+  game-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: game-server
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - APP_PORT=3000
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USERNAME=game
+      - DB_PASSWORD=game_password
+      - DB_DATABASE=game_server
+      - DB_SYNCHRONIZE=false
+      - DB_LOGGING=false
+      - DB_MIGRATIONS_RUN=true
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+      - REDIS_DB=0
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=7d
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      - PAYMENT_CALLBACK_SECRET=${PAYMENT_CALLBACK_SECRET}
+      - ADMIN_DEFAULT_PASSWORD=${ADMIN_DEFAULT_PASSWORD:-change-me-on-first-login}
+      - GAME_INITIAL_GOLD=1000
+      - GAME_INITIAL_DIAMOND=0
+      - GAME_BAG_MAX_SLOTS=100
+      - GAME_DAILY_QUEST_LIMIT=10
+      - GAME_WS_HEARTBEAT_INTERVAL=30
+      - GAME_WS_PING_TIMEOUT=90
+      - GAME_VIEWPORT_RADIUS=10
+      - LOG_LEVEL=info
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - game-network
+
+  # ===== PostgreSQL =====
+  postgres:
+    image: postgres:16-alpine
+    container_name: game-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: game
+      POSTGRES_PASSWORD: game_password
+      POSTGRES_DB: game_server
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U game -d game_server"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - game-network
+
+  # ===== Redis =====
+  redis:
+    image: redis:7-alpine
+    container_name: game-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy noeviction
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - game-network
+
+volumes:
+  postgres-data:
+  redis-data:
+
+networks:
+  game-network:
+    driver: bridge

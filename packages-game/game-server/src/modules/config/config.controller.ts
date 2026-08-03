@@ -1,0 +1,60 @@
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ConfigManageService } from './config.service';
+import { SetConfigDto } from './dto/set-config.dto';
+import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
+import { AdminGuard } from '@common/guards/admin.guard';
+
+@ApiTags('Config')
+@ApiBearerAuth()
+@Controller()
+export class ConfigController {
+  constructor(private readonly configService: ConfigManageService) {}
+
+  // ===== Client (read-only) =====
+
+  @UseGuards(JwtAuthGuard)
+  @Get('api/client/v1/config/:key')
+  @ApiOperation({ summary: '获取配置值' })
+  async getConfig(@Param('key') key: string) {
+    return this.configService.getConfig(key);
+  }
+
+  // ===== Admin =====
+
+  @UseGuards(AdminGuard)
+  @Get('api/admin/v1/config/list')
+  @ApiOperation({ summary: '配置列表' })
+  async getConfigList(@Query('page') page = 1, @Query('limit') limit = 20) {
+    return this.configService.getConfigList(Number(page), Number(limit));
+  }
+
+  @UseGuards(AdminGuard)
+  @Post('api/admin/v1/config')
+  @ApiOperation({ summary: '设置配置（创建/更新）' })
+  async setConfig(@Body() dto: SetConfigDto) {
+    return this.configService.setConfig(
+      dto.key,
+      dto.value,
+      dto.configType,
+      dto.description,
+    );
+  }
+
+  @UseGuards(AdminGuard)
+  @Delete('api/admin/v1/config/:key')
+  @ApiOperation({ summary: '删除配置' })
+  async deleteConfig(@Param('key') key: string) {
+    await this.configService.deleteConfig(key);
+    return { success: true };
+  }
+}
