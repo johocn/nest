@@ -71,7 +71,19 @@ describe('PlayerService', () => {
     expect(player.nickname).toBe('Hero');
     expect(player.accountId).toBe('acc-1');
     expect(mockPlayerRepo.save).toHaveBeenCalledTimes(1);
-    expect(mockCurrencyRepo.save).toHaveBeenCalledTimes(2);
+    expect(mockCurrencyRepo.save).toHaveBeenCalledTimes(1);
+    expect(mockCurrencyRepo.save).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ currencyType: CurrencyType.GOLD, amount: '1000' }),
+        expect.objectContaining({ currencyType: CurrencyType.DIAMOND, amount: '0' }),
+        expect.objectContaining({ currencyType: CurrencyType.FAVOR, amount: '0' }),
+        expect.objectContaining({
+          currencyType: CurrencyType.GUILD_CONTRIB,
+          amount: '0',
+        }),
+        expect.objectContaining({ currencyType: CurrencyType.FACE, amount: '0' }),
+      ]),
+    );
   });
 
   it('should throw if nickname already exists', async () => {

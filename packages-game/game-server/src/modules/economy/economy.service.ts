@@ -20,6 +20,25 @@ export class EconomyService {
     private readonly eventBus: EventBusService,
   ) {}
 
+  private static readonly SOCIAL_CURRENCIES = [
+    CurrencyType.FAVOR,
+    CurrencyType.GUILD_CONTRIB,
+    CurrencyType.FACE,
+  ];
+
+  private async ensureCurrencyRow(
+    playerId: string,
+    currencyType: CurrencyType,
+  ): Promise<void> {
+    const currency = await this.playerService.getCurrency(playerId, currencyType);
+    if (currency) return;
+    await this.playerService.saveCurrency({
+      playerId,
+      currencyType,
+      amount: '0',
+    } as any);
+  }
+
   async addCurrency(
     playerId: string,
     currencyType: CurrencyType,
@@ -36,6 +55,7 @@ export class EconomyService {
     return this.cacheService.withLock(
       lockKey,
       async () => {
+        await this.ensureCurrencyRow(playerId, currencyType);
         const currency = await this.playerService.getCurrency(
           playerId,
           currencyType,
@@ -97,6 +117,7 @@ export class EconomyService {
     return this.cacheService.withLock(
       lockKey,
       async () => {
+        await this.ensureCurrencyRow(playerId, currencyType);
         const currency = await this.playerService.getCurrency(
           playerId,
           currencyType,
@@ -149,6 +170,56 @@ export class EconomyService {
     );
   }
 
+  async exchange(
+    playerId: string,
+    from: CurrencyType,
+    to: CurrencyType,
+    amount: number,
+  ): Promise<{ balanceAfter: string }> {
+    if (amount <= 0) {
+      throw new GameException(ErrorCodes.PARAM_INVALID, '金额必须大于0');
+    }
+    if (from === to) {
+      throw new GameException(ErrorCodes.EXCHANGE_NOT_ALLOWED, '货币相同不可兑换');
+    }
+    const socialOrGold = (t: CurrencyType) =>
+      EconomyService.SOCIAL_CURRENCIES.includes(t) || t === CurrencyType.GOLD;
+    if (socialOrGold(from) || socialOrGold(to)) {
+      throw new GameException(
+        ErrorCodes.EXCHANGE_NOT_ALLOWED,
+        '仅钻石与绑定钻之间允许兑换（社交货币只能通过社交获取）',
+      );
+    }
+
+    // 先扣后加：扣款失败直接中断；加款失败则回补，保证不丢币
+    const deductResult = await this.deductCurrency(
+      playerId,
+      from,
+      amount,
+      'exchange',
+      `exchange:${playerId}:${from}->${to}:${amount}`,
+    );
+    try {
+      await this.addCurrency(
+        playerId,
+        to,
+        amount,
+        'exchange',
+        `exchange:${playerId}:${from}->${to}:${amount}`,
+      );
+    } catch (err) {
+      await this.addCurrency(
+        playerId,
+        from,
+        amount,
+        'exchange_rollback',
+        `exchange:${playerId}:${from}->${to}:${amount}:rollback`,
+      );
+      throw err;
+    }
+    return deductResult;
+  }
+
   async getBalance(
     playerId: string,
     currencyType: CurrencyType,
@@ -158,6 +229,15 @@ export class EconomyService {
       currencyType,
     );
     return currency ? currency.amount : '0';
+  }
+
+  async getSocialBalances(playerId: string): Promise<Record<string, string>> {
+    const [favor, guildContrib, face] = await Promise.all([
+      this.getBalance(playerId, CurrencyType.FAVOR),
+      this.getBalance(playerId, CurrencyType.GUILD_CONTRIB),
+      this.getBalance(playerId, CurrencyType.FACE),
+    ]);
+    return { favor, guildContrib, face };
   }
 
   async getTransactions(

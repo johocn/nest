@@ -52,8 +52,28 @@ export class PlayerService {
       currencyType: CurrencyType.DIAMOND,
       amount: initialDiamond.toString(),
     });
-    await this.currencyRepo.save(goldCurrency);
-    await this.currencyRepo.save(diamondCurrency);
+    const favorCurrency = this.currencyRepo.create({
+      playerId: savedPlayer.id,
+      currencyType: CurrencyType.FAVOR,
+      amount: '0',
+    });
+    const guildContribCurrency = this.currencyRepo.create({
+      playerId: savedPlayer.id,
+      currencyType: CurrencyType.GUILD_CONTRIB,
+      amount: '0',
+    });
+    const faceCurrency = this.currencyRepo.create({
+      playerId: savedPlayer.id,
+      currencyType: CurrencyType.FACE,
+      amount: '0',
+    });
+    await this.currencyRepo.save([
+      goldCurrency,
+      diamondCurrency,
+      favorCurrency,
+      guildContribCurrency,
+      faceCurrency,
+    ]);
 
     return savedPlayer;
   }
