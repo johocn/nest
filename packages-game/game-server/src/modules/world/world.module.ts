@@ -9,6 +9,11 @@ import {
   ObjectTemplate,
   SceneTrigger,
   SceneEntitySpawn,
+  PlayerMount,
+  StreetGame,
+  GameSession,
+  LandmarkMessage,
+  TriggerUnlock,
 } from './entities';
 
 @Module({
@@ -20,6 +25,11 @@ import {
       ObjectTemplate,
       SceneTrigger,
       SceneEntitySpawn,
+      PlayerMount,
+      StreetGame,
+      GameSession,
+      LandmarkMessage,
+      TriggerUnlock,
     ]),
   ],
   controllers: [WorldController],

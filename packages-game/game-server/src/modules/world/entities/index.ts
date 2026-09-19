@@ -4,3 +4,8 @@ export { MonsterTemplate } from './monster-template.entity';
 export { ObjectTemplate } from './object-template.entity';
 export { SceneTrigger } from './scene-trigger.entity';
 export { SceneEntitySpawn } from './scene-entity-spawn.entity';
+export { PlayerMount } from './player-mount.entity';
+export { StreetGame } from './street-game.entity';
+export { GameSession } from './game-session.entity';
+export { LandmarkMessage } from './landmark-message.entity';
+export { TriggerUnlock } from './trigger-unlock.entity';
