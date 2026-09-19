@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { CommunityService } from './community.service';
 import { FeedbackSuggestion, PlayerAmbassador } from './entities';
+import { PlayerReport } from '@modules/social/entities/player-report.entity';
 import { Player } from '@modules/player/entities/player.entity';
 import {
   Character,
@@ -11,12 +12,17 @@ import {
 import { EventBusService } from '@event-bus/event-bus.service';
 import { AdminService } from '@modules/admin/admin.service';
 import { AnalyticsService } from '@modules/analytics/analytics.service';
+import { AuthService } from '@modules/auth/auth.service';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
 import {
   AmbassadorStatus,
   FeedbackCategory,
   FeedbackStatus,
+  PenaltyLevel,
+  ReportHandleAction,
+  ReportStatus,
+  ReportTargetType,
 } from '@constants/enums';
 import type { Repository } from 'typeorm';
 
@@ -30,9 +36,10 @@ describe('CommunityService', () => {
   let charTitleRepo: jest.Mocked<Repository<CharacterTitle>>;
   let adminService: jest.Mocked<AdminService>;
   let eventBus: jest.Mocked<EventBusService>;
+  let module: TestingModule;
 
   beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
+    module = await Test.createTestingModule({
       providers: [
         CommunityService,
         {
@@ -63,6 +70,16 @@ describe('CommunityService', () => {
           provide: getRepositoryToken(Player),
           useValue: {
             find: jest.fn(),
+            findOne: jest.fn(),
+          },
+        },
+        {
+          provide: getRepositoryToken(PlayerReport),
+          useValue: {
+            findOne: jest.fn(),
+            find: jest.fn(),
+            count: jest.fn(),
+            update: jest.fn(),
           },
         },
         {
@@ -90,6 +107,10 @@ describe('CommunityService', () => {
         {
           provide: AdminService,
           useValue: { logOperation: jest.fn() },
+        },
+        {
+          provide: AuthService,
+          useValue: { applyPenalty: jest.fn() },
         },
         {
           provide: AnalyticsService,
@@ -251,6 +272,100 @@ describe('CommunityService', () => {
       ]);
       const result = await service.getActiveAmbassadors();
       expect(result[0].nickname).toBe('侠客小赵');
+    });
+  });
+
+  describe('举报台账与处置', () => {
+    let reportRepo: any;
+    let authService: any;
+
+    beforeEach(() => {
+      reportRepo = module.get(getRepositoryToken(PlayerReport));
+      authService = module.get(AuthService);
+      jest.clearAllMocks();
+    });
+
+    it('台账列表按状态筛选', async () => {
+      reportRepo.find.mockResolvedValueOnce([
+        { id: '1', status: ReportStatus.PENDING },
+      ]);
+      reportRepo.count.mockResolvedValueOnce(1);
+      const result = await service.listReports(ReportStatus.PENDING, 1, 20);
+      expect(result.total).toBe(1);
+      expect(reportRepo.find).toHaveBeenCalled();
+    });
+
+    it('处理 MUTE 调用 applyPenalty 并标记已处理', async () => {
+      reportRepo.findOne.mockResolvedValueOnce({
+        id: '1',
+        targetType: ReportTargetType.PLAYER,
+        targetId: '200',
+        status: ReportStatus.PENDING,
+      });
+      playerRepo.findOne.mockResolvedValueOnce({ id: '200', accountId: '9' });
+      authService.applyPenalty.mockResolvedValueOnce({ id: 'p1' });
+      adminService.logOperation.mockResolvedValueOnce(undefined);
+      reportRepo.update.mockResolvedValueOnce({ affected: 1 });
+
+      await service.handleReport(
+        'admin1',
+        'adminName',
+        '1',
+        ReportHandleAction.MUTE,
+        '骂人',
+        3600,
+      );
+      expect(authService.applyPenalty).toHaveBeenCalledWith(
+        'adminName',
+        '200',
+        '9',
+        PenaltyLevel.MUTE,
+        '骂人',
+        3600,
+      );
+      expect(reportRepo.update).toHaveBeenCalledWith(
+        { id: '1' },
+        expect.objectContaining({
+          status: ReportStatus.PROCESSED,
+          handleAction: 'MUTE',
+        }),
+      );
+    });
+
+    it('已处理举报拒绝重复处理', async () => {
+      reportRepo.findOne.mockResolvedValueOnce({
+        id: '1',
+        status: ReportStatus.PROCESSED,
+      });
+      await expect(
+        service.handleReport(
+          'admin1',
+          'adminName',
+          '1',
+          ReportHandleAction.IGNORE,
+          'x',
+        ),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.REPORT_ALREADY_HANDLED },
+      });
+    });
+
+    it('IGNORE 不落惩罚', async () => {
+      reportRepo.findOne.mockResolvedValueOnce({
+        id: '1',
+        targetType: ReportTargetType.PLAYER,
+        targetId: '200',
+        status: ReportStatus.PENDING,
+      });
+      reportRepo.update.mockResolvedValueOnce({ affected: 1 });
+      await service.handleReport(
+        'admin1',
+        'adminName',
+        '1',
+        ReportHandleAction.IGNORE,
+        'x',
+      );
+      expect(authService.applyPenalty).not.toHaveBeenCalled();
     });
   });
 });

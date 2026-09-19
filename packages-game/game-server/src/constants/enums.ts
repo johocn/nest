@@ -734,3 +734,10 @@ export enum ReportStatus {
   PROCESSED = 'processed',
   IGNORED = 'ignored',
 }
+
+export enum ReportHandleAction {
+  IGNORE = 'IGNORE',
+  WARN = 'WARN',
+  MUTE = 'MUTE',
+  BAN = 'BAN',
+}

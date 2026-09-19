@@ -2,10 +2,15 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { FeedbackSuggestion, PlayerAmbassador } from './entities';
+import { PlayerReport } from '@modules/social/entities/player-report.entity';
 import {
   AmbassadorStatus,
   FeedbackCategory,
   FeedbackStatus,
+  PenaltyLevel,
+  ReportHandleAction,
+  ReportStatus,
+  ReportTargetType,
 } from '@constants/enums';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
@@ -13,6 +18,7 @@ import { EventBusService } from '@event-bus/event-bus.service';
 import { GameEvents } from '@event-bus/game-events';
 import { AdminService } from '@modules/admin/admin.service';
 import { AnalyticsService } from '@modules/analytics/analytics.service';
+import { AuthService } from '@modules/auth/auth.service';
 import { Player } from '@modules/player/entities/player.entity';
 import {
   Character,
@@ -29,6 +35,8 @@ export class CommunityService {
     private readonly feedbackRepo: Repository<FeedbackSuggestion>,
     @InjectRepository(PlayerAmbassador)
     private readonly ambassadorRepo: Repository<PlayerAmbassador>,
+    @InjectRepository(PlayerReport)
+    private readonly reportRepo: Repository<PlayerReport>,
     @InjectRepository(Player)
     private readonly playerRepo: Repository<Player>,
     @InjectRepository(Character)
@@ -39,6 +47,7 @@ export class CommunityService {
     private readonly charTitleRepo: Repository<CharacterTitle>,
     private readonly adminService: AdminService,
     private readonly analyticsService: AnalyticsService,
+    private readonly authService: AuthService,
     private readonly eventBus: EventBusService,
   ) {}
 
@@ -217,6 +226,88 @@ export class CommunityService {
   /** 社交枢纽候选（13.8②，来自 analytics 社交枢纽） */
   async recommendAmbassadors(limit = 10): Promise<unknown[]> {
     return this.analyticsService.getSocialHubs(limit);
+  }
+
+  // ===== 举报台账（阶段5批1） =====
+
+  async listReports(
+    status?: ReportStatus,
+    page = 1,
+    limit = 20,
+  ): Promise<{ items: PlayerReport[]; total: number }> {
+    const [items, total] = await Promise.all([
+      this.reportRepo.find({
+        where: status ? { status } : {},
+        order: { createdAt: 'DESC' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.reportRepo.count({ where: status ? { status } : {} }),
+    ]);
+    return { items, total };
+  }
+
+  async handleReport(
+    adminId: string,
+    adminName: string,
+    reportId: string,
+    action: ReportHandleAction,
+    remark?: string,
+    durationSeconds?: number,
+  ): Promise<PlayerReport> {
+    const report = await this.reportRepo.findOne({ where: { id: reportId } });
+    if (!report) {
+      throw new GameException(ErrorCodes.REPORT_NOT_FOUND, '举报记录不存在');
+    }
+    if (report.status !== ReportStatus.PENDING) {
+      throw new GameException(ErrorCodes.REPORT_ALREADY_HANDLED, '举报已处理');
+    }
+    const updates: Record<string, any> = {
+      handlerAdminId: adminId,
+      handleRemark: remark?.trim() || null,
+      handledAt: new Date(),
+    };
+    if (action === ReportHandleAction.IGNORE) {
+      updates.status = ReportStatus.IGNORED;
+      updates.handleAction = ReportHandleAction.IGNORE;
+    } else {
+      if (report.targetType !== ReportTargetType.PLAYER) {
+        throw new GameException(
+          ErrorCodes.REPORT_INVALID_TARGET,
+          '仅玩家类举报可施加惩罚',
+        );
+      }
+      const player = await this.playerRepo.findOne({
+        where: { id: report.targetId },
+      });
+      if (!player) {
+        throw new GameException(ErrorCodes.REPORT_INVALID_TARGET, '目标玩家不存在');
+      }
+      const level =
+        action === ReportHandleAction.WARN
+          ? PenaltyLevel.WARNING
+          : action === ReportHandleAction.MUTE
+            ? PenaltyLevel.MUTE
+            : PenaltyLevel.BAN;
+      await this.authService.applyPenalty(
+        adminName,
+        player.id,
+        player.accountId,
+        level,
+        remark?.trim() || '举报处置',
+        durationSeconds,
+      );
+      updates.status = ReportStatus.PROCESSED;
+      updates.handleAction = action;
+      await this.adminService.logOperation({
+        adminId,
+        targetPlayerId: player.id,
+        operation: 'community.report.handle',
+        changeAfter: { id: report.id, action },
+      });
+    }
+    await this.reportRepo.update({ id: reportId }, updates);
+    return { ...report, ...updates } as PlayerReport;
   }
 
   // ===== 私有 =====
