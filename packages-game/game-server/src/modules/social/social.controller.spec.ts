@@ -32,6 +32,22 @@ describe('SocialController', () => {
     graduateApprentice: jest.fn(),
     getKinships: jest.fn(),
     getSocialSummary: jest.fn(),
+    setGuildRole: jest.fn(),
+    initiateImpeachment: jest.fn(),
+    endorseImpeachment: jest.fn(),
+    getImpeachment: jest.fn(),
+    getGuildLog: jest.fn(),
+    buildBuilding: jest.fn(),
+    getGuildBuildings: jest.fn(),
+    adjustGuildFund: jest.fn(),
+    getGuildFundLogs: jest.fn(),
+    createGuildActivity: jest.fn(),
+    getGuildActivities: jest.fn(),
+    setDiplomacy: jest.fn(),
+    getGuildDiplomacies: jest.fn(),
+    exchangeGuildShop: jest.fn(),
+    paySalaries: jest.fn(),
+    getGuildContributionRank: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -197,6 +213,150 @@ describe('SocialController', () => {
         kinships: [],
         relationships: [],
       });
+    });
+  });
+
+  describe('guild governance endpoints', () => {
+    it('setGuildRole passes operator, guildId, playerId and role', async () => {
+      service.setGuildRole.mockResolvedValue({ id: 'm1', role: 'hall_master' });
+      const result = await controller.setGuildRole(player, {
+        guildId: 'g1',
+        playerId: 'p2',
+        role: 'hall_master',
+      } as any);
+      expect(service.setGuildRole).toHaveBeenCalledWith('p1', 'g1', 'p2', 'hall_master');
+      expect(result).toEqual({ id: 'm1', role: 'hall_master' });
+    });
+
+    it('impeach passes playerId and guildId', async () => {
+      service.initiateImpeachment.mockResolvedValue({ id: 'i1' });
+      const result = await controller.impeach(player, { guildId: 'g1' });
+      expect(service.initiateImpeachment).toHaveBeenCalledWith('p1', 'g1');
+      expect(result).toEqual({ id: 'i1' });
+    });
+
+    it('endorseImpeach passes playerId and impeachmentId', async () => {
+      service.endorseImpeachment.mockResolvedValue({ id: 'i1', status: 'done' });
+      const result = await controller.endorseImpeach(player, { impeachmentId: 'i1' });
+      expect(service.endorseImpeachment).toHaveBeenCalledWith('p1', 'i1');
+      expect(result).toEqual({ id: 'i1', status: 'done' });
+    });
+
+    it('getImpeachment passes guildId', async () => {
+      service.getImpeachment.mockResolvedValue({ id: 'i1' });
+      const result = await controller.getImpeachment('g1');
+      expect(service.getImpeachment).toHaveBeenCalledWith('g1');
+      expect(result).toEqual({ id: 'i1' });
+    });
+
+    it('getGuildLog passes guildId', async () => {
+      service.getGuildLog.mockResolvedValue([]);
+      const result = await controller.getGuildLog('g1');
+      expect(service.getGuildLog).toHaveBeenCalledWith('g1');
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('guild base/fund endpoints', () => {
+    it('buildBuilding passes playerId, guildId and buildingType', async () => {
+      service.buildBuilding.mockResolvedValue({ id: 'b1', level: 1 });
+      const result = await controller.buildBuilding(player, {
+        guildId: 'g1',
+        buildingType: 'meeting_hall',
+      } as any);
+      expect(service.buildBuilding).toHaveBeenCalledWith('p1', 'g1', 'meeting_hall');
+      expect(result).toEqual({ id: 'b1', level: 1 });
+    });
+
+    it('getGuildBuildings passes guildId', async () => {
+      service.getGuildBuildings.mockResolvedValue([]);
+      const result = await controller.getGuildBuildings('g1');
+      expect(service.getGuildBuildings).toHaveBeenCalledWith('g1');
+      expect(result).toEqual([]);
+    });
+
+    it('adjustGuildFund passes playerId, guildId, amount and reason', async () => {
+      service.adjustGuildFund.mockResolvedValue({ id: 'f1' });
+      const result = await controller.adjustGuildFund(player, {
+        guildId: 'g1',
+        amount: 5000,
+        reason: '拍卖',
+      });
+      expect(service.adjustGuildFund).toHaveBeenCalledWith('p1', 'g1', 5000, '拍卖');
+      expect(result).toEqual({ id: 'f1' });
+    });
+
+    it('getGuildFundLogs passes guildId, page and limit', async () => {
+      service.getGuildFundLogs.mockResolvedValue({ items: [], total: 0 });
+      const result = await controller.getGuildFundLogs('g1', 1, 20);
+      expect(service.getGuildFundLogs).toHaveBeenCalledWith('g1', 1, 20);
+      expect(result).toEqual({ items: [], total: 0 });
+    });
+  });
+
+  describe('guild activity/diplomacy endpoints', () => {
+    it('createGuildActivity parses scheduleAt and passes through', async () => {
+      service.createGuildActivity.mockResolvedValue({ id: 'a1' });
+      const result = await controller.createGuildActivity(player, {
+        guildId: 'g1',
+        activityType: 'banquet',
+        scheduleAt: '2026-10-01T10:00:00.000Z',
+      } as any);
+      expect(service.createGuildActivity).toHaveBeenCalledWith(
+        'p1', 'g1', 'banquet', new Date('2026-10-01T10:00:00.000Z'),
+      );
+      expect(result).toEqual({ id: 'a1' });
+    });
+
+    it('getGuildActivities passes guildId', async () => {
+      service.getGuildActivities.mockResolvedValue([]);
+      const result = await controller.getGuildActivities('g1');
+      expect(service.getGuildActivities).toHaveBeenCalledWith('g1');
+      expect(result).toEqual([]);
+    });
+
+    it('setDiplomacy passes playerId, guildId, targetGuildId and relation', async () => {
+      service.setDiplomacy.mockResolvedValue({ id: 'd1', relation: 'friendly' });
+      const result = await controller.setDiplomacy(player, {
+        guildId: 'g1',
+        targetGuildId: 'g2',
+        relation: 'friendly',
+      } as any);
+      expect(service.setDiplomacy).toHaveBeenCalledWith('p1', 'g1', 'g2', 'friendly');
+      expect(result).toEqual({ id: 'd1', relation: 'friendly' });
+    });
+
+    it('getGuildDiplomacies passes guildId', async () => {
+      service.getGuildDiplomacies.mockResolvedValue([]);
+      const result = await controller.getGuildDiplomacies('g1');
+      expect(service.getGuildDiplomacies).toHaveBeenCalledWith('g1');
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('guild shop/salary endpoints', () => {
+    it('exchangeGuildShop passes playerId, guildId and rewardType', async () => {
+      service.exchangeGuildShop.mockResolvedValue({ rewardType: 'skill_point', cost: 100 });
+      const result = await controller.exchangeGuildShop(player, {
+        guildId: 'g1',
+        rewardType: 'skill_point',
+      } as any);
+      expect(service.exchangeGuildShop).toHaveBeenCalledWith('p1', 'g1', 'skill_point');
+      expect(result).toEqual({ rewardType: 'skill_point', cost: 100 });
+    });
+
+    it('paySalaries passes playerId and guildId', async () => {
+      service.paySalaries.mockResolvedValue({ paid: [], total: 0 });
+      const result = await controller.paySalaries(player, { guildId: 'g1' });
+      expect(service.paySalaries).toHaveBeenCalledWith('p1', 'g1');
+      expect(result).toEqual({ paid: [], total: 0 });
+    });
+
+    it('getGuildContributionRank passes guildId', async () => {
+      service.getGuildContributionRank.mockResolvedValue([]);
+      const result = await controller.getGuildContributionRank('g1');
+      expect(service.getGuildContributionRank).toHaveBeenCalledWith('g1');
+      expect(result).toEqual([]);
     });
   });
 });

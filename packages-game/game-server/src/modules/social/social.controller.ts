@@ -23,6 +23,13 @@ import { IntelBuyDto } from './dto/intel-buy.dto';
 import { GiftDto } from './dto/gift.dto';
 import { KinshipFormDto } from './dto/kinship-form.dto';
 import { KinshipBreakDto } from './dto/kinship-break.dto';
+import { SetGuildRoleDto } from './dto/guild-role.dto';
+import { ImpeachDto, EndorseImpeachDto } from './dto/guild-impeach.dto';
+import { BuildGuildBuildingDto } from './dto/guild-build.dto';
+import { AdjustGuildFundDto } from './dto/guild-fund.dto';
+import { CreateGuildActivityDto } from './dto/guild-activity.dto';
+import { SetDiplomacyDto } from './dto/guild-diplomacy.dto';
+import { ExchangeGuildShopDto } from './dto/guild-shop.dto';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { CurrentPlayer } from '@common/decorators/current-player.decorator';
 import type { CurrentPlayerData } from '@common/decorators/current-player.decorator';
@@ -115,6 +122,169 @@ export class SocialController {
       dto.donateType as DonateType,
       dto.amount,
     );
+  }
+
+  // ===== Guild Governance =====
+
+  @Post('guild/role')
+  @ApiOperation({ summary: '任命职位（帮主/副帮主可任命）' })
+  async setGuildRole(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Body() dto: SetGuildRoleDto,
+  ) {
+    return this.socialService.setGuildRole(
+      player.playerId,
+      dto.guildId,
+      dto.playerId,
+      dto.role,
+    );
+  }
+
+  @Post('guild/impeach')
+  @ApiOperation({ summary: '发起弹劾（帮主7日未上线）' })
+  async impeach(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Body() dto: ImpeachDto,
+  ) {
+    return this.socialService.initiateImpeachment(player.playerId, dto.guildId);
+  }
+
+  @Post('guild/impeach/endorse')
+  @ApiOperation({ summary: '联署弹劾' })
+  async endorseImpeach(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Body() dto: EndorseImpeachDto,
+  ) {
+    return this.socialService.endorseImpeachment(player.playerId, dto.impeachmentId);
+  }
+
+  @Get('guild/:guildId/impeachment')
+  @ApiOperation({ summary: '查询进行中的弹劾' })
+  async getImpeachment(@Param('guildId') guildId: string) {
+    return this.socialService.getImpeachment(guildId);
+  }
+
+  @Get('guild/:guildId/log')
+  @ApiOperation({ summary: '帮派操作日志' })
+  async getGuildLog(@Param('guildId') guildId: string) {
+    return this.socialService.getGuildLog(guildId);
+  }
+
+  // ===== Guild Base & Fund =====
+
+  @Post('guild/build')
+  @ApiOperation({ summary: '建设/升级驻地建筑' })
+  async buildBuilding(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Body() dto: BuildGuildBuildingDto,
+  ) {
+    return this.socialService.buildBuilding(
+      player.playerId,
+      dto.guildId,
+      dto.buildingType,
+    );
+  }
+
+  @Get('guild/:guildId/buildings')
+  @ApiOperation({ summary: '驻地建筑列表' })
+  async getGuildBuildings(@Param('guildId') guildId: string) {
+    return this.socialService.getGuildBuildings(guildId);
+  }
+
+  @Post('guild/fund')
+  @ApiOperation({ summary: '调整帮派资金（入账/支出）' })
+  async adjustGuildFund(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Body() dto: AdjustGuildFundDto,
+  ) {
+    return this.socialService.adjustGuildFund(
+      player.playerId,
+      dto.guildId,
+      dto.amount,
+      dto.reason,
+    );
+  }
+
+  @Get('guild/:guildId/fund-logs')
+  @ApiOperation({ summary: '帮派资金流水' })
+  async getGuildFundLogs(
+    @Param('guildId') guildId: string,
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
+  ) {
+    return this.socialService.getGuildFundLogs(guildId, page, limit);
+  }
+
+  // ===== Guild Activity & Diplomacy =====
+
+  @Post('guild/activities')
+  @ApiOperation({ summary: '创建帮派活动' })
+  async createGuildActivity(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Body() dto: CreateGuildActivityDto,
+  ) {
+    return this.socialService.createGuildActivity(
+      player.playerId,
+      dto.guildId,
+      dto.activityType,
+      new Date(dto.scheduleAt),
+    );
+  }
+
+  @Get('guild/:guildId/activities')
+  @ApiOperation({ summary: '帮派活动日历' })
+  async getGuildActivities(@Param('guildId') guildId: string) {
+    return this.socialService.getGuildActivities(guildId);
+  }
+
+  @Post('guild/diplomacy')
+  @ApiOperation({ summary: '建立/更新帮派外交' })
+  async setDiplomacy(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Body() dto: SetDiplomacyDto,
+  ) {
+    return this.socialService.setDiplomacy(
+      player.playerId,
+      dto.guildId,
+      dto.targetGuildId,
+      dto.relation,
+    );
+  }
+
+  @Get('guild/:guildId/diplomacies')
+  @ApiOperation({ summary: '帮派外交列表' })
+  async getGuildDiplomacies(@Param('guildId') guildId: string) {
+    return this.socialService.getGuildDiplomacies(guildId);
+  }
+
+  // ===== Guild Shop & Salary =====
+
+  @Post('guild/shop/exchange')
+  @ApiOperation({ summary: '帮贡商店兑换' })
+  async exchangeGuildShop(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Body() dto: ExchangeGuildShopDto,
+  ) {
+    return this.socialService.exchangeGuildShop(
+      player.playerId,
+      dto.guildId,
+      dto.rewardType,
+    );
+  }
+
+  @Post('guild/salary')
+  @ApiOperation({ summary: '结算周薪（帮主/副帮主触发）' })
+  async paySalaries(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Body() dto: JoinGuildDto,
+  ) {
+    return this.socialService.paySalaries(player.playerId, dto.guildId);
+  }
+
+  @Get('guild/:guildId/contribution-rank')
+  @ApiOperation({ summary: '帮贡贡献排行' })
+  async getGuildContributionRank(@Param('guildId') guildId: string) {
+    return this.socialService.getGuildContributionRank(guildId);
   }
 
   // ===== Intelligence =====
