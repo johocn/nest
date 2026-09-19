@@ -130,8 +130,9 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
   <a class="nav-item" href="#ch13">13 运营与数据</a>
   <a class="nav-item" href="#ch14">14 实时通信</a>
   <a class="nav-item" href="#ch15">15 新手引导与初始数值</a>
+  <a class="nav-item" href="#ch16">16 生态联动</a>
   <div class="nav-group">附录</div>
-  <a class="nav-item" href="#chapter16">16 数据字典全集</a>
+  <a class="nav-item" href="#chapter16">17 数据字典全集</a>
   <a class="nav-item" href="#appendix-a">A 接口路径索引</a>
   <a class="nav-item" href="#appendix-b">B 枚举全集</a>
   <a class="nav-item" href="#appendix-c">C 部署与运维</a>
@@ -1482,6 +1483,14 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
     <li><b>投放节奏</b>：日常任务错峰、周常重协作、主线重剧情——避免「任务疲劳」，社交任务穿插防纯刷。</li>
     <li><b>运营配置</b>：社交任务占比、配额、奖励倍率全部远程配置（见 13.2）——节奏由数据说话。</li>
   </ul>
+  <h3>7.10 社交任务目标类型补充（战斗 / 经济 / 生态行为 → 任务）</h3>
+  <p>阶段 3（2026-09-19）已实现 5 类社交动作事件推进（情报/送礼/好友/帮派/亲缘）；本节补充<b>游戏内战斗/经济行为</b>与<b>业务生态行为</b>两类目标（规划备案 2026-09-20，详见第 16 章）：</p>
+  <ul>
+    <li><b>游戏内补充</b>：form_formation / activate_formation / perform_combo / rescue_success / loot_distributed / arbitration_settled / negotiation_done / escrow_released / bounty_published / bounty_completed / credit_repaid / barter_done；并补齐 join_guild（GUILD_JOINED 事件）、intel_buy（INTEL_BOUGHT 事件）推进入口。</li>
+    <li><b>生态行为</b>：view_article / view_course / view_product / view_price / view_activity / join_activity / like / comment / purchase / distribute——业务站点行为经签名回调 <code>POST /api/client/v1/eco/events</code> 上报，映射推进（见 16.3/16.4）。</li>
+    <li><b>防刷</b>：生态浏览类任务进度每日最多计入 10 次（Redis <code>eco:daily:{playerId}:{targetType}</code>，见 16.7）。</li>
+    <li><b>奖励倾斜</b>：reward_social 支持 favor/guild_contrib/face 三类社交货币（见 7.4），任务种子示例见 16.8。</li>
+  </ul>
   </div>
 </section>
 
@@ -2462,8 +2471,125 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
   </div>
 </section>
 
+<section class="chapter" id="ch16">
+  <div class="chapter-inner">
+  <h2 class="ch-title">第 16 章 · 生态联动（游戏 × 业务站点）</h2>
+  <p class="ch-desc">把游戏外业务生态（文章 / 课程 / 商品 / 活动）的真实用户行为接入游戏社交任务，形成「游戏内社交 × 业务生态」双环互哺。本文档为规划备案（2026-09-20，见 docs/superpowers/specs/2026-09-20-social-task-supplement-design.md）。</p>
+  <h3>16.1 生态联动总览</h3>
+  <ul>
+    <li><b>定位</b>：业务站点（www.joho.cn 文章 / v.joho.cn 课程 / www.youshop.cn 商品 / zhao-point 活动）的浏览、查看价格、报名、成交、分销、点赞、评论等真实行为，经业务插件回调上报 game-server，推进游戏内社交任务进度。</li>
+    <li><b>身份打通</b>：<b>SSO 直接登录游戏</b>（zhao-sso 标准 OAuth2，app_code=game）——玩家在游戏内以 SSO 会话建档，auth_accounts 记录 sso_id 唯一映射，行为回调按 sso_id 定位玩家。</li>
+    <li><b>数据通路</b>：行为在业务系统本地发生最可信 → 业务插件钩子（fire-and-forget POST + HMAC 签名）→ game-server <code>POST /api/client/v1/eco/events</code> → 签名/防重放校验 → EventBus <code>ECO_ACTION</code> → 任务监听器推进。</li>
+  </ul>
+  <h3>16.2 SSO 直接登录流程</h3>
+  <table>
+    <thead><tr><th>步骤</th><th>动作</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>游戏前端 <code>GET /api/client/v1/auth/sso/login</code> → 302 至 zhao-sso <code>authorize?app_code=game&redirect_uri={游戏回调}&response_type=code</code></td></tr>
+      <tr><td>2</td><td>SSO 授权 → 302 回 <code>GET /api/client/v1/auth/sso/callback?code=xxx</code></td></tr>
+      <tr><td>3</td><td>game-server 用 code 调 zhao-sso <code>exchange-token</code>（回调一致性由 zhao-sso 白名单校验）→ <code>{ ssoId, username }</code></td></tr>
+      <tr><td>4</td><td>auth_accounts 按 sso_id 查 → 有则签发游戏 token；无则自动建档（accountType=SSO，密码随机不可密码登录；用户名冲突加后缀）→ 建 players 行 → 签发 token</td></tr>
+    </tbody>
+  </table>
+  <ul>
+    <li><b>表变更</b>：<code>auth_accounts += sso_id varchar(64) unique nullable / sso_provider varchar(32)</code>（只加列）。</li>
+    <li><b>兼容</b>：既有 NORMAL 用户名密码登录保留，SSO 账号与 NORMAL 账号并存不迁移。</li>
+    <li><b>错误码</b>：SSO_AUTH_FAILED(91605) 换码失败 / SSO_ACCOUNT_EXISTS(91606) 用户名冲突。</li>
+  </ul>
+  <h3>16.3 生态行为上报契约</h3>
+  <ul>
+    <li><b>接口</b>：<code>POST /api/client/v1/eco/events</code>（业务插件回调，非玩家直调）。</li>
+    <li><b>请求头</b>：<code>X-Eco-Sign = hmac_sha256(sharedSecret, body + "|" + timestamp)</code>；<code>X-Eco-Ts</code> unix 秒；密钥走环境变量 ECO_SHARED_SECRET。</li>
+    <li><b>请求体</b>：<code>{ "action": "view_article", "scope": "joho", "ssoId": "12", "targetId": "1024", "extra": {} }</code>。</li>
+    <li><b>校验管线</b>：时间戳窗口 ±300s → HMAC 签名比对 → Redis 防重放（<code>eco:evt:{hash}</code> SET NX EX 300）→ action 白名单 → sso_id 定位玩家（无对应玩家静默 200，业务侧无需感知）→ 发 ECO_ACTION。</li>
+    <li><b>错误码</b>：ECO_SIGN_INVALID(91601) / ECO_REPLAY(91602) / ECO_SSO_NOT_BOUND(91603 静默) / ECO_UNKNOWN_ACTION(91604)。</li>
+  </ul>
+  <h3>16.4 生态行为 → 任务目标映射</h3>
+  <table>
+    <thead><tr><th>action（回调）</th><th>SocialTargetType</th><th>含义</th></tr></thead>
+    <tbody>
+      <tr><td>view_article</td><td>VIEW_ARTICLE</td><td>浏览文章</td></tr>
+      <tr><td>view_course</td><td>VIEW_COURSE</td><td>查看课程内容</td></tr>
+      <tr><td>view_product</td><td>VIEW_PRODUCT</td><td>浏览商品</td></tr>
+      <tr><td>view_price</td><td>VIEW_PRICE</td><td>查看商品价格</td></tr>
+      <tr><td>view_activity</td><td>VIEW_ACTIVITY</td><td>查看活动详情</td></tr>
+      <tr><td>join_activity</td><td>JOIN_ACTIVITY</td><td>参加活动</td></tr>
+      <tr><td>like</td><td>LIKE</td><td>点赞</td></tr>
+      <tr><td>comment</td><td>COMMENT</td><td>评论</td></tr>
+      <tr><td>purchase</td><td>PURCHASE</td><td>成交（课程报名/商品下单）</td></tr>
+      <tr><td>distribute</td><td>DISTRIBUTE</td><td>分销（邀请/佣金）</td></tr>
+    </tbody>
+  </table>
+  <h3>16.5 游戏内补充目标（战斗 / 经济行为 → 任务）</h3>
+  <table>
+    <thead><tr><th>SocialTargetType</th><th>触发事件</th><th>含义</th></tr></thead>
+    <tbody>
+      <tr><td>FORM_FORMATION</td><td>（建阵成功）</td><td>组建阵法</td></tr>
+      <tr><td>ACTIVATE_FORMATION</td><td>FORMATION_ACTIVATED</td><td>激活阵法</td></tr>
+      <tr><td>PERFORM_COMBO</td><td>COMBO_TRIGGERED</td><td>完成合击</td></tr>
+      <tr><td>RESCUE_SUCCESS</td><td>RESCUE_SUCCESS</td><td>成功援护</td></tr>
+      <tr><td>LOOT_DISTRIBUTED</td><td>LOOT_DISTRIBUTED</td><td>参与战利品分配</td></tr>
+      <tr><td>ARBITRATION_SETTLED</td><td>ARBITRATION_SETTLED</td><td>调解仲裁成功</td></tr>
+      <tr><td>NEGOTIATION_DONE</td><td>NEGOTIATION_COMPLETED</td><td>议价成交</td></tr>
+      <tr><td>ESCROW_RELEASED</td><td>ESCROW_RELEASED</td><td>担保交易放款</td></tr>
+      <tr><td>BOUNTY_PUBLISHED</td><td>BOUNTY_PUBLISHED</td><td>发布悬赏</td></tr>
+      <tr><td>BOUNTY_COMPLETED</td><td>BOUNTY_COMPLETED</td><td>完成悬赏</td></tr>
+      <tr><td>CREDIT_REPAID</td><td>CREDIT_SETTLED</td><td>还清赊账</td></tr>
+      <tr><td>BARTER_DONE</td><td>BARTER_COMPLETED</td><td>以物易物成交</td></tr>
+      <tr><td>JOIN_GUILD</td><td>GUILD_JOINED（补发）</td><td>加入帮派</td></tr>
+      <tr><td>INTEL_BUY</td><td>INTEL_BOUGHT（补发）</td><td>购买情报</td></tr>
+    </tbody>
+  </table>
+  <h3>16.6 业务站点钩子清单</h3>
+  <table>
+    <thead><tr><th>站点</th><th>插件</th><th>行为 → 触发点</th></tr></thead>
+    <tbody>
+      <tr><td>www.joho.cn 文章</td><td>zhao-website</td><td>view_article→visit-log 写入处；like/comment→interaction 写入处；distribute→invite-trace 写入处</td></tr>
+      <tr><td>v.joho.cn 课程</td><td>zhao-course</td><td>view_course→课程详情/lesson-progress 写入处；purchase→course-enrollment 创建处</td></tr>
+      <tr><td>zhao-point 活动</td><td>zhao-point</td><td>view_activity→活动详情访问处；join_activity→activity-signup 创建处；distribute→activity-referral-reward 创建处</td></tr>
+      <tr><td>www.youshop.cn 商品</td><td>商品站插件</td><td>view_product/view_price→商品详情/价格查看处；purchase→订单创建处；distribute→分销结算处</td></tr>
+    </tbody>
+  </table>
+  <ul>
+    <li><b>钩子统一模式</b>：行为写入点后 fire-and-forget POST（2s 超时、失败静默 console.warn），密钥/地址走插件 config 或环境变量；Strapi 侧改后必须重建 dist（铁律）。</li>
+  </ul>
+  <h3>16.7 防刷与风控</h3>
+  <ul>
+    <li><b>签名防伪造</b>：HMAC-SHA256 + 时间戳窗口 ±300s + Redis 防重放（一次性事件哈希）。</li>
+    <li><b>浏览类日上限</b>：生态浏览类任务进度每日最多计入 10 次（Redis <code>eco:daily:{playerId}:{targetType}</code> EX 86400），防脚本批量刷浏览任务。</li>
+    <li><b>真实行为锚点</b>：成交/报名/分销以业务侧真实记录创建处触发（enrollment/signup/订单），不可凭空构造。</li>
+    <li><b>业务侧故障隔离</b>：钩子失败不影响业务主流程（fire-and-forget + 静默）。</li>
+  </ul>
+  <h3>16.8 任务种子示例（quest_templates 补充）</h3>
+  <table>
+    <thead><tr><th>任务名</th><th>target_type</th><th>目标数</th><th>reward_social</th></tr></thead>
+    <tbody>
+      <tr><td>初窥门径·浏览文章</td><td>view_article</td><td>3</td><td>favor +10</td></tr>
+      <tr><td>江湖见闻·查看课程</td><td>view_course</td><td>2</td><td>favor +10</td></tr>
+      <tr><td>货比三家·查看商品</td><td>view_product</td><td>3</td><td>face +5</td></tr>
+      <tr><td>闻讯而动·报名活动</td><td>join_activity</td><td>1</td><td>face +10</td></tr>
+      <tr><td>英雄所见·点赞文章</td><td>like</td><td>3</td><td>favor +15</td></tr>
+      <tr><td>结阵而战·激活阵法</td><td>activate_formation</td><td>1</td><td>guild_contrib +20</td></tr>
+      <tr><td>同生共死·成功援护</td><td>rescue_success</td><td>1</td><td>favor +15</td></tr>
+      <tr><td>一诺千金·担保放款</td><td>escrow_released</td><td>1</td><td>guild_contrib +20</td></tr>
+    </tbody>
+  </table>
+  <h3>16.9 落地映射（设计 → 代码 → 接口）</h3>
+  <table>
+    <thead><tr><th>能力</th><th>代码承载</th><th>对外接口</th></tr></thead>
+    <tbody>
+      <tr><td>SSO 登录</td><td>auth.service（buildSsoLoginUrl/handleSsoCallback）；auth_accounts.sso_id</td><td>GET /auth/sso/login；GET /auth/sso/callback</td></tr>
+      <tr><td>生态事件接收</td><td>eco-events.service（verifySignature/防重放/映射）+ eco.controller</td><td>POST /api/client/v1/eco/events</td></tr>
+      <tr><td>任务推进</td><td>quest-event.listener（ECO_ACTION + 战斗/经济事件映射）；quest.service.advanceSocialTarget（生态日上限）</td><td>GET /quest/list 进度可见</td></tr>
+      <tr><td>事件补发</td><td>social.service（GUILD_JOINED/INTEL_BOUGHT）；trade.service（经济 6 事件）</td><td>EventBus 内部</td></tr>
+      <tr><td>业务钩子</td><td>zhao-website/zhao-course/zhao-point/商品站插件 eco-hook.ts</td><td>回调 POST（签名）</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
 <section class="dict-chapter" id="chapter16">
-<h2 class="ch-title">第 16 章 · 数据字典全集</h2>
+<h2 class="ch-title">第 17 章 · 数据字典全集</h2>
 <p class="ch-desc">共 64 张表、602 个字段。字段类型与默认值取自生产库 <code>game_server</code> 实际结构；说明按源码实体语义整理。枚举类型取值详见<b>附录 B 枚举全集</b>。</p>
 <div class="dict-toc">
 <a href="#dict-account_login_logs">account_login_logs (7)</a>
