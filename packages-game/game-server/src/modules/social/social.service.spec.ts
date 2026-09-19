@@ -6,6 +6,7 @@ import {
   Guild,
   GuildMember,
   GuildDonate,
+  GuildImpeachment,
   Intelligence,
   GiftTemplate,
   Kinship,
@@ -32,6 +33,7 @@ import {
   RelationshipLevel,
   KinshipType,
   KinshipStatus,
+  GuildImpeachmentStatus,
 } from '@constants/enums';
 import type { Repository } from 'typeorm';
 
@@ -44,6 +46,7 @@ describe('SocialService', () => {
   let intelligenceRepo: jest.Mocked<Repository<Intelligence>>;
   let giftRepo: jest.Mocked<Repository<GiftTemplate>>;
   let kinshipRepo: jest.Mocked<Repository<Kinship>>;
+  let impeachmentRepo: jest.Mocked<Repository<GuildImpeachment>>;
   let espionageRepo: jest.Mocked<Repository<CharacterEspionage>>;
   let cacheService: jest.Mocked<CacheService>;
   let economyService: jest.Mocked<EconomyService>;
@@ -96,6 +99,16 @@ describe('SocialService', () => {
         {
           provide: getRepositoryToken(GuildDonate),
           useValue: {
+            save: jest
+              .fn()
+              .mockImplementation((data: any) => Promise.resolve(data)),
+            create: jest.fn((data: any) => ({ ...data, id: '1' })),
+          },
+        },
+        {
+          provide: getRepositoryToken(GuildImpeachment),
+          useValue: {
+            findOne: jest.fn(),
             save: jest
               .fn()
               .mockImplementation((data: any) => Promise.resolve(data)),
@@ -184,6 +197,7 @@ describe('SocialService', () => {
     intelligenceRepo = module.get(getRepositoryToken(Intelligence));
     giftRepo = module.get(getRepositoryToken(GiftTemplate));
     kinshipRepo = module.get(getRepositoryToken(Kinship));
+    impeachmentRepo = module.get(getRepositoryToken(GuildImpeachment));
     espionageRepo = module.get(getRepositoryToken(CharacterEspionage));
     cacheService = module.get(CacheService);
     economyService = module.get(EconomyService);
@@ -1156,6 +1170,179 @@ describe('SocialService', () => {
         kinships: [{ id: 'k1' }],
         relationships: [{ id: 'r1' }],
       });
+    });
+  });
+
+  describe('setGuildRole', () => {
+    const member = (role: GuildRole, playerId = 'p1') =>
+      ({ id: '1', guildId: '1', playerId, role, contribution: 0 } as GuildMember);
+
+    it('throws GUILD_ROLE_FORBIDDEN when operator is a plain member', async () => {
+      guildMemberRepo.findOne.mockResolvedValue(member(GuildRole.MEMBER));
+      await expect(
+        service.setGuildRole('p1', '1', 'p2', GuildRole.HALL_MASTER),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.GUILD_ROLE_FORBIDDEN },
+      });
+    });
+
+    it('throws GUILD_ROLE_FORBIDDEN when directly appointing leader', async () => {
+      guildMemberRepo.findOne.mockResolvedValue(member(GuildRole.LEADER));
+      await expect(
+        service.setGuildRole('p1', '1', 'p2', GuildRole.LEADER),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.GUILD_ROLE_FORBIDDEN },
+      });
+    });
+
+    it('appoints hall master as leader and appends log + event', async () => {
+      guildMemberRepo.findOne
+        .mockResolvedValueOnce(member(GuildRole.LEADER))
+        .mockResolvedValueOnce(member(GuildRole.MEMBER, 'p2'));
+      const guild = { id: '1', actionLog: [] } as any;
+      guildRepo.findOneOrFail = jest.fn().mockResolvedValue(guild);
+      guildRepo.save = jest.fn().mockImplementation((g: any) => Promise.resolve(g));
+
+      const result = await service.setGuildRole(
+        'p1',
+        '1',
+        'p2',
+        GuildRole.HALL_MASTER,
+      );
+
+      expect(result.role).toBe(GuildRole.HALL_MASTER);
+      expect(guildRepo.save).toHaveBeenCalled();
+      expect(guild.actionLog).toHaveLength(1);
+      expect(guild.actionLog[0].type).toBe('role_change');
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        GameEvents.GUILD_ROLE_CHANGED,
+        expect.any(Object),
+      );
+    });
+  });
+
+  describe('initiateImpeachment', () => {
+    it('throws GUILD_ROLE_FORBIDDEN below vice leader', async () => {
+      guildMemberRepo.findOne.mockResolvedValue({
+        id: '1', guildId: '1', playerId: 'p1', role: GuildRole.HALL_MASTER,
+      } as GuildMember);
+      await expect(service.initiateImpeachment('p1', '1')).rejects.toMatchObject({
+        response: { code: ErrorCodes.GUILD_ROLE_FORBIDDEN },
+      });
+    });
+
+    it('throws GUILD_IMPEACHMENT_NOT_READY when leader active within 7 days', async () => {
+      guildMemberRepo.findOne.mockResolvedValue({
+        id: '1', guildId: '1', playerId: 'p1', role: GuildRole.VICE_LEADER,
+      } as GuildMember);
+      guildRepo.findOne.mockResolvedValue({
+        id: '1', leaderId: 'l1', actionLog: [],
+      } as any);
+      playerService.getById.mockResolvedValue({
+        lastActivityAt: new Date(Date.now() - 3600 * 1000),
+      } as any);
+      await expect(service.initiateImpeachment('p1', '1')).rejects.toMatchObject({
+        response: { code: ErrorCodes.GUILD_IMPEACHMENT_NOT_READY },
+      });
+    });
+
+    it('throws GUILD_IMPEACHMENT_EXISTS when pending impeachment present', async () => {
+      guildMemberRepo.findOne.mockResolvedValue({
+        id: '1', guildId: '1', playerId: 'p1', role: GuildRole.VICE_LEADER,
+      } as GuildMember);
+      guildRepo.findOne.mockResolvedValue({
+        id: '1', leaderId: 'l1', actionLog: [],
+      } as any);
+      playerService.getById.mockResolvedValue({
+        lastActivityAt: new Date(Date.now() - 8 * 24 * 3600 * 1000),
+      } as any);
+      impeachmentRepo.findOne.mockResolvedValue({ id: 'i1' } as any);
+      await expect(service.initiateImpeachment('p1', '1')).rejects.toMatchObject({
+        response: { code: ErrorCodes.GUILD_IMPEACHMENT_EXISTS },
+      });
+    });
+
+    it('creates pending impeachment when leader inactive', async () => {
+      guildMemberRepo.findOne.mockResolvedValue({
+        id: '1', guildId: '1', playerId: 'p1', role: GuildRole.VICE_LEADER,
+      } as GuildMember);
+      guildRepo.findOne.mockResolvedValue({
+        id: '1', leaderId: 'l1', actionLog: [],
+      } as any);
+      playerService.getById.mockResolvedValue({
+        lastActivityAt: new Date(Date.now() - 8 * 24 * 3600 * 1000),
+      } as any);
+      impeachmentRepo.findOne.mockResolvedValue(null);
+      impeachmentRepo.save.mockResolvedValue({
+        id: 'i1', guildId: '1', targetId: 'l1', initiatorId: 'p1',
+        endorsements: [], status: GuildImpeachmentStatus.PENDING,
+      } as any);
+
+      const result = await service.initiateImpeachment('p1', '1');
+      expect(result.status).toBe(GuildImpeachmentStatus.PENDING);
+      expect(result.targetId).toBe('l1');
+      expect(impeachmentRepo.create).toHaveBeenCalled();
+    });
+  });
+
+  describe('endorseImpeachment', () => {
+    it('throws GUILD_ROLE_FORBIDDEN below hall master', async () => {
+      impeachmentRepo.findOne.mockResolvedValue({
+        id: 'i1', guildId: '1', status: GuildImpeachmentStatus.PENDING,
+        endorsements: [],
+      } as any);
+      guildMemberRepo.findOne.mockResolvedValue({
+        id: '1', guildId: '1', playerId: 'p1', role: GuildRole.MEMBER,
+      } as GuildMember);
+      await expect(
+        service.endorseImpeachment('p1', 'i1'),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.GUILD_ROLE_FORBIDDEN },
+      });
+    });
+
+    it('transfers leadership to top-contribution vice leader when quorum reached', async () => {
+      impeachmentRepo.findOne.mockResolvedValue({
+        id: 'i1', guildId: '1', status: GuildImpeachmentStatus.PENDING,
+        endorsements: [],
+      } as any);
+      guildMemberRepo.findOne.mockResolvedValue({
+        id: '1', guildId: '1', playerId: 'p1', role: GuildRole.HALL_MASTER,
+      } as GuildMember);
+      guildMemberRepo.find.mockResolvedValue([
+        { id: '1', guildId: '1', playerId: 'h1', role: GuildRole.HALL_MASTER, contribution: 10 },
+        { id: '3', guildId: '1', playerId: 'v2', role: GuildRole.VICE_LEADER, contribution: 40 },
+      ] as any);
+      const guild = { id: '1', leaderId: 'l1', actionLog: [] } as any;
+      guildRepo.findOne.mockResolvedValue(guild);
+      guildRepo.save = jest.fn().mockImplementation((g: any) => Promise.resolve(g));
+      impeachmentRepo.save.mockImplementation((d: any) => Promise.resolve(d));
+
+      const result = await service.endorseImpeachment('p1', 'i1');
+
+      expect(result.status).toBe(GuildImpeachmentStatus.DONE);
+      expect(result.endedAt).toBeInstanceOf(Date);
+      expect(guild.leaderId).toBe('v2');
+      expect(guild.actionLog[0].type).toBe('impeach');
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        GameEvents.GUILD_IMPEACHMENT,
+        expect.objectContaining({ newLeaderId: 'v2' }),
+      );
+    });
+  });
+
+  describe('getGuildLog', () => {
+    it('returns action log entries', async () => {
+      const log = [{ type: 'role_change', playerId: 'p1', detail: 'x', at: 't' }];
+      guildRepo.findOne.mockResolvedValue({ id: '1', actionLog: log } as any);
+      const result = await service.getGuildLog('1');
+      expect(result).toEqual(log);
+    });
+
+    it('returns empty array when guild missing', async () => {
+      guildRepo.findOne.mockResolvedValue(null);
+      const result = await service.getGuildLog('1');
+      expect(result).toEqual([]);
     });
   });
 });

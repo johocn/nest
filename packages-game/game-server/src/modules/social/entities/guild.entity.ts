@@ -32,6 +32,14 @@ export class Guild {
   @Column({ type: 'text', nullable: true })
   announcement: string | null;
 
+  @Column({ name: 'action_log', type: 'jsonb', default: '[]' })
+  actionLog: Array<{
+    type: string;
+    playerId: string;
+    detail: string;
+    at: string;
+  }>;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

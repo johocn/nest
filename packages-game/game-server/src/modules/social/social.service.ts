@@ -6,6 +6,7 @@ import {
   Guild,
   GuildMember,
   GuildDonate,
+  GuildImpeachment,
   Intelligence,
   GiftTemplate,
   Kinship,
@@ -30,6 +31,7 @@ import {
   RelationshipLevel,
   KinshipType,
   KinshipStatus,
+  GuildImpeachmentStatus,
 } from '@constants/enums';
 import { CacheService } from '@cache/cache.service';
 import { EconomyService } from '@modules/economy/economy.service';
@@ -56,6 +58,8 @@ export class SocialService {
     private readonly guildMemberRepo: Repository<GuildMember>,
     @InjectRepository(GuildDonate)
     private readonly guildDonateRepo: Repository<GuildDonate>,
+    @InjectRepository(GuildImpeachment)
+    private readonly impeachmentRepo: Repository<GuildImpeachment>,
     @InjectRepository(Intelligence)
     private readonly intelligenceRepo: Repository<Intelligence>,
     @InjectRepository(GiftTemplate)
@@ -267,6 +271,190 @@ export class SocialService {
       order: { createdAt: 'DESC' },
     });
     return { items, total };
+  }
+
+  // ===== Guild Governance =====
+
+  private static readonly GUILD_ROLE_RANKS: Record<string, number> = {
+    [GuildRole.LEADER]: 4,
+    [GuildRole.VICE_LEADER]: 3,
+    [GuildRole.HALL_MASTER]: 2,
+    [GuildRole.INCENSE_MASTER]: 1,
+    [GuildRole.OFFICER]: 0,
+    [GuildRole.ELITE]: 0,
+    [GuildRole.MEMBER]: 0,
+  };
+
+  private guildRoleRank(role: GuildRole): number {
+    return SocialService.GUILD_ROLE_RANKS[role] ?? 0;
+  }
+
+  private async getGuildMemberOrThrow(
+    playerId: string,
+    guildId: string,
+  ): Promise<GuildMember> {
+    const member = await this.guildMemberRepo.findOne({
+      where: { playerId, guildId },
+    });
+    if (!member) {
+      throw new GameException(ErrorCodes.GUILD_PERMISSION_DENIED, '不在公会中');
+    }
+    return member;
+  }
+
+  private async appendGuildLog(
+    guild: Guild,
+    type: string,
+    playerId: string,
+    detail: string,
+  ): Promise<void> {
+    guild.actionLog = [
+      ...(Array.isArray(guild.actionLog) ? guild.actionLog : []),
+      { type, playerId, detail, at: new Date(Date.now()).toISOString() },
+    ];
+    await this.guildRepo.save(guild);
+  }
+
+  async setGuildRole(
+    operatorId: string,
+    guildId: string,
+    playerId: string,
+    role: GuildRole,
+  ): Promise<GuildMember> {
+    const operator = await this.getGuildMemberOrThrow(operatorId, guildId);
+    if (role === GuildRole.LEADER) {
+      throw new GameException(ErrorCodes.GUILD_ROLE_FORBIDDEN, '帮主不可直接任命');
+    }
+    const maxAppointRank =
+      operator.role === GuildRole.LEADER
+        ? this.guildRoleRank(GuildRole.VICE_LEADER)
+        : operator.role === GuildRole.VICE_LEADER
+          ? this.guildRoleRank(GuildRole.HALL_MASTER)
+          : -1;
+    if (this.guildRoleRank(role) > maxAppointRank) {
+      throw new GameException(ErrorCodes.GUILD_ROLE_FORBIDDEN, '无权任命该职位');
+    }
+
+    const target = await this.getGuildMemberOrThrow(playerId, guildId);
+    target.role = role;
+    const saved = await this.guildMemberRepo.save(target);
+    await this.appendGuildLog(
+      await this.guildRepo.findOneOrFail({ where: { id: guildId } }),
+      'role_change',
+      operatorId,
+      `${playerId} → ${role}`,
+    );
+    this.eventBus.emit(GameEvents.GUILD_ROLE_CHANGED, {
+      guildId,
+      playerId,
+      role,
+      operatorId,
+    });
+    return saved;
+  }
+
+  async initiateImpeachment(
+    operatorId: string,
+    guildId: string,
+  ): Promise<GuildImpeachment> {
+    const operator = await this.getGuildMemberOrThrow(operatorId, guildId);
+    if (this.guildRoleRank(operator.role) < this.guildRoleRank(GuildRole.VICE_LEADER)) {
+      throw new GameException(ErrorCodes.GUILD_ROLE_FORBIDDEN, '仅副帮主以上可发起弹劾');
+    }
+
+    const guild = await this.guildRepo.findOne({ where: { id: guildId } });
+    if (!guild) {
+      throw new GameException(ErrorCodes.GUILD_PERMISSION_DENIED, '公会不存在');
+    }
+
+    const leader = await this.playerService.getById(guild.leaderId);
+    const lastActive = leader?.lastActivityAt;
+    if (lastActive && lastActive.getTime() > Date.now() - 7 * 24 * 3600 * 1000) {
+      throw new GameException(ErrorCodes.GUILD_IMPEACHMENT_NOT_READY, '帮主近期在线不可弹劾');
+    }
+
+    const pending = await this.impeachmentRepo.findOne({
+      where: { guildId, status: GuildImpeachmentStatus.PENDING },
+    });
+    if (pending) {
+      throw new GameException(ErrorCodes.GUILD_IMPEACHMENT_EXISTS, '已有进行中的弹劾');
+    }
+
+    const impeachment = this.impeachmentRepo.create({
+      guildId,
+      targetId: guild.leaderId,
+      initiatorId: operatorId,
+      endorsements: [],
+      status: GuildImpeachmentStatus.PENDING,
+      endedAt: null,
+    });
+    return this.impeachmentRepo.save(impeachment);
+  }
+
+  async endorseImpeachment(
+    playerId: string,
+    impeachmentId: string,
+  ): Promise<GuildImpeachment> {
+    const impeachment = await this.impeachmentRepo.findOne({
+      where: { id: impeachmentId, status: GuildImpeachmentStatus.PENDING },
+    });
+    if (!impeachment) {
+      throw new GameException(ErrorCodes.GUILD_IMPEACHMENT_NOT_READY, '弹劾不存在或已结束');
+    }
+
+    const member = await this.getGuildMemberOrThrow(playerId, impeachment.guildId);
+    if (this.guildRoleRank(member.role) < this.guildRoleRank(GuildRole.HALL_MASTER)) {
+      throw new GameException(ErrorCodes.GUILD_ROLE_FORBIDDEN, '仅香主以上可联署弹劾');
+    }
+
+    const endorsements = Array.isArray(impeachment.endorsements)
+      ? [...impeachment.endorsements]
+      : [];
+    if (!endorsements.includes(playerId)) {
+      endorsements.push(playerId);
+    }
+    impeachment.endorsements = endorsements;
+
+    const eligible = await this.guildMemberRepo.find({
+      where: { guildId: impeachment.guildId },
+    });
+    const eligibleCount = eligible.filter(
+      (m) =>
+        this.guildRoleRank(m.role) >= this.guildRoleRank(GuildRole.HALL_MASTER),
+    ).length;
+    const quorum = Math.ceil(eligibleCount / 2);
+    if (endorsements.length >= quorum) {
+      const viceLeader = eligible
+        .filter((m) => m.role === GuildRole.VICE_LEADER)
+        .sort((a, b) => b.contribution - a.contribution)[0];
+      const newLeaderId = viceLeader?.playerId ?? impeachment.initiatorId;
+      const guild = await this.guildRepo.findOne({
+        where: { id: impeachment.guildId },
+      });
+      if (guild) {
+        guild.leaderId = newLeaderId;
+        await this.appendGuildLog(guild, 'impeach', playerId, `弹劾成功，帮主移交 ${newLeaderId}`);
+      }
+      impeachment.status = GuildImpeachmentStatus.DONE;
+      impeachment.endedAt = new Date();
+      this.eventBus.emit(GameEvents.GUILD_IMPEACHMENT, {
+        guildId: impeachment.guildId,
+        impeachmentId,
+        newLeaderId,
+      });
+    }
+    return this.impeachmentRepo.save(impeachment);
+  }
+
+  async getImpeachment(guildId: string): Promise<GuildImpeachment | null> {
+    return this.impeachmentRepo.findOne({
+      where: { guildId, status: GuildImpeachmentStatus.PENDING },
+    });
+  }
+
+  async getGuildLog(guildId: string): Promise<Guild['actionLog']> {
+    const guild = await this.guildRepo.findOne({ where: { id: guildId } });
+    return guild ? (guild.actionLog ?? []) : [];
   }
 
   // ===== Intelligence =====
