@@ -7,38 +7,54 @@ import { AuthAccount } from './entities/auth-account.entity';
 import { AccountLoginLog } from './entities/account-login-log.entity';
 import { PlayerService } from '@modules/player/player.service';
 import { GameException } from '@common/exceptions/game.exception';
-import { AccountType, AccountStatus } from '@constants/enums';
+import { AccountType, AccountStatus, PenaltyLevel } from '@constants/enums';
+import { ErrorCodes } from '@constants/error-codes';
+import { AccountPenalty } from './entities/account-penalty.entity';
+import { AccountSecurityEvent } from './entities/account-security-event.entity';
+
+const mockAccountRepo = {
+  findOne: jest.fn(),
+  create: jest.fn(),
+  save: jest.fn(),
+  update: jest.fn(),
+};
+
+const mockLoginLogRepo = {
+  create: jest.fn(),
+  save: jest.fn(),
+  findOne: jest.fn(),
+};
+
+const mockPlayerService = {
+  createPlayer: jest.fn(),
+  getByAccountId: jest.fn(),
+};
+
+const mockJwtService = {
+  sign: jest.fn().mockReturnValue('mock-jwt-token'),
+};
+
+const mockConfigService = {
+  get: jest.fn((key: string) => {
+    if (key === 'jwt') return { secret: 'test-secret', expiresIn: '7d' };
+    return undefined;
+  }),
+};
+
+const mockPenaltyRepo = {
+  create: jest.fn((v) => v),
+  save: jest.fn((v) => Promise.resolve(v)),
+  find: jest.fn(() => Promise.resolve([])),
+  findOne: jest.fn(() => Promise.resolve(null)),
+};
+
+const mockSecurityEventRepo = {
+  create: jest.fn((v) => v),
+  save: jest.fn((v) => Promise.resolve(v)),
+};
 
 describe('AuthService', () => {
   let service: AuthService;
-
-  const mockAccountRepo = {
-    findOne: jest.fn(),
-    create: jest.fn(),
-    save: jest.fn(),
-    update: jest.fn(),
-  };
-
-  const mockLoginLogRepo = {
-    create: jest.fn(),
-    save: jest.fn(),
-  };
-
-  const mockPlayerService = {
-    createPlayer: jest.fn(),
-    getByAccountId: jest.fn(),
-  };
-
-  const mockJwtService = {
-    sign: jest.fn().mockReturnValue('mock-jwt-token'),
-  };
-
-  const mockConfigService = {
-    get: jest.fn((key: string) => {
-      if (key === 'jwt') return { secret: 'test-secret', expiresIn: '7d' };
-      return undefined;
-    }),
-  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -49,6 +65,14 @@ describe('AuthService', () => {
         {
           provide: getRepositoryToken(AccountLoginLog),
           useValue: mockLoginLogRepo,
+        },
+        {
+          provide: getRepositoryToken(AccountPenalty),
+          useValue: mockPenaltyRepo,
+        },
+        {
+          provide: getRepositoryToken(AccountSecurityEvent),
+          useValue: mockSecurityEventRepo,
         },
         { provide: PlayerService, useValue: mockPlayerService },
         { provide: JwtService, useValue: mockJwtService },
@@ -201,5 +225,104 @@ describe('AuthService', () => {
       type: 'player',
     });
     expect(result).toBe(false);
+  });
+});
+
+describe('账号安全扩展', () => {
+  let service: AuthService;
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        AuthService,
+        { provide: getRepositoryToken(AuthAccount), useValue: mockAccountRepo },
+        {
+          provide: getRepositoryToken(AccountLoginLog),
+          useValue: mockLoginLogRepo,
+        },
+        {
+          provide: getRepositoryToken(AccountPenalty),
+          useValue: mockPenaltyRepo,
+        },
+        {
+          provide: getRepositoryToken(AccountSecurityEvent),
+          useValue: mockSecurityEventRepo,
+        },
+        { provide: PlayerService, useValue: mockPlayerService },
+        { provide: JwtService, useValue: mockJwtService },
+        { provide: ConfigService, useValue: mockConfigService },
+      ],
+    }).compile();
+
+    service = moduleRef.get(AuthService);
+  });
+
+  it('applyPenalty 禁言写冗余列并留痕', async () => {
+    mockAccountRepo.findOne.mockResolvedValue({
+      id: '1',
+      mutedUntil: null,
+      tradeLockedUntil: null,
+      status: AccountStatus.ACTIVE,
+    });
+    mockPenaltyRepo.findOne.mockResolvedValue(null);
+    mockAccountRepo.update.mockResolvedValue({});
+
+    await service.applyPenalty('gm1', '1', '1', PenaltyLevel.MUTE, '骂人', 3600);
+
+    expect(mockPenaltyRepo.save).toHaveBeenCalled();
+    expect(mockAccountRepo.update).toHaveBeenCalledWith(
+      { id: '1' },
+      expect.objectContaining({ mutedUntil: expect.any(Date) }),
+    );
+  });
+
+  it('封禁不降级（新等级序号必须高于当前）', async () => {
+    mockAccountRepo.findOne.mockResolvedValue({
+      id: '1',
+      mutedUntil: new Date(),
+      tradeLockedUntil: null,
+      status: AccountStatus.ACTIVE,
+    });
+    mockPenaltyRepo.findOne.mockResolvedValue({ level: PenaltyLevel.BAN });
+
+    await expect(
+      service.applyPenalty('gm1', '1', '1', PenaltyLevel.MUTE, '降级尝试', 3600),
+    ).rejects.toMatchObject({
+      response: { code: ErrorCodes.PENALTY_LEVEL_INVALID },
+    });
+  });
+
+  it('bindRealName 加密存储且脱敏查询', async () => {
+    mockAccountRepo.findOne.mockResolvedValue({
+      id: '1',
+      realName: null,
+      idNoHash: null,
+    });
+    mockAccountRepo.save.mockImplementation((v) => Promise.resolve(v));
+
+    await service.bindRealName('1', '张三', '110101199001011234');
+    const saved = mockAccountRepo.save.mock.calls[0][0];
+    expect(saved.realName).not.toContain('张三');
+    expect(saved.idNoHash).toHaveLength(64);
+
+    const status = await service.getSecurityStatus('1');
+    expect(status.realNameMasked).toContain('*');
+  });
+
+  it('getAccountRestrictions 到期自动解除', async () => {
+    mockAccountRepo.findOne.mockResolvedValue({
+      id: '1',
+      mutedUntil: new Date(Date.now() - 1000),
+      tradeLockedUntil: null,
+    });
+    mockAccountRepo.update.mockResolvedValue({});
+
+    const res = await service.getAccountRestrictions('1');
+    expect(res.mutedUntil).toBeNull();
+    expect(mockAccountRepo.update).toHaveBeenCalledWith(
+      { id: '1' },
+      { mutedUntil: null },
+    );
   });
 });
