@@ -10,13 +10,21 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { AuthAccount } from './entities/auth-account.entity';
 import { AccountLoginLog } from './entities/account-login-log.entity';
 import { AdminUser } from './entities/admin-user.entity';
+import { AccountPenalty } from './entities/account-penalty.entity';
+import { AccountSecurityEvent } from './entities/account-security-event.entity';
 import { PlayerModule } from '@modules/player/player.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([AuthAccount, AccountLoginLog, AdminUser]),
+    TypeOrmModule.forFeature([
+      AuthAccount,
+      AccountLoginLog,
+      AdminUser,
+      AccountPenalty,
+      AccountSecurityEvent,
+    ]),
     PassportModule,
-    JwtModule.register({}),
+    JwtModule.register({ global: true }),
     PlayerModule,
   ],
   controllers: [AuthController, AdminAuthController],

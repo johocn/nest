@@ -43,6 +43,21 @@ export class AuthAccount {
   @Column({ name: 'ban_expire_at', type: 'timestamp', nullable: true })
   banExpireAt: Date | null;
 
+  @Column({ name: 'muted_until', type: 'timestamp', nullable: true })
+  mutedUntil: Date | null;
+
+  @Column({ name: 'trade_locked_until', type: 'timestamp', nullable: true })
+  tradeLockedUntil: Date | null;
+
+  @Column({ name: 'real_name', type: 'varchar', length: 512, nullable: true })
+  realName: string | null; // AES 加密存储
+
+  @Column({ name: 'id_no_hash', type: 'varchar', length: 64, nullable: true })
+  idNoHash: string | null;
+
+  @Column({ name: 'anti_addiction_on', type: 'boolean', default: false })
+  antiAddictionOn: boolean;
+
   @Column({ name: 'token_version', type: 'int', default: 0 })
   tokenVersion: number;
 
