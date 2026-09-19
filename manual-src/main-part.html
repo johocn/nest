@@ -1,0 +1,2534 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Game Server 开发手册 · 江湖录</title>
+<style>
+:root{
+  --ink:#16120e; --ink2:#1f1913; --paper:#f4ead6; --paper-dim:#e6d8bd;
+  --gold:#d4af37; --gold-dim:#a8872a; --red:#b03a2e; --red-dark:#8a2b21;
+  --text:#2b2118; --text-dim:#6b5d4c; --line:#c9b891; --green:#3a6b4f;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  font-family:"Songti SC","Noto Serif SC","STSong","SimSun",serif;
+  background:var(--ink); color:var(--paper); line-height:1.75; font-size:15px;
+}
+a{color:var(--gold); text-decoration:none}
+a:hover{color:#e8cf7a}
+/* ===== 侧边导航 ===== */
+#nav{
+  position:fixed; top:0; left:0; bottom:0; width:250px; overflow-y:auto;
+  background:var(--ink2); border-right:1px solid #3a2f22; padding:20px 0; z-index:10;
+}
+#nav::-webkit-scrollbar{width:6px}
+#nav::-webkit-scrollbar-thumb{background:#4a3c28; border-radius:3px}
+#nav .brand{font-size:20px; color:var(--gold); text-align:center; letter-spacing:6px; padding:6px 10px 14px; border-bottom:1px solid #3a2f22; margin-bottom:10px; font-weight:bold}
+#nav .brand small{display:block; font-size:11px; color:var(--text-dim); letter-spacing:2px; margin-top:4px}
+#nav a.nav-item{display:block; padding:7px 18px; color:#cbb user-select:none; color:#cbbca4; font-size:13.5px; border-left:3px solid transparent}
+#nav a.nav-item:hover{background:#2a2218; color:var(--gold); border-left-color:var(--gold)}
+#nav a.nav-item.active{background:#2a2218; color:var(--gold); border-left-color:var(--gold)}
+#nav .nav-group{color:var(--text-dim); font-size:11px; padding:12px 18px 4px; letter-spacing:3px}
+/* ===== 主内容 ===== */
+#main{margin-left:250px; padding:0 48px 80px; max-width:1180px}
+section.chapter{display:block}
+.chapter-inner{max-width:1080px; margin:0 auto}
+/* 封面 */
+.cover{min-height:86vh; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; border-bottom:1px solid #3a2f22}
+.cover .seal{width:86px; height:86px; border:3px solid var(--red); color:var(--red); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:34px; font-weight:bold; margin-bottom:26px; transform:rotate(-3deg); box-shadow:0 0 0 4px var(--ink), 0 0 0 5px var(--red)}
+.cover h1{font-size:52px; letter-spacing:18px; color:var(--paper); margin-bottom:10px}
+.cover .sub{font-size:18px; letter-spacing:6px; color:var(--gold); margin-bottom:36px}
+.cover .meta{color:var(--text-dim); font-size:13px; letter-spacing:3px; line-height:2}
+.cover .meta b{color:var(--paper-dim)}
+.cover .tagline{margin-top:46px; max-width:620px; color:#b9a98a; font-size:14.5px; font-style:italic; letter-spacing:2px; line-height:2}
+/* 章节标题 */
+.ch-title{font-size:26px; color:var(--gold); letter-spacing:4px; margin:64px 0 8px; padding-top:24px; border-top:1px solid #3a2f22; position:relative}
+.ch-title::before{content:"◆"; color:var(--red); margin-right:12px; font-size:14px}
+.ch-desc{color:var(--text-dim); margin-bottom:26px; font-size:14px}
+h3{color:var(--gold); font-size:17px; margin:34px 0 12px; letter-spacing:2px; border-left:3px solid var(--red); padding-left:12px}
+h4{color:var(--paper-dim); font-size:15px; margin:22px 0 8px}
+p{margin-bottom:14px}
+code{background:#2a2218; border:1px solid #4a3c28; padding:1px 7px; border-radius:4px; font-family:Consolas,"Courier New",monospace; font-size:13px; color:#e8cf7a}
+ul,ol{margin:0 0 16px 24px}
+li{margin-bottom:6px}
+b,strong{color:var(--paper-dim)}
+/* 提示框 */
+.note{border:1px solid var(--gold-dim); border-left:4px solid var(--gold); background:#26200f; padding:14px 18px; border-radius:6px; margin:16px 0; font-size:14px}
+.note.red{border-color:var(--red); border-left-color:var(--red); background:#2b1612}
+.note b{color:var(--gold)}
+.note.red b{color:#e08a7c}
+/* 表格 */
+table{width:100%; border-collapse:collapse; margin:14px 0 26px; font-size:13.5px; background:#1d1812}
+th{background:#2a2218; color:var(--gold); text-align:left; padding:9px 12px; border:1px solid #4a3c28; font-weight:bold; letter-spacing:1px}
+td{padding:7px 12px; border:1px solid #3a2f22; color:var(--paper); vertical-align:top}
+tbody tr:hover{background:#221c14}
+td code{background:transparent; border:none; color:#e8cf7a; padding:0}
+/* 数据字典 */
+.dict-chapter,.appendix-chapter{display:block}
+.dict-toc{margin:20px 0 30px; display:flex; flex-wrap:wrap; gap:8px}
+.dict-toc a{font-size:12.5px; border:1px solid #4a3c28; padding:4px 10px; border-radius:14px; color:#b9a98a}
+.dict-toc a:hover{border-color:var(--gold); color:var(--gold)}
+.dict-table h3{font-size:15.5px; margin:26px 0 10px}
+.tbl-meta{font-size:12px; color:var(--text-dim); font-weight:normal; letter-spacing:1px}
+/* 徽章 */
+.badge{display:inline-block; padding:1px 9px; border-radius:3px; font-size:12px; font-weight:bold; font-family:Consolas,monospace}
+.m-get{background:#14321f; color:#6fcf8f; border:1px solid #2c5c3c}
+.m-post{background:#1f2a3a; color:#7fb2e8; border:1px solid #2c4560}
+.m-put{background:#3a2d12; color:#e8c36a; border:1px solid #5c4c22}
+.m-del{background:#3a1712; color:#e8837a; border:1px solid #5c2a22}
+/* 布局卡片 */
+.grid2{display:grid; grid-template-columns:1fr 1fr; gap:18px}
+.grid3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:18px}
+.card{border:1px solid #3a2f22; border-radius:8px; padding:18px 20px; background:#1d1812}
+.card h4{margin-top:0; color:var(--gold)}
+.card .big{font-size:26px; color:var(--paper); font-weight:bold}
+.card .big span{color:var(--gold)}
+.card ul{margin-bottom:0}
+/* 世界观层级卡 */
+.tier{border-radius:10px; padding:20px 24px; margin:16px 0; border:1px solid}
+.tier h4{font-size:18px; margin:0 0 10px; letter-spacing:3px}
+.tier.basic{border-color:#8a7a3a; background:linear-gradient(135deg,#26220f,#1d1812)}
+.tier.basic h4{color:#e8cf7a}
+.tier.sci{border-color:#3a6a8a; background:linear-gradient(135deg,#14242e,#1d1812)}
+.tier.sci h4{color:#7fb2e8}
+.tier.xuan{border-color:#6a3a8a; background:linear-gradient(135deg,#231530,#1d1812)}
+.tier.xuan h4{color:#c79be8}
+.tier p:last-child{margin-bottom:0}
+/* 社交循环 */
+.loop{display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:10px; margin:22px 0; font-size:14px}
+.loop .step{border:1px solid var(--gold-dim); border-radius:20px; padding:8px 18px; background:#26200f; color:var(--paper-dim)}
+.loop .arrow{color:var(--red); font-weight:bold}
+@media(max-width:900px){
+  #nav{display:none}
+  #main{margin-left:0; padding:0 20px}
+  .grid2,.grid3{grid-template-columns:1fr}
+  .cover h1{font-size:34px; letter-spacing:8px}
+}
+</style>
+</head>
+<body>
+
+<nav id="nav">
+  <div class="brand">江湖录<small>GAME SERVER 开发手册</small></div>
+  <div class="nav-group">世界观</div>
+  <a class="nav-item" href="#ch0">〇 世界观总纲</a>
+  <div class="nav-group">系统设计</div>
+  <a class="nav-item" href="#ch1">01 项目概述</a>
+  <a class="nav-item" href="#ch2">02 账号与权限</a>
+  <a class="nav-item" href="#ch3">03 玩家与角色</a>
+  <a class="nav-item" href="#ch4">04 背包与道具</a>
+  <a class="nav-item" href="#ch5">05 世界与场景</a>
+  <a class="nav-item" href="#ch6">06 战斗与技能</a>
+  <a class="nav-item" href="#ch7">07 任务与成就</a>
+  <a class="nav-item" href="#ch8">08 社交系统（核心）</a>
+  <a class="nav-item" href="#ch9">09 活动与签到</a>
+  <a class="nav-item" href="#ch10">10 排行</a>
+  <a class="nav-item" href="#ch11">11 交易与拍卖</a>
+  <a class="nav-item" href="#ch12">12 充值与 VIP</a>
+  <a class="nav-item" href="#ch13">13 运营与数据</a>
+  <a class="nav-item" href="#ch14">14 实时通信</a>
+  <a class="nav-item" href="#ch15">15 新手引导与初始数值</a>
+  <div class="nav-group">附录</div>
+  <a class="nav-item" href="#chapter16">16 数据字典全集</a>
+  <a class="nav-item" href="#appendix-a">A 接口路径索引</a>
+  <a class="nav-item" href="#appendix-b">B 枚举全集</a>
+  <a class="nav-item" href="#appendix-c">C 部署与运维</a>
+</nav>
+
+<div id="main">
+
+<!-- ==================== 封面 ==================== -->
+<section class="chapter" id="cover">
+  <div class="cover">
+    <div class="seal">武</div>
+    <h1>江 湖 录</h1>
+    <div class="sub">GAME SERVER · 开发与玩法设计手册</div>
+    <div class="meta">
+      版本 <b>v1.1</b>　·　日期 <b>2026-09-19</b>　·　适用对象 <b>游戏策划 / 研发 / 运营</b><br>
+      数据字典 <b>64 表 / 602 字段</b>　·　接口 <b>158 条</b>　·　枚举 <b>58 个</b>
+    </div>
+    <div class="tagline">
+      「武者以力服人，智者以情动人。此界之中，<b>社交即核心玩法</b>——
+      刺探、结义、运镖、揭榜，一饮一啄皆有因果；<br>
+      基础武学立身，科学武技破局，玄学秘术通天，
+      三级境界，步步江湖。」
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 第0章 世界观总纲 ==================== -->
+<section class="chapter" id="ch0">
+  <div class="chapter-inner">
+  <h2 class="ch-title">〇 世界观总纲</h2>
+  <p class="ch-desc">本手册一切系统设计的根基。世界观由两大支柱构成：<b>三级武学体系</b>（力量如何成长）与<b>社交驱动核心</b>（玩家为何互动）。所有模块的玩法设计说明均以此为底色。</p>
+
+  <h3>一、三级武学体系</h3>
+  <p>武学以「<b>境界</b> × <b>类别</b>」构成正交体系：纵轴为三级境界（力量本源与定位不同），横轴为武学类别（拳/掌/腿/兵器，对应数据模型 <code>art_type</code> 枚举）。同一类别下，可依境界习得不同层次的技能。</p>
+
+  <div class="tier basic">
+    <h4>第一级 · 基础篇 — 传统武学</h4>
+    <p><b>根基</b>：中国传统武学文化，物理学范畴（杠杆、冲量、重心）。<b>力量本源</b>：内力（<code>character_statuses.mana</code>）。<b>涵盖</b>：拳、掌、腿、兵器、内功、轻功、暗器、医术、毒术。<b>定位</b>：稳定可靠、消耗低、人人可练。<b>风格</b>：扎实稳健，如太极拳·揽雀尾、形意·崩拳、金钟罩。</p>
+  </div>
+  <div class="tier sci">
+    <h4>第二级 · 科学篇 — 现代科学武技</h4>
+    <p><b>根基</b>：现代科学原理（生物力学、流体力学、声学、神经科学）。<b>力量本源</b>：体能 / 精力。<b>涵盖</b>：生物力学（寸劲/透劲/发劲）、流体力学（气刃/水刀）、声学（狮吼功/次声震荡）、神经反应（预判/闪避）。<b>定位</b>：技巧克制（破防/穿透/预判），<b>可想象但不夸张脱离现实</b>。<b>风格</b>：巧劲制胜，如动能贯拳、流体切割、神经预判。</p>
+  </div>
+  <div class="tier xuan">
+    <h4>第三级 · 玄学篇 — 自然力量</h4>
+    <p><b>根基</b>：元素魔法、自然力量（五行、气机、天地灵气）。<b>力量本源</b>：灵力。<b>涵盖</b>：五行术（金木水火土）、气机牵引、自然元素召唤。<b>定位</b>：范围爆发、高消耗高门槛，超脱物理但遵循自然法则。<b>风格</b>：天地之力，如炎龙焚天、寒冰结界、雷动九天。</p>
+  </div>
+
+  <h3>二、社交驱动核心</h3>
+  <p>这是本作与常规 MMO 最大的分野：<b>所有玩家必须进行大量互动</b>——互动推动剧情、互动积攒能量与资源。社交手段是核心玩法，而非附属系统。</p>
+  <div class="loop">
+    <span class="step">社交动作</span><span class="arrow">→</span>
+    <span class="step">产出 · 情报 / 声望 / 人情 / 资源</span><span class="arrow">→</span>
+    <span class="step">推动剧情 + 修炼条件</span><span class="arrow">→</span>
+    <span class="step">力量成长</span><span class="arrow">→</span>
+    <span class="step">更高级社交场景</span>
+  </div>
+  <ul>
+    <li><b>情报喂任务</b>：刺探情报产出任务线索、目标弱点，战斗与任务双线受益。</li>
+    <li><b>资源反哺修炼</b>：社交产出的声望/情谊兑换科学篇「参悟」与玄学篇「机缘」——高阶力量的门槛是<b>社交深度</b>而非纯氪金。</li>
+    <li><b>剧情随互动推进</b>：主线/支线进度与社交动作绑定（不刺探够情报无法触发关键剧情节点）。</li>
+  </ul>
+
+  <h3>三、七大社交动作矩阵</h3>
+  <p>参考内地主流武侠 MMO 成熟玩法，将社交动作归纳为 7 大类 26 种，全部与任务、资源、剧情、晋升条件相连。</p>
+  <table>
+    <thead><tr><th>类别</th><th>社交动作</th><th>武侠载体</th><th>产出</th><th>系统对接</th></tr></thead>
+    <tbody>
+      <tr><td rowspan="3"><b>情报类</b></td><td>刺探情报</td><td>谍报系统（character_espionages）</td><td>情报值、目标弱点</td><td>战斗克制、任务</td></tr>
+      <tr><td>打听消息</td><td>江湖百晓生</td><td>剧情线索、机缘指引</td><td>任务、玄学机缘</td></tr>
+      <tr><td>跟踪 / 窃听</td><td>隐匿行动</td><td>行踪情报</td><td>谍报、PVP</td></tr>
+      <tr><td rowspan="4"><b>展示类</b></td><td>发广告</td><td>广告悬赏</td><td>曝光、佣金</td><td>交易、经济</td></tr>
+      <tr><td>称号炫耀</td><td>江湖称号</td><td>声望、存在感</td><td>排行</td></tr>
+      <tr><td>摆摊叫卖</td><td>街市摊位（trade_orders）</td><td>交易流量</td><td>交易、拍卖</td></tr>
+      <tr><td>切磋扬名</td><td>比武擂台</td><td>名声、彩头</td><td>战斗、排行</td></tr>
+      <tr><td rowspan="3"><b>悬赏类</b></td><td>揭皇榜</td><td>皇榜悬赏</td><td>声望、奖赏</td><td>任务、排行</td></tr>
+      <tr><td>玩家委托</td><td>江湖悬赏令</td><td>佣金、人情</td><td>经济、任务</td></tr>
+      <tr><td>通缉追杀</td><td>红名通缉</td><td>赏金、正义值</td><td>PVP、阵营</td></tr>
+      <tr><td rowspan="5"><b>关系类</b></td><td>拜师收徒</td><td>师徒传承</td><td>经验加成、传承技能</td><td>角色成长</td></tr>
+      <tr><td>结拜义兄弟</td><td>桃园结义</td><td>结拜技、属性加成</td><td>战斗、社交</td></tr>
+      <tr><td>结为侠侣</td><td>情缘系统</td><td>情侣技、专属任务</td><td>社交、剧情</td></tr>
+      <tr><td>拜访家园</td><td>庄园做客</td><td>情谊值</td><td>家园、日常</td></tr>
+      <tr><td>结仇寻仇</td><td>仇人录（memories.enemies）</td><td>复仇目标</td><td>PVP</td></tr>
+      <tr><td rowspan="4"><b>协作类</b></td><td>组队搭伙</td><td>队伍系统（combat_logs.team_id）</td><td>组队收益、副本准入</td><td>战斗、副本</td></tr>
+      <tr><td>运镖护镖</td><td>镖局系统</td><td>镖银、声望</td><td>经济、PVP（劫镖）</td></tr>
+      <tr><td>帮派建设</td><td>帮派任务 / 帮战</td><td>帮贡、帮派技能</td><td>帮派、排行</td></tr>
+      <tr><td>集合求助</td><td>帮派 / 世界求助</td><td>人情、互助</td><td>社交、任务</td></tr>
+      <tr><td rowspan="3"><b>交流类</b></td><td>逛街交流</td><td>路人甲 / NPC 互动</td><td>人情、小线索</td><td>剧情、隐藏任务</td></tr>
+      <tr><td>茶楼听书</td><td>江湖轶事场所</td><td>传闻、线索</td><td>剧情、情报</td></tr>
+      <tr><td>庙会集市</td><td>限时社交场景</td><td>小游戏奖励、社交氛围</td><td>活动</td></tr>
+      <tr><td rowspan="3"><b>馈赠类</b></td><td>红包打赏</td><td>江湖红包</td><td>人气、好感</td><td>经济、社交</td></tr>
+      <tr><td>送礼答谢</td><td>礼物互赠</td><td>好感度</td><td>关系类系统</td></tr>
+      <tr><td>情义相助</td><td>帮派互助</td><td>帮贡、情谊</td><td>帮派</td></tr>
+    </tbody>
+  </table>
+
+  <h3>四、晋升机制</h3>
+  <table>
+    <thead><tr><th>境界</th><th>解锁条件</th><th>力量本源</th><th>数值策略</th></tr></thead>
+    <tbody>
+      <tr><td>基础篇</td><td>随角色等级解锁（<code>skill_templates.min_level</code>）</td><td>内力 mana</td><td>低消耗、稳定输出，作为常驻输出与生存底座</td></tr>
+      <tr><td>科学篇</td><td>角色等级 + 参悟 / 特训条件（社交资源兑换）</td><td>体能 / 精力</td><td>技巧克制：破防 / 穿透 / 预判，消耗中等</td></tr>
+      <tr><td>玄学篇</td><td>角色等级 + 机缘 / 资源（悟道任务、灵石、社交深度）</td><td>灵力</td><td>范围爆发、高消耗、高冷却，稀缺而不泛滥</td></tr>
+    </tbody>
+  </table>
+
+  <h3>五、平衡哲学 — 机制差异平衡</h3>
+  <ul>
+    <li>三层<b>定位不同而非碾压</b>：基础稳、科学巧、玄学猛——不存在「高阶完全取代低阶」。</li>
+    <li>强度梯度靠「<b>门槛 + 消耗 + 冷却</b>」三方共同平衡，防止数值膨胀。</li>
+    <li>科学篇受「不夸张脱离现实」约束，其强大体现为<b>机制</b>（克制关系）而非数值。</li>
+    <li>玄学篇的稀缺性由「机缘获取」保证——机缘来自社交深度（打听消息、揭榜、情谊），天然限制泛滥。</li>
+  </ul>
+
+  <h3>六、命名风格</h3>
+  <table>
+    <thead><tr><th>境界</th><th>命名风格</th><th>示例</th></tr></thead>
+    <tbody>
+      <tr><td>基础篇</td><td>传统武学名目，讲究拳理出处</td><td>太极拳·揽雀尾、形意·崩拳、金钟罩、梯云纵</td></tr>
+      <tr><td>科学篇</td><td>物理/生物概念 + 武技化表达</td><td>动能贯拳、流体切割、次声震荡、神经预判</td></tr>
+      <tr><td>玄学篇</td><td>五行气象 + 天地意象</td><td>炎龙焚天、寒冰结界、雷动九天、御风千里</td></tr>
+    </tbody>
+  </table>
+
+  <h3>七、社交能量与资源循环（互动积攒什么）</h3>
+  <p><b>玩法定位</b>：明确「互动积攒能量、资源」的具体所指——每类社交动作产出可计量的能量/资源，全部回流到成长。</p>
+  <table>
+    <thead><tr><th>社交动作</th><th>积攒的能量/资源</th><th>回流去向</th></tr></thead>
+    <tbody>
+      <tr><td>情报类（刺探/打听/窃听）</td><td>情报值、情报货品</td><td>任务线索、战斗弱点、玄学机缘（见 8.6）</td></tr>
+      <tr><td>展示类（摆摊/切磋/称号）</td><td>人气、名声、交易流量</td><td>交易溢价、榜单荣誉、帮派招募（见 8.16）</td></tr>
+      <tr><td>悬赏类（揭榜/委托）</td><td>声望、佣金、人情</td><td>修炼资源兑换、VIP 社交特权（见 11.9）</td></tr>
+      <tr><td>关系类（结义/师徒/侠侣）</td><td>好感度、默契、传承技能</td><td>组队加成、合击强度、双人任务（见 8.7、6.19）</td></tr>
+      <tr><td>协作类（组队/运镖/帮战）</td><td>帮贡、镖银、团队声望</td><td>帮派技能、驻地建设、分红（见 8.22）</td></tr>
+      <tr><td>交流类（逛街/听书）</td><td>人情、小线索、传闻</td><td>隐藏任务、情报货源（见 8.10、8.12）</td></tr>
+      <tr><td>馈赠类（红包/送礼/相助）</td><td>好感、信誉、帮贡</td><td>关系升级、赊账额度、担保资格（见 8.13、11.5）</td></tr>
+    </tbody>
+  </table>
+  <div class="note"><b>核心循环</b>：社交动作 → 能量/资源 → 修炼与剧情条件 → 力量成长 → 更高级社交场景（更贵的情报、更大的交易、更强的帮派）——<b>「社交—成长」互为燃料</b>，任何一端的停滞都会拖慢另一端，这是本作数值设计的最高原则。</div>
+
+  <h3>八、玩家成长旅程（社交视角的成长地图）</h3>
+  <table>
+    <thead><tr><th>阶段</th><th>等级带</th><th>社交主线</th><th>关键目标</th></tr></thead>
+    <tbody>
+      <tr><td>初入江湖</td><td>1-10</td><td>拜师 + 逛街 + 首次组队</td><td>建立第一个关系（见 15.3 D1-D2）</td></tr>
+      <tr><td>小有名气</td><td>11-30</td><td>入帮 + 运镖 + 摆摊</td><td>拥有帮派身份与第一桶金（见 15.3 D4-D5）</td></tr>
+      <tr><td>江湖新秀</td><td>31-60</td><td>结义 + 刺探 + 悬赏</td><td>稳定关系 + 情报网成型（见 15.3 D6-D7）</td></tr>
+      <tr><td>一方豪杰</td><td>61-90</td><td>帮派治理 + 天梯 + 拍卖</td><td>社交资产经营（帮派/声誉/人脉）</td></tr>
+      <tr><td>传说人物</td><td>91+</td><td>传承 + 门派声望 + 传奇事件</td><td>被世界记住（雕像/纪念碑，见 10.7）</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- ==================== 第1章 项目概述 ==================== -->
+<section class="chapter" id="ch1">
+  <div class="chapter-inner">
+  <h2 class="ch-title">第 1 章 · 项目概述</h2>
+  <p class="ch-desc">面向 3D 武侠题材的实时社交游戏服务端。本章交代技术底座与设计原则，帮助策划理解「系统能做什么、边界在哪」。</p>
+
+  <h3>1.1 技术栈与架构</h3>
+  <table>
+    <thead><tr><th>层</th><th>技术</th><th>职责</th></tr></thead>
+    <tbody>
+      <tr><td>运行时</td><td>NestJS 11 + TypeScript</td><td>模块化服务端框架，依赖注入</td></tr>
+      <tr><td>数据层</td><td>TypeORM + PostgreSQL 17</td><td>实体建模、自动建表、事务</td></tr>
+      <tr><td>缓存/队列</td><td>Redis + BullMQ</td><td>会话、限流、异步任务</td></tr>
+      <tr><td>实时通信</td><td>Socket.IO</td><td>WebSocket 网关，场景同步</td></tr>
+      <tr><td>认证</td><td>JWT 双体系</td><td>客户端 / 管理员独立令牌</td></tr>
+    </tbody>
+  </table>
+  <p>请求统一走 <code>/api</code> 前缀：客户端接口 <code>/api/client/v1/…</code>，运营后台 <code>/api/admin/v1/…</code>（详见附录 A）。</p>
+
+  <h3>1.2 模块清单（29 个）</h3>
+  <table>
+    <thead><tr><th>领域</th><th>模块</th><th>核心职责</th></tr></thead>
+    <tbody>
+      <tr><td rowspan="4">账号与运营</td><td>auth</td><td>账号注册登录、管理员认证、封禁</td></tr>
+      <tr><td>admin</td><td>GM 操作与审计日志</td></tr>
+      <tr><td>config</td><td>远程热更配置</td></tr>
+      <tr><td>server-status</td><td>服务器状态与版本</td></tr>
+      <tr><td rowspan="6">角色与世界</td><td>player</td><td>玩家档案、货币、在线状态</td></tr>
+      <tr><td>character</td><td>角色、属性、武学、关系、谍报、入魔等 17 组子实体</td></tr>
+      <tr><td>world</td><td>场景、NPC、怪物、物体、触发器</td></tr>
+      <tr><td>item-drop</td><td>掉落模板</td></tr>
+      <tr><td>inventory</td><td>背包、装备、物品模板</td></tr>
+      <tr><td>combat</td><td>战斗日志与结算</td></tr>
+      <tr><td rowspan="4">玩法</td><td>skill</td><td>技能模板（三级武学载体）</td></tr>
+      <tr><td>buff</td><td>增益 / 减益效果模板</td></tr>
+      <tr><td>quest</td><td>任务模板与进度</td></tr>
+      <tr><td>achievement</td><td>成就模板与解锁</td></tr>
+      <tr><td rowspan="5">社交</td><td>chat</td><td>世界 / 私聊 / 帮派聊天</td></tr>
+      <tr><td>social</td><td>好友、帮派、捐献</td></tr>
+      <tr><td>mail</td><td>系统 / 玩家邮件</td></tr>
+      <tr><td>activity</td><td>限时活动、签到</td></tr>
+      <tr><td>matchmaking</td><td>匹配（擂台/竞技）</td></tr>
+      <tr><td rowspan="4">经济</td><td>economy</td><td>货币流水（全量审计）</td></tr>
+      <tr><td>trade</td><td>摆摊交易、拍卖行</td></tr>
+      <tr><td>payment</td><td>充值商品、订单</td></tr>
+      <tr><td>vip</td><td>VIP 等级与特权</td></tr>
+      <tr><td rowspan="3">数据</td><td>ranking</td><td>战力 / 等级 / 财富排行</td></tr>
+      <tr><td>analytics</td><td>行为日志、留存统计</td></tr>
+      <tr><td>gateway</td><td>Socket.IO 实时网关</td></tr>
+      <tr><td rowspan="2">支撑</td><td>notice</td><td>公告（弹窗/滚动/邮件）</td></tr>
+      <tr><td>offline</td><td>离线结算（生存消耗等）</td></tr>
+    </tbody>
+  </table>
+
+  <h3>1.3 设计原则</h3>
+  <ul>
+    <li><b>社交驱动</b>：所有系统闭环到「互动 → 回报」循环，避免单机化养成。</li>
+    <li><b>身份安全</b>：账号/玩家/角色三层分离，双令牌隔离客户端与后台权限。</li>
+    <li><b>全量审计</b>：货币流水、物品变更、GM 操作、行为日志全覆盖，支撑反作弊与数据运营。</li>
+    <li><b>运营可配</b>：模板表（技能/任务/活动/掉落/公告）全部支持后台配置与热更。</li>
+    <li><b>软删除</b>：核心业务表均带 <code>deleted_at</code>，运营误删可恢复。</li>
+  </ul>
+
+  <h3>1.4 设计目标与里程碑</h3>
+  <p><b>一句话目标</b>：一款「社交是核心玩法」的 3D 武侠游戏——互动推动剧情、积攒能量与资源，社交手段即力量来源。</p>
+  <ul>
+    <li><b>设计目标</b>：① 每个系统都闭环到「互动 → 回报」；② 社交货币（人情 / 帮贡 / 声望）只能通过社交获取（见 11.12）；③ 剧情随社交推进（见 7.6）；④ 社交建立率作为留存先行指标（见 13.8）。</li>
+    <li><b>实现节奏</b>：按「先基础社交设施（聊天 / 好友 / 帮派）→ 再核心社交玩法（情报 / 悬赏 / 关系）→ 后社交经济（担保 / 赊账 / 黑市）」三步推进，向目标靠近。</li>
+    <li><b>验证口径</b>：每日社交动作量、关系建立率、帮派活跃度、社交消费占比（见 12.5④）——数据驱动迭代。</li>
+  </ul>
+  </div>
+</section>
+
+<!-- ==================== 第2章 账号与权限 ==================== -->
+<section class="chapter" id="ch2">
+  <div class="chapter-inner">
+  <h2 class="ch-title">第 2 章 · 账号与权限</h2>
+  <p class="ch-desc">账号体系是身份与安全的根基。策划视角关注：游客转化、封禁规则、后台人员权限划分。</p>
+
+  <h3>2.1 账号类型</h3>
+  <table>
+    <thead><tr><th>类型</th><th>特点</th><th>策划关注点</th></tr></thead>
+    <tbody>
+      <tr><td>normal 普通</td><td>用户名 + 密码注册</td><td>主账号形态，可绑定手机/邮箱增强找回</td></tr>
+      <tr><td>guest 游客</td><td>设备 ID 免注册进入</td><td>转化漏斗起点；建议引导游客绑定正式账号，避免换设备丢档</td></tr>
+      <tr><td>wechat / google</td><td>三方授权</td><td>降低注册门槛（当前默认未开放）</td></tr>
+    </tbody>
+  </table>
+
+  <h3>2.2 封禁体系</h3>
+  <p><code>auth_accounts</code> 支持<b>封禁原因</b>（ban_reason）与<b>封禁到期</b>（ban_expire_at），到期自动解封；<code>token_version</code> 支持强制全员下线（版本号 +1，旧令牌全部失效），用于重大安全事件或版本更新。</p>
+
+  <h3>2.3 双令牌权限</h3>
+  <table>
+    <thead><tr><th>令牌</th><th>对象</th><th>接口域</th><th>角色</th></tr></thead>
+    <tbody>
+      <tr><td>Client JWT</td><td>玩家</td><td><code>/api/client/v1</code></td><td>玩家身份（playerId）</td></tr>
+      <tr><td>Admin JWT</td><td>运营人员</td><td><code>/api/admin/v1</code></td><td>super_admin / admin / operator / viewer</td></tr>
+    </tbody>
+  </table>
+  <div class="note"><b>权限设计建议</b>：viewer 仅可读（数据查看），operator 可操作模板/发奖，admin 可管理管理员与封禁，super_admin 为唯一超级账号；重要操作（发奖/封禁）必须留痕于 <code>gm_operate_logs</code>。</div>
+
+  <h3>2.4 相关表</h3>
+  <p>auth_accounts（账号）、admin_users（管理员）、account_login_logs（登录日志）、gm_operate_logs（GM 操作日志）。登录日志记录 IP/设备/地区，可支撑异地登录风控。</p>
+
+  <h3>2.5 账号安全与社交（身份是社交信任的锚点）</h3>
+  <ul>
+    <li><b>异地登录风控</b>：登录日志（IP / 设备 / 地区，见 2.4）异常触发二次验证——<b>账号被盗 = 社交关系被劫持</b>（好友 / 帮派 / 交易都是目标）。</li>
+    <li><b>安全密码</b>：二次验证密码（见 3.1 safe_password_hash）用于交易 / 贵重操作——社交资产（礼物 / 红包 / 帮贡）同样需保护。</li>
+    <li><b>绑定与找回</b>：手机 / 邮箱绑定增强找回（见 2.1）——找回渠道是信任恢复的入口。</li>
+    <li><b>冻结与申诉</b>：可疑操作可冻结账号（临时），申诉流程恢复——与封禁（见 2.6）分级处置。</li>
+  </ul>
+
+  <h3>2.6 封禁与社交治理联动（处罚不止封号）</h3>
+  <p><b>玩法定位</b>：封禁是治理的最终手段（见 8.17 社交安全）——处罚要「打在社交关系上」而非只打在登录上，威慑才有社会性。</p>
+  <ul>
+    <li><b>分级处置</b>：警告 → 禁言（见 14.4）→ 帮派除名（帮主执行，见 8.18）→ 限交易 → 封禁——按社交影响从小到大。</li>
+    <li><b>社交后果</b>：严重违规封禁时，社交资产同步处理（称号收回 / 帮派除名 / 榜单移除，见 10.6）——<b>违规者被社会性除名</b>。</li>
+    <li><b>封禁公示</b>：重大违规公示（江湖快报，见 8.10②）——公开治理建立公平感。</li>
+    <li><b>申诉与修复</b>：封禁到期后，信用分（见 8.15③）需通过社交行为修复——<b>重新做人从社交做起</b>。</li>
+  </ul>
+
+  <h3>2.7 运营权限与社交干预（GM 是江湖的「执剑人」）</h3>
+  <ul>
+    <li><b>权限分级</b>：viewer 只读 → operator 可操作模板 / 发奖 → admin 可管理管理员与封禁 → super_admin 唯一超级账号（见 2.3）。</li>
+    <li><b>社交仲裁权</b>：operator 级可执行社交仲裁（见 8.17②）、战斗调解（见 6.25）、活动回滚（见 13.6）——<b>社交纠纷的终审在 GM</b>。</li>
+    <li><b>权限留痕</b>：一切运营操作（含社交干预）入 gm_operate_logs（见 13.5）——执剑人也要被监督。</li>
+  </ul>
+
+  <h3>2.8 账号与身份认证（合规与防沉迷）</h3>
+  <ul>
+    <li><b>实名认证</b>：按发行地区合规要求接入实名认证（充值 / 部分玩法前置）。</li>
+    <li><b>防沉迷</b>：未成年时长 / 时段限制，与推送（见 14.6）联动——社交游戏也要守规矩。</li>
+    <li><b>账号关联</b>：SSO 单点（见 2.1 三方授权）未来接入时，账号体系已预留 token_version 全员下线能力（见 2.2）。</li>
+  </ul>
+  </div>
+</section>
+
+<!-- ==================== 第3章 玩家与角色 ==================== -->
+<section class="chapter" id="ch3">
+  <div class="chapter-inner">
+  <h2 class="ch-title">第 3 章 · 玩家与角色</h2>
+  <p class="ch-desc">「玩家」是现实身份（账号），「角色」是江湖身份（一个玩家可拥有多个角色，NPC 也复用角色模型）。本作的角色系统深度为武侠题材之最：属性、需求、资质、特长、关系、记忆、阵营、入魔、谍报、生存——每一层都服务于「社交驱动」。</p>
+
+  <h3>3.1 玩家档案（players）</h3>
+  <p>等级（level）、经验（exp）、VIP（vip_level / vip_exp）、累计充值（total_recharge）、在线状态。<b>安全密码</b>（safe_password_hash）用于交易/贵重操作的二次验证。</p>
+
+  <h3>3.2 职业（characters.profession）</h3>
+  <p>19 种职业决定身份底色与社交产出方向：农夫、樵夫、矿工（资源生产）、商人（经济）、守卫、将军（战斗）、工匠、铁匠（打造）、医生、药师（医疗）、教书、书生（知识）、乞丐（情报）、杀手、刺客（暗杀）、密探（谍报）、和尚（辅助）、贵族、小偷。</p>
+  <div class="note"><b>策划设计要点</b>：职业是<b>社交分工</b>的天然纽带——玩家需要「找铁匠打装备、找药师求药、找密探买情报」，职业差异即社交需求的来源。建议职业特长与效率系数（character_specialties.efficiency）影响生产/修炼速度。</div>
+
+  <h3>3.3 五大属性（character_attributes）</h3>
+  <table>
+    <thead><tr><th>属性</th><th>默认</th><th>对应境界</th><th>影响</th></tr></thead>
+    <tbody>
+      <tr><td>strength 力量</td><td>10</td><td>基础篇拳脚/兵器物理威力</td><td>近战输出、负重</td></tr>
+      <tr><td>speed 速度</td><td>10</td><td>基础篇轻功、科学篇神经反应</td><td>出手顺序、闪避、移动</td></tr>
+      <tr><td>defense 防御</td><td>10</td><td>基础篇外功、科学篇力学结构</td><td>减伤、生存</td></tr>
+      <tr><td>intelligence 智力</td><td>10</td><td>科学篇理解、玄学篇灵力</td><td>法系威力、参悟速度</td></tr>
+      <tr><td>comprehension 悟性</td><td>10</td><td>全境界</td><td>修炼速度、技能习得上限</td></tr>
+      <tr><td>loyalty 忠诚度</td><td>50</td><td>—</td><td>社交信用：背叛/背盟下降，影响委托与结义信任</td></tr>
+    </tbody>
+  </table>
+  <p><b>战力</b>（combat_power）由属性/技能/装备综合，是排行与匹配的依据。</p>
+
+  <h3>3.4 需求系统（character_needs）— 社交驱动的底层引擎</h3>
+  <p>参考马斯洛需求层次，角色拥有五类需求（默认 50）：</p>
+  <table>
+    <thead><tr><th>需求</th><th>满足方式（策划可配）</th></tr></thead>
+    <tbody>
+      <tr><td>survival 生存</td><td>食物（character_resources.food）、住所</td></tr>
+      <tr><td>safety 安全</td><td>阵营庇护、保镖、安全区</td></tr>
+      <tr><td>belonging 归属</td><td>帮派、结义、师徒——<b>必须社交</b></td></tr>
+      <tr><td>esteem 尊重</td><td>声望、称号、排行——<b>必须展示</b></td></tr>
+      <tr><td>actualization 自我实现</td><td>武学巅峰、玄学机缘、剧情成就</td></tr>
+    </tbody>
+  </table>
+  <div class="note"><b>核心玩法连接</b>：需求得不到满足 → 角色状态（生存/安全）下降 → 需要求助帮派/好友；归属与尊重需求<b>只能通过社交动作满足</b>——这是「社交是核心玩法」在数值层的硬保证。</div>
+
+  <h3>3.5 资质与特长</h3>
+  <ul>
+    <li><b>资质</b>（character_qualifications）：默认 2，决定武学成长上限；消耗性资质（is_consumable）作为高价值奖励投放。</li>
+    <li><b>特长</b>（character_specialties）：主特长 + 副特长列表 + 效率系数，影响对应职业行为的产出速度。</li>
+  </ul>
+
+  <h3>3.6 关系网络（character_relationships + character_memories）</h3>
+  <p><b>关系表</b>记录角色间的<b>好感度</b>（favorability）、关系等级（stranger 陌生 → friend 友人 → confidant 知己 → enemy 仇敌）、关系事件历史与剧情触发钩子。<b>记忆表</b>承载长期社交记忆：雇主、互动、秘密、朋友、仇敌、传闻。</p>
+  <div class="note"><b>策划设计要点</b>：记忆是「社交即剧情」的数据底座——NPC 与玩家记住你帮过/害过谁，触发差异化剧情与隐藏任务；秘密与传闻（secrets/rumors）是情报交易的货品。</div>
+
+  <h3>3.7 阵营（character_factions）</h3>
+  <p>正（righteous）/ 邪（evil）/ 中立（neutral）三阵营，默认中立。阵营等级（默认 5）与称号（faction_title），阵营间好感度（faction_relations）影响组队/交易/攻防关系。入魔会改变阵营偏向（向邪偏移），猎杀与被猎杀是阵营冲突的日常形态。</p>
+
+  <h3>3.8 入魔（character_darkened）— 高风险高回报</h3>
+  <p><b>玩法定位</b>：高风险高回报的角色成长分支，承担「长线养成 + 玩家对抗」双重职责。</p>
+  <ul>
+    <li><b>核心循环</b>：角色选择入魔 → 战力 ×1.5（power_boost 默认 1.5）→ 获得魔名（darkened_name，隐藏原身份）→ 成为他人猎杀目标（hunting_target）→ 可洗白回归或维持入魔。</li>
+    <li><b>设计意图</b>：「强但不安全」——数值鼓励入魔，身份隐藏带来 PVP 博弈，猎杀机制形成玩家间对立目标。</li>
+    <li><b>可配置项</b>：战力倍率、入魔原因文案、猎杀目标绑定。</li>
+    <li><b>系统联动</b>：入魔 ↔ 排行榜（战力加成影响排位）↔ 阵营 ↔ 社交（魔名影响好友识别与信任）。</li>
+    <li><b>平衡考量</b>：1.5 倍若叠加装备/技能易膨胀，需限制入魔后成长曲线；猎杀过于频繁会导致对抗疲劳。</li>
+  </ul>
+
+  <h3>3.9 谍报（character_espionages）— 情报社交的核心</h3>
+  <p><b>玩法定位</b>：情报是社交驱动的「硬通货」，谍报系统是五大社交动作之一「刺探情报」的载体。</p>
+  <ul>
+    <li>能力开关：can_spy（可刺探）、can_infiltrate（可渗透），谍报等级（espionage_level）决定成功率与情报价值。</li>
+    <li>当前谍报任务（current_mission）+ 伪装身份（disguise）——渗透敌方阵营/帮派窃取情报。</li>
+    <li><b>产出</b>：目标弱点（供战斗克制）、剧情线索（供任务）、秘密（供交易）。</li>
+  </ul>
+
+  <h3>3.10 生存消耗（character_consumptions）</h3>
+  <p>每日食物消耗（默认 9），低于最低食物线（默认 3）进入饥饿；连续饥饿（hunger_days）恶化状态：well_fed 饱食 → normal 正常 → hungry 饥饿 → starving 濒死 → dead 饿死。<b>离线也会结算</b>（offline 模块），形成「回归后处理生计」的日常钩子。</p>
+
+  <h3>3.11 状态 / 位置 / 资源 / 伙伴 / 特殊效果</h3>
+  <ul>
+    <li><b>状态</b>（character_statuses）：气血 health、内力 mana（基础篇消耗）、财富 wealth、声望 reputation（社交核心）、生死（江湖死亡制：is_alive / death_cause / death_date）、世代 season（江湖传承）、家族 family（继承/复仇）。</li>
+    <li><b>位置</b>（character_locations）：地图/地块/区域/坐标/室内，路径历史用于行为分析。</li>
+    <li><b>资源</b>（character_resources）：食物/木材/铁/草药/金银——生存与生产原料。</li>
+    <li><b>伙伴</b>（character_companions）：跟随、陪伴时长、牺牲机制（sacrifice_used / last_words，剧情向）。</li>
+    <li><b>特殊效果</b>（character_special_effects）：剧情/活动授予的持久效果（代码识别 code + 参数 params）。</li>
+  </ul>
+
+  <h3>3.12 角色形象与外观（社交展示的第一印象）</h3>
+  <p><b>玩法定位</b>：外观是「被看见」的第一媒介——同场景玩家靠形象认人，外观即社交名片（见 5.6 名片联动）。</p>
+  <ul>
+    <li><b>形象数据</b>：捏脸 / 时装 / 挂件（外观系统数据入角色档案），装备「展示模式」叠加稀有度光效（见 4.6③）。</li>
+    <li><b>称号显示</b>：头顶称号（声望 / 成就 / 榜单，见 8.16①）——一屏之内立人设。</li>
+    <li><b>外观收集</b>：时装图鉴（收集奖励，见 4.6 炫耀经济）——收集是展示的燃料。</li>
+    <li><b>外观交易</b>：可交易外观进入交易 / 拍卖（见 11 章）——美也是经济。</li>
+  </ul>
+
+  <h3>3.13 角色叙事身份（江湖名号与人设）</h3>
+  <p><b>玩法定位</b>：江湖身份是社交叙事层——名字之外，还有名号、诗号、传记。</p>
+  <ul>
+    <li><b>江湖名号</b>：系统称号（如「铁掌镇河」）+ 自定义诗号（见 14.2② 自定义诗号）——身份可自定义。</li>
+    <li><b>江湖传记</b>：角色经历自动生成传记（大事记：结义 / 复仇 / 榜单）——社交史即传记。</li>
+    <li><b>魔名</b>：入魔后获得隐藏原身份的魔名（见 3.8）——身份可隐藏，叙事更刺激。</li>
+    <li><b>世代与家族</b>：江湖传承世代（season）+ 家族（family）——身份可继承（见 3.11 状态）——「他爹是当年那位」是顶级社交谈资。</li>
+  </ul>
+  </div>
+</section>
+
+<!-- ==================== 第4章 背包与道具 ==================== -->
+<section class="chapter" id="ch4">
+  <div class="chapter-inner">
+  <h2 class="ch-title">第 4 章 · 背包与道具</h2>
+  <p class="ch-desc">道具是经济与社交的载体：可交易、可掉落、可绑定，全部变更留痕。</p>
+
+  <h3>4.1 物品模板（item_templates）</h3>
+  <table>
+    <thead><tr><th>维度</th><th>取值</th><th>策划关注</th></tr></thead>
+    <tbody>
+      <tr><td>类型 item_type</td><td>材料 / 消耗 / 装备等</td><td>决定使用行为与掉落归属</td></tr>
+      <tr><td>稀有度 rarity</td><td>common / rare / epic / legendary</td><td>掉落概率与社交炫耀价值</td></tr>
+      <tr><td>堆叠 max_stack</td><td>默认 99</td><td>仓库压力设计</td></tr>
+      <tr><td>可交易 can_trade / 可掉落 can_drop</td><td>布尔</td><td>经济流通与保值锚点</td></tr>
+      <tr><td>绑定 bind_type</td><td>none / equip 穿戴绑定 / acquire 获得绑定</td><td>绑定钻石等防通胀道具常用</td></tr>
+    </tbody>
+  </table>
+
+  <h3>4.2 背包（inventory_items）</h3>
+  <p>按玩家持有（player_id），含数量、格子索引、绑定状态（bind_status）、过期时间（限时道具）、附加属性（extra_attrs：随机词条/强化值）。</p>
+
+  <h3>4.3 装备（character_equipment）</h3>
+  <p>五个槽位：weapon 武器 / helmet 头盔 / armor 护甲 / boots 靴子 / accessory 饰品。装备槽位唯一（同一角色同一槽位只能一件），通过 <code>inventory_item_id</code> 关联背包物品。</p>
+
+  <h3>4.4 变更审计（player_item_change_logs）</h3>
+  <p>每次获得/移除/交易/销毁都记录：变更类型、数量、操作追踪（op_trace）、变更后余额。与货币流水（transactions）构成双轨审计，支撑反作弊与问题追溯。</p>
+
+  <h3>4.5 道具的社交属性（物品不只是数值）</h3>
+  <p><b>玩法定位</b>：道具是「社交的载体」——外观被看见、礼物表心意、限定有话题，物品模板需要配置<b>社交标签</b>。</p>
+  <h4>① 社交标签字段（item_templates 扩展）</h4>
+  <table>
+    <thead><tr><th>字段</th><th>说明</th><th>对接</th></tr></thead>
+    <tbody>
+      <tr><td>display</td><td>可展示（橱窗 / 称号来源）</td><td>见 8.16①</td></tr>
+      <tr><td>gift_weight</td><td>送礼好感权重</td><td>见 8.7</td></tr>
+      <tr><td>topic</td><td>话题标签（快报可报道）</td><td>见 6.22②</td></tr>
+    </tbody>
+  </table>
+  <h4>② 道具叙事</h4>
+  <p>限定道具带「来处」（产出活动 / 事件，见第 9 章），成为江湖谈资——物品描述里的一句来处，就是玩家的社交开场白。</p>
+
+  <h3>4.6 稀有度与炫耀经济（展示类社交的底座）</h3>
+  <p><b>玩法定位</b>：稀有度是「被看见」的货币——越稀有越要秀，炫耀动作（见 8.16）依赖稀有度体系供给素材。</p>
+  <ul>
+    <li><b>梯度深化</b>（承接 4.1）：common / rare / epic / legendary 四档外观特效分级——同款装备 legendary 有专属光效。</li>
+    <li><b>全服播报</b>：获得 legendary 触发全服广播（展示类，见 8.16），上茶楼头条（见 8.10②）。</li>
+    <li><b>套装与称号</b>：集齐套装解锁展示称号（见 8.16①），套装图鉴入个人主页（见 8.16③ 观战主页）。</li>
+    <li><b>炫耀橱窗</b>：装备栏可设「展示模式」，同场景玩家可见（名片联动，见 5.6）——装备是行走的名片。</li>
+  </ul>
+
+  <h3>4.7 礼物道具体系（关系系统的载体）</h3>
+  <p><b>玩法定位</b>：礼物是「关系类」社交动作的实体载体——心意通过物品传递，好感度通过礼物计量（见 8.7）。</p>
+  <ul>
+    <li><b>礼物模板</b>：礼物道具带好感度权重（gift_weight，见 4.5①），送礼记录入好感度流水（见 8.7 好感度阶段）。</li>
+    <li><b>礼物场景</b>：日常送礼（相识解锁，见 8.7）、节日限定礼物（活动产出，见第 9 章）、婚礼彩礼（见 8.7④）。</li>
+    <li><b>红包道具</b>（深化 8.13②）：金币 / 钻石红包封装为道具，可群发（帮派 / 队伍 / 全场景）——红包是「馈赠类」社交动作的快捷载体。</li>
+    <li><b>防刷</b>：每日送礼上限（见 8.7）+ 礼物价值封顶，防止互刷好感。</li>
+  </ul>
+
+  <h3>4.8 限定与绝版道具（稀缺性社交）</h3>
+  <p><b>玩法定位</b>：稀缺制造话题——限定让活动有吸引力，绝版让老玩家有身份，存量流通让交易有价值（见第 11 章）。</p>
+  <ul>
+    <li><b>限定道具</b>：活动限定产出（见第 9 章），错过等复刻——复刻由社区投票决定（社区运营，见 13.7）。</li>
+    <li><b>绝版道具</b>：停产后存量为王，可交易（见第 11 章）保值——绝版是「老玩家身份」的社交勋章。</li>
+    <li><b>防通胀</b>：绑定（bind_type，见 4.1）与限量（max_participants，见 9.1）双保险，控制存量。</li>
+    <li><b>绝版行情</b>：茶楼物价指数（见 11.8）反映绝版价格曲线——绝版是社交资产也是投资品。</li>
+  </ul>
+
+  <h3>4.9 背包管理与社交空间（整理也是社交）</h3>
+  <p><b>玩法定位</b>：背包不只是仓库——共享、展示、转交让「持有」变成社交关系的一部分。</p>
+  <ul>
+    <li><b>背包与仓库</b>：容量可扩充（扩充道具），仓库格解锁——收纳本身是长期目标。</li>
+    <li><b>帮派仓库</b>：共享材料（帮贡兑换，见 8.22），帮派建设用料集中存放（见 8.19）——<b>个人持有参与集体建设</b>。</li>
+    <li><b>家园展示柜</b>：收藏品摆入家园展示柜（见 8.16② 家园拜访可见）——收藏是「被参观」的社交资产。</li>
+    <li><b>赠予与转交</b>：好友间道具转交（限次数防刷）、NPC 传信委托（见 5.11）——道具在关系中流动。</li>
+    <li><b>一键整理</b>：背包一键整理、套装方案保存（联动 6.12 数值成长）——整理效率让玩家更多时间在场景社交。</li>
+  </ul>
+
+  <h3>4.10 装备数值平衡策略（强化有度，迭代有序）</h3>
+  <p><b>玩法定位</b>：装备是战力载体也是保值资产——平衡目标：<b>强化有上限、迭代有节奏、老装备有价值、数值不碾压</b>。</p>
+  <ul>
+    <li><b>强化上限</b>：强化等级封顶（默认 +10），每级加成递减（+9 级收益衰减 30%）——<b>防滚雪球，逼玩家横向配装而非纵向死磕</b>。</li>
+    <li><b>耐久与消耗</b>：装备耐久随战斗消耗（见 4.3），修复消耗材料——<b>装备有生命周期，持续回收经济存量（呼应 5.21⑤ 回收泵）</b>。</li>
+    <li><b>迭代节奏</b>：新装备阶梯投放（版本 / 活动 / 副本），替代曲线与成长曲线对齐（见 6.12）——老装备降价入次级市场（见 11.8 物价），<b>换代即话题，旧装即馈赠</b>（见 8.13 送礼）。</li>
+    <li><b>产出-消耗平衡</b>：装备产出（打造 / 掉落）与耐久消耗、强化材料消耗挂钩（见 5.21② 消耗锚点）——<b>装备是消耗泵，不是通胀源</b>。</li>
+    <li><b>防碾压护栏</b>：高装等对低装等衰减（境界差衰减同思路，见 6.26②）——<b>装备碾压有上限，操作与配合永远有空间</b>。</li>
+  </ul>
+  </div>
+</section>
+
+<!-- ==================== 第5章 世界与场景 ==================== -->
+<section class="chapter" id="ch5">
+  <div class="chapter-inner">
+  <h2 class="ch-title">第 5 章 · 世界与场景</h2>
+  <p class="ch-desc">世界是社交的舞台。区域划分、NPC 分布、触发器编排，决定玩家在何处相遇、以何种方式互动。</p>
+
+  <h3>5.1 场景（scenes）</h3>
+  <p>场景类型（town 城镇 / wild 野外 / dungeon 副本 / arena 擂台等）、地图资源、尺寸、图层配置、刷新规则、触发器组、进入等级（min_level）、人数上限（max_players）。城镇是社交主舞台，野外是资源与对抗，副本/擂台是协作与竞技。</p>
+
+  <h3>5.2 区域（character_locations.region）</h3>
+  <p>central_city 主城 / black_forest 黑森林 / iron_mine 铁矿 / gold_plain 金原 / wilderness 荒野。区域决定资源产出与安全等级——主城安全区承载摆摊/茶馆/擂台，野外承载采集与猎杀。</p>
+
+  <h3>5.3 实体模板与刷怪</h3>
+  <table>
+    <thead><tr><th>实体</th><th>模板表</th><th>策划要点</th></tr></thead>
+    <tbody>
+      <tr><td>NPC</td><td>npc_templates</td><td>交互类型（talk 对话 / shop 商店 / quest 任务 / trade 交易）、对话脚本（dialogue_id）、活动范围与自动巡逻——路人甲、百晓生、铁匠铺老板都由此配置</td></tr>
+      <tr><td>怪物</td><td>monster_templates</td><td>气血/攻击、掉落模板、刷新 CD、仇恨范围、AI 类型、附加属性（三级武学抗性）</td></tr>
+      <tr><td>物体</td><td>object_templates</td><td>宝箱/采集点/石头/植物，交互奖励与 CD，一次性标记</td></tr>
+      <tr><td>刷怪点</td><td>scene_entity_spawns</td><td>场景内实体出生：类型/模板/坐标/数量/半径</td></tr>
+    </tbody>
+  </table>
+
+  <h3>5.4 触发器（scene_triggers）</h3>
+  <p>区域触发器四类：transport 传送（跨场景）/ story 剧情（触发剧情节点）/ battle 战斗（遭遇战）/ activity 活动（活动入口）。带条件（condition）与单次（once_only）控制。<b>策划设计要点</b>：剧情触发器是「社交推进剧情」的落点——条件可配置为「玩家已获得某情报 / 好感度达标」。</p>
+
+  <h3>5.5 城镇社交空间布局（社交场景地图）</h3>
+  <p><b>玩法定位</b>：主城不是装饰性场景，而是<b>按社交动线规划的「功能舞台」</b>——每个功能区承载特定社交动作，动线闭环让玩家「逛街一圈完成一天社交」。</p>
+  <table>
+    <thead><tr><th>功能区</th><th>位置</th><th>承载社交动作</th><th>系统对接</th></tr></thead>
+    <tbody>
+      <tr><td>茶楼</td><td>主城中心</td><td>听书 / 传闻 / 江湖快报（见 8.10②、6.22②）</td><td>情报、剧情</td></tr>
+      <tr><td>擂台</td><td>主城广场东</td><td>切磋扬名 / 观战打赏（见 8.5、8.16③、6.11）</td><td>战斗、排行</td></tr>
+      <tr><td>摆摊街</td><td>主城东市</td><td>摆摊叫卖 / 逛街（见第 11 章、8.16②）</td><td>交易、经济</td></tr>
+      <tr><td>官府</td><td>主城北街</td><td>揭皇榜 / 通缉公示（见 8.10①、8.9②）</td><td>任务、PVP</td></tr>
+      <tr><td>客栈</td><td>主城西门</td><td>组队集合 / 休息 / 离线挂机（见 8.14、6.17③）</td><td>协作、修炼</td></tr>
+      <tr><td>结义亭</td><td>主城西郊</td><td>结拜 / 侠侣仪式（见 8.7②④）</td><td>关系类</td></tr>
+      <tr><td>中心广场</td><td>主城中央</td><td>世界喊话聚集 / 活动集合（庙会，见 8.10③）</td><td>活动</td></tr>
+    </tbody>
+  </table>
+  <ul>
+    <li><b>动线设计</b>：功能区之间 10 秒内可达，形成「逛街 → 茶楼 → 擂台 → 摆摊」的自然社交动线，玩家移动本身就是「逛街交流」（见 8.12）的触发源。</li>
+    <li><b>场景密度</b>：主城安全区（见 5.2）不设进入门槛，保证任何时候都有社交密度；高峰期启用场景分流（镜像），维持密度而不拥堵。</li>
+  </ul>
+
+  <h3>5.6 场景内社交行为基础设施</h3>
+  <p><b>玩法定位</b>：场景要承载社交，先要有「看见彼此、喊得到人」的基础设施。</p>
+  <ul>
+    <li><b>附近频道与区域广播</b>：同场景玩家互相可见（名片 / 手势：作揖 / 挑衅 / 招手 / 鼓掌）；区域广播（附近频道）与世界频道（见 8.1）分层，避免刷屏。</li>
+    <li><b>场景聚集事件</b>：世界 BOSS 刷出 / 帮战集合 / 庙会开场自动生成中心广场集合点，一键传送召集（消耗少量资源，防滥用）。</li>
+    <li><b>偶遇机制</b>：场景移动概率触发偶遇（路人甲 / 行脚商 / 行脚僧，见 8.12①），让「赶路」也带社交期待。</li>
+    <li><b>场景分流策略</b>：主城高峰期镜像分流（按分线编号），同队 / 同帮玩家强制同线，避免「约好见面却不同线」。</li>
+  </ul>
+
+  <h3>5.7 野外与对抗场景的社交</h3>
+  <p><b>玩法定位</b>：野外是「竞争与协作并存」的社交场——采集抢点、组队猎杀、据点占领、镖线对峙，对抗本身就制造关系。</p>
+  <ul>
+    <li><b>采集区</b>：同资源点多人可采（组队共享采集加成）；采集中可被友好「切磋挑战」，输者让点——把资源竞争变成社交博弈而非纯 PK。</li>
+    <li><b>猎杀区</b>（红名出没地带）：玩家组队狩猎入魔者（见 8.9③）；猎杀组队是「协作类」社交动作的野外版本，猎杀成功全场景播报。</li>
+    <li><b>帮派资源点</b>：野外据点可被帮派占领（见 8.8），占领期内产出帮派资金，敌对帮派可发起争夺战——野外场景承载帮派对抗。</li>
+    <li><b>镖线对峙</b>：运镖路线跨场景（见 8.9①），沿途固定伏击区是「护送队 vs 劫镖团伙」的天然对峙舞台；安全区 / 非安全区标注清晰，红名不可入安全区。</li>
+  </ul>
+
+  <h3>5.8 副本与秘境场景的社交</h3>
+  <p><b>玩法定位</b>：副本入口是「组队等待的社交场景」，副本内是「分工协作的验证场」——秘境把「凑人」与「配合」都社交化。</p>
+  <ul>
+    <li><b>秘境入口聚集</b>：副本入口设「集结区」，支持组队自动匹配（见 8.14①）与等待互动（闲聊 / 切磋热身 / 临时搭伙）。</li>
+    <li><b>副本内分工</b>：高难副本 BOSS 机制分工（见 6.20②）+ 阵法配合（见 6.19①），验证日常社交经营的默契。</li>
+    <li><b>首通与排行</b>：副本首通全服广播（展示类），周通关榜并入排行（见第 10 章）——副本成就是「被看见」的勋章。</li>
+    <li><b>帮派 / 家园副本</b>：帮派副本（见 8.8）与家园练功桩（见 8.16②）是私域协作场景，成员共玩空间。</li>
+  </ul>
+
+  <h3>5.9 场景触发器 × 社交事件（深化 5.4）</h3>
+  <p><b>玩法定位</b>：触发器不只是剧情开关，更是<b>社交事件编排器</b>——定时事件、动态事件、社交条件事件，让场景每天都有「值得去的理由」。</p>
+  <h4>① 定时社交事件（排期表）</h4>
+  <table>
+    <thead><tr><th>事件</th><th>周期</th><th>场景</th><th>社交属性</th></tr></thead>
+    <tbody>
+      <tr><td>茶楼开书</td><td>每日</td><td>茶楼（见 8.10②）</td><td>听书得传闻，落座即社交</td></tr>
+      <tr><td>庙会集市</td><td>周末</td><td>中心广场（见 8.10③）</td><td>猜谜 / 比武彩头 / 祈福墙</td></tr>
+      <tr><td>比武大会</td><td>周</td><td>擂台（见 8.5）</td><td>晋级赛 + 观战打赏</td></tr>
+      <tr><td>帮战报名</td><td>周</td><td>官府 / 帮派驻地（见 8.8②）</td><td>报名 + 阵前挑战（见 6.21②）</td></tr>
+    </tbody>
+  </table>
+  <h4>② 动态世界事件</h4>
+  <ul>
+    <li><b>世界 BOSS</b>：全服集结讨伐，中心广场自动集合点，输出榜并入排行（见第 10 章）。</li>
+    <li><b>商队护送</b>：跨场景合作护送（玩家自发组队），与运镖（见 8.9①）共用押运框架。</li>
+    <li><b>通缉播报</b>：入魔者 / 劫镖者行踪全场景播报（见 8.9②③），把追杀变成全服参与的动态事件。</li>
+  </ul>
+  <h4>③ 社交条件触发器（承接 5.4）</h4>
+  <ul>
+    <li>条件可配置「情报达标 / 好感度达标 / 帮派贡献达标 / 组队人数达标」——社交状态成为场景入口钥匙，呼应「社交推进剧情」总纲。</li>
+    <li>事件参数经远程配置热更（见 13.2），配合活动系统排期（见第 9 章），运营可无发版编排场景事件。</li>
+  </ul>
+
+  <h3>5.10 场景内互动动作集（手势 / 坐席 / 装饰）</h3>
+  <p><b>玩法定位</b>：场景要「玩得起来」，先有丰富的就地互动——手势打招呼只是起点，坐下、留言、围火才是「在场感」的来源。</p>
+  <h4>① 手势与表情动作（深化 5.6）</h4>
+  <ul>
+    <li>通用：作揖 / 鼓掌 / 招手 / 挑衅 / 拱手 / 抱拳——快键触发，附近可见；挑衅带颜面后果（见 6.23）。</li>
+    <li>仪式动作：结拜（见 8.7②）、侠侣成礼（见 8.7④）有专属场景动作（同场景可围观）。</li>
+  </ul>
+  <h4>② 坐席系统（坐下来才社交）</h4>
+  <ul>
+    <li>茶楼落座（听书见 8.10②）、客栈雅间（组队 / 离线挂机见 6.17③）、长凳闲聊——<b>「坐下」是场景社交仪式</b>，坐席有占用状态，同席自动进附近频道。</li>
+    <li>野外篝火 / 火塘：夜间聚集点，围火触发「夜话」闲聊事件（轻量情报产出，呼应 8.6 E 级街谈巷议）。</li>
+  </ul>
+  <h4>③ 场景装饰互动</h4>
+  <ul>
+    <li>祈福墙（庙会，见 8.10③）可留言祈福（展示类）；客栈留言板可留话（离线传话）；涂鸦墙（限时活动）可创作。</li>
+  </ul>
+
+  <h3>5.11 NPC 社交媒介（NPC 不是背景板）</h3>
+  <p><b>玩法定位</b>：NPC 是场景与系统之间的「社交中介」——情报、牵线、委托、传话都通过 NPC 发生，NPC 让社交有「人物」。</p>
+  <table>
+    <thead><tr><th>NPC</th><th>场景</th><th>社交职能</th><th>对接系统</th></tr></thead>
+    <tbody>
+      <tr><td>百晓生</td><td>茶楼 / 主城</td><td>情报买卖 / 打听消息</td><td>见 8.6</td></tr>
+      <tr><td>红娘</td><td>结义亭</td><td>结义 / 侠侣牵线（双方同意）</td><td>见 8.7②④</td></tr>
+      <tr><td>镖头</td><td>镖局</td><td>运镖委托 / 护送组队入口</td><td>见 8.9①</td></tr>
+      <tr><td>说书人</td><td>茶楼</td><td>讲江湖快报 / 传闻</td><td>见 8.10②、6.22②</td></tr>
+      <tr><td>捕快</td><td>官府</td><td>通缉公示 / 悬赏查询</td><td>见 8.9②</td></tr>
+    </tbody>
+  </table>
+  <ul>
+    <li><b>NPC 好感</b>：NPC 好感影响场景功能（铁匠铺好感高打折，见 11.3 同口径）；NPC 好感是「关系类」社交动作的对象化（见 8.7 好友好感度同框架）。</li>
+    <li><b>NPC 传话</b>：NPC 可代为传话（离线留言 / 匿名传情）——场景里有「牵线人」。</li>
+    <li><b>NPC 随机事件</b>：NPC 发布小委托（寻物 / 传信 / 跑腿），形成以场景为半径的轻社交任务链。</li>
+  </ul>
+
+  <h3>5.12 场景动态氛围（时段 / 天气 / 节庆）</h3>
+  <p><b>玩法定位</b>：场景氛围随时段、天气、节庆流动——不同时间去同一个地方，社交内容不同，玩家因此「选时间去场景」。</p>
+  <ul>
+    <li><b>昼夜循环</b>：白天摆摊街最热闹（见 11.4）、夜晚茶楼说书开场（见 8.10②）、深夜客栈静——时段决定场景社交重心。</li>
+    <li><b>天气事件</b>：雨雪天气茶馆避雨聚集（临时社交场）、野外采集效率变化；节日氛围（中秋灯会 / 春节庙会，见 8.10③）临时场景装饰。</li>
+    <li><b>场景氛围标识</b>：热闹 / 肃杀 / 宁静三档氛围影响区域广播范围（见 5.6）与偶遇概率（见 5.6）——氛围是可感知、可利用的。</li>
+    <li><b>活跃提醒</b>：运营可配置「场景活跃」推送（人少场景的组队召集，见 8.14① 自动匹配联动），疏导人流、盘活冷门地图。</li>
+  </ul>
+
+  <h3>5.13 场景安全与红名社交（冲突场景细则）</h3>
+  <p><b>玩法定位</b>：安全区不是「无社交」，而是「换一种方式社交」——挑衅、决斗、执法都在安全规则内发生，冲突被设计成仪式而非滥杀。</p>
+  <ul>
+    <li><b>安全区规则</b>：禁 PK 但可挑衅（发起决斗邀请，见 6.10⑨ 点到为止 / 生死斗）；<b>红名不可入安全区</b>（见 5.7），被通缉者在野外暴露。</li>
+    <li><b>决斗流程</b>：场景内发起决斗（双方同意）→ 围观（见 6.10⑧ 助威与气势）→ 结算入 combat_logs；决斗是「对抗类」社交动作的受控形态。</li>
+    <li><b>场景仇恨记忆</b>：在被击杀 / 击杀过人的场景留痕（见 8.15② 恩怨），回该场景触发仇人遭遇提醒——场景是恩怨的「老地方」。</li>
+    <li><b>场景执法</b>：官府捕快巡逻（红名驱逐，见 8.9②）、悬赏公示栏（通缉信息全场景可见）——执法本身是公开的社交剧场。</li>
+  </ul>
+
+  <h3>5.14 场景与叙事结合（社交剧情舞台）</h3>
+  <p><b>玩法定位</b>：场景是剧情的「舞台」——NPC 大事件、玩家自办活动、场景留痕，让地图承载故事、故事反哺人气。</p>
+  <ul>
+    <li><b>场景剧情舞台</b>：剧情事件在特定场景上演（婚礼 / 庆典 / 灭门惨案现场），玩家可围观、参与、传播（见 8.10② 快报）——场景事件即社交话题。</li>
+    <li><b>玩家自办活动</b>：玩家可租用场景举办活动（见 8.16 展示类）：侠侣婚礼巡游、生日宴、帮派庆典（见 8.8① 宴会）——<b>玩家把场景变成自己的舞台</b>。</li>
+    <li><b>场景留痕</b>：留言（见 5.10③ 留言板）、纪念碑、玩家雕像（声望荣誉，见 8.15①）——「到此一游」成为长期社交资产。</li>
+    <li><b>场景故事线</b>：每张地图一条主线剧情（任务链，见第 7 章），社交条件解锁（见 5.9③）——地图不是无限刷怪场，而是有起承转合的叙事空间。</li>
+  </ul>
+
+  <h3>5.15 场景物件互动（人 · 事 · 物的三种用法）</h3>
+  <p><b>玩法定位</b>：场景里的每一棵树、一口井、一张床都不是背景板——<b>「一物三用」</b>：每个可互动物件至少绑定一个<b>生存动作</b>、一个<b>玩法动作</b>、一个<b>社交动作</b>。</p>
+  <h4>① 自然物件互动表（天地万物皆可用）</h4>
+  <table>
+    <thead><tr><th>物件</th><th>生存动作</th><th>玩法动作</th><th>社交动作</th></tr></thead>
+    <tbody>
+      <tr><td>大树</td><td>砍伐取木材</td><td>藏身隐匿（隐匿状态，见 5.13②）；爬上树冠俯察下方（居高观察）</td><td>树下烧火围坐（夜话轻情报，见 5.10②）；树洞藏物 / 留信</td></tr>
+      <tr><td>水源（河/井/潭）</td><td>取水（生存资源，见 3.10）</td><td>垂钓（食材+奇遇，见 6.16）；洗剑净器</td><td>结伴打水闲聊；井边许愿（投币入奇遇池）</td></tr>
+      <tr><td>岩石</td><td>采石（建材）</td><td>借力跳跃（位移）；刻字留名（场景留痕，见 5.14③）</td><td>围石而坐野餐；岩壁擂台（决斗彩头）</td></tr>
+      <tr><td>草地</td><td>采集草药</td><td>打坐修炼（见 6.17 同框架）；躺卧休息</td><td>野餐聚会；同席而坐（偶遇路人甲，见 8.12）</td></tr>
+      <tr><td>竹林</td><td>砍竹制器</td><td>藏身（竹影掩行踪）；听风辨位（感知提升）</td><td>竹亭品茗；刻竹传书（好友留言）</td></tr>
+      <tr><td>山崖</td><td>采药（悬崖药草）</td><td>观景（地图解锁）；练胆（跳崖彩蛋）</td><td>并肩观景（好感+，见 8.7）；崖边决斗「不死不休」</td></tr>
+    </tbody>
+  </table>
+  <h4>② 人工物件互动表（江湖起居皆成局）</h4>
+  <table>
+    <thead><tr><th>物件</th><th>生存动作</th><th>玩法动作</th><th>社交动作</th></tr></thead>
+    <tbody>
+      <tr><td>床</td><td>睡觉回复气血 / 离线挂机（见 6.17③ 练功房同框架）</td><td>客栈留宿（夜宿剧情）；卧床疗伤</td><td>客栈同宿偶遇；好友探病探望（好感+）</td></tr>
+      <tr><td>凳 / 椅</td><td>坐下歇脚（体力恢复）</td><td>占位（摆摊 / 听书抢座）</td><td>落座即加入围谈（见 5.10② 坐席系统）；让座（颜面+，见 6.23）</td></tr>
+      <tr><td>桌</td><td>用餐（食物消耗，见 3.10）</td><td>摆摊台面（见 11.4）；下棋对弈（小游戏）</td><td>围桌长谈；茶楼听书同桌（见 8.10②）</td></tr>
+      <tr><td>灶台</td><td>做饭（烹饪食物）</td><td>药膳制作（医术联动，见 6.18）</td><td>分享食物（情义+，见 8.13③）；乞讨互动（见 8.12）</td></tr>
+      <tr><td>水井</td><td>取水</td><td>打捞（随机杂物）；投币许愿（奇遇）</td><td>结伴打水；井边八卦（传闻来源，见 8.6）</td></tr>
+      <tr><td>告示板</td><td>—</td><td>贴广告（见 8.16）；揭榜（见 8.9② 悬赏）；看通缉（见 8.9③）</td><td>信息广场——围观讨论（话题制造机，见 14.9）</td></tr>
+      <tr><td>灯笼</td><td>照明（夜行视野）</td><td>节日挂灯（活动，见 5.12③）；灯语传讯（自定义信号）</td><td>放河灯（祈福社交）；并肩看灯（关系+，见 8.7）</td></tr>
+      <tr><td>门 / 窗</td><td>进户躲避（天气 / 追杀）</td><td>叩门（NPC 委托触发）；窥视（窃听，见 8.6①）</td><td>串门拜访（见 8.7 家园做客）；门窗留话（留言）</td></tr>
+    </tbody>
+  </table>
+  <h4>③ 家具制造与摆放（做床、做凳子）</h4>
+  <ul>
+    <li><b>材料采集</b>：砍树得木、采石得料、挖矿得铁（见 3.2 职业效率——工匠 / 木匠最快）——物件互动喂生产。</li>
+    <li><b>制作</b>：生活技能制作家具（床 / 凳 / 桌 / 柜 / 灯笼），成品为道具入背包（见第 4 章）——<b>做出来的东西有名字、能交易</b>（见第 11 章）。</li>
+    <li><b>摆放</b>：家具可摆进家园（见 8.7 家园拜访）、帮派驻地（见 8.19 驻地建设）——摆放即经营，被参观即被认可。</li>
+    <li><b>家具功能</b>：床（休息）、凳（落座）、桌（摆摊台面 / 围坐）、灶台（做饭）——家具不只是装饰，每一件都带玩法与社交功能。</li>
+  </ul>
+  <h4>④ 物件即社交钩子（藏身、烧火、留宿都是局）</h4>
+  <ul>
+    <li><b>大树藏身</b>：藏身是「观察别人」的入口——树上俯察、树影窃听（见 8.6 情报生态）——<b>一棵树就是一张情报网</b>（谍报联动，见 3.9）。</li>
+    <li><b>树下烧火</b>：篝火围坐触发轻情报夜话（见 5.10②）——取暖之外，火光聚人，人是火的燃料。</li>
+    <li><b>床与客栈</b>：留宿触发夜宿剧情与同宿偶遇——<b>睡一觉也能结一段缘</b>。</li>
+    <li><b>告示板</b>：全图信息中枢——贴广告、揭榜、看通缉都在这，<b>是场景的「广场」</b>（联动 14.9 话题）。</li>
+    <li><b>灶台分享</b>：做饭分食是情义（见 8.13③）——<b>一碗热汤就是人情</b>。</li>
+  </ul>
+
+  <h3>5.16 场景机关与谜题（物是死的，事是活的）</h3>
+  <p><b>玩法定位</b>：场景不只有「摸一下」的物件，还有「动脑动手」的机关——机关是「事」，是玩家协作与智斗的舞台。</p>
+  <ul>
+    <li><b>机关类型</b>：机关石门（开锁 / 推石）、棋盘残局（解谜 / 对弈）、密道入口（藏身 / 逃命路线，见 5.15① 大树藏身同思路）、机关陷阱（触发 / 破除）、瀑布暗洞（奇遇入口，见 6.16 机缘）。</li>
+    <li><b>机关社交</b>：多人机关需配合（一人踩位一人触发——站位即协作，见 6.19 阵法同思路）；破解机关全场景广播（展示，见 8.16①）——<b>「破机关的队伍」是谈资</b>。</li>
+    <li><b>机关情报</b>：机关解法可打听（情报货品，见 8.6）——<b>知道解法的人，靠知识赚钱</b>。</li>
+    <li><b>机关谜题掉落</b>：解谜产出宝箱（组队分赃仪式，见 6.24）——事成之后的分配，又是一场社交。</li>
+  </ul>
+
+  <h3>5.17 场景生物与坐骑互动（万物有灵）</h3>
+  <p><b>玩法定位</b>：场景里的活物不是装饰——马匹载人、信鸽传书、宠物陪伴、动物奇遇，让「物」活起来。</p>
+  <ul>
+    <li><b>坐骑</b>：马匹（骑乘代步、驿站换马，见 5.20③）、马车（多人同乘——<b>同路即同聊</b>）。</li>
+    <li><b>信鸽传书</b>：书信经信鸽送达（异步社交，见 14.6 离线留言同框架）——<b>飞鸽传书是武侠味的消息推送</b>。</li>
+    <li><b>宠物伙伴</b>：跟随宠物（陪伴 + 互动，见 3.11 伙伴 companion）——宠物是社交破冰话题（「你这猫真俊」）。</li>
+    <li><b>动物奇遇</b>：灵兽引路（触发奇遇，见 6.16）、动物救助（善举入声望，见 8.15①）——<b>救一只鹿，可能结一段缘</b>。</li>
+  </ul>
+
+  <h3>5.18 场景微型玩法（街头小游戏）</h3>
+  <p><b>玩法定位</b>：每个街角都可能有「一局」——小游戏是低门槛、高频次的社交场景。</p>
+  <ul>
+    <li><b>小游戏清单</b>：垂钓（河塘点位）、对弈（棋盘摊位）、投壶 / 射箭摊（庙会，见 8.10③）、斗蛐蛐（赌彩头）、套圈（奖品兑换）——一图多摊，逛街即娱乐。</li>
+    <li><b>围观经济</b>：小游戏可围观下注（彩头，见 11.3 议价同思路）——<b>玩的人有输赢，看的人有话题</b>。</li>
+    <li><b>摊主身份</b>：玩家可摆小游戏摊（摆摊升级，见 11.4）——<b>开一局，交一友</b>。</li>
+    <li><b>小游戏排行</b>：垂钓大师 / 棋圣等图内小榜（见 10 章排行框架）——街角也有荣誉。</li>
+  </ul>
+
+  <h3>5.19 场景资源点与生活技能（田、矿、渔、酿）</h3>
+  <p><b>玩法定位</b>：资源点是生产链的起点，也是职业玩家（见 3.2）的「地盘」——生产本身是社交分工。</p>
+  <ul>
+    <li><b>资源点位</b>：药草园（药师）、矿脉（矿工）、渔点（渔夫）、农田（农夫）、酒窖（酿造）——按职业效率产出（见 3.2 特长效率）。</li>
+    <li><b>点位的社交性</b>：资源点共用（让点 / 抢点）、合作采集（帮派资源田，见 8.19 驻地）、定期刷新（蹲点相遇成熟人）——<b>同锄一块地，就是半个熟人</b>。</li>
+    <li><b>产出即社交</b>：药材供丹药（见 6.18）、食材供灶台（见 5.15②）、木材供家具（见 5.15③）——生产链末端全是社交场景。</li>
+    <li><b>特产经济</b>：区域特产（见 11.10 跑商）——你的田，是别人的商路。</li>
+  </ul>
+
+  <h3>5.20 场景导航与地标互动（走路也是社交）</h3>
+  <p><b>玩法定位</b>：地图不只有「传送点」——路牌、瞭望塔、驿站、地标让「赶路」本身产生相遇与话题。</p>
+  <ul>
+    <li><b>路牌</b>：查看地图信息、贴留言（见 5.10③）——岔路口是「等人」与「偶遇」的默认地点。</li>
+    <li><b>瞭望塔</b>：登塔解锁视野（发现资源点 / 事件）、放哨（帮派协作，见 8.20）——<b>塔上看得远，也容易被看见</b>。</li>
+    <li><b>驿站</b>：马匹换乘、组队同程（见 8.14）、跑商起终点（见 11.10）——驿站是流动人口的聚集点。</li>
+    <li><b>地标打卡</b>：风景地标（观景台 / 名胜）打卡合影（展示，见 8.16）——<b>「到此一游」是社交履历</b>。</li>
+    <li><b>地标事件</b>：地标定时事件（见 5.9② 世界事件）——地标是事件的发生地，事件是地标的广告。</li>
+  </ul>
+
+  <h3>5.21 场景资源能量平衡策略（生态 × 经济 × 社交）</h3>
+  <p><b>玩法定位</b>：资源点不是「无限挖的矿」——四类资源（山川湖泊 / 农田 / 林木 / 矿产）各有供给节奏与消耗锚点，平衡目标是：<b>供给跟上消耗、争夺带来社交、富余不泛滥、稀缺不绝望</b>。</p>
+  <h4>① 资源分类与供给分层（可再生度）</h4>
+  <table>
+    <thead><tr><th>资源</th><th>类型</th><th>供给节奏（默认，可配）</th><th>消耗去向</th></tr></thead>
+    <tbody>
+      <tr><td>山川湖泊（水产/水源/山货）</td><td>可再生</td><td>渔点 / 山货按日刷新（每日 8:00 / 20:00 双刷）</td><td>食物（见 3.10）、垂钓玩法（见 5.18）、药材（见 6.18）</td></tr>
+      <tr><td>农田（粮/菜/药田）</td><td>可再生（需经营）</td><td>种植-成熟周期（默认 8h），施肥/打理提速</td><td>每日食物消耗 9、下限 3（见 3.10）、灶台烹饪（见 5.15②）</td></tr>
+      <tr><td>林木（木材）</td><td>半可再生</td><td>采伐后林地再生（默认 6h），过度采伐触发「林地退化」</td><td>家具制造（见 5.15③）、建筑升级（见 8.19）、燃料</td></tr>
+      <tr><td>矿产（铁/铜/稀有矿）</td><td>半再生 ~ 不可再生</td><td>矿脉缓慢再生（默认 12h）；稀有矿脉限量（全服日产量上限）</td><td>装备打造（见 4.3）、帮派建筑（见 8.19）、交易（见 11 章）</td></tr>
+    </tbody>
+  </table>
+  <h4>② 产能与消耗平衡（供需对照）</h4>
+  <ul>
+    <li><b>食物基准</b>：生存消耗每日 9、下限 3（见 3.10）——农田 / 湖泊供给需覆盖全服消耗基线，缺口由「产量 × 效率」参数调节（见 3.2 职业效率）。</li>
+    <li><b>消耗锚点</b>：每种资源至少绑定一个「消耗泵」（食物→生存、木材→家具/建筑、矿石→装备/锻造、药材→丹药）——<b>无消耗锚点的资源会贬值，有锚点的资源才保值</b>。</li>
+    <li><b>供需比值</b>：建议维持「日产量 ≈ 日消耗 × 1.2」（20% 富余）——富余太多物价崩（见 11.8），富余太少资源焦虑。</li>
+  </ul>
+  <h4>③ 动态平衡机制（生态是活的）</h4>
+  <ul>
+    <li><b>枯竭与丰饶</b>：过度采伐触发林地退化（产量 -50% 持续 24h）；休渔/休矿期促进恢复（产量 +25%）——<b>生态惩罚引导玩家自我节制</b>。</li>
+    <li><b>价格联动</b>：资源稀缺度计入茶楼物价行情（见 11.8）——稀缺自动涨价、泛滥自动降价，供需自动调节。</li>
+    <li><b>密度调节</b>：资源点产量随该区域活跃人数动态调节（见 5.6 分流同框架）——人多保供给、人少防过剩。</li>
+    <li><b>事件注入</b>：世界事件（商队投放 / 官府收购，见 11.8③）临时注入或回收资源——运营可干预平衡。</li>
+  </ul>
+  <h4>④ 玩家间分配平衡（争夺是社交，独占是原罪）</h4>
+  <ul>
+    <li><b>采集上限</b>：单人单点日采集上限（默认 50 次）+ 收益递减（第 30 次后效率 -30%）——<b>防垄断、逼分工</b>。</li>
+    <li><b>点位的社交分配</b>：共用资源点鼓励「让点」（让点 + 颜面，见 6.23）、争夺资源点形成竞争（PVP 区域，见 5.7③ 帮派资源点）；<b>占而不采会被人记住</b>（仇人录，见 8.15②）。</li>
+    <li><b>帮派配额</b>：帮派资源田按职位配额（见 8.19 驻地）——集体资源内部公平，贡献多者份额高（见 8.8① 帮贡）。</li>
+    <li><b>防工作室</b>：单账号收益上限 + 行为审计（见 4.4 变更审计、13.3 行为日志）——资源产出异常波动当天可见（见 C.4 业务告警）。</li>
+  </ul>
+  <h4>⑤ 经济注入与回收（防通胀闭环）</h4>
+  <ul>
+    <li><b>加工链</b>：原料 → 半成品 → 成品（矿→铁锭→装备），每级加工产生损耗与工时——<b>资源在加工链中转化为价值，而非直接变现</b>。</li>
+    <li><b>回收泵</b>：装备耐久消耗（见 4.3）、食物腐坏、家具损耗——资源型产物有生命周期，持续从经济中抽走存量。</li>
+    <li><b>绑定兜底</b>：高价值资源产物绑定（见 4.1 bind_type）限制倒卖——资源价值留在玩家身上，而非流入投机。</li>
+  </ul>
+  <h4>⑥ 防挂机与反通胀护栏（活跃才有产出）</h4>
+  <ul>
+    <li><b>离线不产</b>：资源点离线不产出（离线挂机仅限练功房，见 6.17③）——<b>资源是「在线社交的奖励」，不是挂机收益</b>。</li>
+    <li><b>效率递减</b>：连续采集效率递减（防 24h 挂机脚本），刷新周期内换点/休息最优。</li>
+    <li><b>数值护栏</b>：全服日产量硬上限（稀有矿），达到上限后当日报警并停采（运营可配，见 13.2）——<b>稀缺资源天生限量，限量即价值</b>。</li>
+    <li><b>审计闭环</b>：产出 / 交易 / 消耗全量流水（见 4.4、11.12 多币种审计）——平衡是否失效，数据当天说话（见 13.4）。</li>
+  </ul>
+  <h4>⑦ 落地映射与配置键（设计 → 代码）</h4>
+  <p><b>落地说明</b>：资源点由两张表承载——<code>object_templates</code>（物件模板：类型 / 采集冷却 / 是否可再生 / 产出）与 <code>scene_entity_spawns</code>（场景刷新点：点位 / 数量 / 激活），平衡参数经 <code>remote_configs</code>（见 13.2）热更。</p>
+  <table>
+    <thead><tr><th>平衡策略（本小节）</th><th>代码承载（game-server）</th><th>字段 / 枚举</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td>资源分类（山川湖泊 / 农田 / 林木 / 矿产）</td><td><code>object_templates.type</code></td><td><code>ObjectType</code>：COLLECT / PLANT / STONE / CHEST</td><td>COLLECT=采集物（水产/山货/水源）、PLANT=植物（农田/药田/林木）、STONE=矿脉、CHEST=宝箱（稀有限量）</td></tr>
+      <tr><td>供给节奏（日刷 / 成熟周期 / 再生时间）</td><td><code>object_templates.interact_cd</code></td><td>int（秒，默认 0）</td><td>采集冷却 = 单点节奏；成熟周期由运营经 remote_configs 调节倍率</td></tr>
+      <tr><td>可再生度（可再生 / 半可再生 / 一次性）</td><td><code>object_templates.is_one_time</code></td><td>boolean（默认 false）</td><td>false=可再生物件（刷新周期恢复）、true=一次性（如稀有宝箱 / 遗产）</td></tr>
+      <tr><td>点位 / 数量 / 分布</td><td><code>scene_entity_spawns</code></td><td>scene_id / template_id / spawn_count / spawn_radius / is_active</td><td>每场景独立配置刷新点，spawn_count 即单点密度，运营可按活跃度调（见 5.21③ 密度调节）</td></tr>
+      <tr><td>产出（奖励 / 采集物）</td><td><code>object_templates.reward</code></td><td>jsonb</td><td>采集产出结构，配合 item-drop 掉落（见第 4 章）</td></tr>
+      <tr><td>全服日产量硬上限 / 退化阈值 / 效率递减</td><td><code>remote_configs</code>（见 13.2）</td><td>如 <code>resource.daily_cap</code> / <code>resource.degrade_threshold</code> / <code>resource.eff_decay</code></td><td>策划无发版调参；全量流水审计（见 4.4）监控平衡是否失效</td></tr>
+    </tbody>
+  </table>
+  <ul>
+    <li><b>落地顺序</b>：先用 <code>object_templates</code> + <code>scene_entity_spawns</code> 配出四类资源点（类型 / 冷却 / 可再生 / 点位）跑通采集闭环，再逐步加远程配置（产量上限、退化阈值、效率递减）——<b>平衡策略分步上线，每步可回滚</b>（见 C.6）。</li>
+    <li><b>字段默认值</b>：interact_cd 默认 0 表示无冷却（需按资源类型配置，如矿脉 12h=43200s）；is_one_time 默认 false（可再生），稀有资源显式置 true。</li>
+  </ul>
+  <h4>⑧ 代码实现与单元测试映射（设计 → 代码 → 测试）</h4>
+  <p><b>实现落地</b>：平衡算法为纯逻辑类 <code>ResourceBalancePolicy</code>（<code>src/modules/world/resource-balance.policy.ts</code>），无 IO 依赖、参数对齐 <code>remote_configs</code> 的 <code>resource.*</code> 键，可单测、可热更、可复用。</p>
+  <table>
+    <thead><tr><th>平衡策略（本小节）</th><th>方法</th><th>算法 / 默认参数</th><th>判定口径</th></tr></thead>
+    <tbody>
+      <tr><td>效率递减（⑥）</td><td><code>efficiencyFactor(n)</code></td><td>n ≤ 30 为 1；n &gt; 30 按 <code>1 − (n−30) × 0.3</code> 递减</td><td>结果钳制下限 0.3（低活跃玩家仍可采集，不归零）</td></tr>
+      <tr><td>生态退化（③ 枯竭）</td><td><code>isDegraded(n)</code> / <code>degradedYield(y, n)</code></td><td>连续采伐 &gt; 50 次触发退化</td><td>退化期产量 ×（1 − 0.5）= 半产（林地退化 −50%，持续 24h 见 ③）</td></tr>
+      <tr><td>生态恢复（③ 丰饶）</td><td><code>restoredYield(y, resting)</code></td><td>休渔 / 休矿期</td><td>产量 ×（1 + 0.25）= +25%</td></tr>
+      <tr><td>全服日产量上限（⑥ 数值护栏）</td><td><code>dailyCapExceeded(n)</code></td><td>默认 Infinity（仅稀有矿配置 <code>resource.daily_cap</code>）</td><td>当日累计 ≥ 上限即停采并告警</td></tr>
+      <tr><td>供需平衡（② 产能与消耗）</td><td><code>supplyHealth(produce, consume)</code></td><td>比值 = 日产量 / 日消耗</td><td>&lt; 1 缺货（短缺）、1 ~ 1.2 健康（20% 富余）、&gt; 1.2 富余（物价崩盘预警）</td></tr>
+      <tr><td>供给节奏校验（① interact_cd）</td><td><code>isValidInteractCd(sec)</code></td><td>秒数必须 ≥ 0 且有限</td><td>矿脉 43200s（12h）有效；负数 / NaN 无效</td></tr>
+      <tr><td>默认配置</td><td><code>DEFAULT_RESOURCE_BALANCE</code></td><td>effDecayAfter=30 / effDecayRate=0.3 / degradeThreshold=50 / degradeMalus=0.5 / restoreBonus=0.25 / dailySupplyRatio=1.2</td><td>与本节数值表一一对应，策划可经 remote_configs 覆盖</td></tr>
+    </tbody>
+  </table>
+  <p><b>单元测试</b>：<code>src/modules/world/resource-balance.policy.spec.ts</code>，16 个用例覆盖六组策略 + 默认配置一致性（jest 已全绿）。</p>
+  <table>
+    <thead><tr><th>测试组</th><th>覆盖点（用例数）</th><th>关键断言示例</th></tr></thead>
+    <tbody>
+      <tr><td>效率递减</td><td>前 30 次不递减 / 31 次起递减 / 下限钳制 / 自定义参数（4）</td><td>efficiencyFactor(31) ≈ 0.7；efficiencyFactor(1000) = 0.3</td></tr>
+      <tr><td>生态动态</td><td>退化阈值边界 / 退化半产 / 休渔恢复（3）</td><td>isDegraded(51) = true；degradedYield(100, 51) = 50；restoredYield(100, true) = 125</td></tr>
+      <tr><td>产量上限</td><td>达上限停采 / 默认不限（2）</td><td>dailyCapExceeded(500) = true（dailyCap=500）</td></tr>
+      <tr><td>供需平衡</td><td>缺货 / 健康带边界 / 富余 / 无锚点（4）</td><td>supplyHealth(121, 100) = 'surplus'；supplyHealth(120, 100) = 'healthy'</td></tr>
+      <tr><td>供给节奏</td><td>矿脉 12h 有效 / 负值与 NaN 无效（2）</td><td>isValidInteractCd(43200) = true；isValidInteractCd(-1) = false</td></tr>
+      <tr><td>默认配置</td><td>与手册参数一致（1）</td><td>DEFAULT_RESOURCE_BALANCE 各项与本节数值表一致</td></tr>
+    </tbody>
+  </table>
+  <ul>
+    <li><b>接入建议</b>：采集接口调用 <code>efficiencyFactor</code> 折算单次产出、<code>degradedYield</code> 处理退化期、<code>dailyCapExceeded</code> 做当日停采闸门——平衡策略从手册到代码闭环落地。</li>
+    <li><b>热更路径</b>：远程配置变更后重建策略实例（或按 key 读取）即可无发版调参（见 13.2），配合 13.4 数据看板观测效果。</li>
+  </ul>
+  </div>
+</section>
+
+<!-- ==================== 第6章 战斗与技能 ==================== -->
+<section class="chapter" id="ch6">
+  <div class="chapter-inner">
+  <h2 class="ch-title">第 6 章 · 战斗与技能（三级武学落点）</h2>
+  <p class="ch-desc">本章是三级武学体系的实现层。技能模板、Buff、战斗风格、战斗日志构成完整战斗闭环。</p>
+
+  <h3>6.1 技能模板（skill_templates）</h3>
+  <table>
+    <thead><tr><th>字段</th><th>说明</th><th>三级武学对应</th></tr></thead>
+    <tbody>
+      <tr><td>skill_type</td><td>active 主动 / passive 被动</td><td>主动技=释放技能；被动技=境界加持（如基础篇外功防御、科学篇神经预判、玄学篇灵力亲和）</td></tr>
+      <tr><td>art_type</td><td>fist 拳 / palm 掌 / leg 腿 / weapon 兵器</td><td>武学类别横轴，与「武学熟练等级」绑定（character_martial_arts）</td></tr>
+      <tr><td>base_damage</td><td>基础伤害</td><td>不同境界有不同伤害定位（见 6.4）</td></tr>
+      <tr><td>cooldown</td><td>冷却秒</td><td>玄学篇冷却显著更长</td></tr>
+      <tr><td>mp_cost</td><td>内力消耗</td><td>当前模型统一消耗内力；科学/玄学篇的体能/灵力可映射到 effect_json 扩展</td></tr>
+      <tr><td>range</td><td>作用距离</td><td>玄学篇多为大范围</td></tr>
+      <tr><td>effect_json</td><td>效果配置（附加效果/位移/连携）</td><td>境界专属效果（破防/穿透/元素伤害）在此配置</td></tr>
+      <tr><td>min_level</td><td>习得最低等级</td><td>三级境界门槛：基础篇 1 级起、科学篇需中高等级、玄学篇需高等级 + 机缘（建议 1-30 / 31-60 / 61+）</td></tr>
+    </tbody>
+  </table>
+
+  <h3>6.2 武学熟练（character_martial_arts）</h3>
+  <p>每类武学（拳/掌/腿/兵器）独立熟练等级（level）与已学技能（skills JSON 数组）。熟练等级决定该类可习得技能上限——<b>「拳法第几重」的武侠感</b>由此实现，同角色可兼修多类武学。</p>
+
+  <h3>6.3 Buff 系统（buff_templates）</h3>
+  <p>增益 / 减益（buffType），作用目标（self 己方 / target 敌方），持续秒数，属性修正（stat_modifiers：力量/速度/防御等）。用于：境界被动、药品效果、帮派 Buff、活动增益。</p>
+
+  <h3>6.4 三级境界的战斗定位（策划配置建议）</h3>
+  <table>
+    <thead><tr><th>境界</th><th>输出定位</th><th>机制特色</th><th>消耗</th><th>冷却</th></tr></thead>
+    <tbody>
+      <tr><td>基础篇</td><td>稳定持续输出</td><td>低消耗、少机制、可靠命中</td><td>内力（低）</td><td>短（3-6s）</td></tr>
+      <tr><td>科学篇</td><td>技巧克制</td><td>破防（无视部分防御）、穿透、预判（先手/闪避）</td><td>体能/精力（中）</td><td>中（8-15s）</td></tr>
+      <tr><td>玄学篇</td><td>范围爆发</td><td>AOE、元素克制（五行相生相克）、控制</td><td>灵力（高）</td><td>长（20s+）</td></tr>
+    </tbody>
+  </table>
+
+  <h3>6.5 战斗风格（character_combat_styles）</h3>
+  <p>aggressive 激进 / defensive 防御 / balanced 均衡 / tactical 战术。影响出手倾向与匹配偏好（与 matchmaking 联动）。</p>
+
+  <h3>6.6 战斗结算（combat_logs）</h3>
+  <p>记录攻防双方、场景、队伍（team_id，组队协作）、战斗类型（pve / pvp / guild_war 帮战）、结果、伤害明细（damage_json：技能/命中/暴击）、奖励明细（reward_json）、时长。战斗日志是排行、成就（win_combat）、行为分析的数据源。</p>
+
+  <h3>6.7 三级武学技能池（策划配置起点）</h3>
+  <p>以下为按「境界 × 类别」展开的代表性技能池，数值均为起点，可经 <code>remote_configs</code> 热更调参（呼应 6.4 的定位：基础短冷却低消耗、科学中冷却技巧向、玄学长冷却高爆发）。</p>
+  <h4>① 基础篇技能池（稳定持续，内力消耗）</h4>
+  <table>
+    <thead><tr><th>类别</th><th>技能名</th><th>效果</th><th>耗内</th><th>冷却</th></tr></thead>
+    <tbody>
+      <tr><td>拳</td><td>太极拳·揽雀尾</td><td>借力打力，命中后概率反弹 10% 伤害</td><td>8</td><td>4s</td></tr>
+      <tr><td>拳</td><td>形意·崩拳</td><td>直线突进，忽视 20% 防御</td><td>10</td><td>5s</td></tr>
+      <tr><td>掌</td><td>铁砂掌·开碑</td><td>高倍率单体，附加「内伤」减益</td><td>12</td><td>6s</td></tr>
+      <tr><td>腿</td><td>谭腿·连环</td><td>三连击，每击 60% 伤害</td><td>10</td><td>5s</td></tr>
+      <tr><td>兵器</td><td>太极剑·云手</td><td>格挡反击，受击时概率反击</td><td>8</td><td>6s</td></tr>
+      <tr><td>内功</td><td>金钟罩</td><td>被动，减伤 5%/级</td><td>—</td><td>被动</td></tr>
+      <tr><td>轻功</td><td>梯云纵</td><td>位移 + 闪避提升 15%，持续 5s</td><td>15</td><td>8s</td></tr>
+      <tr><td>暗器</td><td>飞蝗石</td><td>远程 1.2 倍伤害，附带减速 20%</td><td>6</td><td>3s</td></tr>
+      <tr><td>医术</td><td>金创药灸</td><td>治疗，回复 15% 气血</td><td>10</td><td>10s</td></tr>
+      <tr><td>毒术</td><td>蛇影缠身</td><td>持续伤害 5s，可叠加层数</td><td>8</td><td>6s</td></tr>
+    </tbody>
+  </table>
+  <h4>② 科学篇技能池（技巧克制，体能/精力消耗）</h4>
+  <table>
+    <thead><tr><th>学科</th><th>技能名</th><th>效果</th><th>耗体</th><th>冷却</th></tr></thead>
+    <tbody>
+      <tr><td>生物力学</td><td>寸劲·透</td><td>破防 50%，无视护体</td><td>20</td><td>10s</td></tr>
+      <tr><td>生物力学</td><td>发劲·崩山</td><td>蓄力 1.5s，2.5 倍爆发</td><td>25</td><td>12s</td></tr>
+      <tr><td>流体力学</td><td>气刃斩</td><td>直线 3 格 AOE，可穿透</td><td>22</td><td>10s</td></tr>
+      <tr><td>流体力学</td><td>水刀·切割</td><td>高倍单体，破甲 30%</td><td>24</td><td>12s</td></tr>
+      <tr><td>声学</td><td>狮吼功·镇魂</td><td>扇形震退 + 眩晕 1s</td><td>30</td><td>15s</td></tr>
+      <tr><td>声学</td><td>次声震荡</td><td>无视 30% 防御，附加失衡</td><td>28</td><td>14s</td></tr>
+      <tr><td>神经科学</td><td>预判·先手</td><td>闪避率 +40%，持续 4s</td><td>18</td><td>12s</td></tr>
+      <tr><td>神经科学</td><td>致命感知</td><td>暴击率 +25%，持续 6s</td><td>20</td><td>15s</td></tr>
+    </tbody>
+  </table>
+  <h4>③ 玄学篇技能池（范围爆发，灵力消耗）</h4>
+  <table>
+    <thead><tr><th>五行/气机</th><th>技能名</th><th>效果</th><th>耗灵</th><th>冷却</th></tr></thead>
+    <tbody>
+      <tr><td>金</td><td>金刚锐金诀</td><td>单体穿刺，附加「金蚀」减防</td><td>40</td><td>20s</td></tr>
+      <tr><td>木</td><td>青木缠绕</td><td>定身 2s，持续吸取内力</td><td>35</td><td>22s</td></tr>
+      <tr><td>水</td><td>寒冰结界</td><td>范围减速 50% + 冰冻几率</td><td>45</td><td>25s</td></tr>
+      <tr><td>火</td><td>炎龙焚天</td><td>大范围 3 倍伤害</td><td>60</td><td>30s</td></tr>
+      <tr><td>土</td><td>大地守护</td><td>护盾吸收 30% 气血伤害，持续 8s</td><td>40</td><td>25s</td></tr>
+      <tr><td>气机</td><td>御风千里</td><td>全队移速 +30%，持续 10s</td><td>50</td><td>30s</td></tr>
+      <tr><td>召唤</td><td>雷动九天</td><td>全屏雷击，随机 5 目标</td><td>70</td><td>45s</td></tr>
+    </tbody>
+  </table>
+
+  <h3>6.8 武学类别 × 境界正交详解</h3>
+  <p>同一武学类别在三级境界下有不同表现形态（横轴类别不变，纵轴境界递进），是「类别 × 境界正交」体系的直观落地。</p>
+  <table>
+    <thead><tr><th>类别</th><th>基础篇（传统武学）</th><th>科学篇（现代科学武技）</th><th>玄学篇（自然力量）</th></tr></thead>
+    <tbody>
+      <tr><td>拳</td><td>刚猛直拳 / 太极化劲</td><td>寸劲透劲（生物力学杠杆）</td><td>五行金刚拳（元素附着）</td></tr>
+      <tr><td>掌</td><td>铁砂掌 / 绵掌</td><td>流体推掌（气劲压缩）</td><td>五雷掌 / 寒冰掌</td></tr>
+      <tr><td>腿</td><td>连环腿 / 弹腿</td><td>步法动力学（重心 / 惯性）</td><td>踏火流星</td></tr>
+      <tr><td>兵器</td><td>刀剑枪棍</td><td>刃口流体学 / 材料力学</td><td>御剑术 / 雷刃</td></tr>
+      <tr><td>内功</td><td>金钟罩 / 混元功</td><td>呼吸控制（供氧供能优化）</td><td>灵力亲和（天地灵气导入）</td></tr>
+      <tr><td>暗器</td><td>飞蝗石 / 袖箭</td><td>弹道学 / 抛体运动</td><td>御物术（意念操控）</td></tr>
+    </tbody>
+  </table>
+  <p><b>兼修规则</b>：同角色可兼修多类武学（武学熟练等级独立成长，见 6.2），但属性点分散导致单类强度下降——「博而不精 vs 专精一艺」的取舍，天然形成战斗风格分化（联动 6.5）。</p>
+
+  <h3>6.9 境界晋升与修炼条件</h3>
+  <h4>① 晋升流程</h4>
+  <table>
+    <thead><tr><th>晋升</th><th>解锁条件</th><th>材料 / 资源</th><th>仪式</th></tr></thead>
+    <tbody>
+      <tr><td>基础篇</td><td>角色 1 级起自动解锁</td><td>无</td><td>新手村拜师引导</td></tr>
+      <tr><td>科学篇</td><td>31 级 + 参悟条件</td><td>参悟券（社交积分兑换）+ 特训任务</td><td>突破小副本（单人，可组队助战）</td></tr>
+      <tr><td>玄学篇</td><td>61 级 + 机缘条件</td><td>机缘令 + 灵石 + 悟道任务链（打听消息 / 揭榜 / 情谊深度）</td><td>悟道仪式（组队副本，限时）</td></tr>
+    </tbody>
+  </table>
+  <h4>② 修炼资源三件套（来源与用途）</h4>
+  <ul>
+    <li><b>参悟券</b>：社交积分兑换 / 每日社交任务产出——科学篇晋升与技能升级的硬通货（呼应世界观总纲「高阶力量的门槛是社交深度」）。</li>
+    <li><b>机缘令</b>：悟道任务、玄学机缘事件、高难度皇榜掉落——玄学篇稀缺性的保证。</li>
+    <li><b>灵石</b>：副本掉落 / 帮派商店——玄学技能消耗的「灵力电池」，形成持续消耗循环。</li>
+  </ul>
+  <h4>③ 晋升数值策略</h4>
+  <p>晋升后 <code>base_damage</code> 定位提升一档，但消耗与冷却同步上调（见 6.7 技能池）——<b>「越强越贵」</b>，防止低消耗套高爆发；突破副本失败不掉级，只损耗材料，保护进阶体验。</p>
+
+  <h3>6.10 战斗机制细则（命中 / 暴击 / 克制 / 连击）</h3>
+  <h4>① 命中与闪避</h4>
+  <p>命中率 = 基础 90% + 命中修正 − 目标闪避；科学篇「预判」类技能可临时提升闪避（见 6.7②），轻功类位移可规避指向性技能。</p>
+  <h4>② 暴击</h4>
+  <p>暴击率 × 暴击伤害（默认 1.5 倍）。玄学篇暴击率上限更高但基础命中更低（高收益高风险），与科学篇「稳定技巧」形成反差。</p>
+  <h4>③ 破防与穿透</h4>
+  <p><b>破防</b> = 百分比无视防御（如寸劲·透 50%）；<b>穿透</b> = 无视护体/护盾。两者是科学篇克制「高防坦克」的手段，避免纯堆防御无敌。</p>
+  <h4>④ 五行克制</h4>
+  <p>金→木→土→水→火→金：克制 +20% 伤害，被克 −10%。玄学篇技能天然带五行属性；基础/科学篇可通过「五行附魔」临时切换属性（消耗材料），把克制从玄学专属扩展为全员博弈。</p>
+  <h4>⑤ 机制克制（三层剪刀石头布）</h4>
+  <p>基础稳（持续消耗拖垮爆发）克 玄学猛（高冷却空窗期）；科学巧（破防/预判）克 基础稳（站桩输出）；玄学爆发（短窗口秒杀）克 科学巧（脆皮技巧）——防止单一境界通吃，落实「机制差异平衡」哲学。</p>
+  <h4>⑥ 连击与合击</h4>
+  <p>同武学类别连续施放触发连击加成（第 3 连 +20%）；组队战斗中，结义技 / 情侣技（见 8.7）触发<b>同步合击</b>（详见 6.19②）——战斗奖励「一起玩」。</p>
+  <h4>⑦ 情报弱点（社交 → 战斗直连）</h4>
+  <p>刺探 / 窃听得到的目标弱点情报（见 8.6，B 级及以上）可在战斗中「针对弱点」一次性消耗：触发<b>易伤 +15% / 破防 +20%</b>。目标可花费资源「清除自身弱点情报」反制（反侦察）。<b>这是「情报喂战斗」的直接落地</b>——战斗准备从「组队刷装」扩展为「组队 + 刺探」，让谍报成为高难度战斗的必修课。</p>
+  <h4>⑧ 助威与气势（围观 → 战斗加成）</h4>
+  <ul>
+    <li>观战者喝彩 / 打赏累计「气势值」，战斗方获得至多 +10% 攻防（士气）；帮战主场 / 擂台主场的可累计上限更高。</li>
+    <li>气势需要真实观战行为累计（场景到场 + 交互），防止脚本刷气势。</li>
+    <li>被围观也是风险：通缉犯被围观时暴露行踪（见 8.9），围观系统同时服务「助威」与「曝光」双向。</li>
+  </ul>
+  <h4>⑨ 战斗模式（点到为止 / 生死斗）</h4>
+  <ul>
+    <li>切磋 / 恩怨战（见 6.21①）开战前由发起方声明模式：<b>点到为止</b>（胜负即止，无死亡惩罚，败者付彩头或认输，双方好感度不变甚至微升）或 <b>生死斗</b>（可致死，掉经验 / 部分掉落，结仇加深见 8.15②）。</li>
+    <li>系统默认点到为止；生死斗需双方同意（红名 / 通缉者除外，强制生死斗）——把「要不要下死手」变成社交决策，避免无差别杀戮。</li>
+    <li>模式影响结算：点到为止记录 <code>combat_logs</code> 胜负即可；生死斗触发死亡处理——<b>遗体可由好友收敛</b>（收敛者获人情，见 8.13③），死亡损失与社交悼念形成「生死有江湖」的叙事。</li>
+  </ul>
+  <h4>⑩ 社交化解动作（谈判 / 求饶 / 劝降）</h4>
+  <ul>
+    <li>战斗中可发起社交化解：<b>谈判</b>（付代价止战）、<b>求饶</b>（降颜面 / 付彩头换生存）、<b>劝降</b>（PVE 对 NPC / 入魔者，成功率受声望与好感影响）。</li>
+    <li>化解成功率 = 基础 + 声望修正 + 好感修正 − 目标愤怒度；被劝降的入魔者（见 8.9③）可由「说和人」净化而非击杀（呼应 6.25）。</li>
+    <li>化解失败进入「恼怒」状态（对方攻击 +10%，短暂），防止无脑求饶刷生存——<b>嘴遁也是要底子的</b>。</li>
+  </ul>
+
+  <h3>6.11 战斗模式与社交化战斗</h3>
+  <h4>① 战斗模式总览</h4>
+  <table>
+    <thead><tr><th>模式</th><th>类型</th><th>准入</th><th>产出</th></tr></thead>
+    <tbody>
+      <tr><td>野怪战斗</td><td>pve</td><td>场景刷新（见第 15 章怪物基础值）</td><td>经验、掉落、行为日志</td></tr>
+      <tr><td>副本</td><td>pve</td><td>单人 / 组队（team_id），有队伍准入门槛</td><td>灵石、参悟材料、装备</td></tr>
+      <tr><td>帮派 BOSS</td><td>pve（guild_war）</td><td>帮派周常，全员集结</td><td>帮派资金、帮贡、掉落</td></tr>
+      <tr><td>擂台切磋</td><td>pvp</td><td>友谊赛 / 彩头赛，支持观战</td><td>名声、彩头、人气（见 8.16）</td></tr>
+      <tr><td>野外 PK</td><td>pvp</td><td>红名惩罚（见 8.9 通缉联动）</td><td>掉落 / 恶名 / 通缉风险</td></tr>
+      <tr><td>帮战</td><td>pvp（guild_war）</td><td>报名制周常（见 8.8）</td><td>帮派资金、称号</td></tr>
+    </tbody>
+  </table>
+  <h4>② 社交化战斗（战斗 × 社交联动）</h4>
+  <ul>
+    <li><b>助战</b>：好友/帮派成员可助战副本与突破仪式，助战者获人情值（见 8.13③），求助者获进度加成。</li>
+    <li><b>观战打赏</b>：擂台切磋支持围观，观众可押彩头、打赏、喝彩（见 8.16③）。</li>
+    <li><b>战斗广播</b>：切磋胜出、通缉成功、帮战胜利全服喊话（展示类社交动作的放大器）。</li>
+    <li><b>败而不退</b>：PVE 失败可发起「情义相助」求援（见 8.13），把挫败转化为社交协作入口。</li>
+  </ul>
+  <h4>③ 战斗中的实时社交动作</h4>
+  <ul>
+    <li><b>实时求援</b>：战斗中（团队濒灭 / 被红名围攻）可一键向好友/帮派实时求援，援助者 15 秒内入场支援（入场瞬移冷却限制防滥用，呼应 8.14③ 守护模式）。</li>
+    <li><b>借力</b>：战斗中可向好友「借力」（借取 20% 内力上限或指定技能的一次使用权），<b>消耗人情值</b>（见 8.13③）；借力成功与否受「过命交情」等级影响——离线好友的低等级关系借力成功率低，倒逼日常社交经营。</li>
+    <li><b>战斗舆论</b>：帮战 / 通缉等大事件战斗全程可被围观，围观舆论影响双方「心态」状态（BUFF / DEBUFF）；战后自动生成「江湖快报」供茶楼传播（呼应 8.10 茶楼听书），战斗结果反哺情报生态。</li>
+  </ul>
+
+  <h3>6.12 数值成长与平衡校验</h3>
+  <h4>① 成长曲线建议</h4>
+  <ul>
+    <li>每级属性 +2%；技能伤害随 <code>min_level</code> 分段：1-30 / 31-60 / 61+ 每档 ×1.8。</li>
+    <li>三条资源线独立：内力（被动回复 + 药品）、体能（休息 + 食物）、灵力（灵石 + 冥想）——<b>防止单资源吃遍三层</b>，各自形成消耗经济。</li>
+  </ul>
+  <h4>② 平衡校验清单（上线前自查）</h4>
+  <ul>
+    <li>同级同装备下，三层流派 DPS 曲线应在 ±15% 内接近——差异体现在机制（克制/爆发/控制）而非数值。</li>
+    <li>PVP 单挑时长 30-90s；帮战团战 10 分钟内分出胜负。</li>
+    <li>高境界打低境界伤害衰减（境界差 ≥2 时 ±30% 调整），保护低阶玩家体验，防碾压劝退。</li>
+  </ul>
+
+  <h3>6.13 战斗社交经济学（借力 / 助战能量 / 人情闭环）</h3>
+  <p><b>玩法定位</b>：把「社交关系」变成可消耗、可积累的战斗资源——战斗不再是孤立的数值对撞，而是<b>日常社交经营的变现场</b>。</p>
+  <h4>① 助战能量（并肩成长）</h4>
+  <ul>
+    <li>每场助战成功双方获得「并肩」标记，累计提升组队默契值（见 8.14②）；助战还能触发「并肩成就」（见 7.3 社交类成就）。</li>
+    <li>助战不消耗被助者的任何资源，只消耗助战者时间——「付出时间换人情」，社交参与本身成为可再生资源。</li>
+  </ul>
+  <h4>② 战斗人情闭环</h4>
+  <div class="loop">
+    <span class="step">求助</span><span class="arrow">→</span>
+    <span class="step">消耗人情值</span><span class="arrow">→</span>
+    <span class="step">援助 · 获得人情值</span><span class="arrow">→</span>
+    <span class="step">借力 · 再消耗</span><span class="arrow">→</span>
+    <span class="step">再求助</span>
+  </div>
+  <ul>
+    <li>求助消耗人情（见 8.13③）→ 助战者获得人情 → 借力消耗人情——<b>人情是战斗协作的唯一硬通货</b>，越乐于助人，越能在关键时刻获得支援。</li>
+    <li>人情值每日有获取上限（防互刷），但求助侧消耗不设上限（鼓励开口求助，降低卡关挫败）。</li>
+  </ul>
+  <h4>③ 战斗声望</h4>
+  <p>战斗表现（连击数 / 救场次数 / 助战次数 / 胜率）折算为江湖声望（见 8.15）：救场与助战权重高于单纯击杀——<b>「会打架」不如「会救场」有声望</b>，从数值上引导协作型战斗。</p>
+  <h4>④ 数值护栏（防带小号）</h4>
+  <ul>
+    <li>借力/助战收益随境界差衰减：境界差 ≥3 时收益减半，防「大号带小号」刷人情与默契。</li>
+    <li>助战入场有每日次数上限；实时求援有全局冷却（5 分钟），防止战斗无限续命。</li>
+  </ul>
+
+  <h3>6.14 内功心法与修炼系统（三大资源线的修炼玩法）</h3>
+  <p><b>玩法定位</b>：武学不只是「技能释放」，还有「内功养成」——心法决定资源回复与被动，打坐/冥想是三层力量本源（内力/体能/灵力，见 6.12）的日常修炼入口。</p>
+  <h4>① 心法槽位</h4>
+  <ul>
+    <li>装备一门心法（新表 inner_minds 或复用 skill_templates + art_type=内功）：决定内力/体能/灵力三项的回复效率与专属被动（如金钟罩减伤、呼吸控制供氧、灵力亲和）。</li>
+    <li>心法分级对应三层境界：基础心法（内力向）/ 科学心法（体能向）/ 玄学心法（灵力向）；心法切换有冷却（5 分钟），战斗与突破仪式中不可切换。</li>
+  </ul>
+  <h4>② 打坐与冥想</h4>
+  <ul>
+    <li><b>打坐</b>：安全区打坐获得双倍资源回复 + 修炼值（修炼值推动心法等级）；<b>组队打坐（双修）效率 +20%</b>——修炼也要「一起」（社交连接：好友/侠侣双修有额外加成）。</li>
+    <li><b>冥想</b>（玄学向）：消耗灵石冥想，提升悟道效率与灵力上限，是玄学篇的专属修炼节奏。</li>
+    <li>离线挂机修炼见 6.17③，与打坐形成「在线主动 + 离线被动」双轨。</li>
+  </ul>
+
+  <h3>6.15 武学秘籍与传承（秘籍经济）</h3>
+  <p><b>玩法定位</b>：秘籍是武学养成的「收藏与交易」载体——获取途径多样，残页可交易，参悟需要资源，让武学本身成为可流通的社交商品。</p>
+  <h4>① 秘籍获取途径</h4>
+  <table>
+    <thead><tr><th>途径</th><th>说明</th><th>社交属性</th></tr></thead>
+    <tbody>
+      <tr><td>师门传授</td><td>拜师后由师傅指定传授（见 8.7③）</td><td>师徒关系绑定</td></tr>
+      <tr><td>奇遇掉落</td><td>逛街/好感事件触发（见 6.16）</td><td>社交事件驱动</td></tr>
+      <tr><td>拍卖行 / 摆摊</td><td>完整秘籍或残页挂单流通（见第 11 章）</td><td>交易经济</td></tr>
+      <tr><td>帮派藏经阁</td><td>帮贡兑换共享技能（见 8.8③）</td><td>帮派协作</td></tr>
+      <tr><td>皇榜 / 悬赏奖励</td><td>高难任务掉落（见 8.10①）</td><td>悬赏联动</td></tr>
+    </tbody>
+  </table>
+  <h4>② 残页与参悟</h4>
+  <ul>
+    <li><b>秘籍残页</b>：完整秘籍拆分为 N 张残页，残页可交易——收集党可挂单求购，形成「残页市场」（呼应 8.16 展示与交易）。</li>
+    <li><b>参悟</b>：消耗参悟券（见 6.9②）参悟秘籍，解锁技能分支或强化效果；参悟有成功率，失败保留进度（软保底），避免挫败。</li>
+  </ul>
+  <h4>③ 传承</h4>
+  <p>师傅可将已参悟的秘籍技能传授给徒弟（一次性），徒弟出师后关系保留为「师徒情谊」仍可请教（限次）；<b>传承记录入江湖快报</b>（见 6.11③），传承本身就是「展示类」社交事件。</p>
+
+  <h3>6.16 奇遇与机缘系统（武学奇遇 / 玄学机缘）</h3>
+  <p><b>玩法定位</b>：奇遇是武学成长的「惊喜通道」，机缘是玄学篇稀缺性的来源——两者都由社交行为触发，落实「高阶力量的门槛是社交深度」（世界观总纲）。</p>
+  <h4>① 武学奇遇</h4>
+  <ul>
+    <li>触发源：逛街遇路人甲（见 8.12②）、NPC 好感达标、茶楼听书线索（见 8.10②）、随机街头事件。</li>
+    <li>奇遇类型：发现秘籍、无名老者指点（技能强化）、石壁刻痕（隐藏技能）、挑战幻境（奖励修炼值）。</li>
+    <li>奇遇冷却：每日奇遇上限 + 稀有度权重，防刷。</li>
+  </ul>
+  <h4>② 玄学机缘</h4>
+  <ul>
+    <li>机缘事件是玄学篇晋升（61 级）与机缘令（见 6.9②）的主要来源：打听消息获得「机缘指引」（A 级情报，见 8.6）、揭榜高难任务、情谊深度达标（结义/侠侣/帮派贡献）。</li>
+    <li>机缘稀有度分级：灵缘 / 仙缘 / 天缘；天缘触发全服广播（展示类社交），引动他人围观与求带。</li>
+  </ul>
+  <h4>③ 悟道任务链</h4>
+  <p>61 级玄学晋升前置：多步任务链串联「打听消息 → 揭榜 → 情谊考验」三类社交行为（见 6.9①），失败不断链（从当前步续做），但会清空部分机缘进度——鼓励一次做完。</p>
+
+  <h3>6.17 演武与修炼场所（每日修炼节奏）</h3>
+  <p><b>玩法定位</b>：给「练武」一个仪式化的场所与节奏——木人桩练熟练、练功房挂机、演武场切磋，各司其职。</p>
+  <ul>
+    <li><b>木人桩</b>：城镇演武场内的单机练功目标，战斗获得武学熟练度（见 6.2）与少量经验；无风险、无消耗，是新技能上手与熟练度保底的场所。</li>
+    <li><b>演武场</b>：擂台切磋场地（见 8.5 切磋扬名、6.11 观战打赏），可设友谊赛 / 彩头赛 / 帮派内训。</li>
+    <li><b>练功房</b>：帮派练功房 / 家园练功桩（见 8.16②），支持<b>离线挂机修炼</b>（离线结算补发，呼应第 14 章）——修炼值按心法等级结算，上限 8 小时。</li>
+    <li><b>每日修炼节奏</b>：每日修炼时间有软上限（如 2 小时高效段，之后收益衰减 50%），防肝保健康，把「练武」从苦役变成节奏。</li>
+  </ul>
+
+  <h3>6.18 医术毒术与丹药（生活武学）</h3>
+  <p><b>玩法定位</b>：医术毒术是「生活向武学」——不直接堆战力，但决定续航、补给与对战局的影响力，是战斗经济的供给端。</p>
+  <h4>① 炼丹（医术）</h4>
+  <ul>
+    <li>采集：野外药材采集（资源点，见第 5 章场景）+ 集市购买（见 8.16② 摆摊经济）。</li>
+    <li>配方：丹药分回血 / 回内 / 临时属性三类（对应 6.3 Buff）；高品丹药需高阶医术等级 + 稀有药材。</li>
+  </ul>
+  <h4>② 制毒（毒术）</h4>
+  <ul>
+    <li>毒药可淬于暗器与兵器（见 6.7 蛇影缠身、飞蝗石），造成持续伤害 / 减益。</li>
+    <li>解毒丹、抗毒心法是反制手段——毒与医互为攻防，形成「战斗前准备」的策略层。</li>
+  </ul>
+  <h4>③ 治疗定位</h4>
+  <ul>
+    <li>医术技能（金创药灸等）是队伍治疗的稳定手段（见 6.11 组队角色定位），丹药则是单人续航的补充。</li>
+    <li><b>救死扶伤声望</b>：治疗量 / 解毒次数折算江湖声望（见 6.13③ 战斗声望口径一致）——生活武学同样通往「侠义」。</li>
+  </ul>
+
+  <h3>6.19 阵法与合击（多人战斗的社交内核）</h3>
+  <p><b>玩法定位</b>：把「组队」从「各打各的」升级为「阵法配合」——战斗不再是个人的数值叠加，而是<b>多人协作的同步表演</b>。这是社交元素对战斗机制最直接的改造。</p>
+  <h4>① 阵法系统（新表 formations / formation_bindings）</h4>
+  <table>
+    <thead><tr><th>阵法</th><th>人数</th><th>基础效果</th><th>克制关系</th></tr></thead>
+    <tbody>
+      <tr><td>北斗七星阵</td><td>7 人</td><td>全员攻击 +15% 持续</td><td>克 五行阵</td></tr>
+      <tr><td>五行阵</td><td>5 人</td><td>属性轮转防御（受击属性自动切换克制）</td><td>克 三才阵</td></tr>
+      <tr><td>三才阵</td><td>3 人</td><td>攻防均衡 + 治疗强化</td><td>克 北斗阵</td></tr>
+    </tbody>
+  </table>
+  <ul>
+    <li><b>就位同步</b>：队长配置阵型图，队员须在 10 秒限时内按站位就位才触发阵法——「站错位阵法失效」，真实协作而非挂机。</li>
+    <li><b>强度随默契</b>：阵法效果 = 基础 ×（1 + 默契等级加成，见 8.14②）；结义/侠侣成员同阵额外加成。</li>
+    <li><b>阵法克制</b>（呼应 6.10⑤ 机制克制的延伸）：北斗克五行、五行克三才、三才克北斗——组队博弈从「选人」扩展到「选阵」。</li>
+  </ul>
+  <h4>② 合击同步机制（深化 6.10⑥）</h4>
+  <ul>
+    <li><b>触发</b>：两名以上队友在 2 秒窗口内按「合击谱」顺序释放指定技能即触发合击；合击谱随关系解锁（结义技 / 情侣技 / 师徒技，见 8.7）。</li>
+    <li><b>强度随默契</b>：基础合击（陌生队友，无加成）→ 精妙合击（知己，+20%）→ 天衣无缝（生死之交 / 侠侣，+40%）。</li>
+    <li><b>失败成本</b>：错过合击窗口则进入「失衡」短暂减益——<b>鼓励沟通而非无脑按键</b>，把战斗节奏变成对话。</li>
+  </ul>
+
+  <h3>6.20 援护与战斗分工（副本协作机制）</h3>
+  <p><b>玩法定位</b>：高难战斗必须「分工 + 互相保护」——让协作从可选变为刚需，社交沟通成为过关的充分条件。</p>
+  <h4>① 援护 / 挡刀</h4>
+  <ul>
+    <li>队友可消耗情谊值（见 8.13③）替被集火队友承受 1 次伤害（挡刀）；情谊 ≥ 知己 解锁。</li>
+    <li>援护成功双方得「过命交情」标记（呼应 6.13 并肩成长），触发 8.7 好感度加成；每日援护上限防互刷。</li>
+  </ul>
+  <h4>② BOSS 机制分工</h4>
+  <ul>
+    <li>高难副本 BOSS 设计「分工机制」：拉怪（坦克）、打断（技能打断窗口）、解机关（场景交互）、治疗轮换——任何一环缺失团灭倒计时。</li>
+    <li><b>分工失败惩罚作用于全队</b>，倒逼沟通——战斗机制层面强制「必须交流」。</li>
+  </ul>
+  <h4>③ 战斗沟通工具</h4>
+  <ul>
+    <li>队伍快捷信号盘（集火 / 撤退 / 求援 / 就位），低门槛传递战术意图；战术标记（场景标点）供队长布阵。</li>
+    <li>队伍语音（Socket.IO 音频，可选）降低高难副本沟通成本；信号盘同时服务实时求援（见 6.11③）。</li>
+  </ul>
+
+  <h3>6.21 战斗中的社交对抗（恩怨 × 战斗）</h3>
+  <p><b>玩法定位</b>：对抗不只是数值对撞，还承载恩怨叙事——仇人战、阵前挑战、观战情报，让每一次交手都有「江湖故事」。</p>
+  <h4>① 恩怨对决</h4>
+  <ul>
+    <li>结仇双方（见 8.15②）交手自动触发「恩怨战」：双方情绪值提升（BUFF），胜者获复仇 / 雪耻声望，败者记录待雪。</li>
+    <li>恩怨战全程可围观（助威与气势，见 6.10⑧），围观者可押彩头。</li>
+  </ul>
+  <h4>② 阵前挑战（帮战）</h4>
+  <ul>
+    <li>帮战开战前双方可派代表「单挑下战书」：胜者帮派士气 +15%（全局气势），代表由帮派声望最高者担任。</li>
+    <li>单挑代表即「展示类」社交动作（见 8.5 切磋扬名的帮战延伸），下战书内容全服广播。</li>
+  </ul>
+  <h4>③ 观战实时情报支援</h4>
+  <ul>
+    <li>观战者（见 6.10⑧）可在战斗中通过弹幕向己方战斗者传递实时情报（目标弱点提醒 / 技能预警）。</li>
+    <li>情报质量受观战者谍报等级影响（呼应 8.6）——<b>观战从「看热闹」升级为「参与战斗准备」</b>，围观者也成为战斗的一环。</li>
+  </ul>
+
+  <h3>6.22 战后社交仪式（战果的社交化）</h3>
+  <p><b>玩法定位</b>：战斗结束不是终点，而是新的社交起点——战果被传播、被纪念、被再战，形成「打 → 传 → 再打」循环。</p>
+  <h4>① 战后互动</h4>
+  <ul>
+    <li>击掌 / 致敬（双方好感度小幅提升）、「再战」约定（生成好友/再战推荐，沉淀新关系）。</li>
+    <li>帮战 / 通缉战后自动开启帮派「庆功宴」或「战利品拍卖」（见 8.8 帮派宴会、第 11 章拍卖）。</li>
+  </ul>
+  <h4>② 江湖快报深化（呼应 6.11③）</h4>
+  <ul>
+    <li>战报生成：胜者登「今日英雄榜」（茶楼头条，见 8.10②）；败者可发「雪耻宣言」——直接拉起恩怨战（见 6.21①）。</li>
+    <li>战报可收藏 / 转发（展示类社交动作），是「被看见」的资源入口（呼应 8.16 人气值）。</li>
+  </ul>
+  <h4>③ 战败保护</h4>
+  <ul>
+    <li>战败方获「重整旗鼓」Buff（1 小时 +10% 修炼效率，见 6.17），把挫败转化为成长节奏。</li>
+    <li>连续战败触发「情义相助」引导（见 8.13③），防挫败流失——战败也是社交入口。</li>
+  </ul>
+
+  <h3>6.23 面子与羞辱（颜面的平行维度）</h3>
+  <p><b>玩法定位</b>：武侠重颜面——战斗胜负之外还有「面子」的输赢，让围观、羞辱、认输都有独立于血条的第二条数值线。</p>
+  <h4>① 颜面值</h4>
+  <table>
+    <thead><tr><th>事件</th><th>颜面变化</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td>战胜强者（境界 ≥ 自身）</td><td>+</td><td>公开挑战成功</td></tr>
+      <tr><td>被围观喝彩 / 打赏</td><td>+</td><td>人气反哺颜面（呼应 8.16③）</td></tr>
+      <tr><td>输给低阶者</td><td>−−</td><td>爆冷最丢面子</td></tr>
+      <tr><td>被迫认输 / 当众求饶</td><td>−−</td><td>见 6.10⑩</td></tr>
+      <tr><td>被公开羞辱</td><td>−−−</td><td>见 ②</td></tr>
+    </tbody>
+  </table>
+  <ul>
+    <li>颜面影响：NPC 交易折扣（有面子砍价更易）、声望获取倍率、江湖快报头条优先权（见 6.22②）。</li>
+    <li>初始 50，周结算进「面子榜」（并入排行，见第 10 章）——颜面本身是可经营、可炫耀的社交资产。</li>
+  </ul>
+  <h4>② 羞辱机制</h4>
+  <ul>
+    <li>战斗中对败者「公开羞辱」（广播 + 围观必看）：羞辱者涨颜面，被羞辱者颜面大损并触发「雪耻宣言」（见 6.22②）直接拉起恩怨战（见 6.21①）。</li>
+    <li><b>护栏</b>：羞辱需当面（同场景）且可被拒绝（拒绝者颜面小幅损失但可反制，防止单方面霸凌）；恶意羞辱被举报核实扣信用分（见 8.15③）。</li>
+  </ul>
+
+  <h3>6.24 战利品分配仪式（组队收益社交化）</h3>
+  <p><b>玩法定位</b>：组队收益分配不是后勤问题，而是<b>社交仪式</b>——分得透明、分得漂亮，队伍关系更牢固；分得不公，结仇起点。</p>
+  <h4>① 分配模式</h4>
+  <ul>
+    <li><b>按贡献</b>：DPS + 治疗 + 援护（见 6.20①）权重自动分账——引导「又输出又救场」的协作型玩法（呼应 6.13③ 战斗声望口径）。</li>
+    <li><b>抽签（ROLL）</b>：贵重掉落全队公开 ROLL 点，点数可见、可炫耀。</li>
+    <li><b>队长分配 / 均分</b>：由队长声明，分配明细入队伍日志。</li>
+  </ul>
+  <h4>② 仪式化与仲裁</h4>
+  <ul>
+    <li>贵重掉落全队「过目」（展示给全队），得主可「谢队」发红包（见 8.13②）——<b>分配本身就是社交互动</b>。</li>
+    <li>分配争议可提交 GM 仲裁（见 13.5 审计）：基于 items 快照与 <code>combat_logs</code> 贡献明细判定（呼应第 11 章交易仲裁），仲裁结果入失信记录（见 8.15③）。</li>
+  </ul>
+
+  <h3>6.25 战斗调解与仲裁（第三方说和）</h3>
+  <p><b>玩法定位</b>：不是每场冲突都要打到底——江湖有「说和人」，声望与关系可以终结战斗，把对抗转化为关系。</p>
+  <ul>
+    <li><b>说和人</b>：声望高的第三方（帮主 / 高好感 NPC / 侠侣 / 结义兄弟）可对恩怨双方发起调解（呼应 8.15② 化解）。</li>
+    <li><b>调解流程</b>：双方各陈诉求（付代价 / 道歉 / 互让）→ 说和成功：双方获「不打不相识」好感（见 8.15②），失败则进入恩怨战（见 6.21①）。</li>
+    <li><b>系统仲裁</b>：无法说和的纠纷（劫镖 / 诈骗 / 恶意羞辱）走官府仲裁（GM 审计，见 13.5），判决执行（赔偿 / 禁言 / 封禁）入失信记录（见 8.15③）。</li>
+    <li><b>说和收益</b>：说和成功者获「息事宁人」声望与全服广播（展示类）——<b>调解也是战斗之外的第二战场</b>。</li>
+  </ul>
+
+  <h3>6.26 战斗对抗平衡策略（克制有循环，胜负有护栏）</h3>
+  <p><b>玩法定位</b>：战斗平衡不是「数值相同」——而是<b>每种流派有克制、每种克制有代价、每场胜负不绝望</b>。</p>
+  <ul>
+    <li><b>三层克制循环</b>：基础篇 → 科学篇 → 玄学篇循环克制（10% 克制加成），同层内五行相生相克（见 6.10④）——<b>克制形成循环，循环逼出配队与换人（社交决策，见 6.19 阵法）</b>。</li>
+    <li><b>境界差衰减</b>：高境界对低境界衰减（默认每差 1 级 -2%，上限 -40%），高装等同样衰减（见 4.10⑤）——<b>碾压被限制，切磋与协助仍有意义</b>（带小号 / 结义互助，见 8.14）。</li>
+    <li><b>胜负结算护栏</b>：点到为止模式胜者收益上限（防刷）、生死斗败者保护（见 6.10⑨ 遗物由好友收敛）——<b>输赢有代价但不致命</b>（战败重振 Buff，见 6.22③）。</li>
+    <li><b>PVP 与 PVE 分离</b>：PVP 数值（克制 / 衰减 / 暴击）与 PVE 数值独立配置——<b>刷副本的强度不等于欺负人的强度</b>。</li>
+    <li><b>反互刷护栏</b>：连续对刷收益递减（见 10.6 有效互动计分同思路）、观战押注上限（见 9.7③）——<b>战斗结果被围观，刷子无处遁形</b>。</li>
+    <li><b>实时校验</b>：三层流派胜率按日监控（见 13.4）——任一流派胜率跌破 40% 触发平衡公告与热修复（见 13.6 灰度流程）。</li>
+  </ul>
+  </div>
+</section>
+
+<!-- ==================== 第7章 任务与成就 ==================== -->
+<section class="chapter" id="ch7">
+  <div class="chapter-inner">
+  <h2 class="ch-title">第 7 章 · 任务与成就</h2>
+  <p class="ch-desc">任务是社交动作的「导航」：目标配置支持任意行为类型，社交动作（刺探/揭榜/送礼/结义）都可作为任务目标。</p>
+
+  <h3>7.1 任务模板（quest_templates）</h3>
+  <table>
+    <thead><tr><th>字段</th><th>说明</th><th>策划要点</th></tr></thead>
+    <tbody>
+      <tr><td>quest_type</td><td>main 主线 / daily 日常 / weekly 周常 / achievement 成就</td><td>主线承载剧情（社交深度解锁），日常周常承载活跃</td></tr>
+      <tr><td>min_level</td><td>接取最低等级</td><td>与境界门槛对齐</td></tr>
+      <tr><td>accept_limit</td><td>接取次数上限</td><td>限次任务投放</td></tr>
+      <tr><td>auto_reward</td><td>自动发奖</td><td>低价值任务免交互</td></tr>
+      <tr><td>target_json</td><td>目标配置：杀怪/收集/社交行为</td><td><b>社交目标</b>：刺探 N 次、送礼 N 次、组队完成副本——社交任务由此配置</td></tr>
+      <tr><td>reward_json</td><td>奖励配置</td><td>货币/道具/声望/修炼资源</td></tr>
+      <tr><td>prerequisite_ids</td><td>前置任务链</td><td>剧情顺序与境界解锁</td></tr>
+      <tr><td>repeatable</td><td>可重复</td><td>日常周常开启</td></tr>
+    </tbody>
+  </table>
+
+  <h3>7.2 玩家任务状态机（player_quests）</h3>
+  <p>not_started 未接 → in_progress 进行中 → completed 可提交 → claimed 已领奖；重复任务记录完成次数（complete_times）。</p>
+
+  <h3>7.3 成就（achievement_templates + player_achievements）</h3>
+  <p>五类成就：combat 战斗 / social 社交 / economy 经济 / exploration 探索 / special 特殊；七种达成条件：升级、击杀数、完成任务、赚钱、入帮、交友、获胜。玩家成就表记录当前进度与解锁/领奖状态。</p>
+  <div class="note"><b>策划设计要点</b>：社交类成就（add_friend / join_guild）是新手引导「必须社交」的软强制；成就奖励建议包含修炼资源，形成「成就 → 力量」的正循环。</div>
+
+  <h3>7.4 任务类型体系（任务 × 社交矩阵）</h3>
+  <p><b>玩法定位</b>：任务不只「杀怪收集」——本作任务类型按「是否社交」重排，社交任务占比是运营配置项（默认 40%）。</p>
+  <table>
+    <thead><tr><th>类型</th><th>子类</th><th>社交属性</th><th>对接</th></tr></thead>
+    <tbody>
+      <tr><td>主线</td><td>剧情任务（社交解锁）</td><td>节点需情报/好感/阵营</td><td>见 7.6</td></tr>
+      <tr><td>支线</td><td>NPC 委托</td><td>好感触发</td><td>见 5.11 NPC 媒介</td></tr>
+      <tr><td>日常</td><td>每日任务（含社交目标）</td><td>组队/送礼/刺探/运镖</td><td>见 7.5</td></tr>
+      <tr><td>周常</td><td>帮派任务、天梯</td><td>帮派协作</td><td>见 8.20、9.7</td></tr>
+      <tr><td>奇遇</td><td>悟道任务链</td><td>情报+揭榜+情谊考验</td><td>见 6.16③</td></tr>
+      <tr><td>悬赏</td><td>玩家委托</td><td>信用担保契约</td><td>见 11.9</td></tr>
+    </tbody>
+  </table>
+
+  <h3>7.5 社交任务设计（把社交动作变成任务目标）</h3>
+  <p><b>玩法定位</b>：target_json（见 7.1）直接支持社交目标——<b>任务给社交发指令，社交给任务供进度</b>。</p>
+  <ul>
+    <li><b>社交目标类型</b>：刺探 N 次 / 送礼 N 次 / 组队完成副本 N 次 / 帮贡 N 点 / 揭榜 N 次 / 运镖 N 次——与七大社交动作一一对应。</li>
+    <li><b>奖励倾斜</b>：社交任务奖励侧重声望 / 人情 / 好感度（社交货币，见 11.12）——做社交得社交，循环自洽。</li>
+    <li><b>任务示例</b>：每日「茶楼跑腿」（组队听书 + 送礼答谢）、「百晓生悬赏」（刺探 2 次）、「镖局帮工」（护送 1 趟）——日常即江湖生活。</li>
+    <li><b>社交门槛</b>：高价值任务设社交前提（需要 1 名好友 / 帮派成员 / 情报等级，见 15.3 七日引导同思路）——<b>能力不足时，求助社交是正解</b>。</li>
+  </ul>
+
+  <h3>7.6 剧情任务与社交解锁（剧情随互动推进）</h3>
+  <p><b>玩法定位</b>：剧情不是「自动播放」——社交动作是剧情的钥匙，剧情走向由玩家关系网络决定。</p>
+  <ul>
+    <li><b>社交解锁节点</b>：主线节点需要情报达标（见 8.6）、好感度达标（见 8.7）、帮派身份（见 8.18）——<b>不社交，剧情卡住</b>。</li>
+    <li><b>剧情分叉</b>：关键剧情多分支（帮 A 还是帮 B），由角色关系（见 3.6 关系网络）与选择决定——每个玩家的剧情由自己的社交史写成。</li>
+    <li><b>剧情见证</b>：婚礼 / 结义 / 拜师剧情可邀请好友/帮派观礼（见证系统）——剧情是社交事件的「仪式时刻」。</li>
+    <li><b>剧情回响</b>：剧情选择写入记忆（见 3.6），后续 NPC 对话差异化回应——社交史即剧情史。</li>
+  </ul>
+
+  <h3>7.7 成就体系深化（成就的社交展示）</h3>
+  <ul>
+    <li><b>成就墙</b>：个人主页展示成就墙（见 8.16③ 观战主页）——成就是「我玩过什么」的履历。</li>
+    <li><b>成就称号</b>：成就解锁展示称号（见 8.16①）——头衔是社交名片。</li>
+    <li><b>成就分享</b>：达成成就可分享到频道（见 14.1）——分享动作本身计入活跃。</li>
+    <li><b>成就等级</b>：成就进度可视（current_value / target_value，见 7.3）——差一点就解锁，是继续社交的钩子。</li>
+  </ul>
+
+  <h3>7.8 任务协作与共享（任务也可以一起做）</h3>
+  <ul>
+    <li><b>组队任务进度共享</b>：组队时任务进度共享（击杀/收集同计）——组队是「任务加速器」。</li>
+    <li><b>帮派任务全员进度</b>：帮派任务全员共享进度（帮派建设，见 8.19）——一人出力、全帮受益。</li>
+    <li><b>求助任务</b>：任务卡关可向好友/帮派求助（求援，见 6.11① 实时求援同框架）——<b>卡关是求助理由，求助是社交机会</b>。</li>
+    <li><b>师徒带教任务</b>：师徒共同完成任务（双人教程，见 15.4）——老带新任务化。</li>
+  </ul>
+
+  <h3>7.9 任务经济与投放（任务控制社交节奏）</h3>
+  <ul>
+    <li><b>社交配额</b>：每日社交动作有配额（见 8.17 治理、10.6 有效互动同口径）——任务投放不超过配额，防刷且保真实。</li>
+    <li><b>奖励结构</b>：任务奖励混合货币 + 社交货币（人情/帮贡/声望，见 11.12）——经济系统喂社交。</li>
+    <li><b>投放节奏</b>：日常任务错峰、周常重协作、主线重剧情——避免「任务疲劳」，社交任务穿插防纯刷。</li>
+    <li><b>运营配置</b>：社交任务占比、配额、奖励倍率全部远程配置（见 13.2）——节奏由数据说话。</li>
+  </ul>
+  </div>
+</section>
+
+<!-- ==================== 第8章 社交系统（核心） ==================== -->
+<section class="chapter" id="ch8">
+  <div class="chapter-inner">
+  <h2 class="ch-title">第 8 章 · 社交系统（核心）</h2>
+  <p class="ch-desc">本章为全手册重心。聊天、好友、帮派、邮件是基础社交设施；七大社交动作矩阵（见世界观总纲）中，情报、展示、悬赏、馈赠四类的数据底座在此落地。</p>
+
+  <h3>8.1 聊天（chat_messages）</h3>
+  <p>三频道：world 世界 / private 私聊 / guild 帮派。记录发送者、接收者（私聊）、帮派（帮派频道）、内容。世界频道是「发广告」「求助」「喊话」的场所，需配合敏感词与频率限制。</p>
+
+  <h3>8.2 好友（friends）</h3>
+  <p>好友状态机：pending 待处理 → accepted 已接受（或 blocked 拉黑）。备注（remark）、最近聊天时间。好友是送礼、私聊、组队、结义的基础关系单元。</p>
+
+  <h3>8.3 帮派（guilds / guild_members / guild_donates）</h3>
+  <p><b>帮派</b>：名称唯一、帮主（leader_id）、等级、成员数、图标、帮派 Buff（全员加成，如「帮派心法」）、公告、解散时间。</p>
+  <p><b>成员</b>：职位（leader 帮主 / officer 副帮主 / elite 精英 / member 成员）+ 帮贡（contribution）。</p>
+  <p><b>捐献</b>：金币/钻石/物品三种类型（donate_type），获得帮贡（contribution_gained）。帮贡兑换帮派技能/资源——「情义相助」「帮派建设」社交动作的落地。</p>
+
+  <h3>8.4 邮件（mails）</h3>
+  <p>系统 / 玩家两类发件（sender_type），支持附件奖励（attachment_json）、批量发送（batch_id）、模板（template_id）、过期未领消失（expired_at）。系统邮件用于运营发奖、离线补偿；玩家邮件支撑「送礼」「侠侣书信」。</p>
+
+  <h3>8.5 社交动作 → 系统落地映射（策划配置指南）</h3>
+  <table>
+    <thead><tr><th>社交动作</th><th>已具备的底座</th><th>待策划配置 / 扩展</th></tr></thead>
+    <tbody>
+      <tr><td>刺探情报</td><td>character_espionages（谍报等级/任务/伪装）</td><td>配置刺探任务产出（弱点/线索），接入任务 target_json</td></tr>
+      <tr><td>打听消息</td><td>NPC 对话（npc_templates.dialogue_id）+ chat</td><td>「百晓生」NPC 售卖传闻，传闻进 memories.rumors</td></tr>
+      <tr><td>发广告</td><td>chat world 频道</td><td>广告模板 + 频率限制 + 置顶付费位</td></tr>
+      <tr><td>揭皇榜</td><td>quest 系统 + scene_triggers</td><td>皇榜=限时悬赏任务池，奖励声望</td></tr>
+      <tr><td>逛街交流</td><td>NPC 互动（talk）+ character_relationships</td><td>路人甲好感度养成，触发隐藏剧情</td></tr>
+      <tr><td>摆摊叫卖</td><td>trade_orders 交易订单</td><td>摊位 UI + 叫卖广播</td></tr>
+      <tr><td>切磋扬名</td><td>combat + matchmaking</td><td>擂台场景 + 排名彩头</td></tr>
+      <tr><td>结义/师徒/侠侣</td><td>friends + guild_members 模式可复用</td><td>关系类型扩展 + 专属技能/加成</td></tr>
+      <tr><td>红包打赏</td><td>economy + transactions</td><td>红包功能 + 人气值</td></tr>
+      <tr><td>通缉追杀</td><td>character_darkened.hunting_target</td><td>通缉令 + 赏金池</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note"><b>运营策略</b>：社交动作应与日常/周常任务深度绑定（「今日刺探 3 次」「本周完成 5 单悬赏」），以任务系统把社交动作变成「必做项」而非可选项，保证社交活跃度基线。</div>
+
+  <h3>8.6 情报生态详解（刺探 / 打听 / 窃听）</h3>
+  <p><b>玩法定位</b>：情报是本作社交经济的第一硬通货——它同时喂给任务（剧情线索）、战斗（目标弱点）、交易（货品）三条线。</p>
+  <h4>① 情报价值分级（策划建议）</h4>
+  <table>
+    <thead><tr><th>等级</th><th>名称</th><th>来源</th><th>用途</th></tr></thead>
+    <tbody>
+      <tr><td>E</td><td>街谈巷议</td><td>逛街交流、茶楼听书</td><td>日常闲聊、低价值传闻</td></tr>
+      <tr><td>D</td><td>市井传言</td><td>打听消息（百晓生）</td><td>小任务线索</td></tr>
+      <tr><td>C</td><td>可靠消息</td><td>刺探成功</td><td>剧情节点解锁、弱克制加成</td></tr>
+      <tr><td>B</td><td>机密</td><td>渗透 / 窃听成功</td><td>关键剧情、目标弱点（破防+15%）</td></tr>
+      <tr><td>A</td><td>绝密</td><td>高谍报等级 + 高难度任务</td><td>玄学机缘指引、阵营级事件</td></tr>
+    </tbody>
+  </table>
+  <h4>② 谍报成长曲线</h4>
+  <ul>
+    <li>每次刺探产出 1 条情报 + 情报值；情报值累计提升 <code>espionage_level</code>（建议阈值：1-5 级每级 100，6-10 级每级 300，封顶 10 级）。</li>
+    <li>刺探成功率 = 基础成功率（60%）+ 谍报等级 × 3% − 目标反侦察等级 × 3%；失败进入冷却（10 分钟）并可能暴露身份。</li>
+    <li>高价值情报有<b>保鲜期</b>（B 级 48h、A 级 24h），过期降级或作废，防止囤积压价。</li>
+  </ul>
+  <h4>③ 情报交易市场</h4>
+  <p>传闻与秘密（<code>memories.rumors / secrets</code>）可挂单出售（复用 <code>trade_orders</code> 挂单模式 + <code>chat world</code> 广播叫卖）。买方支付金币，成交后情报入买方记忆。<b>防滥用</b>：情报实名来源留痕（记忆记录卖家），贩卖假情报（伪造）会降忠诚度并触发仇人关系。</p>
+
+  <h3>8.7 关系养成详解（结义 / 师徒 / 侠侣）</h3>
+  <h4>① 好感度阶段（character_relationships）</h4>
+  <table>
+    <thead><tr><th>阶段</th><th>好感度</th><th>解锁内容</th></tr></thead>
+    <tbody>
+      <tr><td>陌生 stranger</td><td>0</td><td>基础对话</td></tr>
+      <tr><td>相识 acquaintance</td><td>50</td><td>私聊、送礼（每日上限）</td></tr>
+      <tr><td>友人 friend</td><td>150</td><td>组队加成 +5%、切磋</td></tr>
+      <tr><td>知己 confidant</td><td>300</td><td>结义资格、共享情报、双人任务</td></tr>
+      <tr><td>生死之交 sworn</td><td>500</td><td>结拜技、互助复活、遗产继承</td></tr>
+    </tbody>
+  </table>
+  <p>好感度来源：送礼（按礼物价值）、组队、助战、剧情共同经历；负面事件（背叛/拒绝求助）大幅扣减并可能降级。</p>
+  <h4>② 结义（桃园结义）</h4>
+  <ul>
+    <li>人数 3-8 人，成员互为知己（好感度 ≥300），于「结义亭」场景行结拜仪式（全服广播）。</li>
+    <li>结拜收益：结拜技（合击技，需组队且同时在场）、属性加成 +3%、互助复活（每日限次）。</li>
+    <li>结义名册写入关系表（<code>history</code> 记录结义事件），背叛结义（主动攻击兄弟）全服公示并降忠诚。</li>
+  </ul>
+  <h4>③ 师徒传承</h4>
+  <ul>
+    <li>拜师条件：师等级 ≥ 徒 +10；行拜师礼（敬茶互动）。</li>
+    <li>收益：徒经验加成 +10%、师获得师德值（师门声望，可换称号与资源）；每日师徒任务双方各得奖励。</li>
+    <li>出师：徒达指定等级自动出师，双方获出师礼包，关系保留为「师徒情谊」。</li>
+  </ul>
+  <h4>④ 侠侣情缘</h4>
+  <ul>
+    <li>结缘：互为知己 + 专属求缘任务（情缘副本），仪式后结为侠侣（全服广播+称号）。</li>
+    <li>情侣技（双人合击）、夫妻任务（每日同游）、家园拜访互动（情谊值）。</li>
+    <li>解除：需双方同意或单方强解（强解方忠诚度 -20、全服公示）。</li>
+  </ul>
+
+  <h3>8.8 帮派社交运营（建设 / 帮战 / 帮贡经济）</h3>
+  <h4>① 日常活跃</h4>
+  <ul>
+    <li>帮派任务：建设（交资源）、采购（委托购买）、护送（组队运镖）三类，产出帮贡 + 帮派资金。</li>
+    <li>帮派宴会：帮主开启限时宴会场景，成员聚集互动，全员获得「宴席」Buff（经验/属性加成 1h），是「帮派建设」社交动作的仪式化出口。</li>
+    <li>捐献：金币/钻石/物品三类（<code>guild_donates</code>），捐献排行激励。</li>
+  </ul>
+  <h4>② 帮战（周常）</h4>
+  <ul>
+    <li>形式：攻城 / 夺旗，战斗类型 <code>guild_war</code>；报名制，每周固定时段。</li>
+    <li>奖励：胜方帮派资金 + 全体成员帮贡与称号，败方参与奖；帮战日志入 <code>combat_logs</code>。</li>
+    <li>帮战是「协作类」社交动作的最高强度场景，产出帮派技能解锁材料。</li>
+  </ul>
+  <h4>③ 帮贡经济</h4>
+  <p>帮贡兑换：帮派技能（永久被动）、资源包、称号、帮派商店折扣。帮派技能树由帮主配置，成员消耗帮贡学习——<b>帮贡是帮派内社交参与度的直接计价物</b>。</p>
+
+  <h3>8.9 对抗社交详解（运镖 / 通缉 / 入魔猎杀）</h3>
+  <h4>① 镖局运镖</h4>
+  <ul>
+    <li>接镖：镖局 NPC 处领取运镖任务（货物价值=押金），护送至目标场景（押运路线跨区域）。</li>
+    <li>护镖：可组队护送（押运队），沿途遭遇劫镖玩家或 NPC 劫匪；劫镖点固定（设计伏击区）。</li>
+    <li>结算：送达得镖银 + 声望；被劫则货物损失（押金扣除部分），劫镖者获镖银但红名 +2h（可被通缉）。</li>
+    <li><b>定位</b>：高收益高风险的经济与对抗混合玩法，天然制造「护送队 vs 劫镖团伙」的社交对立。</li>
+  </ul>
+  <h4>② 通缉追杀</h4>
+  <ul>
+    <li>红名（PK 值/入魔/劫镖）玩家自动上榜通缉，玩家或帮派可缴纳悬赏金发起指名通缉。</li>
+    <li>击杀通缉犯：得赏金（悬赏金池）+ 正义值；被击杀者入狱/掉声望。</li>
+    <li>与入魔联动：<code>hunting_target</code> 猎杀目标即通缉榜机制之一，入魔者既是猎手也是猎物。</li>
+  </ul>
+  <h4>③ 入魔猎杀规则细化</h4>
+  <ul>
+    <li>入魔后 <code>hunting_target</code> 指向玩家；猎杀成功可「净化」目标（恢复原名）并获正义值奖励。</li>
+    <li>入魔玩家击杀目标越多，<code>power_boost</code> 效果越强但魔名越响亮（暴露风险↑）——形成「越强越危险」的博弈曲线。</li>
+  </ul>
+
+  <h3>8.10 剧情社交详解（皇榜 / 茶楼 / 庙会）</h3>
+  <h4>① 皇榜悬赏</h4>
+  <ul>
+    <li>每日 0 点刷新悬赏任务池（击杀/护送/收集/情报四类），任意玩家可揭榜（<code>quest</code> 系统承载，类型=daily + 皇榜标记）。</li>
+    <li>奖励：声望 + 银两 + 揭榜积分；积分月榜兑换「侠义」称号。</li>
+    <li>部分高难皇榜需组队揭榜（协作入口）。</li>
+  </ul>
+  <h4>② 茶楼听书（江湖传闻场）</h4>
+  <ul>
+    <li>城镇茶楼 NPC 定时「开书」：玩家落座收听，随机获得 1 条传闻（E~C 级情报）或小彩头。</li>
+    <li>传闻可触发隐藏任务线（条件=情报等级 + 好感度），是「打听消息」的低门槛版。</li>
+  </ul>
+  <h4>③ 庙会集市（限时社交场景）</h4>
+  <ul>
+    <li>周期性（如周末）开启限时场景，内置小游戏：猜灯谜（答题）、比武彩头（低门槛 PVP）、祈福（社交许愿墙）。</li>
+    <li>产出：社交币（兑换装饰/称号）、限时道具；场景内强制可见他人（展示类社交动作的放大器）。</li>
+  </ul>
+
+  <h3>8.11 日常社交钩子与活跃度</h3>
+  <ul>
+    <li><b>每日社交任务</b>（模板化配置）：刺探 3 次、送礼 1 次、帮派任务 1 次、茶楼 1 次、组队战斗 1 次——每项产出社交积分 + 基础奖励。</li>
+    <li><b>社交活跃度</b>：每日社交动作累计活跃值，周结算宝箱（分档：10/30/60/100 活跃值）。</li>
+    <li><b>社交积分经济</b>：社交积分兑换修炼资源——科学篇「参悟券」、玄学篇「机缘令」——<b>打通「社交 → 高阶力量」的最终闭环</b>（呼应世界观总纲）。</li>
+    <li><b>反挂机设计</b>：社交动作需真实交互（对象随机/频道喊话/场景到场），限制脚本化刷活跃。</li>
+  </ul>
+
+  <h3>8.12 街头社交与路人甲（逛街交流系统）</h3>
+  <p><b>玩法定位</b>：逛街是最低门槛、最高频的社交入口——不组队、不花钱也能随时「社交」，是新手建立社交习惯的第一课。</p>
+  <h4>① 路人甲 NPC 池</h4>
+  <ul>
+    <li>每个城镇场景常驻 20-40 个路人甲 NPC（随机外貌/称谓/性格），行为模拟：走路、驻足、摆摊、闲聊（<code>npc_templates</code> 扩展 street_persona 字段）。</li>
+    <li>对话池随机生成「街头话题」：天气、物价、传闻碎片、抱怨（隐藏线索）。同一 NPC 好感度越高，话越「深」。</li>
+  </ul>
+  <h4>② 路人好感与随机事件</h4>
+  <ul>
+    <li>与路人甲闲聊可得「街谈巷议」（E~D 级情报，见 8.6），连续互动提升该 NPC 好感度，好感达阈值触发隐藏任务（送信/寻物/调解）。</li>
+    <li>随机街头事件：<b>碰瓷</b>（赔钱/讲理/武力三选，不同声望变化）、<b>乞讨</b>（施舍得功德值）、<b>求助</b>（护送/寻回失物）、<b>送信</b>（跨城跑腿小任务）、<b>算命</b>（随机 buff/线索）——每个事件都是 10 秒内的轻量社交决策。</li>
+  </ul>
+  <h4>③ 逛街产出</h4>
+  <p>逛街产出：街谈巷议（情报）、功德值（侠义向）、好人缘（街头声望）、偶发折扣（小贩好感给优惠）——用轻产出让逛街「有理由」。<code>character_relationships</code> 支持路人甲关系条目，单 NPC 每日情报产出上限，防止「刷路人只换情报」的数值漏洞。</p>
+
+  <h3>8.13 馈赠打赏经济（红包 / 礼物 / 情义相助）</h3>
+  <p><b>玩法定位</b>：馈赠是情感表达与「能量流动」的通道——把玩家的感谢、炫耀、示好变成可量化的社交货币。</p>
+  <h4>① 礼物价值体系</h4>
+  <table>
+    <thead><tr><th>礼物档位</th><th>花费</th><th>好感度</th><th>附加效果</th></tr></thead>
+    <tbody>
+      <tr><td>心意（花/茶点）</td><td>低（银两）</td><td>+10</td><td>表达友好</td></tr>
+      <tr><td>实用（丹药/材料）</td><td>中（金币）</td><td>+30</td><td>对方可自用</td></tr>
+      <tr><td>贵重（秘籍/饰品）</td><td>高（金币/钻石）</td><td>+80</td><td>全服广播「XX 赠 XX 千金」</td></tr>
+    </tbody>
+  </table>
+  <p>礼物通过邮件（mails.attachment_json）送达；贵重礼物系统广播满足「展示」心理。每日送礼上限防刷（见 8.7）。</p>
+  <h4>② 红包玩法</h4>
+  <ul>
+    <li>世界频道发红包：定额/拼手气两类，金额走 economy 流水；抢红包者产生「人情值」（见 ③）。</li>
+    <li>红包可挂主题（庆祝出师/结义/上榜），强化「社交仪式 → 话题 → 关注」链路。</li>
+  </ul>
+  <h4>③ 情义相助（求助打赏）</h4>
+  <ul>
+    <li>玩家卡关可发起「情义相助」求助（战斗/任务/寻物），好友/帮派/全服响应；完成者获打赏 + 感谢值，求助者记录「欠人情」。</li>
+    <li><b>人情值</b>（复用关系表字段或新表 social_favors）：收到帮助 +1、帮助他人 +1 且解锁下次优先响应权；人情值影响求助排序——互帮互助者优先被看到。</li>
+  </ul>
+
+  <h3>8.14 组队协作系统（搭伙 / 默契 / 分配）</h3>
+  <p><b>玩法定位</b>：组队是协作类社交的核心容器——把「一起玩」变成机制：战斗加成、任务共享、收益分配。</p>
+  <h4>① 组队流程</h4>
+  <ul>
+    <li>发起：世界喊话 / 好友邀请 / 系统自动匹配（按战力与需求撮合，降低组队门槛）。</li>
+    <li>角色定位：输出/坦克/治疗/辅助 四类，匹配时校验队伍构成（无奶队伍给建议）。</li>
+    <li>收益共享：队伍成员共享任务进度与场景掉落，队长可设分配规则（均分/队长分配/贡献分配）。</li>
+  </ul>
+  <h4>② 默契度</h4>
+  <ul>
+    <li>组队战斗累计「默契值」（新表 team_bonds 或复用 character_relationships）：组队完成副本/帮战/运镖增加；默契阶段提升组队属性加成（+1% → +8%）。</li>
+    <li>默契值在结义/侠侣间额外加成（呼应 8.7 生死之交的合击技）。</li>
+  </ul>
+  <h4>③ 集合求助（守护模式）</h4>
+  <ul>
+    <li>PVP 中被追杀或红名围攻时可发起「守护求助」：帮派成员/好友 1 分钟内入场支援（入场瞬移冷却限制防滥用）。</li>
+    <li>守护成功双方得「过命交情」标记（触发 8.7 好感度暴涨 + 人情值），失败不惩罚——保护被欺负玩家的体验，把对抗转化为协作叙事。</li>
+  </ul>
+
+  <h3>8.15 名声与恩怨系统（声望 / 侠义 / 恶名 / 结仇）</h3>
+  <p><b>玩法定位</b>：名声是玩家在江湖中的「人格标签」，恩怨让对抗有了故事，两者共同构成社交身份的公共面。</p>
+  <h4>① 名声分层</h4>
+  <table>
+    <thead><tr><th>维度</th><th>增长来源</th><th>消耗/惩罚</th><th>作用</th></tr></thead>
+    <tbody>
+      <tr><td>侠义值</td><td>揭榜、通缉、救助、施舍</td><td>滥杀/抢劫扣除</td><td>NPC 好感、正义向任务、侠义称号</td></tr>
+      <tr><td>恶名值</td><td>劫镖、入魔、恶意击杀</td><td>净化/赎罪消耗</td><td>通缉上榜（见 8.9）、恶人专属任务</td></tr>
+      <tr><td>江湖声望</td><td>社交动作总量（情报/馈赠/帮贡）</td><td>假情报、背叛扣除</td><td>社交类任务解锁、社交榜</td></tr>
+    </tbody>
+  </table>
+  <h4>② 结仇寻仇</h4>
+  <ul>
+    <li><b>结仇</b>：被击杀/被劫镖/背叛等负面事件自动结仇（记录仇恨来源与事件），也可主动「下战书」指名结仇。</li>
+    <li><b>寻仇</b>：仇人上线/进入同场景推送提醒；寻仇成功（击杀）得「复仇」标记与小额奖励；被复仇方掉部分恶名（抵消通缉收益）。</li>
+    <li><b>化解</b>：请中间人（帮主/高好感 NPC）调解，或赠送赔罪礼；化解后仇怨转为「不打不相识」好感度（冲突变关系，叙事反转）。</li>
+  </ul>
+  <h4>③ 江湖信用分（防恶意治理）</h4>
+  <p>信用分（0-100，初始 80）：被举报核实、恶意行为扣分；正常社交/完成任务缓慢回升。信用 &lt;60 限制部分社交功能（世界频道禁言、红包禁发）；&lt;30 进入「失信名单」公示。举报流程见 8.17。</p>
+
+  <h3>8.16 展示与围观（称号炫耀 / 家园拜访 / 观战打赏）</h3>
+  <p><b>玩法定位</b>：展示类社交是「被看见」的舞台——称号、家园、战斗英姿都值得围观，围观产生人气，人气反哺社交经济。</p>
+  <h4>① 称号炫耀系统</h4>
+  <ul>
+    <li>称号来源：成就 / 榜单 / 帮战 / 侠侣 / 师徒 / 社交活跃；称号含全服可见特效，佩戴称号进场景自动广播。</li>
+    <li>「炫耀」动作：向好友/帮派/世界推送称号卡片，收到点赞/祝福者反哺人气值（见 ③）。</li>
+  </ul>
+  <h4>② 家园拜访</h4>
+  <ul>
+    <li>家园（新表 homes 或复用场景家具配置）：玩家布置家具/庭院/武馆，好友可拜访、留言、互动（坐、弹琴、比武台切磋）。</li>
+    <li>拜访产出：主人获「人气值」，访客获限时 buff（茶点/练功桩）；每日拜访上限防刷。家园是「展示 + 交流 + 协作」三合一空间。</li>
+  </ul>
+  <h4>③ 观战与打赏</h4>
+  <ul>
+    <li>擂台切磋（见 8.5 切磋扬名）支持观战：观众可押彩头（小额）、打赏（礼物/红包）、喝彩（表情刷屏）。</li>
+    <li><b>人气值</b>（并入社交积分或独立计数）：被点赞/被拜访/被打赏累计；人气榜（周更）兑换展示类道具——让「被看见」本身成为可经营的资源。</li>
+  </ul>
+
+  <h3>8.17 社交安全与治理（举报 / 屏蔽 / 信用分落地）</h3>
+  <p><b>玩法定位</b>：社交繁荣的前提是安全底线——治理不是「扣分工具」，而是让正经玩家敢于社交的护栏。</p>
+  <ul>
+    <li><b>举报</b>：辱骂/骚扰/诈骗/外挂四类举报入口（聊天气泡/玩家名片/通缉榜），举报留证（消息快照 + 上下文），人工后台复核（GM 审计见 13.5）。</li>
+    <li><b>屏蔽</b>：拉黑后不再收到私聊/组队邀请/求助；被大量拉黑触发信用分观察。</li>
+    <li><b>敏感词与限频</b>：世界频道敏感词库 + 每分钟发言上限；广告软文检测（重复模板识别）自动折叠。</li>
+    <li><b>信用分联动</b>（承接 8.15③）：扣分明细可查（申诉入口），信用修复任务（完成 N 次助人）提供改过自新路径——治理闭环而非一刀切。</li>
+    <li><b>时段治理</b>：夜间时段（22:00-8:00）世界频道静音 + 关闭打赏功能，保护健康作息。</li>
+  </ul>
+
+  <h3>8.18 帮派组织与治理（建帮 / 职位 / 晋升）</h3>
+  <p><b>玩法定位</b>：帮派是「协作类」社交动作的容器——从建帮到治理，每一步都是组织化社交，帮派天然承载归属感与竞争。</p>
+  <h4>① 建帮条件（社交门槛）</h4>
+  <ul>
+    <li>等级 ≥ 30、声望 ≥「名动一方」（见 8.15①）、银两 100 万，且需 3 名响应者联名——<b>建帮也要有人响应</b>，门槛本身就是社交。</li>
+  </ul>
+  <h4>② 组织结构</h4>
+  <table>
+    <thead><tr><th>职位</th><th>人数</th><th>权限</th></tr></thead>
+    <tbody>
+      <tr><td>帮主</td><td>1</td><td>帮规 / 外交 / 任命 / 宴会</td></tr>
+      <tr><td>副帮主</td><td>2</td><td>外交 / 日常管理 / 弹劾发起</td></tr>
+      <tr><td>堂主</td><td>3–5</td><td>分堂管理（战斗堂 / 情报堂 / 商学堂）</td></tr>
+      <tr><td>香主</td><td>5–10</td><td>带新 / 组队召集</td></tr>
+      <tr><td>成员</td><td>不限</td><td>帮务 / 帮贡</td></tr>
+    </tbody>
+  </table>
+  <h4>③ 晋升与弹劾</h4>
+  <ul>
+    <li>晋升：贡献值排名 + 帮主任命；分堂主组织本堂帮务（采购 / 护送 / 情报采集，见 8.8①）。</li>
+    <li><b>弹劾机制</b>：帮主 7 日未上线，副帮主可发起弹劾（过半数香主以上联署），系统移交帮主——<b>防独裁、促治理</b>，帮派不会因一人流失而崩溃。</li>
+    <li>帮规：帮主发布 2–3 条帮规，违规记过（警告 / 逐出），记录入帮派日志（成员可见，管理透明）。</li>
+  </ul>
+
+  <h3>8.19 帮派驻地与建设（私域社交空间）</h3>
+  <p><b>玩法定位</b>：驻地是帮派的「家」——建筑功能支撑玩法，外观承载荣誉，参观连接外界（呼应 8.16② 家园拜访）。</p>
+  <h4>① 建筑体系（驻地等级 1–5）</h4>
+  <table>
+    <thead><tr><th>建筑</th><th>功能</th><th>对接系统</th></tr></thead>
+    <tbody>
+      <tr><td>议事厅</td><td>帮派功能解锁（外交 / 帮规 / 帮战报名）</td><td>8.18 治理</td></tr>
+      <tr><td>练功房</td><td>离线挂机修炼</td><td>见 6.17③</td></tr>
+      <tr><td>藏经阁</td><td>帮贡兑换共享技能 / 秘籍残页</td><td>见 6.15</td></tr>
+      <tr><td>铁匠铺</td><td>兵器强化 / 修理折扣（帮贡）</td><td>见 6.7 兵器</td></tr>
+      <tr><td>药圃</td><td>药材产出（炼丹供给）</td><td>见 6.18①</td></tr>
+    </tbody>
+  </table>
+  <ul>
+    <li><b>建设投入</b>：帮派资金 + 成员建设任务（见 8.8①）；建筑升级解锁功能与外观（展示类，见 8.16）。</li>
+    <li><b>驻地参观</b>：对外开放参观（与家园拜访同框架，见 8.16②），繁荣度榜并入排行（见第 10 章）——驻地是帮派的「门面」。</li>
+  </ul>
+
+  <h3>8.20 帮派活动日历（协作社交排期）</h3>
+  <p><b>玩法定位</b>：帮派每天都有「一起做的理由」——错峰排期，固定时段仪式化，让上线节奏与帮派生活同步。</p>
+  <table>
+    <thead><tr><th>周期</th><th>活动</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td>每日</td><td>帮务任务 / 帮派答题</td><td>帮务见 8.8①；答题晚间固定时段抢答（轻量社交）</td></tr>
+      <tr><td>每周</td><td>帮战 / 帮派副本 / 资源争夺战</td><td>帮战见 8.8②；副本见 5.8；资源点争夺见 5.7</td></tr>
+      <tr><td>每月</td><td>帮派远征</td><td>限时大型协作，全帮参与，产出帮派独有外观</td></tr>
+      <tr><td>随时</td><td>帮派宴会</td><td>帮主随时开，仪式化聚集（见 8.8①）</td></tr>
+    </tbody>
+  </table>
+  <ul>
+    <li>活动错峰排期（系统日历 + 运营配置，见 13.2），避免撞车。</li>
+    <li>活动开始前邮件提醒（见 8.4），帮派日历全员可见——<b>日程本身就是社交承诺</b>。</li>
+  </ul>
+
+  <h3>8.21 帮派关系与外交（帮派 × 帮派社交）</h3>
+  <p><b>玩法定位</b>：帮派之间的关系像国家——结盟、敌对、信誉，帮派外交是「协作类 + 对抗类」社交动作的组织级形态。</p>
+  <ul>
+    <li><b>外交状态</b>：友好 / 中立 / 敌对（帮主 / 副帮主管理）；敌对帮派可互相争夺资源点（见 5.7）。</li>
+    <li><b>联谊活动</b>：友好帮派联合宴会、友谊赛（切磋，见 8.5 帮派版）——帮派之间也有「不打不相识」。</li>
+    <li><b>帮派信誉</b>：外交承诺（结盟 / 互不侵犯）违约扣帮派信誉，信誉影响 NPC 好感与帮派商店折扣（见 11.5 信任经济同口径）——<b>帮派也要讲信用</b>。</li>
+    <li><b>阵前挑战</b>：帮战开战前的单挑仪式（见 6.21②）是帮派关系的高潮戏码，战书全服广播。</li>
+  </ul>
+
+  <h3>8.22 帮派经济深化（帮派基金 / 工资 / 分红）</h3>
+  <p><b>玩法定位</b>：帮派经济是「集体信任」的试炼场——资金池人人有份，贡献透明，分红公平，帮派才聚得拢人。</p>
+  <ul>
+    <li><b>资金池</b>：来源 = 帮务（见 8.8①）+ 税收反哺（见 11.8）+ 帮战奖励 + 捐献（见 8.8①）。</li>
+    <li><b>工资</b>：按职位周薪（帮主可调），在职活跃发放——防挂机白拿，激励真参与。</li>
+    <li><b>分红</b>：帮战 / 资源战战利品按贡献分红（沿用 6.24 分配仪式：贡献权重公开可见）。</li>
+    <li><b>互助基金</b>：成员可申请无息借贷（帮贡担保，深化 8.13③ 互助），逾期扣帮贡——<b>帮派内部的人情经济</b>。</li>
+    <li><b>内部拍卖</b>：帮派产出稀有物内部流通（复用 11.7 拍卖框架），优先帮内消化——帮派是自给自足的经济圈。</li>
+  </ul>
+  </div>
+</section>
+
+<!-- ==================== 第9章 活动与签到 ==================== -->
+<section class="chapter" id="ch9">
+  <div class="chapter-inner">
+  <h2 class="ch-title">第 9 章 · 活动与签到</h2>
+  <p class="ch-desc">活动是运营的节奏器：限时活动造势、签到拉留存、天梯刺激竞技。</p>
+
+  <h3>9.1 活动模板（activity_templates）</h3>
+  <table>
+    <thead><tr><th>字段</th><th>说明</th><th>策划要点</th></tr></thead>
+    <tbody>
+      <tr><td>activity_type</td><td>limited_time 限时 / sign_in 签到 / ladder 天梯</td><td>三类活动形态</td></tr>
+      <tr><td>start_at / end_at</td><td>起止时间</td><td>活动排期表</td></tr>
+      <tr><td>status</td><td>draft 草稿 / published 发布 / ended 结束</td><td>预配置、定时发布</td></tr>
+      <tr><td>sign_in_cycle</td><td>daily / weekly / monthly 签到周期</td><td>签到类活动配置</td></tr>
+      <tr><td>reward_json</td><td>奖励配置</td><td>阶段奖励/排行奖励</td></tr>
+      <tr><td>condition_json</td><td>参与条件（等级/任务/社交门槛）</td><td>例如「好感度 ≥ X 方可参与」</td></tr>
+      <tr><td>max_participants</td><td>人数上限（0=不限）</td><td>限量活动稀缺性</td></tr>
+    </tbody>
+  </table>
+
+  <h3>9.2 参与与进度（player_activities）</h3>
+  <p>玩家参与记录：活动类型、进度（progress）、领奖状态、参与时间。</p>
+
+  <h3>9.3 签到（sign_in_records）</h3>
+  <p>签到日期、周期、连续天数（consecutive_days，断签重置）、领奖状态。连续签到奖励是留存的核心抓手。</p>
+
+  <h3>9.4 社交型活动分类（活动 × 社交维度）</h3>
+  <p><b>玩法定位</b>：活动不是孤立的限时玩法，而是<b>社交的「加速器」</b>——按社交参与度给活动分类，运营按目标选型。</p>
+  <table>
+    <thead><tr><th>活动形态</th><th>社交参与</th><th>典型例子</th><th>对接</th></tr></thead>
+    <tbody>
+      <tr><td>限时</td><td>单人可参与、组队加成</td><td>双倍采集、限时副本</td><td>9.1</td></tr>
+      <tr><td>协作型</td><td>必须组队</td><td>世界 BOSS（见 5.9②）、帮派远征（见 8.20）</td><td>8.14 组队</td></tr>
+      <tr><td>组织型</td><td>帮派 / 阵营对抗</td><td>帮战（见 8.8②）、资源争夺（见 5.7）</td><td>8.8 帮派</td></tr>
+      <tr><td>展示型</td><td>围观 / 打赏</td><td>比武大会（见 8.5）、时装秀</td><td>8.16 展示</td></tr>
+      <tr><td>情报型</td><td>信息差博弈</td><td>限时情报任务（见 8.6）</td><td>8.6 情报</td></tr>
+    </tbody>
+  </table>
+  <p>选型原则：按运营目标（拉新 / 促活 / 促社交 / 促付费）选择活动形态，社交型活动优先排入黄金时段。</p>
+
+  <h3>9.5 限时活动编排（日历 + 社交目标联动）</h3>
+  <p><b>玩法定位</b>：活动排期不是随机的——日历固定节奏（承接 5.9①），<b>活动目标可配置社交指标</b>，让活动直接「发任务给社交」。</p>
+  <ul>
+    <li><b>活动日历</b>：周 / 月固定 slot，社交类活动与日常任务错峰，避免撞车（见 5.9① 排期表）。</li>
+    <li><b>社交目标联动</b>：活动目标可配置「组队 N 次 / 送礼 N 次 / 帮贡 N 点」（对应 8.14、8.13、8.8）——<b>活动奖励社交行为本身</b>。</li>
+    <li><b>社交门槛</b>（深化 9.1 condition_json）：活动可设「组队人数 / 帮派成员 / 好感度」参与门槛，门槛即社交引导。</li>
+    <li><b>活动回收</b>：活动结束保留展示入口（活动回顾 / 榜单留档，见第 10 章）——活动成果沉淀为社交资产。</li>
+  </ul>
+
+  <h3>9.6 签到社交化（把签到变成「一起做」）</h3>
+  <p><b>玩法定位</b>：签到是每日第一动作——加入好友与帮派维度，让签到从「自己的事」变成「集体的事」。</p>
+  <ul>
+    <li><b>好友互赠</b>：好友可「帮签」（每日限 1 人）、签到礼包互赠（沿用 8.13 送礼框架）——签到成为好友互动理由。</li>
+    <li><b>组队签到</b>：与好友 / 帮派成员同日签到有组队加成（默契加成，见 8.14② 同口径）。</li>
+    <li><b>帮派签到</b>：帮派全员签到率达标解锁帮派共享奖励（帮贡，见 8.22）——个人习惯反哺集体。</li>
+    <li><b>断签保护</b>：可用人情值（见 8.13③）兑换补签——<b>断签是向好友求助的理由</b>，把挫败转化为互动。</li>
+  </ul>
+
+  <h3>9.7 天梯活动社交化（ladder 赛季）</h3>
+  <p><b>玩法定位</b>：天梯是「竞技 + 展示」的社交舞台——赛季制、组队榜、观战应援，让冲榜被全服看见。</p>
+  <ul>
+    <li><b>赛季制</b>：天梯（9.1 ladder）按赛季结算，赛季称号展示（见 8.16①），赛季末「全服英雄榜」茶楼播报（见 8.10②）。</li>
+    <li><b>组队天梯</b>：双人 / 三人天梯，默契加成（见 8.14②）——冲榜也要「搭得好」。</li>
+    <li><b>观战与应援</b>：天梯赛全程观战（见 6.11 观战打赏）、押彩头（见 6.21①）——高手对决是展示类高光。</li>
+    <li><b>榜上恩怨</b>：天梯可挑战仇人（见 8.15②），「榜上对决」恩怨战升级版（见 6.21①）——竞技与恩怨互相喂养。</li>
+  </ul>
+  </div>
+</section>
+
+<!-- ==================== 第10章 排行 ==================== -->
+<section class="chapter" id="ch10">
+  <div class="chapter-inner">
+  <h2 class="ch-title">第 10 章 · 排行</h2>
+  <p class="ch-desc">排行是「尊重需求」的公共展示面，也是称号/炫耀社交动作的数值来源——<b>榜上无名无人识，榜上有名天下知</b>。</p>
+
+  <h3>10.1 榜单体系总览（基础榜 + 社交榜）</h3>
+  <table>
+    <thead><tr><th>榜单</th><th>指标</th><th>结算节奏</th><th>社交属性</th></tr></thead>
+    <tbody>
+      <tr><td>战力榜</td><td>power</td><td>日 / 周</td><td>实力名片（见 5.6）</td></tr>
+      <tr><td>等级榜</td><td>level</td><td>周</td><td>成长名片</td></tr>
+      <tr><td>财富榜</td><td>wealth</td><td>周</td><td>地位名片</td></tr>
+      <tr><td>人气榜</td><td>围观 / 打赏量</td><td>周</td><td>展示类社交（见 8.16②）</td></tr>
+      <tr><td>帮贡榜</td><td>帮派贡献</td><td>月</td><td>组织荣誉（见 8.8①）</td></tr>
+      <tr><td>情义榜</td><td>人情往来</td><td>月</td><td>馈赠类社交（见 8.13）</td></tr>
+      <tr><td>谍报榜</td><td>情报产出</td><td>月</td><td>情报类社交（见 8.6）</td></tr>
+    </tbody>
+  </table>
+  <p>设计要点：基础榜（战力 / 等级 / 财富）满足「变强被看见」，社交榜（人气 / 帮贡 / 情义 / 谍报）满足「社交被尊重」——<b>两条荣誉路径并行，社交玩家同样有榜可上</b>。</p>
+
+  <h3>10.2 榜单记录与结算（快照制）</h3>
+  <p>排行记录（ranking_records）保存玩家昵称快照、排行数值、名次、快照时间（snapshot_at）——快照制保证榜单稳定可回溯，避免实时刷榜抖动。</p>
+  <ul>
+    <li><b>结算节奏</b>：日榜（战力）即时刺激、周榜（人气 / 财富）蓄力节奏、月榜（帮贡 / 情义 / 谍报）长期经营——不同榜不同心跳。</li>
+    <li><b>奖励发放</b>：榜单奖励通过邮件（mails）发放（见 14.6 邮件通道），上榜广播全服可见（见 14.7 事件流）。</li>
+    <li><b>历史留档</b>：历史榜可回溯——「上赛季榜一」是长期荣誉资产（见 10.7）。</li>
+  </ul>
+
+  <h3>10.3 榜单展示与炫耀（榜上有名即社交资产）</h3>
+  <ul>
+    <li><b>榜墙</b>：茶楼设榜墙（见 8.10② 英雄榜）——逛茶楼即看榜，榜是场景内容。</li>
+    <li><b>上榜播报</b>：上榜 / 登顶触发全服广播（见 14.7）、茶楼头条（见 8.10②）——被全服看见。</li>
+    <li><b>称号联动</b>：上榜获得展示称号（见 8.16①、4.6 套装称号同框架），称号即身份。</li>
+    <li><b>点榜看人</b>：点击榜单查看他人主页 / 装备（名片联动，见 5.6）——榜是「发现强者」的入口。</li>
+  </ul>
+
+  <h3>10.4 榜单社交互动（围观 / 应援 / 竞逐）</h3>
+  <p><b>玩法定位</b>：榜单不是静态名单——围观、应援、约战让榜「活」起来。</p>
+  <ul>
+    <li><b>围观与打赏</b>：榜上玩家可被围观打赏（展示类，见 8.16②）——人气榜本身就是打赏量的度量。</li>
+    <li><b>好友应援</b>：好友可应援（点赞 / 留言，情义框架见 8.13③）——「我朋友上榜了」是社交话题。</li>
+    <li><b>竞逐提醒</b>：排名临近时提醒（「你距榜一仅差 N 名」）——目标感驱动挑战。</li>
+    <li><b>榜上约战</b>：榜上玩家可被挑战（天梯见 9.7、恩怨战见 8.15②）——「榜上对决」把排名变成实时剧情。</li>
+  </ul>
+
+  <h3>10.5 帮派与阵营榜（组织荣誉）</h3>
+  <ul>
+    <li><b>帮派榜</b>：帮派战力 / 繁荣度（见 8.19）、帮战战绩（见 8.8②）——组织层面的荣誉。</li>
+    <li><b>全员受益</b>：帮派上榜奖励全帮发放（分红，见 8.22）——个人冲榜惠及集体（与 12.4 VIP 帮派加成同哲学）。</li>
+    <li><b>帮派竞争</b>：帮派榜位次差距可触发宣战（外交，见 8.21）——<b>榜位是帮派外交的筹码</b>。</li>
+  </ul>
+
+  <h3>10.6 榜单治理（防刷防作弊）</h3>
+  <ul>
+    <li><b>快照制</b>：按快照结算（见 10.2），规避最后一秒刷榜。</li>
+    <li><b>行为审计</b>：榜单数据异常预警（行为日志见 13.3、GM 审计见 13.5），异常名次复核。</li>
+    <li><b>分榜公平</b>：等级段分组榜（新手榜 / 高手榜）防大佬垄断——每个人都有「能上的榜」。</li>
+    <li><b>社交榜防刷</b>：人气 / 情义榜按「有效互动」计（打赏真实消耗、人情需双向）——社交榜防机器人互刷（治理见 8.17）。</li>
+  </ul>
+
+  <h3>10.7 荣誉系统（榜单的长期沉淀）</h3>
+  <ul>
+    <li><b>荣誉头衔</b>：上榜积累赛季头衔（永久 / 限时）——荣誉是跨赛季的长期资产。</li>
+    <li><b>荣誉墙</b>：纪念碑 / 玩家雕像（场景留痕，见 5.14③）——<b>榜一可以被「供奉」在场景里</b>。</li>
+    <li><b>荣誉商店</b>：荣誉积分兑换限定外观（限定框架，见 4.8）——荣誉可被看见、被收藏。</li>
+    <li><b>身份联动</b>：荣誉与声望（见 8.15①）、江湖身份互相印证——<b>荣誉是社交身份的上层建筑</b>。</li>
+  </ul>
+  </div>
+</section>
+
+<!-- ==================== 第11章 交易与拍卖 ==================== -->
+<section class="chapter" id="ch11">
+  <div class="chapter-inner">
+  <h2 class="ch-title">第 11 章 · 交易与拍卖</h2>
+  <p class="ch-desc">交易是玩家经济与社交信任的试炼场。</p>
+
+  <h3>11.1 摆摊交易（trade_orders）</h3>
+  <p>卖家挂单：物品、数量、单价、币种（默认金币）。状态机：pending 待处理 → accepted 已接受 → completed 已完成 / cancelled 已取消。买家可下单选货，支持议价流程（accepted 阶段）。</p>
+
+  <h3>11.2 拍卖行（auction_items）</h3>
+  <p>卖家上架 → 竞价（current_bidder_id / current_price）→ 到期成交或流拍。状态：listed 在售 / bid 竞价中 / sold 已售 / expired 流拍 / cancelled 取消。</p>
+  <div class="note"><b>策划设计要点</b>：绑定道具（bind_status / bind_type）禁止交易流通，保护绑定钻石经济；建议收取上架手续费与成交税，回收金币。交易纠纷仲裁依赖 items 快照（item_name 冗余存储）与流水审计。</div>
+
+  <h3>11.3 议价与砍价（价格博弈的社交化）</h3>
+  <p><b>玩法定位</b>：买卖不只是价格，是江湖社交——砍价是嘴遁（见 6.10⑩），折扣是人情（见 8.7），成交是关系。</p>
+  <h4>① 议价流程（深化 11.1 的 accepted 阶段）</h4>
+  <ul>
+    <li>买家出价 → 摊主还价 → 双方可附言（砍价话术）；<b>恶意压价</b>被摊主标记，记入对方信用评价（见 8.15③）。</li>
+    <li>议价次数设上限（防刷），超限自动锁定为原价成交或流单。</li>
+  </ul>
+  <h4>② 折扣加成（关系 + 颜面）</h4>
+  <table>
+    <thead><tr><th>条件</th><th>折扣</th><th>来源</th></tr></thead>
+    <tbody>
+      <tr><td>好感度 ≥ 友人</td><td>−3%</td><td>见 8.7</td></tr>
+      <tr><td>结义 / 侠侣</td><td>−5%</td><td>见 8.7②④</td></tr>
+      <tr><td>颜面值高（≥ 80）</td><td>「面子价」−3%</td><td>见 6.23</td></tr>
+      <tr><td>熟客（成交 ≥ 10 次）</td><td>−2% 起累积</td><td>熟客关系</td></tr>
+    </tbody>
+  </table>
+  <h4>③ 围观砍价</h4>
+  <p>被围观时砍价成功触发「会过日子」小广播（展示类，见 8.16）——砍价本身也是社交表演；摊主亦可拒绝成交保颜面。</p>
+
+  <h3>11.4 摆摊叫卖与逛街经济（展示类社交）</h3>
+  <p><b>玩法定位</b>：摆摊是「可逛的市集」——叫卖吸引人，逛街有偶遇，摊位有名气，让交易自带展示与社交。</p>
+  <ul>
+    <li><b>摆摊叫卖</b>：区域广播（见 5.6 附近频道）限范围内喊话，有冷却；稀有货（秘籍 6.15 / 丹药 6.18）可加「宝光」特效吸引围观。</li>
+    <li><b>摊主名气溢价</b>：摊主名气（快报曝光见 6.22②、收藏数见 8.16③）带来至多 +10% 溢价——「老字号」招牌可长期经营。</li>
+    <li><b>逛街经济</b>：逛摊触发偶遇（见 5.6 路人甲 / 行脚商）；摊主随机上架隐藏稀有货，<b>逛到就是赚到</b>——逛街是低成本高回报的社交动作（见 8.12）。</li>
+    <li><b>黄金铺位</b>：主城摆摊街（见 5.5）分时段竞价摊位，出价高者得黄金铺位——<b>铺位本身也是经济</b>，竞争催生摆摊街的长期人气。</li>
+  </ul>
+
+  <h3>11.5 中间人与担保交易（信任经济）</h3>
+  <p><b>玩法定位</b>：大额交易需要「信得过的人」——担保机制把信任变成可经营的社交资产。</p>
+  <ul>
+    <li><b>担保资格</b>：声望达「侠客」级（见 6.13③ 战斗声望口径）的玩家可担任中间人，收担保费 1%–3%。</li>
+    <li><b>担保流程</b>：买家款入系统托管 → 担保人验货 → 双方确认 → 放款；担保人违约赔担保金并扣信用分（见 8.15③），一次失信取消担保资格（入失信记录）。</li>
+    <li><b>信誉中介</b>：担保成功积累「信誉中介」声望；担保量上榜（见第 10 章），中间人是可长期经营的「职业」。</li>
+    <li><b>与仲裁衔接</b>：担保交易纠纷走官府仲裁（见 6.25），items 快照（item_name 冗余）与流水审计为证（呼应 6.24②）。</li>
+  </ul>
+
+  <h3>11.6 以物易物与赊账互助（关系经济）</h3>
+  <p><b>玩法定位</b>：不是所有交易都用金币——物物交换、赊账、代购都是「关系当钱花」的经济形态。</p>
+  <ul>
+    <li><b>以物易物</b>：物品直接交换（支持「物品 + 金币」混合），双方确认即成交；争议走仲裁（见 6.25）。</li>
+    <li><b>赊账</b>：好友 / 帮派成员间赊账，人情值担保（见 8.13③），到期未还扣人情与信用分（见 8.15③）；帮派「互助基金」帮贡借贷（见 8.8 帮贡经济）。</li>
+    <li><b>代购</b>：绑定道具（见 11.2）无法直接流通，由帮派代购点以帮贡兑换（见 8.8），或好友代购消耗人情——<b>绑定经济的社交出口</b>。</li>
+  </ul>
+
+  <h3>11.7 拍卖现场社交（深化 11.2）</h3>
+  <p><b>玩法定位</b>：拍卖不只是竞价，是「现场感」社交——围观、挑衅、匿名，让拍卖成为面子与博弈的舞台。</p>
+  <ul>
+    <li><b>现场围观</b>：拍卖开拍时同场景可围观（展示类，见 8.16③ 观战同框架），竞价过程可见；VIP 专属拍卖室（见第 12 章）。</li>
+    <li><b>加价挑衅</b>：竞价时可附「挑衅语」（出价 + 留言，围观可见）——竞价变成面子博弈（见 6.23 颜面）；<b>匿名竞价</b>可选，隐藏身份防结仇（见 8.15）。</li>
+    <li><b>捡漏场</b>：流拍物品进「捡漏场」（限时折扣，逛到即可捡漏，呼应 8.16② 逛街）；拍卖周榜（成交额 / 捡漏王）并入排行（见第 10 章）。</li>
+  </ul>
+
+  <h3>11.8 物价与税收治理（经济生态的社交治理）</h3>
+  <p><b>玩法定位</b>：经济要活而不乱——物价情报、税收反哺、囤积治理、黑市并存，构成有博弈深度的江湖经济生态。</p>
+  <ul>
+    <li><b>江湖物价指数</b>：茶楼（见 8.10②）每日发布「物价行情」（成交均价）——物价本身是情报（见 8.6 情报生态），信息差交易是硬核玩家的盈利路径。</li>
+    <li><b>税收反哺</b>：成交税（见 11.2）按比例入帮派资金（帮派占产地商品，见 8.8）与系统回收；比例可远程配置（见 13.2）。</li>
+    <li><b>囤积治理</b>：监测异常囤积（单一玩家垄断某物品）触发「商队投放」（系统补货）或「官府收购」（价格管制）事件——反垄断由系统事件执行，不带入玩家恩怨。</li>
+    <li><b>黑市</b>：高税收物品走黑市（匿名交易、更高溢价，但<b>不受仲裁保护</b>，被骗无官方追责）——黑市是信用分（见 8.15③）与人情（见 8.13③）的试炼场，玩家只能靠关系网络避险。</li>
+  </ul>
+
+  <h3>11.9 悬赏与委托经济（玩家需求市场）</h3>
+  <p><b>玩法定位</b>：不只是系统发任务——玩家可以「花钱请人办事」，把需求变成自由市场，<b>悬赏本身是社交契约</b>。</p>
+  <h4>① 悬赏类型</h4>
+  <table>
+    <thead><tr><th>类型</th><th>内容</th><th>对接</th></tr></thead>
+    <tbody>
+      <tr><td>寻人</td><td>找玩家 / 找 NPC（带话 / 讨账）</td><td>8.15 恩怨、5.11 NPC</td></tr>
+      <tr><td>找物</td><td>材料 / 秘籍残页（见 6.15）</td><td>残页市场</td></tr>
+      <tr><td>报仇</td><td>对恩怨目标发起（见 8.15②）</td><td>恩怨战（见 6.21①）</td></tr>
+      <tr><td>带副本</td><td>高难副本带打（见 6.20）</td><td>组队协作（见 8.14）</td></tr>
+    </tbody>
+  </table>
+  <h4>② 契约与违约</h4>
+  <ul>
+    <li>发布：悬赏金（金币 / 钻石）、时限、限接人数；接单后立契约（信用分担保，见 8.15③）。</li>
+    <li>悬赏栏设于官府（见 5.11 捕快），全服可见（展示类，见 8.16）；悬赏猎人榜并入排行（见第 10 章）。</li>
+    <li>违约双向扣信用分：雇主撤单 / 接单者毁约——<b>悬赏是「承诺经济」，信用就是本金</b>。</li>
+  </ul>
+
+  <h3>11.10 跑商与跨地图贸易（信息差 + 风险）</h3>
+  <p><b>玩法定位</b>：各区域特产价差（见 5.2 区域经济）催生跑商——跨图倒卖赚差价，风险与情报决定盈亏。</p>
+  <ul>
+    <li><b>区域特产</b>：铁矿产铁器、金原产宝石、黑森林产药材（见 6.18① 炼丹供给）——产地价低、异地图价高。</li>
+    <li><b>信息差</b>：茶楼物价行情（见 11.8）是盈利关键——跑商依赖情报网络（见 8.6），「先知先觉」的商人赚差价。</li>
+    <li><b>风险</b>：跑商路线即运镖路线（见 8.9①），可被劫镖；高收益路线高风险——商道是「胆识 + 关系」的博弈。</li>
+    <li><b>商队协作</b>：组队跑商（护卫，见 8.14）、帮派商队（见 8.8）——跑商是「协作类」经济动作，人脉即镖师。</li>
+    <li><b>商帮声望</b>：长期跑商积累「商帮声望」（与 11.5 信誉中介同框架），可解锁专属商路。</li>
+  </ul>
+
+  <h3>11.11 请客与社交消费（经济驱动社交）</h3>
+  <p><b>玩法定位</b>：花钱买「被看见」——请客、包场、仪式消费让金币流向社交，经济反哺关系。</p>
+  <ul>
+    <li><b>请客</b>：茶馆请全场景喝茶（包场）、客栈请宴（沿用 8.8① 宴会框架）——请客者颜面 +（见 6.23），被请者好感 +（见 8.7）。</li>
+    <li><b>「豪爽」标签</b>：高频请客者获得展示类标签（见 8.16），江湖快报可报道（见 6.22②）。</li>
+    <li><b>护栏</b>：请客金额与频次可配置（见 13.2），冷却防刷好感。</li>
+    <li><b>仪式消费</b>：侠侣彩礼 / 婚礼（婚服 / 花轿 / 宴席，见 8.7④）——婚礼是社交经济的高光时刻，全场景围观（见 5.14 玩家自办活动）。</li>
+  </ul>
+
+  <h3>11.12 多币种与社交货币（货币关系图）</h3>
+  <p><b>玩法定位</b>：多种货币各司其职——硬通货流通、稀缺资源保值、社交货币计价关系，<b>「社交货币不可交易」是铁律</b>。</p>
+  <table>
+    <thead><tr><th>币种</th><th>来源</th><th>用途</th><th>社交属性</th></tr></thead>
+    <tbody>
+      <tr><td>金币</td><td>任务 / 战斗 / 采集</td><td>日常交易（见 11.1）</td><td>可交易硬通货</td></tr>
+      <tr><td>钻石</td><td>充值（见 12.1）</td><td>高级消费 / 礼包</td><td>稀缺资源</td></tr>
+      <tr><td>绑定钻石</td><td>充值赠送 / 活动</td><td>专属商城</td><td>防流通</td></tr>
+      <tr><td>帮贡</td><td>帮务（见 8.8①）</td><td>帮派兑换（见 8.22）</td><td>帮派社交计价</td></tr>
+      <tr><td>人情值</td><td>互助（见 8.13③）</td><td>赊账 / 担保（见 11.5、11.6）</td><td>纯社交货币</td></tr>
+      <tr><td>颜面</td><td>战斗 / 展示（见 6.23）</td><td>折扣 / 声望倍率</td><td>荣誉货币</td></tr>
+    </tbody>
+  </table>
+  <ul>
+    <li>兑换关系：金币 ↔ 帮贡（帮派商店双向）、钻石 → 金币（单向，保护经济）、人情值 / 颜面<b>不可买卖</b>（防刷与防氪碾压）。</li>
+    <li>社交货币（人情 / 帮贡 / 颜面）只能通过社交行为获取——<b>经济系统强制「想有钱，先社交」</b>。</li>
+  </ul>
+
+  <h3>11.13 货币与经济通胀平衡策略（投放有门，回收有泵）</h3>
+  <p><b>玩法定位</b>：经济平衡目标一句话——<b>投放有门、回收有泵、汇率有锚、通胀有监控</b>。</p>
+  <ul>
+    <li><b>投放有门</b>：金币只从任务 / 战斗 / 采集 / 交易等行为产出（见 11.1），活动投放限量（见 9 章活动）——<b>每一枚金币都有来处，来处可审计</b>（见 4.4）。</li>
+    <li><b>回收有泵</b>：修理（见 4.10②）、税收（见 11.8②）、拍卖佣金（见 11.7）、钻石单向换金币（见 11.12）持续抽走存量——<b>回收速度 ≈ 投放速度，存量才稳定</b>（建议日回收 ≥ 日投放 × 0.8）。</li>
+    <li><b>汇率有锚</b>：钻石 ↔ 金币汇率锚定商城兑换（长期稳定，禁止双向浮动）；社交货币（人情 / 帮贡 / 颜面）不参与汇率（见 11.12 铁律）——<b>硬通货与社交货币两个池子，互不渗透</b>。</li>
+    <li><b>通胀监控指标</b>：金币总存量 / 物价指数（见 11.8 茶楼行情）按日监控（见 13.4）——月通胀率超阈值（默认 5%）触发投放下调或回收加码（见 13.6 灰度）。</li>
+    <li><b>资源联动</b>：经济与资源供给联动（见 5.21 供需比值）——<b>资源稀缺自动抬价、富余自动降价，物价是生态的体温计</b>。</li>
+  </ul>
+  </div>
+</section>
+
+<!-- ==================== 第12章 充值与VIP ==================== -->
+<section class="chapter" id="ch12">
+  <div class="chapter-inner">
+  <h2 class="ch-title">第 12 章 · 充值与 VIP</h2>
+  <p class="ch-desc">商业化层。当前支付为 mock 模拟平台，便于联调与测试。</p>
+
+  <h3>12.1 充值商品（recharge_products）</h3>
+  <p>商品名、金额、赠送内容（reward_json：钻石/绑定钻石）、热门标记、排序。</p>
+
+  <h3>12.2 充值订单（recharge_orders）</h3>
+  <p>订单号唯一、商品、金额、币种（CNY）、状态机（pending 待支付 → paid 已支付 → delivered 已发货 / failed 失败）、平台（默认 mock）、回调时间。支付成功后走 economy 流水发钻石，订单留痕可对账。</p>
+
+  <h3>12.3 VIP（vip_configs）</h3>
+  <p>等级（唯一）、升级所需 VIP 经验（required_exp）、每日奖励、特权配置（privilege_json：功能解锁/加成/次数）。VIP 经验来源：充值 + 活跃行为。</p>
+  <div class="note"><b>策划设计要点</b>：VIP 特权建议以「便利性」为主（每日奖励、次数上限、称号展示），避免直接战力碾压，维护「机制差异平衡」哲学。</div>
+
+  <h3>12.4 VIP 社交特权（便利性特权清单）</h3>
+  <p><b>玩法定位</b>：VIP 特权落在「社交便利」而非战力——让付费玩家更有「存在感」与「组织价值」，延续 12.3 的便利性哲学。</p>
+  <table>
+    <thead><tr><th>特权</th><th>说明</th><th>对接</th></tr></thead>
+    <tbody>
+      <tr><td>专属拍卖室</td><td>VIP 专属竞价（避开拥挤与围观干扰）</td><td>见 11.7</td></tr>
+      <tr><td>称号展示</td><td>VIP 专属称号（展示类）</td><td>见 8.16①</td></tr>
+      <tr><td>打赏 / 送礼上限提升</td><td>更高日上限（社交表达无阻）</td><td>见 8.13</td></tr>
+      <tr><td>帮派建筑加速</td><td>帮派建筑升级加速（惠及全帮）</td><td>见 8.19</td></tr>
+      <tr><td>好友位扩容</td><td>更多好友 / 结义名额</td><td>见 8.2、8.7</td></tr>
+    </tbody>
+  </table>
+  <ul>
+    <li><b>帮派受益</b>：帮派内 VIP 成员贡献额外帮贡（见 8.8①）——<b>付费也惠及集体</b>，VIP 是帮派的「股东」。</li>
+    <li><b>经验来源</b>：充值 + 活跃行为（见 12.3）——不纯靠氪，活跃玩家也能养 VIP。</li>
+  </ul>
+
+  <h3>12.5 钻石的社交消费出口（商业化 × 社交）</h3>
+  <p><b>玩法定位</b>：钻石不止买战力，更流向社交场景——打赏、婚礼、捐献、悬赏，让付费成为社交表达的燃料。</p>
+  <ul>
+    <li><b>社交出口清单</b>：打赏 / 红包（见 8.13② 钻石渠道）、婚礼彩礼（见 8.7④）、帮派捐献（见 8.8① 钻石档）、悬赏金（见 11.9 钻石悬赏）。</li>
+    <li><b>可对账</b>：赠送与消费记录入流水审计（见 13.5），社交消费留痕可查。</li>
+    <li><b>运营指标</b>：钻石社交消费占充值收入的期望比例可配置（见 13.4）——<b>社交是商业化引擎</b>，付费换取「被看见」与「被感激」。</li>
+  </ul>
+
+  <h3>12.6 社交化商业产品矩阵（产品 × 社交）</h3>
+  <p><b>玩法定位</b>：商品按「社交场景」设计而非裸数值——卖的是身份、表达与关系。</p>
+  <table>
+    <thead><tr><th>产品</th><th>形态</th><th>社交逻辑</th></tr></thead>
+    <tbody>
+      <tr><td>首充礼包</td><td>首充双倍 + 专属称号</td><td>「破晓」称号先于战力——第一笔钱买的是存在感（展示，见 8.16①）</td></tr>
+      <tr><td>社交礼包</td><td>钻石 + 精选礼物 / 红包</td><td>礼包可送人（红包封装，见 4.7③）——付费即社交货币</td></tr>
+      <tr><td>周卡 / 月卡</td><td>每日钻石 + 帮贡加成</td><td>帮贡加成惠及全帮（见 12.4 帮派受益）——小额持续付费绑集体</td></tr>
+      <tr><td>婚典礼包</td><td>婚礼皮肤 + 全场景特效</td><td>婚礼仪式消费（见 8.7④）——付费为「被围观」的仪式感</td></tr>
+      <tr><td>皮肤外观</td><td>时装 / 特效 / 名号框</td><td>外观即名片（见 3.12）——付费为「被看见」</td></tr>
+      <tr><td>纪念道具</td><td>限定 / 绝版（见 4.8）</td><td>稀缺即谈资——付费为「身份的烙印」</td></tr>
+    </tbody>
+  </table>
+  <ul>
+    <li><b>定价原则</b>：社交价值 > 数值价值——付费主体买的是关系表达，战力仅是附带。</li>
+    <li><b>付费护栏</b>：数值上限受平衡校验约束（见 6.12），社交产品不与强度强绑定——<b>氪金买身份，不买碾压</b>。</li>
+  </ul>
+  </div>
+</section>
+
+<!-- ==================== 第13章 运营与数据 ==================== -->
+<section class="chapter" id="ch13">
+  <div class="chapter-inner">
+  <h2 class="ch-title">第 13 章 · 运营与数据</h2>
+  <p class="ch-desc">运营工具与数据底座，支撑「活动不停、问题可查、决策有据」。</p>
+
+  <h3>13.1 公告（notices）</h3>
+  <p>三种类型：popup 弹窗 / marquee 滚动 / mail 邮件。生效开关、排序、展示时间窗、创建人。用于版本公告、活动预告、维护通知。</p>
+
+  <h3>13.2 远程配置（remote_configs）</h3>
+  <p>键值配置，类型（string / number / boolean / json），版本号热更校验，生效开关。<b>策划可无发版调整数值</b>（如活动开启开关、掉落倍率、社交动作产出参数）。</p>
+
+  <h3>13.3 行为日志（player_behavior_logs）</h3>
+  <p>登录/登出/购买/升级/完成任务/PVP 六类事件 + 明细 JSON + IP。用于留存归因、功能使用分析、异常检测。</p>
+
+  <h3>13.4 留存统计（retention_stats）</h3>
+  <p>按注册队列（cohort_date）+ 统计日（stat_date）+ 周期（日/周/月）记录队列人数、留存人数、留存率。运营看板直接消费。</p>
+
+  <h3>13.5 GM 审计（gm_operate_logs）</h3>
+  <p>每次运营操作（发奖/封禁/修改）记录操作人、目标玩家、操作类型、变更前后快照（change_before / change_after）。<b>一切运营权限操作必须留痕</b>，支撑追责与误操作回滚。</p>
+
+  <h3>13.6 活动运营工作台（预配置 / 灰度 / 回滚）</h3>
+  <p><b>玩法定位</b>：活动上线是「可编排的流水线」——预配置、灰度验证、一键回滚，让社交活动安全地高频迭代。</p>
+  <ul>
+    <li><b>预配置</b>：活动模板（见 9.1）+ 远程配置（见 13.2）预发布，定时开启（status 编排：draft → published → ended）。</li>
+    <li><b>灰度</b>：白名单 / 小服灰度测试，行为日志（见 13.3）验证参与与异常（如社交动作产出参数是否失衡）。</li>
+    <li><b>回滚</b>：配置版本号回滚（见 13.2），GM 审计留痕（见 13.5）——活动事故 5 分钟内可撤销。</li>
+    <li><b>数据看板</b>：活动参与（见 9.2）、留存（见 13.4）实时监控——活动好坏当天可见。</li>
+  </ul>
+
+  <h3>13.7 玩家社区运营（反馈闭环）</h3>
+  <p><b>玩法定位</b>：运营不止发活动，还要「养社区」——公告互动、反馈闭环、玩家大使，让玩家参与治理与内容共建。</p>
+  <ul>
+    <li><b>公告互动</b>：公告（见 13.1）支持回执 / 点赞（轻互动），热门公告可上茶楼快报（见 8.10②）。</li>
+    <li><b>反馈通道</b>：建议箱（游戏内提交）+ Bug 反馈（留档 GM 工单，见 13.5）——反馈闭环公开（「已采纳」标记，展示类）。</li>
+    <li><b>玩家大使</b>：活跃社交玩家认证「江湖大使」（展示称号，见 8.16①），组织新人带教（见 8.14 带新）——<b>社区运营从官方走向玩家自治</b>。</li>
+    <li><b>社区外联</b>：官方社区 / 直播联动（实时广播可转播，见第 14 章）——游戏外也是社交场。</li>
+  </ul>
+
+  <h3>13.8 社交数据分析（社交网络运营）</h3>
+  <p><b>玩法定位</b>：本作留存的第一指标是社交——用数据经营关系网络，把「社交」从口号变成可度量、可干预的指标。</p>
+  <ul>
+    <li><b>核心指标</b>：好友关系数、组队频率、送礼密度、帮派活跃率 / 在线时长（帮派健康度，见 8.18 治理同口径）。</li>
+    <li><b>关系图谱</b>：图谱分析识别「社交枢纽」玩家（关系密度高者）——大使候选（见 13.7③）与流失挽回的锚点。</li>
+    <li><b>流失预警</b>：社交活跃骤降（组队 / 送礼 / 帮派发言减少）触发预警，早干预（推送社交召集，见 8.14① 联动）。</li>
+    <li><b>社交漏斗</b>：新玩家 7 日内是否建立 ≥ 1 个稳定关系（好友 / 帮派 / 结义）——<b>社交建立率是留存的先行指标</b>，低于阈值触发新手引导调整（见 15 章初始数值）。</li>
+  </ul>
+  </div>
+</section>
+
+<!-- ==================== 第14章 实时通信 ==================== -->
+<section class="chapter" id="ch14">
+  <div class="chapter-inner">
+  <h2 class="ch-title">第 14 章 · 实时通信（聊天频道）</h2>
+  <p class="ch-desc">Socket.IO 网关承载实时交互：聊天是社交的「空气」，场景同步、战斗广播、社交动作都在频道里发生。本章以聊天频道体系为主干，实时通信为底座。</p>
+
+  <h3>14.1 聊天频道体系（频道矩阵）</h3>
+  <table>
+    <thead><tr><th>频道</th><th>武侠命名</th><th>可见范围</th><th>开启条件</th><th>用途</th></tr></thead>
+    <tbody>
+      <tr><td>全服</td><td>江湖</td><td>全服</td><td>等级解锁（防刷屏）</td><td>世界喊话 / 交易公告</td></tr>
+      <tr><td>附近</td><td>街巷</td><td>同场景</td><td>默认</td><td>偶遇搭话（见 5.6、8.12）</td></tr>
+      <tr><td>队伍</td><td>同行</td><td>队伍内</td><td>组队（见 8.14）</td><td>协作指挥</td></tr>
+      <tr><td>帮派</td><td>堂口</td><td>帮派内</td><td>入帮（见 8.8）</td><td>帮务 / 活动召集</td></tr>
+      <tr><td>私聊</td><td>传音</td><td>点对点</td><td>好友（见 8.2）</td><td>密谈 / 交易洽谈</td></tr>
+      <tr><td>系统</td><td>公告</td><td>按事件分级</td><td>自动</td><td>全服播报（见 14.7）</td></tr>
+    </tbody>
+  </table>
+  <p>频道权限可配置（见 13.2），私聊默认仅好友（陌生人私聊需双方开放——陌生人社交需先「搭上话」）。</p>
+
+  <h3>14.2 聊天表现形式（不止打字）</h3>
+  <ul>
+    <li><b>气泡与头顶弹幕</b>：场景内发言显示头顶气泡（配合手势，见 5.10①），情绪通过动作可视化。</li>
+    <li><b>情景聊天</b>：江湖黑话 / 口号模板（一键喊话「替天行道」）、自定义诗号（个人主页展示，见 8.16③）。</li>
+    <li><b>语音转文字</b>：语音输入自动转文字（队伍频道常用，协作指挥见 6.20③ 信号盘同口径）。</li>
+    <li><b>表情包</b>：表情包让表达轻量化——表情包本身可作为收藏品（见 4.8 限定道具框架）。</li>
+  </ul>
+
+  <h3>14.3 聊天即行动（聊天 × 社交动作连接）</h3>
+  <p><b>玩法定位</b>：聊天不只是一句话——<b>消息可携带动作按钮，把「说」变成「做」</b>。</p>
+  <table>
+    <thead><tr><th>喊话</th><th>触发动作</th><th>对接</th></tr></thead>
+    <tbody>
+      <tr><td>@ 求援</td><td>发送实时求援（15 秒入场）</td><td>见 6.11①</td></tr>
+      <tr><td>喊话组队</td><td>附「加入队伍」按钮</td><td>见 8.14①</td></tr>
+      <tr><td>公开约战</td><td>附「应战」按钮（恩怨战）</td><td>见 8.15②、6.21①</td></tr>
+      <tr><td>求购 / 出售</td><td>附「查看摊位」按钮</td><td>见 11.4</td></tr>
+      <tr><td>红包 / 礼物</td><td>消息内嵌红包（见 4.7）</td><td>见 8.13②</td></tr>
+    </tbody>
+  </table>
+  <p>设计要点：聊天是社交动作的「入口」——高频动作（组队 / 求援 / 交易）都能从一句话直达。</p>
+
+  <h3>14.4 频道经济与治理（聊天安全）</h3>
+  <ul>
+    <li><b>发言频率限制</b>：各频道独立限频（全服最严），防刷屏；扩音喇叭（钻石付费，见第 12 章）可突破限频——<b>扩音即付费社交表达</b>。</li>
+    <li><b>内容治理</b>：敏感词过滤（分级处理：替换 / 拦截 / 举报留证，见 8.17 社交安全）。</li>
+    <li><b>禁言与屏蔽</b>：帮派内禁言（帮主权限，见 8.18 治理）、个人屏蔽黑名单；扩音记录入 GM 审计（见 13.5）。</li>
+    <li><b>举报闭环</b>：聊天举报 → 留证（原始消息 + 上下文）→ 仲裁（见 8.17②）——聊天不是法外之地。</li>
+  </ul>
+
+  <h3>14.5 实时互动玩法（Socket.IO 底座）</h3>
+  <p>命名空间 <code>/game</code> 承载全部实时交互，核心事件：player.heartbeat（心跳保活）、world.enter-scene（进场景）、world.move（移动广播）、chat.send（聊天）、combat.attack（战斗指令）。</p>
+  <ul>
+    <li><b>场景同步</b>：场景内广播按区域分片（见 5.6），控制消息量；<b>实时位置让偶遇成为可能</b>（见 5.6③）。</li>
+    <li><b>观战数据流</b>：围观 / 观战实时推送（见 6.11 观战打赏、9.7 天梯观战）——看得见才能打赏。</li>
+    <li><b>战斗广播</b>：combat 事件驱动战斗广播（见 6.11③ 助威联动）、帮战实时战况（见 8.8②）。</li>
+    <li><b>在线状态</b>：心跳驱动好友 / 帮派在线列表（见 8.2、8.8）——在线即社交召唤。</li>
+    <li><b>断线重连</b>：离线结算（offline）补发离线收益；断线好友代收（情义相助，见 8.13③）。</li>
+  </ul>
+
+  <h3>14.6 离线与异步社交（不实时也社交）</h3>
+  <ul>
+    <li><b>离线私信</b>：传音频道离线消息次日送达（限条数，防轰炸）。</li>
+    <li><b>离线礼物与留言</b>：送礼（见 8.7）与留言板（见 5.10③）离线可发——关系经营不断线。</li>
+    <li><b>邮件通道</b>：系统邮件（公告见 13.1）与玩家邮件共用投递通道，活动奖励（见第 9 章）走邮件。</li>
+    <li><b>推送设置</b>：免打扰时段、关键词提醒（被 @ / 被求援 / 帮派活动）——推送是「错过提醒」，不是打扰。</li>
+  </ul>
+
+  <h3>14.7 实时事件流（世界广播）</h3>
+  <ul>
+    <li><b>广播分级</b>：全服 / 场景 / 队伍三级，事件类型可配置开关（见 13.2），运营控制噪音。</li>
+    <li><b>世界事件直播</b>：世界 BOSS 开战（见 5.9②）、商队启程（见 11.10）、通缉播报（见 8.9②）——事件即流量，直播即召集。</li>
+    <li><b>江湖快报</b>：战斗快报 / 今日英雄榜（见 6.22②、8.10②）定时推送——<b>世界广播是社交话题的制造机</b>。</li>
+    <li><b>场景氛围播报</b>：昼夜 / 天气 / 节庆变化播报（见 5.12）——世界是「活」的，聊天跟着世界走。</li>
+  </ul>
+
+  <h3>14.8 频道内互动玩法（聊天本身是玩法）</h3>
+  <p><b>玩法定位</b>：频道不只是通讯工具——红包、签到、活动让「聊天」本身成为可玩的社交场景。</p>
+  <ul>
+    <li><b>频道红包</b>：全服 / 帮派 / 队伍红包（见 4.7 红包道具）——发红包是频道的「高光时刻」，抢红包是共同的期待。</li>
+    <li><b>频道签到</b>：在世界频道发言打卡（承接 9.6 签到）——每日第一声招呼也是活跃指标。</li>
+    <li><b>频道活动</b>：运营在频道发起活动（答题 / 接龙 / 彩蛋口令，配置见 13.2）——频道活动让闲聊天变成参与感。</li>
+    <li><b>频道幸运星</b>：随机抽选活跃发言者发小礼（防刷：按有效发言计，见 10.6 同口径）——鼓励说话的软激励。</li>
+  </ul>
+
+  <h3>14.9 江湖热搜与话题广场（世界频道是舆论场）</h3>
+  <p><b>玩法定位</b>：世界频道沉淀为「舆论场」——热搜、话题、名人讨论让聊天内容本身成为社交资产。</p>
+  <ul>
+    <li><b>江湖热搜</b>：按提及量 / 讨论热度生成热搜榜（玩家昵称 / 事件 / 道具，见 10 章排行框架）——<b>上热搜是玩家自发的社交荣誉</b>。</li>
+    <li><b>话题标签</b>：发言可带话题（#新服 #收徒 #求组），话题页聚合讨论——找同好、找组织的入口。</li>
+    <li><b>名人效应</b>：榜上玩家（见 10.3）发言有标识（金色昵称）——强者发言自带流量，形成「大佬带话题」生态。</li>
+    <li><b>舆论治理</b>：热搜异常（刷量 / 抹黑）纳入治理（见 14.4 举报闭环、8.17 仲裁）——舆论场也要有秩序。</li>
+  </ul>
+
+  <h3>14.10 语音与陪伴社交（声音是有温度的）</h3>
+  <ul>
+    <li><b>队伍语音</b>：队伍频道实时语音（协作指挥，见 6.20③ 信号盘同口径）——组队体验从打字升级为「并肩说话」。</li>
+    <li><b>语音房</b>：茶馆语音房（公共房间，见 8.10② 茶楼场景）——挂机听书、聊天陪伴，房间即社交场。</li>
+    <li><b>陪伴场景</b>：语音房与场景联动（围篝火夜话见 5.10②）——声音 + 场景营造「在场感」。</li>
+    <li><b>语音治理</b>：语音举报留证（转写存档，见 14.4 治理同框架）——声音也要守规矩。</li>
+  </ul>
+
+  <h3>14.11 频道文化与公约（社区自治）</h3>
+  <ul>
+    <li><b>频道等级与称号</b>：频道发言贡献积累频道等级（称号展示，见 8.16①）——「常驻客」是身份。</li>
+    <li><b>帮派频道文化</b>：帮派频道可自定义口号 / 欢迎语（帮规，见 8.18）——频道即帮派门面。</li>
+    <li><b>频道公约</b>：公共频道公约（禁止刷屏 / 引战）由玩家投票修订（社区自治，见 13.7）——规则共建。</li>
+    <li><b>老带新频道</b>：新手频道常驻老玩家答疑（带新奖励，见 15.4 双人教程、13.7③ 玩家大使）——频道是最好的新手村。</li>
+  </ul>
+
+  <h3>14.12 智能引导与客服介入（聊天里有「人」）</h3>
+  <ul>
+    <li><b>引导 NPC</b>：频道内引导机器人（NPC 形象）回复常见问题（新手引导，见 15 章）——提问即引导。</li>
+    <li><b>智能客服</b>：投诉 / 纠纷关键词触发客服流程（举报留证，见 8.17）——频道内闭环处理。</li>
+    <li><b>人工介入</b>：严重纠纷转人工（GM 仲裁权，见 2.7）——智能在前、人工兜底。</li>
+    <li><b>广播公告</b>：客服介入结果在频道公告（见 13.1 公告通道）——处理过程公开，建立信任。</li>
+  </ul>
+  </div>
+</section>
+
+<!-- ==================== 第15章 初始数值总览 ==================== -->
+<section class="chapter" id="ch15">
+  <div class="chapter-inner">
+  <h2 class="ch-title">第 15 章 · 新手引导与初始数值</h2>
+  <p class="ch-desc">新手引导的核心哲学：<b>「先社交、后成长」</b>——新玩家第一周不是在打怪，而是在「认识人」。本章衔接零散引导点（新手村拜师、社交成就软强制、战败情义相助、社交漏斗）为完整体系，初始数值为调整起点。</p>
+
+  <h3>15.1 新手引导总纲（引导哲学）</h3>
+  <ul>
+    <li><b>先社交后成长</b>：引导优先级 = 建立社交习惯（组队 / 好友 / 帮派）&gt; 战斗成长——社交是留存第一指标（见 13.8 社交漏斗）。</li>
+    <li><b>社交类成就软强制</b>：新手成就链包含 add_friend / join_guild（见 7 章成就），奖励修炼资源——<b>「成就 → 力量」正循环逼玩家迈出社交第一步</b>。</li>
+    <li><b>引导即剧情</b>：教程任务套武侠叙事（拜师 / 结义 / 揭榜），不打断沉浸。</li>
+    <li><b>可跳过</b>：老玩家可跳过引导（分服开关，见 13.2 远程配置）。</li>
+  </ul>
+
+  <h3>15.2 新手村流程（第一小时的社交课）</h3>
+  <ul>
+    <li><b>拜师引导</b>：基础篇 1 级自动解锁（见 6 章），新手村拜师 NPC 指引（见 5.11 NPC 媒介）——第一个「关系」从拜师开始。</li>
+    <li><b>逛街第一课</b>：引导逛街与路人甲交流（见 8.12 街头社交）——最低门槛、最高频的社交入口（见 8.12 定位）。</li>
+    <li><b>游客绑定</b>：游客账号（见 2 章）引导绑定正式账号，避免换设备丢档（转化漏斗起点）。</li>
+    <li><b>新手村配置</b>：默认地图 map_001 主城（见 15.7），场景人数上限 100（防拥挤，见 5.6 分流）。</li>
+  </ul>
+
+  <h3>15.3 七日社交引导（第一周路线图）</h3>
+  <p><b>核心目标</b>：新玩家 7 日内建立 ≥ 1 个稳定关系（好友 / 帮派 / 结义）——社交建立率是留存先行指标（见 13.8）。</p>
+  <table>
+    <thead><tr><th>天数</th><th>引导内容</th><th>对接</th></tr></thead>
+    <tbody>
+      <tr><td>D1</td><td>拜师 + 首次组队（新手副本）</td><td>8.14 组队</td></tr>
+      <tr><td>D2</td><td>加 1 个好友 + 好友互赠签到</td><td>8.2 好友、9.6</td></tr>
+      <tr><td>D3</td><td>茶楼听书 + 收到第一条情报</td><td>8.10②、8.6</td></tr>
+      <tr><td>D4</td><td>入帮（帮派新手任务）</td><td>8.8 帮派</td></tr>
+      <tr><td>D5</td><td>首次运镖 / 悬赏（协作）</td><td>8.9①、11.9</td></tr>
+      <tr><td>D6</td><td>送礼 / 回礼（关系升温）</td><td>8.7 好感度</td></tr>
+      <tr><td>D7</td><td>结义或拜师传承（稳定关系达成）</td><td>8.7② 结义</td></tr>
+    </tbody>
+  </table>
+  <p>每日引导完成后推送（见 14.6 关键词提醒）——引导是「推一把」，不是强制。</p>
+
+  <h3>15.4 引导式任务链（教程任务）</h3>
+  <ul>
+    <li><b>教程任务</b>：任务链覆盖各系统首次体验（首次刺探 / 首次摆摊 / 首次帮贡），奖励递增。</li>
+    <li><b>任务即社交剧本</b>：每个教程任务带一个社交动作（见 7 章任务设计）——玩一次就会。</li>
+    <li><b>双人教程任务</b>：部分教程任务需双人完成（与新玩家组队，带新奖励，见 8.14 带新）——<b>老玩家带新有回报</b>（玩家大使体系，见 13.7③）。</li>
+  </ul>
+
+  <h3>15.5 挫败保护与回流（防流失）</h3>
+  <ul>
+    <li><b>战败保护</b>：连续战败触发「情义相助」引导（见 8.13③）——<b>战败也是社交入口</b>（防挫败流失）。</li>
+    <li><b>新手保护期</b>：保护期内 PVP 伤害衰减（见 6.12 数值护栏），红名不可主动攻击新手。</li>
+    <li><b>回流礼包</b>：流失回归发「重逢礼包」（好友 / 帮派提醒回归，见 14.6 推送）——回归是社交事件。</li>
+    <li><b>回流带新</b>：回归玩家自动匹配新手带教任务（经验互惠）——回流即资源。</li>
+  </ul>
+
+  <h3>15.6 新玩家保护与数值护栏（防碾压）</h3>
+  <ul>
+    <li><b>境界差衰减</b>：等级差过大时伤害衰减（见 6.12② 防碾压衰减），保新手体验。</li>
+    <li><b>新手榜</b>：等级段分组榜（见 10.6③）——新手也有「能上的榜」。</li>
+    <li><b>修炼低门槛</b>：新手村练功房离线挂机（见 6.17③）——挂机即可跟上节奏。</li>
+    <li><b>社交安全感</b>：安全区（见 5.13）覆盖新手活动范围，接触对抗玩法从「同意制」开始（决斗双同意，见 6.10⑨）。</li>
+  </ul>
+
+  <h3>15.7 初始数值总览（默认值起点）</h3>
+  <p>系统默认值一览，策划调整的起点（均可经远程配置/模板覆盖）。</p>
+  <div class="grid3">
+    <div class="card"><h4>角色基础</h4><ul>
+      <li>五属性：<b>10</b>（力量/速度/防御/智力/悟性）</li>
+      <li>忠诚度：<b>50</b>（基准 50）</li>
+      <li>气血：<b>100</b>；内力：<b>100</b>（上限 100）</li>
+      <li>声望：<b>50</b></li>
+      <li>五需求：<b>50</b></li>
+      <li>资质：<b>2</b></li>
+    </ul></div>
+    <div class="card"><h4>生存与资源</h4><ul>
+      <li>每日食物消耗：<b>9</b>；最低食物线：<b>3</b></li>
+      <li>食物/木材/铁/草药/金银：<b>0</b> 起</li>
+      <li>世代（season）：<b>1</b></li>
+    </ul></div>
+    <div class="card"><h4>世界与战斗</h4><ul>
+      <li>默认地图：<b>map_001</b>；区域：主城</li>
+      <li>技能基础伤害：<b>10</b>；冷却：<b>5s</b>；耗内：<b>0</b>；射程：<b>1</b></li>
+      <li>怪物：气血 <b>100</b> / 攻击 <b>10</b> / 刷新 <b>30s</b> / 仇恨 <b>5</b></li>
+      <li>Buff 时长：<b>10s</b></li>
+      <li>入魔战力倍率：<b>1.5</b></li>
+    </ul></div>
+  </div>
+  <div class="grid3">
+    <div class="card"><h4>玩家</h4><ul>
+      <li>初始等级：<b>1</b>；经验：<b>0</b></li>
+      <li>VIP：<b>0</b> 级 / <b>0</b> 经验</li>
+      <li>货币：金币/钻石/绑定钻石 <b>0</b></li>
+    </ul></div>
+    <div class="card"><h4>社交</h4><ul>
+      <li>阵营：<b>中立</b>；阵营等级 <b>5</b></li>
+      <li>谍报等级：<b>0</b>（刺探/渗透关闭）</li>
+      <li>关系：陌生人 / 好感 <b>0</b></li>
+      <li>伙伴：不跟随</li>
+    </ul></div>
+    <div class="card"><h4>运营</h4><ul>
+      <li>充值币种：<b>CNY</b>；平台：<b>mock</b></li>
+      <li>服务器版本：<b>1.0.0</b>；状态：运行</li>
+      <li>场景人数上限：<b>100</b></li>
+    </ul></div>
+  </div>
+
+  <h3>15.8 全局平衡校验框架（四象限一票否决）</h3>
+  <p><b>玩法定位</b>：单点平衡之外，需要一张「全局体检表」——四象限：<b>成长 / 战斗 / 经济 / 社交</b>，任一象限失衡都影响长期体验。</p>
+  <table>
+    <thead><tr><th>象限</th><th>核心指标</th><th>健康阈值（默认）</th><th>失衡预案</th></tr></thead>
+    <tbody>
+      <tr><td>成长</td><td>升级耗时曲线 / 经验投放</td><td>1~90 级 ≤ 90 天（线性无断崖）</td><td>经验投放加减速（见 13.6 灰度）</td></tr>
+      <tr><td>战斗</td><td>三层流派胜率 / PVP-PVE 强度差</td><td>各流派胜率 40%~60%（见 6.26⑥）</td><td>克制数值热修复 + 平衡公告</td></tr>
+      <tr><td>经济</td><td>金币存量 / 物价指数 / 通胀率</td><td>月通胀 ≤ 5%（见 11.13④）</td><td>投放下调 / 回收加码</td></tr>
+      <tr><td>社交</td><td>社交活跃度 / 关系建立率 / 社交货币流速</td><td>新玩家 7 日关系建立率 ≥ 60%（见 13.8③）</td><td>社交活动加码 / 引导强化（见 15.3）</td></tr>
+    </tbody>
+  </table>
+  <ul>
+    <li><b>上线前校验清单</b>：数值走查（见 15.7 初始值）→ 模拟压测（万人在线资源供给，见 5.21）→ 灰度小流量（见 13.6）——<b>上线前四象限各跑一遍体检，缺一不可</b>。</li>
+    <li><b>上线后监控</b>：四象限指标按日出报（见 13.4 看板）、异常自动告警（见 C.4）、月度平衡复盘（见 13.8 数据）——<b>平衡不是一次调完，是持续调参</b>。</li>
+    <li><b>一票否决原则</b>：新系统 / 新数值上线前，若任一象限健康指标会被破坏（如新装备让战斗象限胜率失衡），<b>该版本不得上线</b>（见 C.6 发布门禁）。</li>
+  </ul>
+  </div>
+</section>
+
+<!--DICT_PART-->
+
+<!--API_PART-->
+
+<!--ENUM_PART-->
+
+<!-- ==================== 附录C 部署与运维 ==================== -->
+<section class="chapter" id="appendix-c">
+  <div class="chapter-inner">
+  <h2 class="ch-title">附录 C · 部署与运维</h2>
+  <p class="ch-desc">面向研发/运维的部署要点，策划可略读。</p>
+  <h3>C.1 服务与依赖</h3>
+  <table>
+    <thead><tr><th>项</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td>systemd 服务</td><td><code>game-server</code>，开机自启，重启命令 <code>systemctl restart game-server</code></td></tr>
+      <tr><td>PostgreSQL</td><td>1Panel 容器 <code>1Panel-postgresql-4LsS</code>，库 <code>game_server</code>（64 表自动建）</td></tr>
+      <tr><td>Redis</td><td>容器带密码，用于会话/限流/队列</td></tr>
+      <tr><td>反向代理</td><td>OpenResty → <code>game.joho.cn</code> → 127.0.0.1:3000</td></tr>
+      <tr><td>Swagger</td><td><code>/api/docs</code>（联调首选）</td></tr>
+    </tbody>
+  </table>
+  <h3>C.2 部署流程</h3>
+  <ol>
+    <li>本地 <code>npm run build</code>（产物 <code>dist/src/main.js</code>，注意 start:prod 路径）</li>
+    <li>同步 <code>.env.prod</code>（生产变量，含 DB/JWT/Redis 凭据）</li>
+    <li>scp 产物至服务器 → <code>systemctl restart game-server</code></li>
+    <li>验证 <code>/api/docs</code> 与健康接口</li>
+  </ol>
+  <h3>C.3 安全与备份</h3>
+  <ul>
+    <li>数据库凭据与 JWT_SECRET 仅存 <code>.env.prod</code>，禁止入 git</li>
+    <li>管理员初始密码首登后修改；admin_passwd 类数据库管理密码用强随机</li>
+    <li>定期 <code>pg_dump</code> 备份 game_server 库</li>
+  </ul>
+  <h3>C.4 监控与告警</h3>
+  <ul>
+    <li><b>健康检查</b>：进程存活 + 健康接口轮询（systemd 自动拉起），DB / Redis 连通性监控。</li>
+    <li><b>指标监控</b>：CPU / 内存 / 连接数（1G 内存服务器尤其关注 OOM，见 15 章部署约束），Socket.IO 在线数。</li>
+    <li><b>业务告警</b>：交易 / 帮贡 / 情报产出异常波动（防刷预警，见 10.6、13.3 行为日志）——社交经济异常当天可见。</li>
+    <li><b>日志聚合</b>：应用日志 + gm_operate_logs（见 13.5）统一归档，支撑排查与追责。</li>
+  </ul>
+  <h3>C.5 数据备份与恢复</h3>
+  <ul>
+    <li><b>定期备份</b>：pg_dump 定时（每日），备份文件异地留存（服务器为 1G 小盘，备份转存本机）。</li>
+    <li><b>恢复演练</b>：季度恢复演练——<b>社交数据（好友 / 帮派 / 好感度）不可重建，备份是唯一保险</b>。</li>
+    <li><b>配置备份</b>：远程配置（见 13.2）版本化导出，随代码入库。</li>
+  </ul>
+  <h3>C.6 版本发布与回滚</h3>
+  <ul>
+    <li><b>发布流程</b>：本地构建 → 同步 .env.prod → scp 产物 → 重启 → 验证 /api/docs 与健康接口（见 C.2）。</li>
+    <li><b>灰度</b>：大版本白名单灰度（远程配置开关，见 13.2），行为日志验证（见 13.3）。</li>
+    <li><b>回滚</b>：保留上一版产物 + 配置版本回滚（见 13.6）；数据库变更遵循「只加宽不缩容」原则（生产列精度教训）。</li>
+  </ul>
+  <h3>C.7 安全加固清单</h3>
+  <ul>
+    <li>SSH 仅密钥登录（关闭密码）、防火墙仅开放 22 / 80 / 443（安全组白名单）。</li>
+    <li>接口限流与防注入（NestJS 校验管道，防 SQL / 命令注入，见 13.3 行为日志留痕）。</li>
+    <li>密钥轮换：JWT_SECRET / Redis 密码定期轮换，token_version 全员下线能力（见 2.2）配合。</li>
+    <li>管理后台双因素（admin_users，见 2.3）——GM 权限是攻防焦点。</li>
+  </ul>
+  </div>
+</section>
+
+<footer style="text-align:center;color:#6b5d4c;padding:60px 0 20px;font-size:12px;letter-spacing:3px">
+  — 江 湖 录 · GAME SERVER 开发手册 · 2026-09-19 —
+</footer>
+</div>
+</body>
+</html>

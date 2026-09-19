@@ -1,0 +1,602 @@
+﻿account_login_logs|id|bigint|int8|NO|nextval('account_login_logs_id_seq'::regclass)
+account_login_logs|account_id|bigint|int8|NO|
+account_login_logs|login_ip|character varying|varchar|NO|
+account_login_logs|device_info|character varying|varchar|YES|
+account_login_logs|region|character varying|varchar|YES|
+account_login_logs|login_result|character varying|varchar|NO|
+account_login_logs|created_at|timestamp without time zone|timestamp|NO|now()
+achievement_templates|id|bigint|int8|NO|nextval('achievement_templates_id_seq'::regclass)
+achievement_templates|name|character varying|varchar|NO|
+achievement_templates|description|text|text|YES|
+achievement_templates|category|USER-DEFINED|achievement_templates_category_enum|NO|
+achievement_templates|condition|USER-DEFINED|achievement_templates_condition_enum|NO|
+achievement_templates|target_value|integer|int4|NO|
+achievement_templates|reward_json|jsonb|jsonb|NO|'{}'::jsonb
+achievement_templates|icon_url|character varying|varchar|YES|
+achievement_templates|sort_order|integer|int4|NO|0
+achievement_templates|created_at|timestamp without time zone|timestamp|NO|now()
+achievement_templates|updated_at|timestamp without time zone|timestamp|NO|now()
+achievement_templates|deleted_at|timestamp without time zone|timestamp|YES|
+activity_templates|id|bigint|int8|NO|nextval('activity_templates_id_seq'::regclass)
+activity_templates|name|character varying|varchar|NO|
+activity_templates|activity_type|USER-DEFINED|activity_templates_activity_type_enum|NO|
+activity_templates|description|text|text|YES|
+activity_templates|start_at|timestamp without time zone|timestamp|NO|
+activity_templates|end_at|timestamp without time zone|timestamp|NO|
+activity_templates|status|USER-DEFINED|activity_templates_status_enum|NO|'draft'::activity_templates_status_enum
+activity_templates|sign_in_cycle|USER-DEFINED|activity_templates_sign_in_cycle_enum|YES|
+activity_templates|reward_json|jsonb|jsonb|NO|'{}'::jsonb
+activity_templates|condition_json|jsonb|jsonb|NO|'{}'::jsonb
+activity_templates|max_participants|integer|int4|NO|0
+activity_templates|created_at|timestamp without time zone|timestamp|NO|now()
+activity_templates|updated_at|timestamp without time zone|timestamp|NO|now()
+activity_templates|deleted_at|timestamp without time zone|timestamp|YES|
+admin_users|id|bigint|int8|NO|nextval('admin_users_id_seq'::regclass)
+admin_users|username|character varying|varchar|NO|
+admin_users|password_hash|character varying|varchar|NO|
+admin_users|role|USER-DEFINED|admin_users_role_enum|NO|'viewer'::admin_users_role_enum
+admin_users|is_active|boolean|bool|NO|true
+admin_users|last_login_at|timestamp without time zone|timestamp|YES|
+admin_users|created_at|timestamp without time zone|timestamp|NO|now()
+admin_users|updated_at|timestamp without time zone|timestamp|NO|now()
+auction_items|id|bigint|int8|NO|nextval('auction_items_id_seq'::regclass)
+auction_items|seller_id|character varying|varchar|NO|
+auction_items|item_template_id|character varying|varchar|NO|
+auction_items|item_name|character varying|varchar|NO|
+auction_items|quantity|integer|int4|NO|
+auction_items|start_price|bigint|int8|NO|
+auction_items|current_price|bigint|int8|NO|
+auction_items|current_bidder_id|character varying|varchar|YES|
+auction_items|expire_at|timestamp without time zone|timestamp|NO|
+auction_items|status|USER-DEFINED|auction_items_status_enum|NO|'listed'::auction_items_status_enum
+auction_items|created_at|timestamp without time zone|timestamp|NO|now()
+auction_items|updated_at|timestamp without time zone|timestamp|NO|now()
+auth_accounts|id|bigint|int8|NO|nextval('auth_accounts_id_seq'::regclass)
+auth_accounts|username|character varying|varchar|NO|
+auth_accounts|password_hash|character varying|varchar|NO|
+auth_accounts|account_type|USER-DEFINED|auth_accounts_account_type_enum|NO|'normal'::auth_accounts_account_type_enum
+auth_accounts|device_id|character varying|varchar|YES|
+auth_accounts|bind_phone|character varying|varchar|YES|
+auth_accounts|bind_email|character varying|varchar|YES|
+auth_accounts|ban_reason|character varying|varchar|YES|
+auth_accounts|ban_expire_at|timestamp without time zone|timestamp|YES|
+auth_accounts|token_version|integer|int4|NO|0
+auth_accounts|last_login_at|timestamp without time zone|timestamp|YES|
+auth_accounts|status|USER-DEFINED|auth_accounts_status_enum|NO|'active'::auth_accounts_status_enum
+auth_accounts|created_at|timestamp without time zone|timestamp|NO|now()
+auth_accounts|deleted_at|timestamp without time zone|timestamp|YES|
+buff_templates|id|bigint|int8|NO|nextval('buff_templates_id_seq'::regclass)
+buff_templates|name|character varying|varchar|NO|
+buff_templates|buffType|USER-DEFINED|buff_templates_bufftype_enum|NO|'buff'::buff_templates_bufftype_enum
+buff_templates|target|USER-DEFINED|buff_templates_target_enum|NO|'target'::buff_templates_target_enum
+buff_templates|duration|integer|int4|NO|10
+buff_templates|stat_modifiers|jsonb|jsonb|NO|'{}'::jsonb
+buff_templates|description|character varying|varchar|YES|
+buff_templates|icon_key|character varying|varchar|YES|
+buff_templates|created_at|timestamp without time zone|timestamp|NO|now()
+buff_templates|updated_at|timestamp without time zone|timestamp|NO|now()
+buff_templates|deleted_at|timestamp without time zone|timestamp|YES|
+character_attributes|id|bigint|int8|NO|nextval('character_attributes_id_seq'::regclass)
+character_attributes|character_id|bigint|int8|NO|
+character_attributes|strength|integer|int4|NO|10
+character_attributes|speed|integer|int4|NO|10
+character_attributes|defense|integer|int4|NO|10
+character_attributes|intelligence|integer|int4|NO|10
+character_attributes|comprehension|integer|int4|NO|10
+character_attributes|loyalty|integer|int4|NO|50
+character_attributes|loyalty_base|integer|int4|NO|50
+character_attributes|combat_power|bigint|int8|NO|'0'::bigint
+character_combat_styles|id|bigint|int8|NO|nextval('character_combat_styles_id_seq'::regclass)
+character_combat_styles|character_id|bigint|int8|NO|
+character_combat_styles|style|USER-DEFINED|character_combat_styles_style_enum|NO|'balanced'::character_combat_styles_style_enum
+character_companions|id|bigint|int8|NO|nextval('character_companions_id_seq'::regclass)
+character_companions|character_id|bigint|int8|NO|
+character_companions|is_following|boolean|bool|NO|false
+character_companions|follow_start_at|timestamp without time zone|timestamp|YES|
+character_companions|follow_end_at|timestamp without time zone|timestamp|YES|
+character_companions|companion_type|USER-DEFINED|character_companions_companion_type_enum|NO|'none'::character_companions_companion_type_enum
+character_companions|owner_id|bigint|int8|YES|
+character_companions|sacrifice_used|boolean|bool|NO|false
+character_companions|last_words|character varying|varchar|YES|
+character_consumptions|id|bigint|int8|NO|nextval('character_consumptions_id_seq'::regclass)
+character_consumptions|character_id|bigint|int8|NO|
+character_consumptions|food_per_day|integer|int4|NO|9
+character_consumptions|min_food|integer|int4|NO|3
+character_consumptions|last_consume_at|timestamp without time zone|timestamp|YES|
+character_consumptions|hunger_days|integer|int4|NO|0
+character_consumptions|status|USER-DEFINED|character_consumptions_status_enum|NO|'normal'::character_consumptions_status_enum
+character_darkened|id|bigint|int8|NO|nextval('character_darkened_id_seq'::regclass)
+character_darkened|character_id|bigint|int8|NO|
+character_darkened|is_darkened|boolean|bool|NO|false
+character_darkened|darkened_at|timestamp without time zone|timestamp|YES|
+character_darkened|darkened_reason|character varying|varchar|YES|
+character_darkened|original_name|character varying|varchar|YES|
+character_darkened|darkened_name|character varying|varchar|YES|
+character_darkened|power_boost|double precision|float8|NO|'1.5'::double precision
+character_darkened|hunting_target|bigint|int8|YES|
+character_equipment|id|bigint|int8|NO|nextval('character_equipment_id_seq'::regclass)
+character_equipment|character_id|bigint|int8|NO|
+character_equipment|slot|USER-DEFINED|character_equipment_slot_enum|NO|
+character_equipment|inventory_item_id|bigint|int8|NO|
+character_equipment|created_at|timestamp without time zone|timestamp|NO|now()
+character_equipment|updated_at|timestamp without time zone|timestamp|NO|now()
+character_espionages|id|bigint|int8|NO|nextval('character_espionages_id_seq'::regclass)
+character_espionages|character_id|bigint|int8|NO|
+character_espionages|can_spy|boolean|bool|NO|false
+character_espionages|can_infiltrate|boolean|bool|NO|false
+character_espionages|espionage_level|integer|int4|NO|0
+character_espionages|current_mission|jsonb|jsonb|YES|
+character_espionages|disguise|jsonb|jsonb|YES|
+character_factions|id|bigint|int8|NO|nextval('character_factions_id_seq'::regclass)
+character_factions|character_id|bigint|int8|NO|
+character_factions|faction|USER-DEFINED|character_factions_faction_enum|NO|'neutral'::character_factions_faction_enum
+character_factions|faction_name|character varying|varchar|NO|'中立'::character varying
+character_factions|faction_level|integer|int4|NO|5
+character_factions|faction_title|character varying|varchar|YES|
+character_factions|faction_relations|jsonb|jsonb|NO|'{"evil": 0, "neutral": 0, "righteous": 0}'::jsonb
+character_locations|id|bigint|int8|NO|nextval('character_locations_id_seq'::regclass)
+character_locations|character_id|bigint|int8|NO|
+character_locations|map_id|character varying|varchar|NO|'map_001'::character varying
+character_locations|land_id|character varying|varchar|YES|
+character_locations|region|USER-DEFINED|character_locations_region_enum|NO|'central_city'::character_locations_region_enum
+character_locations|pos_x|integer|int4|NO|0
+character_locations|pos_y|integer|int4|NO|0
+character_locations|pos_z|integer|int4|NO|0
+character_locations|building|character varying|varchar|YES|
+character_locations|indoors|boolean|bool|NO|false
+character_locations|last_move_at|timestamp without time zone|timestamp|YES|
+character_locations|path_history|jsonb|jsonb|NO|'[]'::jsonb
+character_martial_arts|id|bigint|int8|NO|nextval('character_martial_arts_id_seq'::regclass)
+character_martial_arts|character_id|bigint|int8|NO|
+character_martial_arts|art_type|USER-DEFINED|character_martial_arts_art_type_enum|NO|
+character_martial_arts|level|integer|int4|NO|0
+character_martial_arts|skills|jsonb|jsonb|NO|'[]'::jsonb
+character_memories|id|bigint|int8|NO|nextval('character_memories_id_seq'::regclass)
+character_memories|character_id|bigint|int8|NO|
+character_memories|employers|jsonb|jsonb|NO|'[]'::jsonb
+character_memories|interactions|jsonb|jsonb|NO|'[]'::jsonb
+character_memories|secrets|jsonb|jsonb|NO|'[]'::jsonb
+character_memories|friends|jsonb|jsonb|NO|'[]'::jsonb
+character_memories|enemies|jsonb|jsonb|NO|'[]'::jsonb
+character_memories|rumors|jsonb|jsonb|NO|'[]'::jsonb
+character_needs|id|bigint|int8|NO|nextval('character_needs_id_seq'::regclass)
+character_needs|character_id|bigint|int8|NO|
+character_needs|survival|integer|int4|NO|50
+character_needs|safety|integer|int4|NO|50
+character_needs|belonging|integer|int4|NO|50
+character_needs|esteem|integer|int4|NO|50
+character_needs|actualization|integer|int4|NO|50
+character_profiles|id|bigint|int8|NO|nextval('character_profiles_id_seq'::regclass)
+character_profiles|character_id|bigint|int8|NO|
+character_profiles|avatar|jsonb|jsonb|NO|'{}'::jsonb
+character_profiles|videos|jsonb|jsonb|NO|'{}'::jsonb
+character_profiles|bio|jsonb|jsonb|NO|'{}'::jsonb
+character_profiles|background|jsonb|jsonb|NO|'{}'::jsonb
+character_qualifications|id|bigint|int8|NO|nextval('character_qualifications_id_seq'::regclass)
+character_qualifications|character_id|bigint|int8|NO|
+character_qualifications|qualification|integer|int4|NO|2
+character_qualifications|qualification_type|USER-DEFINED|character_qualifications_qualification_type_enum|NO|'normal'::character_qualifications_qualification_type_enum
+character_qualifications|is_consumable|boolean|bool|NO|false
+character_relationships|id|bigint|int8|NO|nextval('character_relationships_id_seq'::regclass)
+character_relationships|character_id|bigint|int8|NO|
+character_relationships|target_id|bigint|int8|NO|
+character_relationships|favorability|integer|int4|NO|0
+character_relationships|level|USER-DEFINED|character_relationships_level_enum|NO|'stranger'::character_relationships_level_enum
+character_relationships|status|USER-DEFINED|character_relationships_status_enum|NO|'normal'::character_relationships_status_enum
+character_relationships|history|jsonb|jsonb|NO|'[]'::jsonb
+character_relationships|triggers|jsonb|jsonb|NO|'{}'::jsonb
+character_resources|id|bigint|int8|NO|nextval('character_resources_id_seq'::regclass)
+character_resources|character_id|bigint|int8|NO|
+character_resources|food|integer|int4|NO|0
+character_resources|wood|integer|int4|NO|0
+character_resources|iron|integer|int4|NO|0
+character_resources|herb|integer|int4|NO|0
+character_resources|gold|integer|int4|NO|0
+character_special_effects|id|bigint|int8|NO|nextval('character_special_effects_id_seq'::regclass)
+character_special_effects|character_id|bigint|int8|NO|
+character_special_effects|code|character varying|varchar|NO|
+character_special_effects|name|character varying|varchar|NO|
+character_special_effects|description|character varying|varchar|YES|
+character_special_effects|active|boolean|bool|NO|true
+character_special_effects|params|jsonb|jsonb|NO|'{}'::jsonb
+character_specialties|id|bigint|int8|NO|nextval('character_specialties_id_seq'::regclass)
+character_specialties|character_id|bigint|int8|NO|
+character_specialties|primary_specialty|character varying|varchar|NO|
+character_specialties|secondary_specialties|jsonb|jsonb|NO|'[]'::jsonb
+character_specialties|efficiency|jsonb|jsonb|NO|'{"primary": 1, "secondary": 1}'::jsonb
+character_statuses|id|bigint|int8|NO|nextval('character_statuses_id_seq'::regclass)
+character_statuses|character_id|bigint|int8|NO|
+character_statuses|health|integer|int4|NO|100
+character_statuses|mana|integer|int4|NO|100
+character_statuses|max_mana|integer|int4|NO|100
+character_statuses|wealth|bigint|int8|NO|'0'::bigint
+character_statuses|reputation|integer|int4|NO|50
+character_statuses|is_alive|boolean|bool|NO|true
+character_statuses|death_cause|character varying|varchar|YES|
+character_statuses|death_date|timestamp without time zone|timestamp|YES|
+character_statuses|season|integer|int4|NO|1
+character_statuses|family|jsonb|jsonb|NO|'[]'::jsonb
+characters|id|bigint|int8|NO|nextval('characters_id_seq'::regclass)
+characters|player_id|bigint|int8|YES|
+characters|name|character varying|varchar|NO|
+characters|nickname|character varying|varchar|NO|
+characters|profession|USER-DEFINED|characters_profession_enum|NO|
+characters|gender|USER-DEFINED|characters_gender_enum|NO|
+characters|age|integer|int4|NO|
+characters|birthday|character varying|varchar|YES|
+characters|is_npc|boolean|bool|NO|false
+characters|created_at|timestamp without time zone|timestamp|NO|now()
+characters|updated_at|timestamp without time zone|timestamp|NO|now()
+characters|deleted_at|timestamp without time zone|timestamp|YES|
+chat_messages|id|bigint|int8|NO|nextval('chat_messages_id_seq'::regclass)
+chat_messages|channel|USER-DEFINED|chat_messages_channel_enum|NO|
+chat_messages|sender_id|bigint|int8|NO|
+chat_messages|sender_name|character varying|varchar|NO|
+chat_messages|recipient_id|bigint|int8|YES|
+chat_messages|guild_id|bigint|int8|YES|
+chat_messages|content|text|text|NO|
+chat_messages|created_at|timestamp without time zone|timestamp|NO|now()
+combat_logs|id|bigint|int8|NO|nextval('combat_logs_id_seq'::regclass)
+combat_logs|attacker_id|bigint|int8|NO|
+combat_logs|defender_id|bigint|int8|NO|
+combat_logs|scene_id|bigint|int8|YES|
+combat_logs|team_id|character varying|varchar|YES|
+combat_logs|combat_type|USER-DEFINED|combat_logs_combat_type_enum|NO|
+combat_logs|result|USER-DEFINED|combat_logs_result_enum|NO|
+combat_logs|damage_json|jsonb|jsonb|NO|'{}'::jsonb
+combat_logs|reward_json|jsonb|jsonb|NO|'{}'::jsonb
+combat_logs|duration_ms|integer|int4|NO|0
+combat_logs|created_at|timestamp without time zone|timestamp|NO|now()
+drop_templates|id|bigint|int8|NO|nextval('drop_templates_id_seq'::regclass)
+drop_templates|name|character varying|varchar|NO|
+drop_templates|drop_items|jsonb|jsonb|NO|'[]'::jsonb
+drop_templates|drop_rate|double precision|float8|NO|'1'::double precision
+drop_templates|max_drops|integer|int4|NO|1
+drop_templates|created_at|timestamp without time zone|timestamp|NO|now()
+drop_templates|updated_at|timestamp without time zone|timestamp|NO|now()
+drop_templates|deleted_at|timestamp without time zone|timestamp|YES|
+friends|id|bigint|int8|NO|nextval('friends_id_seq'::regclass)
+friends|player_id|bigint|int8|NO|
+friends|friend_id|bigint|int8|NO|
+friends|status|USER-DEFINED|friends_status_enum|NO|'pending'::friends_status_enum
+friends|remark|character varying|varchar|YES|
+friends|last_chat_time|timestamp without time zone|timestamp|YES|
+friends|created_at|timestamp without time zone|timestamp|NO|now()
+gm_operate_logs|id|bigint|int8|NO|nextval('gm_operate_logs_id_seq'::regclass)
+gm_operate_logs|admin_id|bigint|int8|NO|
+gm_operate_logs|target_player_id|bigint|int8|YES|
+gm_operate_logs|operation|character varying|varchar|NO|
+gm_operate_logs|change_before|jsonb|jsonb|NO|'{}'::jsonb
+gm_operate_logs|change_after|jsonb|jsonb|NO|'{}'::jsonb
+gm_operate_logs|created_at|timestamp without time zone|timestamp|NO|now()
+guild_donates|id|bigint|int8|NO|nextval('guild_donates_id_seq'::regclass)
+guild_donates|guild_id|bigint|int8|NO|
+guild_donates|player_id|bigint|int8|NO|
+guild_donates|donate_type|USER-DEFINED|guild_donates_donate_type_enum|NO|
+guild_donates|amount|bigint|int8|NO|'0'::bigint
+guild_donates|contribution_gained|integer|int4|NO|0
+guild_donates|created_at|timestamp without time zone|timestamp|NO|now()
+guild_members|id|bigint|int8|NO|nextval('guild_members_id_seq'::regclass)
+guild_members|guild_id|bigint|int8|NO|
+guild_members|player_id|bigint|int8|NO|
+guild_members|role|USER-DEFINED|guild_members_role_enum|NO|'member'::guild_members_role_enum
+guild_members|contribution|integer|int4|NO|0
+guild_members|joined_at|timestamp without time zone|timestamp|NO|now()
+guilds|id|bigint|int8|NO|nextval('guilds_id_seq'::regclass)
+guilds|name|character varying|varchar|NO|
+guilds|leader_id|bigint|int8|NO|
+guilds|level|integer|int4|NO|1
+guilds|member_count|integer|int4|NO|1
+guilds|guild_icon|character varying|varchar|YES|
+guilds|guild_buff|jsonb|jsonb|NO|'{}'::jsonb
+guilds|announcement|text|text|YES|
+guilds|created_at|timestamp without time zone|timestamp|NO|now()
+guilds|disbanded_at|timestamp without time zone|timestamp|YES|
+inventory_items|id|bigint|int8|NO|nextval('inventory_items_id_seq'::regclass)
+inventory_items|player_id|bigint|int8|NO|
+inventory_items|item_template_id|bigint|int8|NO|
+inventory_items|quantity|integer|int4|NO|1
+inventory_items|slot_index|integer|int4|NO|0
+inventory_items|bind_status|USER-DEFINED|inventory_items_bind_status_enum|NO|'unbound'::inventory_items_bind_status_enum
+inventory_items|expire_at|timestamp without time zone|timestamp|YES|
+inventory_items|extra_attrs|jsonb|jsonb|YES|
+inventory_items|created_at|timestamp without time zone|timestamp|NO|now()
+inventory_items|updated_at|timestamp without time zone|timestamp|NO|now()
+inventory_items|deleted_at|timestamp without time zone|timestamp|YES|
+item_templates|id|bigint|int8|NO|nextval('item_templates_id_seq'::regclass)
+item_templates|name|character varying|varchar|NO|
+item_templates|item_type|USER-DEFINED|item_templates_item_type_enum|NO|'material'::item_templates_item_type_enum
+item_templates|rarity|USER-DEFINED|item_templates_rarity_enum|NO|'common'::item_templates_rarity_enum
+item_templates|max_stack|integer|int4|NO|99
+item_templates|sell_price|bigint|int8|NO|'0'::bigint
+item_templates|can_trade|boolean|bool|NO|true
+item_templates|can_drop|boolean|bool|NO|true
+item_templates|bind_type|USER-DEFINED|item_templates_bind_type_enum|NO|'none'::item_templates_bind_type_enum
+item_templates|description|character varying|varchar|YES|
+item_templates|config_json|jsonb|jsonb|NO|'{}'::jsonb
+item_templates|created_at|timestamp without time zone|timestamp|NO|now()
+item_templates|updated_at|timestamp without time zone|timestamp|NO|now()
+item_templates|deleted_at|timestamp without time zone|timestamp|YES|
+mails|id|bigint|int8|NO|nextval('mails_id_seq'::regclass)
+mails|recipient_id|bigint|int8|YES|
+mails|sender_type|USER-DEFINED|mails_sender_type_enum|NO|'system'::mails_sender_type_enum
+mails|sender_id|bigint|int8|YES|
+mails|title|character varying|varchar|NO|
+mails|content|text|text|NO|
+mails|attachment_json|jsonb|jsonb|NO|'{}'::jsonb
+mails|batch_id|character varying|varchar|YES|
+mails|template_id|integer|int4|YES|
+mails|is_read|boolean|bool|NO|false
+mails|is_claimed|boolean|bool|NO|false
+mails|expired_at|timestamp without time zone|timestamp|YES|
+mails|created_at|timestamp without time zone|timestamp|NO|now()
+monster_templates|id|bigint|int8|NO|nextval('monster_templates_id_seq'::regclass)
+monster_templates|name|character varying|varchar|NO|
+monster_templates|res_key|character varying|varchar|NO|
+monster_templates|scale|double precision|float8|NO|'1'::double precision
+monster_templates|base_hp|bigint|int8|NO|'100'::bigint
+monster_templates|base_atk|integer|int4|NO|10
+monster_templates|drop_template_id|bigint|int8|YES|
+monster_templates|refresh_cd|integer|int4|NO|30
+monster_templates|aggro_range|integer|int4|NO|5
+monster_templates|ai_type|USER-DEFINED|monster_templates_ai_type_enum|NO|'guard'::monster_templates_ai_type_enum
+monster_templates|attr|jsonb|jsonb|NO|'{}'::jsonb
+monster_templates|created_at|timestamp without time zone|timestamp|NO|now()
+monster_templates|updated_at|timestamp without time zone|timestamp|NO|now()
+monster_templates|deleted_at|timestamp without time zone|timestamp|YES|
+notices|id|bigint|int8|NO|nextval('notices_id_seq'::regclass)
+notices|title|character varying|varchar|NO|
+notices|content|text|text|NO|
+notices|notice_type|USER-DEFINED|notices_notice_type_enum|NO|'popup'::notices_notice_type_enum
+notices|is_active|boolean|bool|NO|true
+notices|sort_order|integer|int4|NO|0
+notices|start_at|timestamp without time zone|timestamp|YES|
+notices|end_at|timestamp without time zone|timestamp|YES|
+notices|created_by|bigint|int8|YES|
+notices|created_at|timestamp without time zone|timestamp|NO|now()
+notices|updated_at|timestamp without time zone|timestamp|NO|now()
+notices|deleted_at|timestamp without time zone|timestamp|YES|
+npc_templates|id|bigint|int8|NO|nextval('npc_templates_id_seq'::regclass)
+npc_templates|name|character varying|varchar|NO|
+npc_templates|res_key|character varying|varchar|NO|
+npc_templates|scale|double precision|float8|NO|'1'::double precision
+npc_templates|default_anim|character varying|varchar|YES|
+npc_templates|interact_type|USER-DEFINED|npc_templates_interact_type_enum|NO|'talk'::npc_templates_interact_type_enum
+npc_templates|dialogue_id|integer|int4|YES|
+npc_templates|move_range|integer|int4|NO|0
+npc_templates|is_auto_wander|boolean|bool|NO|false
+npc_templates|attr|jsonb|jsonb|NO|'{}'::jsonb
+npc_templates|created_at|timestamp without time zone|timestamp|NO|now()
+npc_templates|updated_at|timestamp without time zone|timestamp|NO|now()
+npc_templates|deleted_at|timestamp without time zone|timestamp|YES|
+object_templates|id|bigint|int8|NO|nextval('object_templates_id_seq'::regclass)
+object_templates|name|character varying|varchar|NO|
+object_templates|res_key|character varying|varchar|NO|
+object_templates|type|USER-DEFINED|object_templates_type_enum|NO|'chest'::object_templates_type_enum
+object_templates|interact_cd|integer|int4|NO|0
+object_templates|reward|jsonb|jsonb|YES|
+object_templates|anim_open|character varying|varchar|YES|
+object_templates|is_one_time|boolean|bool|NO|false
+object_templates|created_at|timestamp without time zone|timestamp|NO|now()
+object_templates|updated_at|timestamp without time zone|timestamp|NO|now()
+object_templates|deleted_at|timestamp without time zone|timestamp|YES|
+player_achievements|id|bigint|int8|NO|nextval('player_achievements_id_seq'::regclass)
+player_achievements|player_id|character varying|varchar|NO|
+player_achievements|achievement_id|character varying|varchar|NO|
+player_achievements|current_value|integer|int4|NO|0
+player_achievements|is_unlocked|boolean|bool|NO|false
+player_achievements|is_reward_claimed|boolean|bool|NO|false
+player_achievements|unlocked_at|timestamp without time zone|timestamp|YES|
+player_achievements|created_at|timestamp without time zone|timestamp|NO|now()
+player_achievements|updated_at|timestamp without time zone|timestamp|NO|now()
+player_activities|id|bigint|int8|NO|nextval('player_activities_id_seq'::regclass)
+player_activities|player_id|character varying|varchar|NO|
+player_activities|activity_id|character varying|varchar|NO|
+player_activities|activity_type|USER-DEFINED|player_activities_activity_type_enum|NO|
+player_activities|progress|integer|int4|NO|0
+player_activities|is_reward_claimed|boolean|bool|NO|false
+player_activities|joined_at|timestamp without time zone|timestamp|NO|
+player_activities|created_at|timestamp without time zone|timestamp|NO|now()
+player_activities|updated_at|timestamp without time zone|timestamp|NO|now()
+player_behavior_logs|id|bigint|int8|NO|nextval('player_behavior_logs_id_seq'::regclass)
+player_behavior_logs|player_id|character varying|varchar|NO|
+player_behavior_logs|behavior_type|USER-DEFINED|player_behavior_logs_behavior_type_enum|NO|
+player_behavior_logs|detail_json|jsonb|jsonb|NO|'{}'::jsonb
+player_behavior_logs|ip_address|character varying|varchar|YES|
+player_behavior_logs|created_at|timestamp without time zone|timestamp|NO|now()
+player_currencies|id|bigint|int8|NO|nextval('player_currencies_id_seq'::regclass)
+player_currencies|player_id|bigint|int8|NO|
+player_currencies|currency_type|USER-DEFINED|player_currencies_currency_type_enum|NO|
+player_currencies|amount|bigint|int8|NO|'0'::bigint
+player_currencies|updated_at|timestamp without time zone|timestamp|NO|now()
+player_item_change_logs|id|bigint|int8|NO|nextval('player_item_change_logs_id_seq'::regclass)
+player_item_change_logs|player_id|bigint|int8|NO|
+player_item_change_logs|item_template_id|bigint|int8|NO|
+player_item_change_logs|change_type|USER-DEFINED|player_item_change_logs_change_type_enum|NO|
+player_item_change_logs|quantity|integer|int4|NO|
+player_item_change_logs|op_trace|character varying|varchar|NO|
+player_item_change_logs|balance_after|integer|int4|NO|
+player_item_change_logs|created_at|timestamp without time zone|timestamp|NO|now()
+player_quests|id|bigint|int8|NO|nextval('player_quests_id_seq'::regclass)
+player_quests|player_id|bigint|int8|NO|
+player_quests|quest_template_id|bigint|int8|NO|
+player_quests|progress|integer|int4|NO|0
+player_quests|status|USER-DEFINED|player_quests_status_enum|NO|'not_started'::player_quests_status_enum
+player_quests|complete_times|integer|int4|NO|0
+player_quests|accepted_at|timestamp without time zone|timestamp|YES|
+player_quests|completed_at|timestamp without time zone|timestamp|YES|
+player_quests|created_at|timestamp without time zone|timestamp|NO|now()
+players|id|bigint|int8|NO|nextval('players_id_seq'::regclass)
+players|account_id|bigint|int8|NO|
+players|nickname|character varying|varchar|NO|
+players|avatar_url|character varying|varchar|YES|
+players|level|integer|int4|NO|1
+players|exp|bigint|int8|NO|'0'::bigint
+players|vip_level|integer|int4|NO|0
+players|vip_exp|integer|int4|NO|0
+players|total_recharge|bigint|int8|NO|'0'::bigint
+players|safe_password_hash|character varying|varchar|YES|
+players|last_activity_at|timestamp without time zone|timestamp|YES|
+players|last_logout_at|timestamp without time zone|timestamp|YES|
+players|online_status|boolean|bool|NO|false
+players|created_at|timestamp without time zone|timestamp|NO|now()
+players|updated_at|timestamp without time zone|timestamp|NO|now()
+players|deleted_at|timestamp without time zone|timestamp|YES|
+quest_templates|id|bigint|int8|NO|nextval('quest_templates_id_seq'::regclass)
+quest_templates|name|character varying|varchar|NO|
+quest_templates|quest_type|USER-DEFINED|quest_templates_quest_type_enum|NO|'main'::quest_templates_quest_type_enum
+quest_templates|min_level|integer|int4|NO|1
+quest_templates|accept_limit|integer|int4|NO|1
+quest_templates|auto_reward|boolean|bool|NO|false
+quest_templates|target_json|jsonb|jsonb|NO|'{}'::jsonb
+quest_templates|reward_json|jsonb|jsonb|NO|'{}'::jsonb
+quest_templates|prerequisite_ids|ARRAY|_int4|NO|'{}'::integer[]
+quest_templates|repeatable|boolean|bool|NO|false
+quest_templates|created_at|timestamp without time zone|timestamp|NO|now()
+quest_templates|updated_at|timestamp without time zone|timestamp|NO|now()
+quest_templates|deleted_at|timestamp without time zone|timestamp|YES|
+ranking_records|id|bigint|int8|NO|nextval('ranking_records_id_seq'::regclass)
+ranking_records|ranking_type|USER-DEFINED|ranking_records_ranking_type_enum|NO|
+ranking_records|player_id|bigint|int8|NO|
+ranking_records|player_name|character varying|varchar|NO|
+ranking_records|rank_value|bigint|int8|NO|
+ranking_records|rank_order|integer|int4|NO|
+ranking_records|snapshot_at|timestamp without time zone|timestamp|NO|now()
+recharge_orders|id|bigint|int8|NO|nextval('recharge_orders_id_seq'::regclass)
+recharge_orders|order_no|character varying|varchar|NO|
+recharge_orders|player_id|character varying|varchar|NO|
+recharge_orders|product_id|character varying|varchar|NO|
+recharge_orders|amount|bigint|int8|NO|
+recharge_orders|currency|character varying|varchar|NO|'CNY'::character varying
+recharge_orders|status|USER-DEFINED|recharge_orders_status_enum|NO|'pending'::recharge_orders_status_enum
+recharge_orders|platform|character varying|varchar|NO|'mock'::character varying
+recharge_orders|callback_at|timestamp without time zone|timestamp|YES|
+recharge_orders|created_at|timestamp without time zone|timestamp|NO|now()
+recharge_orders|updated_at|timestamp without time zone|timestamp|NO|now()
+recharge_products|id|bigint|int8|NO|nextval('recharge_products_id_seq'::regclass)
+recharge_products|name|character varying|varchar|NO|
+recharge_products|amount|bigint|int8|NO|
+recharge_products|reward_json|jsonb|jsonb|NO|'{}'::jsonb
+recharge_products|is_hot|boolean|bool|NO|false
+recharge_products|sort_order|integer|int4|NO|0
+recharge_products|created_at|timestamp without time zone|timestamp|NO|now()
+recharge_products|updated_at|timestamp without time zone|timestamp|NO|now()
+recharge_products|deleted_at|timestamp without time zone|timestamp|YES|
+remote_configs|id|bigint|int8|NO|nextval('remote_configs_id_seq'::regclass)
+remote_configs|config_key|character varying|varchar|NO|
+remote_configs|value|text|text|NO|
+remote_configs|configType|USER-DEFINED|remote_configs_configtype_enum|NO|'string'::remote_configs_configtype_enum
+remote_configs|description|text|text|YES|
+remote_configs|version|integer|int4|NO|1
+remote_configs|is_active|boolean|bool|NO|true
+remote_configs|created_at|timestamp without time zone|timestamp|NO|now()
+remote_configs|updated_at|timestamp without time zone|timestamp|NO|now()
+remote_configs|deleted_at|timestamp without time zone|timestamp|YES|
+retention_stats|id|bigint|int8|NO|nextval('retention_stats_id_seq'::regclass)
+retention_stats|stat_date|date|date|NO|
+retention_stats|cohort_date|date|date|NO|
+retention_stats|period|USER-DEFINED|retention_stats_period_enum|NO|
+retention_stats|cohort_size|integer|int4|NO|
+retention_stats|retained_count|integer|int4|NO|0
+retention_stats|retention_rate|numeric|numeric|NO|'0'::numeric
+retention_stats|created_at|timestamp without time zone|timestamp|NO|now()
+scene_entity_spawns|id|bigint|int8|NO|nextval('scene_entity_spawns_id_seq'::regclass)
+scene_entity_spawns|scene_id|bigint|int8|NO|
+scene_entity_spawns|entity_type|USER-DEFINED|scene_entity_spawns_entity_type_enum|NO|
+scene_entity_spawns|template_id|bigint|int8|NO|
+scene_entity_spawns|spawn_x|integer|int4|NO|0
+scene_entity_spawns|spawn_y|integer|int4|NO|0
+scene_entity_spawns|spawn_rotation|integer|int4|NO|0
+scene_entity_spawns|spawn_count|integer|int4|NO|1
+scene_entity_spawns|spawn_radius|integer|int4|NO|0
+scene_entity_spawns|is_active|boolean|bool|NO|true
+scene_entity_spawns|created_at|timestamp without time zone|timestamp|NO|now()
+scene_entity_spawns|updated_at|timestamp without time zone|timestamp|NO|now()
+scene_entity_spawns|deleted_at|timestamp without time zone|timestamp|YES|
+scene_triggers|id|bigint|int8|NO|nextval('scene_triggers_id_seq'::regclass)
+scene_triggers|trigger_type|USER-DEFINED|scene_triggers_trigger_type_enum|NO|
+scene_triggers|area_x|integer|int4|NO|0
+scene_triggers|area_y|integer|int4|NO|0
+scene_triggers|area_w|integer|int4|NO|100
+scene_triggers|area_h|integer|int4|NO|100
+scene_triggers|target_scene_id|bigint|int8|YES|
+scene_triggers|story_id|integer|int4|YES|
+scene_triggers|condition|jsonb|jsonb|YES|
+scene_triggers|once_only|boolean|bool|NO|false
+scene_triggers|created_at|timestamp without time zone|timestamp|NO|now()
+scene_triggers|updated_at|timestamp without time zone|timestamp|NO|now()
+scene_triggers|deleted_at|timestamp without time zone|timestamp|YES|
+scenes|id|bigint|int8|NO|nextval('scenes_id_seq'::regclass)
+scenes|name|character varying|varchar|NO|
+scenes|scene_type|USER-DEFINED|scenes_scene_type_enum|NO|'town'::scenes_scene_type_enum
+scenes|map_res_key|character varying|varchar|NO|
+scenes|map_width|integer|int4|NO|1000
+scenes|map_height|integer|int4|NO|1000
+scenes|layer_config|jsonb|jsonb|NO|'{}'::jsonb
+scenes|refresh_rule|jsonb|jsonb|YES|
+scenes|trigger_group_ids|ARRAY|_int4|NO|'{}'::integer[]
+scenes|min_level|integer|int4|NO|1
+scenes|max_players|integer|int4|NO|100
+scenes|status|USER-DEFINED|scenes_status_enum|NO|'open'::scenes_status_enum
+scenes|created_at|timestamp without time zone|timestamp|NO|now()
+scenes|updated_at|timestamp without time zone|timestamp|NO|now()
+scenes|deleted_at|timestamp without time zone|timestamp|YES|
+server_statuses|id|bigint|int8|NO|nextval('server_statuses_id_seq'::regclass)
+server_statuses|server_name|character varying|varchar|NO|
+server_statuses|state|USER-DEFINED|server_statuses_state_enum|NO|'running'::server_statuses_state_enum
+server_statuses|max_online|integer|int4|NO|0
+server_statuses|current_online|integer|int4|NO|0
+server_statuses|maintenance_message|text|text|YES|
+server_statuses|version|character varying|varchar|NO|'1.0.0'::character varying
+server_statuses|created_at|timestamp without time zone|timestamp|NO|now()
+server_statuses|updated_at|timestamp without time zone|timestamp|NO|now()
+sign_in_records|id|bigint|int8|NO|nextval('sign_in_records_id_seq'::regclass)
+sign_in_records|player_id|character varying|varchar|NO|
+sign_in_records|activity_id|character varying|varchar|NO|
+sign_in_records|sign_in_date|date|date|NO|
+sign_in_records|sign_in_cycle|USER-DEFINED|sign_in_records_sign_in_cycle_enum|NO|
+sign_in_records|consecutive_days|integer|int4|NO|1
+sign_in_records|reward_claimed|boolean|bool|NO|false
+sign_in_records|created_at|timestamp without time zone|timestamp|NO|now()
+skill_templates|id|bigint|int8|NO|nextval('skill_templates_id_seq'::regclass)
+skill_templates|name|character varying|varchar|NO|
+skill_templates|skill_type|USER-DEFINED|skill_templates_skill_type_enum|NO|'active'::skill_templates_skill_type_enum
+skill_templates|art_type|USER-DEFINED|skill_templates_art_type_enum|YES|
+skill_templates|base_damage|integer|int4|NO|10
+skill_templates|cooldown|integer|int4|NO|5
+skill_templates|mp_cost|integer|int4|NO|0
+skill_templates|range|integer|int4|NO|1
+skill_templates|effect_json|jsonb|jsonb|NO|'{}'::jsonb
+skill_templates|min_level|integer|int4|NO|1
+skill_templates|created_at|timestamp without time zone|timestamp|NO|now()
+skill_templates|updated_at|timestamp without time zone|timestamp|NO|now()
+skill_templates|deleted_at|timestamp without time zone|timestamp|YES|
+trade_orders|id|bigint|int8|NO|nextval('trade_orders_id_seq'::regclass)
+trade_orders|seller_id|character varying|varchar|NO|
+trade_orders|buyer_id|character varying|varchar|YES|
+trade_orders|item_template_id|character varying|varchar|NO|
+trade_orders|item_name|character varying|varchar|NO|
+trade_orders|quantity|integer|int4|NO|
+trade_orders|price_per_unit|bigint|int8|NO|
+trade_orders|currency_type|character varying|varchar|NO|'gold'::character varying
+trade_orders|status|USER-DEFINED|trade_orders_status_enum|NO|'pending'::trade_orders_status_enum
+trade_orders|created_at|timestamp without time zone|timestamp|NO|now()
+trade_orders|updated_at|timestamp without time zone|timestamp|NO|now()
+transactions|id|bigint|int8|NO|nextval('transactions_id_seq'::regclass)
+transactions|player_id|bigint|int8|NO|
+transactions|tx_type|USER-DEFINED|transactions_tx_type_enum|NO|
+transactions|currency_type|USER-DEFINED|transactions_currency_type_enum|NO|
+transactions|amount|bigint|int8|NO|
+transactions|source|character varying|varchar|NO|
+transactions|op_trace|character varying|varchar|NO|
+transactions|order_no|character varying|varchar|YES|
+transactions|balance_after|bigint|int8|NO|
+transactions|related_id|character varying|varchar|YES|
+transactions|created_at|timestamp without time zone|timestamp|NO|now()
+vip_configs|id|bigint|int8|NO|nextval('vip_configs_id_seq'::regclass)
+vip_configs|level|integer|int4|NO|
+vip_configs|required_exp|integer|int4|NO|
+vip_configs|daily_reward_json|jsonb|jsonb|NO|'{}'::jsonb
+vip_configs|privilege_json|jsonb|jsonb|NO|'{}'::jsonb
+vip_configs|created_at|timestamp without time zone|timestamp|NO|now()
+vip_configs|updated_at|timestamp without time zone|timestamp|NO|now()

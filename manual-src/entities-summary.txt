@@ -1,0 +1,621 @@
+﻿===achievement_templates|E:\code\nest\packages-game\game-server\src\modules\achievement\entities\achievement-template.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ type: 'varchar', length: 128 })|name|
+  @Column({ type: 'text', nullable: true })|description|
+  @Column({ type: 'enum', enum: AchievementCategory })|category|
+  @Column({ type: 'enum', enum: AchievementCondition })|condition|
+  @Column({ name: 'target_value', type: 'int' })|targetValue|
+  @Column({ name: 'reward_json', type: 'jsonb', default: '{}' })|rewardJson|
+  @Column({ name: 'icon_url', type: 'varchar', length: 256, nullable: true })|iconUrl|
+  @Column({ name: 'sort_order', type: 'int', default: 0 })|sortOrder|
+===player_achievements|E:\code\nest\packages-game\game-server\src\modules\achievement\entities\player-achievement.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'player_id', type: 'varchar', length: 64 })|playerId|
+  @Column({ name: 'achievement_id', type: 'varchar', length: 64 })|achievementId|
+  @Column({ name: 'current_value', type: 'int', default: 0 })|currentValue|
+  @Column({ name: 'is_unlocked', type: 'boolean', default: false })|isUnlocked|
+  @Column({ name: 'is_reward_claimed', type: 'boolean', default: false })|isRewardClaimed|
+  @Column({ name: 'unlocked_at', type: 'timestamp', nullable: true })|unlockedAt|
+===activity_templates|E:\code\nest\packages-game\game-server\src\modules\activity\entities\activity-template.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ type: 'varchar', length: 128 })|name|
+  @Column({ name: 'activity_type', type: 'enum', enum: ActivityType })|activityType|
+  @Column({ type: 'text', nullable: true })|description|
+  @Column({ name: 'start_at', type: 'timestamp' })|startAt|
+  @Column({ name: 'end_at', type: 'timestamp' })|endAt|
+  @Column({ type: 'enum', enum: ActivityStatus, default: ActivityStatus.DRAFT })|status|
+  @Column({|name|
+  @Column({ name: 'reward_json', type: 'jsonb', default: '{}' })|rewardJson|
+  @Column({ name: 'condition_json', type: 'jsonb', default: '{}' })|conditionJson|
+  @Column({ name: 'max_participants', type: 'int', default: 0 })|maxParticipants|
+===player_activities|E:\code\nest\packages-game\game-server\src\modules\activity\entities\player-activity.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'player_id', type: 'varchar', length: 64 })|playerId|
+  @Column({ name: 'activity_id', type: 'varchar', length: 64 })|activityId|
+  @Column({ name: 'activity_type', type: 'enum', enum: ActivityType })|activityType|
+  @Column({ name: 'progress', type: 'int', default: 0 })|progress|
+  @Column({ name: 'is_reward_claimed', type: 'boolean', default: false })|isRewardClaimed|
+  @Column({ name: 'joined_at', type: 'timestamp' })|joinedAt|
+===sign_in_records|E:\code\nest\packages-game\game-server\src\modules\activity\entities\sign-in-record.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'player_id', type: 'varchar', length: 64 })|playerId|
+  @Column({ name: 'activity_id', type: 'varchar', length: 64 })|activityId|
+  @Column({ name: 'sign_in_date', type: 'date' })|signInDate|
+  @Column({ name: 'sign_in_cycle', type: 'enum', enum: SignInCycle })|signInCycle|
+  @Column({ name: 'consecutive_days', type: 'int', default: 1 })|consecutiveDays|
+  @Column({ name: 'reward_claimed', type: 'boolean', default: false })|rewardClaimed|
+===gm_operate_logs|E:\code\nest\packages-game\game-server\src\modules\admin\entities\gm-operate-log.entity.ts
+  @Index('idx_gmlog_admin', ['adminId'])||
+  @Index('idx_gmlog_target', ['targetPlayerId'])||
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'admin_id', type: 'bigint' })|adminId|
+  @Column({ name: 'target_player_id', type: 'bigint', nullable: true })|targetPlayerId|
+  @Column({ type: 'varchar', length: 255 })|operation|
+  @Column({ name: 'change_before', type: 'jsonb', default: '{}' })|changeBefore|
+  @Column({ name: 'change_after', type: 'jsonb', default: '{}' })|changeAfter|
+===player_behavior_logs|E:\code\nest\packages-game\game-server\src\modules\analytics\entities\player-behavior-log.entity.ts
+  @Index(['playerId', 'createdAt'])||
+  @Index(['behaviorType', 'createdAt'])||
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'player_id', type: 'varchar', length: 64 })|playerId|
+  @Column({ name: 'behavior_type', type: 'enum', enum: BehaviorType })|behaviorType|
+  @Column({ name: 'detail_json', type: 'jsonb', default: '{}' })|detailJson|
+  @Column({ name: 'ip_address', type: 'varchar', length: 64, nullable: true })|ipAddress|
+===retention_stats|E:\code\nest\packages-game\game-server\src\modules\analytics\entities\retention-stat.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'stat_date', type: 'date' })|statDate|
+  @Column({ name: 'cohort_date', type: 'date' })|cohortDate|
+  @Column({ type: 'enum', enum: StatPeriod })|period|
+  @Column({ name: 'cohort_size', type: 'int' })|cohortSize|
+  @Column({ name: 'retained_count', type: 'int', default: 0 })|retainedCount|
+  @Column({|name|
+===account_login_logs|E:\code\nest\packages-game\game-server\src\modules\auth\entities\account-login-log.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Index()||
+  @Column({ name: 'account_id', type: 'bigint' })|accountId|
+  @ManyToOne(() => AuthAccount)||
+  @Column({ name: 'login_ip', type: 'varchar', length: 45 })|loginIp|
+  @Column({ name: 'device_info', type: 'varchar', length: 255, nullable: true })|deviceInfo|
+  @Column({ type: 'varchar', length: 64, nullable: true })|region|
+  @Column({ name: 'login_result', type: 'varchar', length: 16 })|loginResult|
+===admin_users|E:\code\nest\packages-game\game-server\src\modules\auth\entities\admin-user.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Index({ unique: true })||
+  @Column({ type: 'varchar', length: 64 })|username|
+  @Column({ name: 'password_hash', type: 'varchar', length: 128 })|passwordHash|
+  @Column({ type: 'enum', enum: AdminRole, default: AdminRole.VIEWER })|role|
+  @Column({ name: 'is_active', type: 'boolean', default: true })|isActive|
+  @Column({ name: 'last_login_at', type: 'timestamp', nullable: true })|lastLoginAt|
+===auth_accounts|E:\code\nest\packages-game\game-server\src\modules\auth\entities\auth-account.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Index({ unique: true })||
+  @Column({ type: 'varchar', length: 64 })|username|
+  @Column({ name: 'password_hash', type: 'varchar', length: 128 })|passwordHash|
+  @Column({|name|
+  @Column({ name: 'device_id', type: 'varchar', length: 128, nullable: true })|deviceId|
+  @Column({ name: 'bind_phone', type: 'varchar', length: 20, nullable: true })|bindPhone|
+  @Column({ name: 'bind_email', type: 'varchar', length: 128, nullable: true })|bindEmail|
+  @Column({ name: 'ban_reason', type: 'varchar', length: 255, nullable: true })|banReason|
+  @Column({ name: 'ban_expire_at', type: 'timestamp', nullable: true })|banExpireAt|
+  @Column({ name: 'token_version', type: 'int', default: 0 })|tokenVersion|
+  @Column({ name: 'last_login_at', type: 'timestamp', nullable: true })|lastLoginAt|
+  @Column({ type: 'enum', enum: AccountStatus, default: AccountStatus.ACTIVE })|status|
+===buff_templates|E:\code\nest\packages-game\game-server\src\modules\buff\entities\buff-template.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ type: 'varchar', length: 64 })|name|
+  @Column({ type: 'enum', enum: BuffType, default: BuffType.BUFF })|buffType|
+  @Column({ type: 'enum', enum: BuffTarget, default: BuffTarget.TARGET })|target|
+  @Column({ name: 'duration', type: 'int', default: 10 })|duration|
+  @Column({ name: 'stat_modifiers', type: 'jsonb', default: '{}' })|statModifiers|
+  @Column({ type: 'varchar', length: 255, nullable: true })|description|
+  @Column({ name: 'icon_key', type: 'varchar', length: 128, nullable: true })|iconKey|
+===character_attributes|E:\code\nest\packages-game\game-server\src\modules\character\entities\character-attribute.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'character_id', type: 'bigint' })|characterId|
+  @Column({ type: 'int', default: 10 })|strength|
+  @Column({ type: 'int', default: 10 })|speed|
+  @Column({ type: 'int', default: 10 })|defense|
+  @Column({ type: 'int', default: 10 })|intelligence|
+  @Column({ type: 'int', default: 10 })|comprehension|
+  @Column({ type: 'int', default: 50 })|loyalty|
+  @Column({ name: 'loyalty_base', type: 'int', default: 50 })|loyaltyBase|
+  @Column({ name: 'combat_power', type: 'bigint', default: '0' })|combatPower|
+===character_combat_styles|E:\code\nest\packages-game\game-server\src\modules\character\entities\character-combat-style.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'character_id', type: 'bigint' })|characterId|
+  @Column({ type: 'enum', enum: CombatStyle, default: CombatStyle.BALANCED })|style|
+===character_companions|E:\code\nest\packages-game\game-server\src\modules\character\entities\character-companion.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'character_id', type: 'bigint' })|characterId|
+  @Column({ name: 'is_following', type: 'boolean', default: false })|isFollowing|
+  @Column({ name: 'follow_start_at', type: 'timestamp', nullable: true })|followStartAt|
+  @Column({ name: 'follow_end_at', type: 'timestamp', nullable: true })|followEndAt|
+  @Column({|name|
+  @Column({ name: 'owner_id', type: 'bigint', nullable: true })|ownerId|
+  @Column({ name: 'sacrifice_used', type: 'boolean', default: false })|sacrificeUsed|
+  @Column({ name: 'last_words', type: 'varchar', length: 255, nullable: true })|lastWords|
+===character_consumptions|E:\code\nest\packages-game\game-server\src\modules\character\entities\character-consumption.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'character_id', type: 'bigint' })|characterId|
+  @Column({ name: 'food_per_day', type: 'int', default: 9 })|foodPerDay|
+  @Column({ name: 'min_food', type: 'int', default: 3 })|minFood|
+  @Column({ name: 'last_consume_at', type: 'timestamp', nullable: true })|lastConsumeAt|
+  @Column({ name: 'hunger_days', type: 'int', default: 0 })|hungerDays|
+  @Column({ type: 'enum', enum: HungerStatus, default: HungerStatus.NORMAL })|status|
+===character_darkened|E:\code\nest\packages-game\game-server\src\modules\character\entities\character-darkened.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'character_id', type: 'bigint' })|characterId|
+  @Column({ name: 'is_darkened', type: 'boolean', default: false })|isDarkened|
+  @Column({ name: 'darkened_at', type: 'timestamp', nullable: true })|darkenedAt|
+  @Column({|name|
+  @Column({|name|
+  @Column({|name|
+  @Column({ name: 'power_boost', type: 'double precision', default: 1.5 })|powerBoost|
+  @Column({ name: 'hunting_target', type: 'bigint', nullable: true })|huntingTarget|
+===character_espionages|E:\code\nest\packages-game\game-server\src\modules\character\entities\character-espionage.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'character_id', type: 'bigint' })|characterId|
+  @Column({ name: 'can_spy', type: 'boolean', default: false })|canSpy|
+  @Column({ name: 'can_infiltrate', type: 'boolean', default: false })|canInfiltrate|
+  @Column({ name: 'espionage_level', type: 'int', default: 0 })|espionageLevel|
+  @Column({ name: 'current_mission', type: 'jsonb', nullable: true })|currentMission|
+  @Column({ type: 'jsonb', nullable: true })|disguise|
+===character_factions|E:\code\nest\packages-game\game-server\src\modules\character\entities\character-faction.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'character_id', type: 'bigint' })|characterId|
+  @Column({ type: 'enum', enum: Faction, default: Faction.NEUTRAL })|faction|
+  @Column({|name|
+  @Column({ name: 'faction_level', type: 'int', default: 5 })|factionLevel|
+  @Column({|name|
+  @Column({|name|
+===character_locations|E:\code\nest\packages-game\game-server\src\modules\character\entities\character-location.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'character_id', type: 'bigint' })|characterId|
+  @Column({ name: 'map_id', type: 'varchar', length: 64, default: 'map_001' })|mapId|
+  @Column({ name: 'land_id', type: 'varchar', length: 64, nullable: true })|landId|
+  @Column({ type: 'enum', enum: Region, default: Region.CENTRAL_CITY })|region|
+  @Column({ name: 'pos_x', type: 'int', default: 0 })|posX|
+  @Column({ name: 'pos_y', type: 'int', default: 0 })|posY|
+  @Column({ name: 'pos_z', type: 'int', default: 0 })|posZ|
+  @Column({ type: 'varchar', length: 64, nullable: true })|building|
+  @Column({ type: 'boolean', default: false })|indoors|
+  @Column({ name: 'last_move_at', type: 'timestamp', nullable: true })|lastMoveAt|
+  @Column({ name: 'path_history', type: 'jsonb', default: [] })|pathHistory|
+===character_martial_arts|E:\code\nest\packages-game\game-server\src\modules\character\entities\character-martial-art.entity.ts
+  @Index(['characterId', 'artType'], { unique: true })||
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'character_id', type: 'bigint' })|characterId|
+  @ManyToOne(() => Character)||
+  @Column({ name: 'art_type', type: 'enum', enum: MartialArtType })|artType|
+  @Column({ type: 'int', default: 0 })|level|
+  @Column({ type: 'jsonb', default: [] })|skills|
+===character_memories|E:\code\nest\packages-game\game-server\src\modules\character\entities\character-memory.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'character_id', type: 'bigint' })|characterId|
+  @Column({ type: 'jsonb', default: [] })|employers|
+  @Column({ type: 'jsonb', default: [] })|interactions|
+  @Column({ type: 'jsonb', default: [] })|secrets|
+  @Column({ type: 'jsonb', default: [] })|friends|
+  @Column({ type: 'jsonb', default: [] })|enemies|
+  @Column({ type: 'jsonb', default: [] })|rumors|
+===character_needs|E:\code\nest\packages-game\game-server\src\modules\character\entities\character-needs.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'character_id', type: 'bigint' })|characterId|
+  @Column({ type: 'int', default: 50 })|survival|
+  @Column({ type: 'int', default: 50 })|safety|
+  @Column({ type: 'int', default: 50 })|belonging|
+  @Column({ type: 'int', default: 50 })|esteem|
+  @Column({ type: 'int', default: 50 })|actualization|
+===character_profiles|E:\code\nest\packages-game\game-server\src\modules\character\entities\character-profile.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'character_id', type: 'bigint' })|characterId|
+  @Column({ type: 'jsonb', default: {} })|avatar|
+  @Column({ type: 'jsonb', default: {} })|videos|
+  @Column({ type: 'jsonb', default: {} })|bio|
+  @Column({ type: 'jsonb', default: {} })|background|
+===character_qualifications|E:\code\nest\packages-game\game-server\src\modules\character\entities\character-qualification.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'character_id', type: 'bigint' })|characterId|
+  @Column({ type: 'int', default: 2 })|qualification|
+  @Column({|name|
+  @Column({ name: 'is_consumable', type: 'boolean', default: false })|isConsumable|
+===character_relationships|E:\code\nest\packages-game\game-server\src\modules\character\entities\character-relationship.entity.ts
+  @Index(['characterId', 'targetId'])||
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'character_id', type: 'bigint' })|characterId|
+  @ManyToOne(() => Character)||
+  @Column({ name: 'target_id', type: 'bigint' })|targetId|
+  @Column({ type: 'int', default: 0 })|favorability|
+  @Column({|type|
+  @Column({|type|
+  @Column({ type: 'jsonb', default: [] })|history|
+  @Column({ type: 'jsonb', default: {} })|triggers|
+===character_resources|E:\code\nest\packages-game\game-server\src\modules\character\entities\character-resource.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'character_id', type: 'bigint' })|characterId|
+  @Column({ type: 'int', default: 0 })|food|
+  @Column({ type: 'int', default: 0 })|wood|
+  @Column({ type: 'int', default: 0 })|iron|
+  @Column({ type: 'int', default: 0 })|herb|
+  @Column({ type: 'int', default: 0 })|gold|
+===character_special_effects|E:\code\nest\packages-game\game-server\src\modules\character\entities\character-special-effect.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'character_id', type: 'bigint' })|characterId|
+  @Column({ type: 'varchar', length: 64 })|code|
+  @Column({ type: 'varchar', length: 100 })|name|
+  @Column({ type: 'varchar', length: 255, nullable: true })|description|
+  @Column({ type: 'boolean', default: true })|active|
+  @Column({ type: 'jsonb', default: {} })|params|
+===character_specialties|E:\code\nest\packages-game\game-server\src\modules\character\entities\character-specialty.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'character_id', type: 'bigint' })|characterId|
+  @Column({ name: 'primary_specialty', type: 'varchar', length: 50 })|primarySpecialty|
+  @Column({ name: 'secondary_specialties', type: 'jsonb', default: [] })|secondarySpecialties|
+  @Column({ type: 'jsonb', default: { primary: 1.0, secondary: 1.0 } })|efficiency|
+===character_statuses|E:\code\nest\packages-game\game-server\src\modules\character\entities\character-status.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'character_id', type: 'bigint' })|characterId|
+  @Column({ type: 'int', default: 100 })|health|
+  @Column({ type: 'int', default: 100 })|mana|
+  @Column({ name: 'max_mana', type: 'int', default: 100 })|maxMana|
+  @Column({ type: 'bigint', default: '0' })|wealth|
+  @Column({ type: 'int', default: 50 })|reputation|
+  @Column({ name: 'is_alive', type: 'boolean', default: true })|isAlive|
+  @Column({ name: 'death_cause', type: 'varchar', length: 255, nullable: true })|deathCause|
+  @Column({ name: 'death_date', type: 'timestamp', nullable: true })|deathDate|
+  @Column({ type: 'int', default: 1 })|season|
+  @Column({ type: 'jsonb', default: [] })|family|
+===characters|E:\code\nest\packages-game\game-server\src\modules\character\entities\character.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Index()||
+  @Column({ name: 'player_id', type: 'bigint', nullable: true })|playerId|
+  @Column({ type: 'varchar', length: 20 })|name|
+  @Column({ type: 'varchar', length: 50 })|nickname|
+  @Column({ type: 'enum', enum: Profession })|profession|
+  @Column({ type: 'enum', enum: Gender })|gender|
+  @Column({ type: 'int' })|age|
+  @Column({ type: 'varchar', length: 20, nullable: true })|birthday|
+  @Column({ name: 'is_npc', type: 'boolean', default: false })|isNpc|
+===chat_messages|E:\code\nest\packages-game\game-server\src\modules\chat\entities\chat-message.entity.ts
+  @Index('idx_chat_channel', ['channel'])||
+  @Index('idx_chat_sender', ['senderId'])||
+  @Index('idx_chat_recipient', ['recipientId'])||
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ type: 'enum', enum: ChatChannel })|channel|
+  @Column({ name: 'sender_id', type: 'bigint' })|senderId|
+  @Column({ name: 'sender_name', type: 'varchar', length: 64 })|senderName|
+  @Column({ name: 'recipient_id', type: 'bigint', nullable: true })|recipientId|
+  @Column({ name: 'guild_id', type: 'bigint', nullable: true })|guildId|
+  @Column({ type: 'text' })|content|
+===combat_logs|E:\code\nest\packages-game\game-server\src\modules\combat\entities\combat-log.entity.ts
+  @Index('idx_combat_attacker', ['attackerId'])||
+  @Index('idx_combat_defender', ['defenderId'])||
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'attacker_id', type: 'bigint' })|attackerId|
+  @Column({ name: 'defender_id', type: 'bigint' })|defenderId|
+  @Column({ name: 'scene_id', type: 'bigint', nullable: true })|sceneId|
+  @Column({ name: 'team_id', type: 'varchar', nullable: true })|teamId|
+  @Column({ name: 'combat_type', type: 'enum', enum: CombatType })|combatType|
+  @Column({ type: 'enum', enum: CombatResult })|result|
+  @Column({ name: 'damage_json', type: 'jsonb', default: '{}' })|damageJson|
+  @Column({ name: 'reward_json', type: 'jsonb', default: '{}' })|rewardJson|
+  @Column({ name: 'duration_ms', type: 'int', default: 0 })|durationMs|
+===remote_configs|E:\code\nest\packages-game\game-server\src\modules\config\entities\remote-config.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'config_key', type: 'varchar', length: 128, unique: true })|configKey|
+  @Column({ type: 'text' })|value|
+  @Column({ type: 'enum', enum: ConfigType, default: ConfigType.STRING })|configType|
+  @Column({ type: 'text', nullable: true })|description|
+  @Column({ type: 'int', default: 1 })|version|
+  @Column({ name: 'is_active', type: 'boolean', default: true })|isActive|
+===transactions|E:\code\nest\packages-game\game-server\src\modules\economy\entities\transaction.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Index()||
+  @Column({ name: 'player_id', type: 'bigint' })|playerId|
+  @Column({ name: 'tx_type', type: 'enum', enum: TransactionType })|txType|
+  @Column({ name: 'currency_type', type: 'enum', enum: CurrencyType })|currencyType|
+  @Column({ type: 'bigint' })|amount|
+  @Column({ type: 'varchar', length: 64 })|source|
+  @Column({ name: 'op_trace', type: 'varchar', length: 64 })|opTrace|
+  @Column({ name: 'order_no', type: 'varchar', length: 64, nullable: true })|orderNo|
+  @Column({ name: 'balance_after', type: 'bigint' })|balanceAfter|
+  @Column({ name: 'related_id', type: 'varchar', length: 64, nullable: true })|relatedId|
+===character_equipment|E:\code\nest\packages-game\game-server\src\modules\inventory\entities\character-equipment.entity.ts
+  @Index('idx_equip_character_slot', ['characterId', 'slot'], { unique: true })||
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Index()||
+  @Column({ name: 'character_id', type: 'bigint' })|characterId|
+  @Column({ type: 'enum', enum: EquipmentSlot })|slot|
+  @Column({ name: 'inventory_item_id', type: 'bigint' })|inventoryItemId|
+  @ManyToOne(() => InventoryItem)||
+===inventory_items|E:\code\nest\packages-game\game-server\src\modules\inventory\entities\inventory-item.entity.ts
+  @Index('idx_inv_player_template', ['playerId', 'itemTemplateId'])||
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Index()||
+  @Column({ name: 'player_id', type: 'bigint' })|playerId|
+  @Column({ name: 'item_template_id', type: 'bigint' })|itemTemplateId|
+  @Column({ type: 'int', default: 1 })|quantity|
+  @Column({ name: 'slot_index', type: 'int', default: 0 })|slotIndex|
+  @Column({|name|
+  @Column({ name: 'expire_at', type: 'timestamp', nullable: true })|expireAt|
+  @Column({ name: 'extra_attrs', type: 'jsonb', nullable: true })|extraAttrs|
+  @ManyToOne(() => ItemTemplate)||
+===item_templates|E:\code\nest\packages-game\game-server\src\modules\inventory\entities\item-template.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ type: 'varchar', length: 64 })|name|
+  @Column({|name|
+  @Column({ type: 'enum', enum: ItemRarity, default: ItemRarity.COMMON })|rarity|
+  @Column({ name: 'max_stack', type: 'int', default: 99 })|maxStack|
+  @Column({ name: 'sell_price', type: 'bigint', default: '0' })|sellPrice|
+  @Column({ name: 'can_trade', type: 'boolean', default: true })|canTrade|
+  @Column({ name: 'can_drop', type: 'boolean', default: true })|canDrop|
+  @Column({|name|
+  @Column({ type: 'varchar', length: 255, nullable: true })|description|
+  @Column({ name: 'config_json', type: 'jsonb', default: '{}' })|configJson|
+===player_item_change_logs|E:\code\nest\packages-game\game-server\src\modules\inventory\entities\player-item-change-log.entity.ts
+  @Index('idx_item_log_player', ['playerId'])||
+  @Index('idx_item_log_template', ['itemTemplateId'])||
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'player_id', type: 'bigint' })|playerId|
+  @Column({ name: 'item_template_id', type: 'bigint' })|itemTemplateId|
+  @Column({ name: 'change_type', type: 'enum', enum: ItemChangeType })|changeType|
+  @Column({ type: 'int' })|quantity|
+  @Column({ name: 'op_trace', type: 'varchar', length: 128 })|opTrace|
+  @Column({ name: 'balance_after', type: 'int' })|balanceAfter|
+===drop_templates|E:\code\nest\packages-game\game-server\src\modules\item-drop\entities\drop-template.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ type: 'varchar', length: 64 })|name|
+  @Column({ name: 'drop_items', type: 'jsonb', default: '[]' })|dropItems|
+  @Column({ name: 'drop_rate', type: 'float', default: 1.0 })|dropRate|
+  @Column({ name: 'max_drops', type: 'int', default: 1 })|maxDrops|
+===mails|E:\code\nest\packages-game\game-server\src\modules\mail\entities\mail.entity.ts
+  @Index('idx_mail_recipient', ['recipientId'])||
+  @Index('idx_mail_batch', ['batchId'])||
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'recipient_id', type: 'bigint', nullable: true })|recipientId|
+  @Column({|name|
+  @Column({ name: 'sender_id', type: 'bigint', nullable: true })|senderId|
+  @Column({ type: 'varchar', length: 128 })|title|
+  @Column({ type: 'text' })|content|
+  @Column({ name: 'attachment_json', type: 'jsonb', default: '{}' })|attachmentJson|
+  @Column({ name: 'batch_id', type: 'varchar', length: 64, nullable: true })|batchId|
+  @Column({ name: 'template_id', type: 'int', nullable: true })|templateId|
+  @Column({ name: 'is_read', type: 'boolean', default: false })|isRead|
+  @Column({ name: 'is_claimed', type: 'boolean', default: false })|isClaimed|
+  @Column({ name: 'expired_at', type: 'timestamp', nullable: true })|expiredAt|
+===notices|E:\code\nest\packages-game\game-server\src\modules\notice\entities\notice.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ type: 'varchar', length: 128 })|title|
+  @Column({ type: 'text' })|content|
+  @Column({|name|
+  @Column({ name: 'is_active', type: 'boolean', default: true })|isActive|
+  @Column({ name: 'sort_order', type: 'int', default: 0 })|sortOrder|
+  @Column({ name: 'start_at', type: 'timestamp', nullable: true })|startAt|
+  @Column({ name: 'end_at', type: 'timestamp', nullable: true })|endAt|
+  @Column({ name: 'created_by', type: 'bigint', nullable: true })|createdBy|
+===recharge_orders|E:\code\nest\packages-game\game-server\src\modules\payment\entities\recharge-order.entity.ts
+  @Index('idx_recharge_player_created', ['playerId', 'createdAt'])||
+  @Index('idx_recharge_status', ['status'])||
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'order_no', type: 'varchar', length: 64, unique: true })|orderNo|
+  @Column({ name: 'player_id', type: 'varchar', length: 64 })|playerId|
+  @Column({ name: 'product_id', type: 'varchar', length: 64 })|productId|
+  @Column({ type: 'bigint' })|amount|
+  @Column({ type: 'varchar', length: 16, default: 'CNY' })|currency|
+  @Column({|type|
+  @Column({ type: 'varchar', length: 32, default: 'mock' })|platform|
+  @Column({ name: 'callback_at', type: 'timestamp', nullable: true })|callbackAt|
+===recharge_products|E:\code\nest\packages-game\game-server\src\modules\payment\entities\recharge-product.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ type: 'varchar', length: 128 })|name|
+  @Column({ type: 'bigint' })|amount|
+  @Column({ name: 'reward_json', type: 'jsonb', default: '{}' })|rewardJson|
+  @Column({ name: 'is_hot', type: 'boolean', default: false })|isHot|
+  @Column({ name: 'sort_order', type: 'int', default: 0 })|sortOrder|
+===player_currencies|E:\code\nest\packages-game\game-server\src\modules\player\entities\player-currency.entity.ts
+  @Index(['playerId', 'currencyType'], { unique: true })||
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'player_id', type: 'bigint' })|playerId|
+  @ManyToOne(() => Player)||
+  @Column({ name: 'currency_type', type: 'enum', enum: CurrencyType })|currencyType|
+  @Column({ type: 'bigint', default: '0' })|amount|
+===players|E:\code\nest\packages-game\game-server\src\modules\player\entities\player.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Index({ unique: true })||
+  @Column({ name: 'account_id', type: 'bigint' })|accountId|
+  @Index({ unique: true })||
+  @Column({ type: 'varchar', length: 32 })|nickname|
+  @Column({ name: 'avatar_url', type: 'varchar', length: 255, nullable: true })|avatarUrl|
+  @Column({ type: 'int', default: 1 })|level|
+  @Column({ type: 'bigint', default: '0' })|exp|
+  @Column({ name: 'vip_level', type: 'int', default: 0 })|vipLevel|
+  @Column({ name: 'vip_exp', type: 'int', default: 0 })|vipExp|
+  @Column({ name: 'total_recharge', type: 'bigint', default: '0' })|totalRecharge|
+  @Column({|name|
+  @Column({ name: 'last_activity_at', type: 'timestamp', nullable: true })|lastActivityAt|
+  @Column({ name: 'last_logout_at', type: 'timestamp', nullable: true })|lastLogoutAt|
+  @Column({ name: 'online_status', type: 'boolean', default: false })|onlineStatus|
+===player_quests|E:\code\nest\packages-game\game-server\src\modules\quest\entities\player-quest.entity.ts
+  @Index('idx_player_quest_player', ['playerId'])||
+  @Index('idx_player_quest_template', ['questTemplateId'])||
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'player_id', type: 'bigint' })|playerId|
+  @Column({ name: 'quest_template_id', type: 'bigint' })|questTemplateId|
+  @Column({ type: 'int', default: 0 })|progress|
+  @Column({ type: 'enum', enum: QuestStatus, default: QuestStatus.NOT_STARTED })|status|
+  @Column({ name: 'complete_times', type: 'int', default: 0 })|completeTimes|
+  @Column({ name: 'accepted_at', type: 'timestamp', nullable: true })|acceptedAt|
+  @Column({ name: 'completed_at', type: 'timestamp', nullable: true })|completedAt|
+===quest_templates|E:\code\nest\packages-game\game-server\src\modules\quest\entities\quest-template.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ type: 'varchar', length: 128 })|name|
+  @Column({|name|
+  @Column({ name: 'min_level', type: 'int', default: 1 })|minLevel|
+  @Column({ name: 'accept_limit', type: 'int', default: 1 })|acceptLimit|
+  @Column({ name: 'auto_reward', type: 'boolean', default: false })|autoReward|
+  @Column({ name: 'target_json', type: 'jsonb', default: '{}' })|targetJson|
+  @Column({ name: 'reward_json', type: 'jsonb', default: '{}' })|rewardJson|
+  @Column({ name: 'prerequisite_ids', type: 'int', array: true, default: [] })|prerequisiteIds|
+  @Column({ type: 'boolean', default: false })|repeatable|
+===ranking_records|E:\code\nest\packages-game\game-server\src\modules\ranking\entities\ranking-record.entity.ts
+  @Index('idx_ranking_type', ['rankingType'])||
+  @Index('idx_ranking_player', ['playerId'])||
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'ranking_type', type: 'enum', enum: RankingType })|rankingType|
+  @Column({ name: 'player_id', type: 'bigint' })|playerId|
+  @Column({ name: 'player_name', type: 'varchar', length: 64 })|playerName|
+  @Column({ name: 'rank_value', type: 'bigint' })|rankValue|
+  @Column({ name: 'rank_order', type: 'int' })|rankOrder|
+===server_statuses|E:\code\nest\packages-game\game-server\src\modules\server-status\entities\server-status.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'server_name', type: 'varchar', length: 64 })|serverName|
+  @Column({|name|
+  @Column({ name: 'max_online', type: 'int', default: 0 })|maxOnline|
+  @Column({ name: 'current_online', type: 'int', default: 0 })|currentOnline|
+  @Column({ name: 'maintenance_message', type: 'text', nullable: true })|maintenanceMessage|
+  @Column({ name: 'version', type: 'varchar', length: 32, default: '1.0.0' })|version|
+===skill_templates|E:\code\nest\packages-game\game-server\src\modules\skill\entities\skill-template.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ type: 'varchar', length: 64 })|name|
+  @Column({|name|
+  @Column({|name|
+  @Column({ name: 'base_damage', type: 'int', default: 10 })|baseDamage|
+  @Column({ type: 'int', default: 5 })|cooldown|
+  @Column({ name: 'mp_cost', type: 'int', default: 0 })|mpCost|
+  @Column({ type: 'int', default: 1 })|range|
+  @Column({ name: 'effect_json', type: 'jsonb', default: '{}' })|effectJson|
+  @Column({ name: 'min_level', type: 'int', default: 1 })|minLevel|
+===friends|E:\code\nest\packages-game\game-server\src\modules\social\entities\friend.entity.ts
+  @Index('idx_friend_player', ['playerId'])||
+  @Index('idx_friend_target', ['friendId'])||
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'player_id', type: 'bigint' })|playerId|
+  @Column({ name: 'friend_id', type: 'bigint' })|friendId|
+  @Column({ type: 'enum', enum: FriendStatus, default: FriendStatus.PENDING })|status|
+  @Column({ type: 'varchar', length: 128, nullable: true })|remark|
+  @Column({ name: 'last_chat_time', type: 'timestamp', nullable: true })|lastChatTime|
+===guild_donates|E:\code\nest\packages-game\game-server\src\modules\social\entities\guild-donate.entity.ts
+  @Index('idx_donate_guild', ['guildId'])||
+  @Index('idx_donate_player', ['playerId'])||
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'guild_id', type: 'bigint' })|guildId|
+  @Column({ name: 'player_id', type: 'bigint' })|playerId|
+  @Column({ name: 'donate_type', type: 'enum', enum: DonateType })|donateType|
+  @Column({ type: 'bigint', default: '0' })|amount|
+  @Column({ name: 'contribution_gained', type: 'int', default: 0 })|contributionGained|
+===guild_members|E:\code\nest\packages-game\game-server\src\modules\social\entities\guild-member.entity.ts
+  @Index('idx_guild_member_guild', ['guildId'])||
+  @Index('idx_guild_member_player', ['playerId'])||
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'guild_id', type: 'bigint' })|guildId|
+  @Column({ name: 'player_id', type: 'bigint' })|playerId|
+  @Column({ type: 'enum', enum: GuildRole, default: GuildRole.MEMBER })|role|
+  @Column({ type: 'int', default: 0 })|contribution|
+===guilds|E:\code\nest\packages-game\game-server\src\modules\social\entities\guild.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ type: 'varchar', length: 64, unique: true })|name|
+  @Column({ name: 'leader_id', type: 'bigint' })|leaderId|
+  @Column({ type: 'int', default: 1 })|level|
+  @Column({ name: 'member_count', type: 'int', default: 1 })|memberCount|
+  @Column({ name: 'guild_icon', type: 'varchar', length: 128, nullable: true })|guildIcon|
+  @Column({ name: 'guild_buff', type: 'jsonb', default: '{}' })|guildBuff|
+  @Column({ type: 'text', nullable: true })|announcement|
+===auction_items|E:\code\nest\packages-game\game-server\src\modules\trade\entities\auction-item.entity.ts
+  @Index('idx_auction_status_expire', ['status', 'expireAt'])||
+  @Index('idx_auction_seller', ['sellerId'])||
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'seller_id', type: 'varchar', length: 64 })|sellerId|
+  @Column({ name: 'item_template_id', type: 'varchar', length: 64 })|itemTemplateId|
+  @Column({ name: 'item_name', type: 'varchar', length: 128 })|itemName|
+  @Column({ type: 'int' })|quantity|
+  @Column({ name: 'start_price', type: 'bigint' })|startPrice|
+  @Column({ name: 'current_price', type: 'bigint' })|currentPrice|
+  @Column({|name|
+  @Column({ name: 'expire_at', type: 'timestamp' })|expireAt|
+  @Column({ type: 'enum', enum: AuctionStatus, default: AuctionStatus.LISTED })|status|
+===trade_orders|E:\code\nest\packages-game\game-server\src\modules\trade\entities\trade-order.entity.ts
+  @Index('idx_trade_seller_status', ['sellerId', 'status'])||
+  @Index('idx_trade_buyer_status', ['buyerId', 'status'])||
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'seller_id', type: 'varchar', length: 64 })|sellerId|
+  @Column({ name: 'buyer_id', type: 'varchar', length: 64, nullable: true })|buyerId|
+  @Column({ name: 'item_template_id', type: 'varchar', length: 64 })|itemTemplateId|
+  @Column({ name: 'item_name', type: 'varchar', length: 128 })|itemName|
+  @Column({ type: 'int' })|quantity|
+  @Column({ name: 'price_per_unit', type: 'bigint' })|pricePerUnit|
+  @Column({|name|
+  @Column({ type: 'enum', enum: TradeStatus, default: TradeStatus.PENDING })|status|
+===vip_configs|E:\code\nest\packages-game\game-server\src\modules\vip\entities\vip-config.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ type: 'int', unique: true })|level|
+  @Column({ name: 'required_exp', type: 'int' })|requiredExp|
+  @Column({ name: 'daily_reward_json', type: 'jsonb', default: '{}' })|dailyRewardJson|
+  @Column({ name: 'privilege_json', type: 'jsonb', default: '{}' })|privilegeJson|
+===monster_templates|E:\code\nest\packages-game\game-server\src\modules\world\entities\monster-template.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ type: 'varchar', length: 64 })|name|
+  @Column({ name: 'res_key', type: 'varchar', length: 128 })|resKey|
+  @Column({ type: 'float', default: 1.0 })|scale|
+  @Column({ name: 'base_hp', type: 'bigint', default: '100' })|baseHp|
+  @Column({ name: 'base_atk', type: 'int', default: 10 })|baseAtk|
+  @Column({ name: 'drop_template_id', type: 'bigint', nullable: true })|dropTemplateId|
+  @Column({ name: 'refresh_cd', type: 'int', default: 30 })|refreshCd|
+  @Column({ name: 'aggro_range', type: 'int', default: 5 })|aggroRange|
+  @Column({|name|
+  @Column({ type: 'jsonb', default: '{}' })|attr|
+===npc_templates|E:\code\nest\packages-game\game-server\src\modules\world\entities\npc-template.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ type: 'varchar', length: 64 })|name|
+  @Column({ name: 'res_key', type: 'varchar', length: 128 })|resKey|
+  @Column({ type: 'float', default: 1.0 })|scale|
+  @Column({ name: 'default_anim', type: 'varchar', length: 64, nullable: true })|defaultAnim|
+  @Column({|name|
+  @Column({ name: 'dialogue_id', type: 'int', nullable: true })|dialogueId|
+  @Column({ name: 'move_range', type: 'int', default: 0 })|moveRange|
+  @Column({ name: 'is_auto_wander', type: 'boolean', default: false })|isAutoWander|
+  @Column({ type: 'jsonb', default: '{}' })|attr|
+===object_templates|E:\code\nest\packages-game\game-server\src\modules\world\entities\object-template.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ type: 'varchar', length: 64 })|name|
+  @Column({ name: 'res_key', type: 'varchar', length: 128 })|resKey|
+  @Column({ type: 'enum', enum: ObjectType, default: ObjectType.CHEST })|type|
+  @Column({ name: 'interact_cd', type: 'int', default: 0 })|interactCd|
+  @Column({ type: 'jsonb', nullable: true })|reward|
+  @Column({ name: 'anim_open', type: 'varchar', length: 64, nullable: true })|animOpen|
+  @Column({ name: 'is_one_time', type: 'boolean', default: false })|isOneTime|
+===scene_entity_spawns|E:\code\nest\packages-game\game-server\src\modules\world\entities\scene-entity-spawn.entity.ts
+  @Index('idx_spawn_scene', ['sceneId'])||
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'scene_id', type: 'bigint' })|sceneId|
+  @Column({ name: 'entity_type', type: 'enum', enum: EntityType })|entityType|
+  @Column({ name: 'template_id', type: 'bigint' })|templateId|
+  @Column({ name: 'spawn_x', type: 'int', default: 0 })|spawnX|
+  @Column({ name: 'spawn_y', type: 'int', default: 0 })|spawnY|
+  @Column({ name: 'spawn_rotation', type: 'int', default: 0 })|spawnRotation|
+  @Column({ name: 'spawn_count', type: 'int', default: 1 })|spawnCount|
+  @Column({ name: 'spawn_radius', type: 'int', default: 0 })|spawnRadius|
+  @Column({ name: 'is_active', type: 'boolean', default: true })|isActive|
+===scene_triggers|E:\code\nest\packages-game\game-server\src\modules\world\entities\scene-trigger.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ name: 'trigger_type', type: 'enum', enum: TriggerType })|triggerType|
+  @Column({ name: 'area_x', type: 'int', default: 0 })|areaX|
+  @Column({ name: 'area_y', type: 'int', default: 0 })|areaY|
+  @Column({ name: 'area_w', type: 'int', default: 100 })|areaW|
+  @Column({ name: 'area_h', type: 'int', default: 100 })|areaH|
+  @Column({ name: 'target_scene_id', type: 'bigint', nullable: true })|targetSceneId|
+  @Column({ name: 'story_id', type: 'int', nullable: true })|storyId|
+  @Column({ type: 'jsonb', nullable: true })|condition|
+  @Column({ name: 'once_only', type: 'boolean', default: false })|onceOnly|
+===scenes|E:\code\nest\packages-game\game-server\src\modules\world\entities\scene.entity.ts
+  @PrimaryGeneratedColumn({ type: 'bigint' })|id|
+  @Column({ type: 'varchar', length: 64 })|name|
+  @Column({|name|
+  @Column({ name: 'map_res_key', type: 'varchar', length: 128 })|mapResKey|
+  @Column({ name: 'map_width', type: 'int', default: 1000 })|mapWidth|
+  @Column({ name: 'map_height', type: 'int', default: 1000 })|mapHeight|
+  @Column({ name: 'layer_config', type: 'jsonb', default: '{}' })|layerConfig|
+  @Column({ name: 'refresh_rule', type: 'jsonb', nullable: true })|refreshRule|
+  @Column({ name: 'trigger_group_ids', type: 'int', array: true, default: [] })|triggerGroupIds|
+  @Column({ name: 'min_level', type: 'int', default: 1 })|minLevel|
+  @Column({ name: 'max_players', type: 'int', default: 100 })|maxPlayers|
+  @Column({ type: 'enum', enum: SceneStatus, default: SceneStatus.OPEN })|status|

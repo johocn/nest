@@ -1,0 +1,928 @@
+<section class="dict-chapter" id="chapter16">
+<h2 class="ch-title">第 16 章 · 数据字典全集</h2>
+<p class="ch-desc">共 64 张表、602 个字段。字段类型与默认值取自生产库 <code>game_server</code> 实际结构；说明按源码实体语义整理。枚举类型取值详见<b>附录 B 枚举全集</b>。</p>
+<div class="dict-toc">
+<a href="#dict-account_login_logs">account_login_logs (7)</a>
+<a href="#dict-achievement_templates">achievement_templates (12)</a>
+<a href="#dict-activity_templates">activity_templates (14)</a>
+<a href="#dict-admin_users">admin_users (8)</a>
+<a href="#dict-auction_items">auction_items (12)</a>
+<a href="#dict-auth_accounts">auth_accounts (14)</a>
+<a href="#dict-buff_templates">buff_templates (11)</a>
+<a href="#dict-character_attributes">character_attributes (10)</a>
+<a href="#dict-character_combat_styles">character_combat_styles (3)</a>
+<a href="#dict-character_companions">character_companions (9)</a>
+<a href="#dict-character_consumptions">character_consumptions (7)</a>
+<a href="#dict-character_darkened">character_darkened (9)</a>
+<a href="#dict-character_equipment">character_equipment (6)</a>
+<a href="#dict-character_espionages">character_espionages (7)</a>
+<a href="#dict-character_factions">character_factions (7)</a>
+<a href="#dict-character_locations">character_locations (12)</a>
+<a href="#dict-character_martial_arts">character_martial_arts (5)</a>
+<a href="#dict-character_memories">character_memories (8)</a>
+<a href="#dict-character_needs">character_needs (7)</a>
+<a href="#dict-character_profiles">character_profiles (6)</a>
+<a href="#dict-character_qualifications">character_qualifications (5)</a>
+<a href="#dict-character_relationships">character_relationships (8)</a>
+<a href="#dict-character_resources">character_resources (7)</a>
+<a href="#dict-character_special_effects">character_special_effects (7)</a>
+<a href="#dict-character_specialties">character_specialties (5)</a>
+<a href="#dict-character_statuses">character_statuses (12)</a>
+<a href="#dict-characters">characters (12)</a>
+<a href="#dict-chat_messages">chat_messages (8)</a>
+<a href="#dict-combat_logs">combat_logs (11)</a>
+<a href="#dict-drop_templates">drop_templates (8)</a>
+<a href="#dict-friends">friends (7)</a>
+<a href="#dict-gm_operate_logs">gm_operate_logs (7)</a>
+<a href="#dict-guild_donates">guild_donates (7)</a>
+<a href="#dict-guild_members">guild_members (6)</a>
+<a href="#dict-guilds">guilds (10)</a>
+<a href="#dict-inventory_items">inventory_items (11)</a>
+<a href="#dict-item_templates">item_templates (14)</a>
+<a href="#dict-mails">mails (13)</a>
+<a href="#dict-monster_templates">monster_templates (14)</a>
+<a href="#dict-notices">notices (12)</a>
+<a href="#dict-npc_templates">npc_templates (13)</a>
+<a href="#dict-object_templates">object_templates (11)</a>
+<a href="#dict-player_achievements">player_achievements (9)</a>
+<a href="#dict-player_activities">player_activities (9)</a>
+<a href="#dict-player_behavior_logs">player_behavior_logs (6)</a>
+<a href="#dict-player_currencies">player_currencies (5)</a>
+<a href="#dict-player_item_change_logs">player_item_change_logs (8)</a>
+<a href="#dict-player_quests">player_quests (9)</a>
+<a href="#dict-players">players (16)</a>
+<a href="#dict-quest_templates">quest_templates (13)</a>
+<a href="#dict-ranking_records">ranking_records (7)</a>
+<a href="#dict-recharge_orders">recharge_orders (11)</a>
+<a href="#dict-recharge_products">recharge_products (9)</a>
+<a href="#dict-remote_configs">remote_configs (10)</a>
+<a href="#dict-retention_stats">retention_stats (8)</a>
+<a href="#dict-scene_entity_spawns">scene_entity_spawns (13)</a>
+<a href="#dict-scene_triggers">scene_triggers (13)</a>
+<a href="#dict-scenes">scenes (15)</a>
+<a href="#dict-server_statuses">server_statuses (9)</a>
+<a href="#dict-sign_in_records">sign_in_records (8)</a>
+<a href="#dict-skill_templates">skill_templates (13)</a>
+<a href="#dict-trade_orders">trade_orders (11)</a>
+<a href="#dict-transactions">transactions (11)</a>
+<a href="#dict-vip_configs">vip_configs (7)</a>
+</div>
+<div class="dict-table" id="dict-account_login_logs">
+<h3>📄 account_login_logs <span class="tbl-meta">7 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>account_id</code></td><td>bigint</td><td>否</td><td></td><td>账号ID</td></tr>
+<tr><td><code>login_ip</code></td><td>varchar</td><td>否</td><td></td><td>登录IP（IPv4/IPv6）</td></tr>
+<tr><td><code>device_info</code></td><td>varchar</td><td>是</td><td></td><td>设备信息（UA/设备型号）</td></tr>
+<tr><td><code>region</code></td><td>varchar</td><td>是</td><td></td><td>登录地区</td></tr>
+<tr><td><code>login_result</code></td><td>varchar</td><td>否</td><td></td><td>登录结果（success/failed）</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-achievement_templates">
+<h3>📄 achievement_templates <span class="tbl-meta">12 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>name</code></td><td>varchar</td><td>否</td><td></td><td>成就名称</td></tr>
+<tr><td><code>description</code></td><td>text</td><td>是</td><td></td><td>成就描述</td></tr>
+<tr><td><code>category</code></td><td>templates_category 枚举</td><td>否</td><td></td><td>成就分类（战斗/社交/经济/探索/特殊）</td></tr>
+<tr><td><code>condition</code></td><td>templates_condition 枚举</td><td>否</td><td></td><td>达成条件类型（升级/击杀/任务/赚钱/入帮/交友/获胜）</td></tr>
+<tr><td><code>target_value</code></td><td>int</td><td>否</td><td></td><td>达成目标数值</td></tr>
+<tr><td><code>reward_json</code></td><td>jsonb</td><td>否</td><td>{}'::jsonb</td><td>奖励配置JSON</td></tr>
+<tr><td><code>icon_url</code></td><td>varchar</td><td>是</td><td></td><td>图标URL</td></tr>
+<tr><td><code>sort_order</code></td><td>int</td><td>否</td><td>0</td><td>排序权重</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+<tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
+<tr><td><code>deleted_at</code></td><td>timestamp</td><td>是</td><td></td><td>软删除时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-activity_templates">
+<h3>📄 activity_templates <span class="tbl-meta">14 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>name</code></td><td>varchar</td><td>否</td><td></td><td>活动名称</td></tr>
+<tr><td><code>activity_type</code></td><td>templates_activity_type 枚举</td><td>否</td><td></td><td>活动类型（限时/签到/天梯）</td></tr>
+<tr><td><code>description</code></td><td>text</td><td>是</td><td></td><td>活动描述</td></tr>
+<tr><td><code>start_at</code></td><td>timestamp</td><td>否</td><td></td><td>开始时间</td></tr>
+<tr><td><code>end_at</code></td><td>timestamp</td><td>否</td><td></td><td>结束时间</td></tr>
+<tr><td><code>status</code></td><td>templates_status 枚举</td><td>否</td><td>draft'::activity_templates_status_enum</td><td>状态（draft草稿/published发布/ended结束）</td></tr>
+<tr><td><code>sign_in_cycle</code></td><td>templates_sign_in_cycle 枚举</td><td>是</td><td></td><td>签到周期（日/周/月）</td></tr>
+<tr><td><code>reward_json</code></td><td>jsonb</td><td>否</td><td>{}'::jsonb</td><td>奖励配置JSON</td></tr>
+<tr><td><code>condition_json</code></td><td>jsonb</td><td>否</td><td>{}'::jsonb</td><td>参与条件JSON（等级/任务/社交门槛）</td></tr>
+<tr><td><code>max_participants</code></td><td>int</td><td>否</td><td>0</td><td>最大参与人数（0=不限）</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+<tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
+<tr><td><code>deleted_at</code></td><td>timestamp</td><td>是</td><td></td><td>软删除时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-admin_users">
+<h3>📄 admin_users <span class="tbl-meta">8 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>username</code></td><td>varchar</td><td>否</td><td></td><td>管理员用户名（唯一）</td></tr>
+<tr><td><code>password_hash</code></td><td>varchar</td><td>否</td><td></td><td>密码哈希</td></tr>
+<tr><td><code>role</code></td><td>users_role 枚举</td><td>否</td><td>viewer'::admin_users_role_enum</td><td>角色（super_admin超级管理员/admin管理员/operator运营/viewer只读）</td></tr>
+<tr><td><code>is_active</code></td><td>bool</td><td>否</td><td>true</td><td>是否启用</td></tr>
+<tr><td><code>last_login_at</code></td><td>timestamp</td><td>是</td><td></td><td>最后登录时间</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+<tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-auction_items">
+<h3>📄 auction_items <span class="tbl-meta">12 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>seller_id</code></td><td>varchar</td><td>否</td><td></td><td>卖家玩家ID</td></tr>
+<tr><td><code>item_template_id</code></td><td>varchar</td><td>否</td><td></td><td>物品模板ID</td></tr>
+<tr><td><code>item_name</code></td><td>varchar</td><td>否</td><td></td><td>物品名称快照</td></tr>
+<tr><td><code>quantity</code></td><td>int</td><td>否</td><td></td><td>上架数量</td></tr>
+<tr><td><code>start_price</code></td><td>bigint</td><td>否</td><td></td><td>起拍价</td></tr>
+<tr><td><code>current_price</code></td><td>bigint</td><td>否</td><td></td><td>当前出价</td></tr>
+<tr><td><code>current_bidder_id</code></td><td>varchar</td><td>是</td><td></td><td>当前最高出价人</td></tr>
+<tr><td><code>expire_at</code></td><td>timestamp</td><td>否</td><td></td><td>拍卖到期时间</td></tr>
+<tr><td><code>status</code></td><td>items_status 枚举</td><td>否</td><td>listed'::auction_items_status_enum</td><td>状态（listed在售/bid竞价中/sold已售/expired流拍/cancelled取消）</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+<tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-auth_accounts">
+<h3>📄 auth_accounts <span class="tbl-meta">14 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>username</code></td><td>varchar</td><td>否</td><td></td><td>登录用户名（唯一）</td></tr>
+<tr><td><code>password_hash</code></td><td>varchar</td><td>否</td><td></td><td>密码哈希（bcrypt）</td></tr>
+<tr><td><code>account_type</code></td><td>accounts_account_type 枚举</td><td>否</td><td>normal'::auth_accounts_account_type_enum</td><td>账号类型（normal普通/guest游客/wechat微信/google谷歌）</td></tr>
+<tr><td><code>device_id</code></td><td>varchar</td><td>是</td><td></td><td>设备ID（游客账号绑定）</td></tr>
+<tr><td><code>bind_phone</code></td><td>varchar</td><td>是</td><td></td><td>绑定手机号</td></tr>
+<tr><td><code>bind_email</code></td><td>varchar</td><td>是</td><td></td><td>绑定邮箱</td></tr>
+<tr><td><code>ban_reason</code></td><td>varchar</td><td>是</td><td></td><td>封禁原因</td></tr>
+<tr><td><code>ban_expire_at</code></td><td>timestamp</td><td>是</td><td></td><td>封禁到期时间</td></tr>
+<tr><td><code>token_version</code></td><td>int</td><td>否</td><td>0</td><td>令牌版本号（+1强制旧令牌失效）</td></tr>
+<tr><td><code>last_login_at</code></td><td>timestamp</td><td>是</td><td></td><td>最后登录时间</td></tr>
+<tr><td><code>status</code></td><td>accounts_status 枚举</td><td>否</td><td>active'::auth_accounts_status_enum</td><td>状态（active正常/banned封禁）</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+<tr><td><code>deleted_at</code></td><td>timestamp</td><td>是</td><td></td><td>软删除时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-buff_templates">
+<h3>📄 buff_templates <span class="tbl-meta">11 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>name</code></td><td>varchar</td><td>否</td><td></td><td>Buff名称</td></tr>
+<tr><td><code>buffType</code></td><td>templates_bufftype 枚举</td><td>否</td><td>buff'::buff_templates_bufftype_enum</td><td>类型（buff增益/debuff减益）</td></tr>
+<tr><td><code>target</code></td><td>templates_target 枚举</td><td>否</td><td>target'::buff_templates_target_enum</td><td>作用目标（self己方/target敌方）</td></tr>
+<tr><td><code>duration</code></td><td>int</td><td>否</td><td>10</td><td>持续秒数</td></tr>
+<tr><td><code>stat_modifiers</code></td><td>jsonb</td><td>否</td><td>{}'::jsonb</td><td>属性修正JSON（力量/速度/防御等）</td></tr>
+<tr><td><code>description</code></td><td>varchar</td><td>是</td><td></td><td>描述</td></tr>
+<tr><td><code>icon_key</code></td><td>varchar</td><td>是</td><td></td><td>图标键</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+<tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
+<tr><td><code>deleted_at</code></td><td>timestamp</td><td>是</td><td></td><td>软删除时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-character_attributes">
+<h3>📄 character_attributes <span class="tbl-meta">10 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>character_id</code></td><td>bigint</td><td>否</td><td></td><td>角色ID</td></tr>
+<tr><td><code>strength</code></td><td>int</td><td>否</td><td>10</td><td>力量（拳脚物理威力，基础10）</td></tr>
+<tr><td><code>speed</code></td><td>int</td><td>否</td><td>10</td><td>速度（出手/移动，基础10）</td></tr>
+<tr><td><code>defense</code></td><td>int</td><td>否</td><td>10</td><td>防御（减伤，基础10）</td></tr>
+<tr><td><code>intelligence</code></td><td>int</td><td>否</td><td>10</td><td>智力（内功/科学/玄学威力，基础10）</td></tr>
+<tr><td><code>comprehension</code></td><td>int</td><td>否</td><td>10</td><td>悟性（修炼/学习速度，基础10）</td></tr>
+<tr><td><code>loyalty</code></td><td>int</td><td>否</td><td>50</td><td>忠诚度（当前，基础50）</td></tr>
+<tr><td><code>loyalty_base</code></td><td>int</td><td>否</td><td>50</td><td>忠诚度基准值（可恢复上限）</td></tr>
+<tr><td><code>combat_power</code></td><td>bigint</td><td>否</td><td>0'::bigint</td><td>综合战力（榜单/匹配用）</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-character_combat_styles">
+<h3>📄 character_combat_styles <span class="tbl-meta">3 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>character_id</code></td><td>bigint</td><td>否</td><td></td><td>角色ID</td></tr>
+<tr><td><code>style</code></td><td>combat_styles_style 枚举</td><td>否</td><td>balanced'::character_combat_styles_style…</td><td>战斗风格（aggressive激进/defensive防御/balanced均衡/tactical战术）</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-character_companions">
+<h3>📄 character_companions <span class="tbl-meta">9 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>character_id</code></td><td>bigint</td><td>否</td><td></td><td>角色ID</td></tr>
+<tr><td><code>is_following</code></td><td>bool</td><td>否</td><td>false</td><td>是否跟随</td></tr>
+<tr><td><code>follow_start_at</code></td><td>timestamp</td><td>是</td><td></td><td>跟随开始时间</td></tr>
+<tr><td><code>follow_end_at</code></td><td>timestamp</td><td>是</td><td></td><td>跟随结束时间</td></tr>
+<tr><td><code>companion_type</code></td><td>companions_companion_type 枚举</td><td>否</td><td>none'::character_companions_companion_ty…</td><td>伙伴类型</td></tr>
+<tr><td><code>owner_id</code></td><td>bigint</td><td>是</td><td></td><td>归属者角色ID</td></tr>
+<tr><td><code>sacrifice_used</code></td><td>bool</td><td>否</td><td>false</td><td>是否已触发牺牲（剧情）</td></tr>
+<tr><td><code>last_words</code></td><td>varchar</td><td>是</td><td></td><td>遗言（牺牲时记录）</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-character_consumptions">
+<h3>📄 character_consumptions <span class="tbl-meta">7 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>character_id</code></td><td>bigint</td><td>否</td><td></td><td>角色ID</td></tr>
+<tr><td><code>food_per_day</code></td><td>int</td><td>否</td><td>9</td><td>每日食物消耗量</td></tr>
+<tr><td><code>min_food</code></td><td>int</td><td>否</td><td>3</td><td>最低食物线（低于进入饥饿）</td></tr>
+<tr><td><code>last_consume_at</code></td><td>timestamp</td><td>是</td><td></td><td>上次消耗结算时间</td></tr>
+<tr><td><code>hunger_days</code></td><td>int</td><td>否</td><td>0</td><td>连续饥饿天数</td></tr>
+<tr><td><code>status</code></td><td>consumptions_status 枚举</td><td>否</td><td>normal'::character_consumptions_status_e…</td><td>饥饿状态（well_fed饱食/normal正常/hungry饥饿/starving濒死/dead饿死）</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-character_darkened">
+<h3>📄 character_darkened <span class="tbl-meta">9 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>character_id</code></td><td>bigint</td><td>否</td><td></td><td>角色ID</td></tr>
+<tr><td><code>is_darkened</code></td><td>bool</td><td>否</td><td>false</td><td>是否入魔</td></tr>
+<tr><td><code>darkened_at</code></td><td>timestamp</td><td>是</td><td></td><td>入魔时间</td></tr>
+<tr><td><code>darkened_reason</code></td><td>varchar</td><td>是</td><td></td><td>入魔原因（剧情事件）</td></tr>
+<tr><td><code>original_name</code></td><td>varchar</td><td>是</td><td></td><td>入魔前原名</td></tr>
+<tr><td><code>darkened_name</code></td><td>varchar</td><td>是</td><td></td><td>入魔后魔名（隐藏身份）</td></tr>
+<tr><td><code>power_boost</code></td><td>float8</td><td>否</td><td>1.5'::double precision</td><td>战力倍率（默认1.5）</td></tr>
+<tr><td><code>hunting_target</code></td><td>bigint</td><td>是</td><td></td><td>猎杀目标角色ID（对抗玩法）</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-character_equipment">
+<h3>📄 character_equipment <span class="tbl-meta">6 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>character_id</code></td><td>bigint</td><td>否</td><td></td><td>角色ID</td></tr>
+<tr><td><code>slot</code></td><td>equipment_slot 枚举</td><td>否</td><td></td><td>装备槽位（weapon武器/helmet头盔/armor护甲/boots靴子/accessory饰品）</td></tr>
+<tr><td><code>inventory_item_id</code></td><td>bigint</td><td>否</td><td></td><td>对应背包物品ID</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+<tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-character_espionages">
+<h3>📄 character_espionages <span class="tbl-meta">7 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>character_id</code></td><td>bigint</td><td>否</td><td></td><td>角色ID</td></tr>
+<tr><td><code>can_spy</code></td><td>bool</td><td>否</td><td>false</td><td>是否可刺探情报</td></tr>
+<tr><td><code>can_infiltrate</code></td><td>bool</td><td>否</td><td>false</td><td>是否可渗透敌方</td></tr>
+<tr><td><code>espionage_level</code></td><td>int</td><td>否</td><td>0</td><td>谍报等级（社交核心成长）</td></tr>
+<tr><td><code>current_mission</code></td><td>jsonb</td><td>是</td><td></td><td>当前谍报任务JSON</td></tr>
+<tr><td><code>disguise</code></td><td>jsonb</td><td>是</td><td></td><td>伪装身份JSON（渗透用）</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-character_factions">
+<h3>📄 character_factions <span class="tbl-meta">7 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>character_id</code></td><td>bigint</td><td>否</td><td></td><td>角色ID</td></tr>
+<tr><td><code>faction</code></td><td>factions_faction 枚举</td><td>否</td><td>neutral'::character_factions_faction_enu…</td><td>阵营（righteous正/evil邪/neutral中立）</td></tr>
+<tr><td><code>faction_name</code></td><td>varchar</td><td>否</td><td>中立'::character varying</td><td>阵营名称（默认'中立'）</td></tr>
+<tr><td><code>faction_level</code></td><td>int</td><td>否</td><td>5</td><td>阵营声望等级（默认5）</td></tr>
+<tr><td><code>faction_title</code></td><td>varchar</td><td>是</td><td></td><td>阵营内称号</td></tr>
+<tr><td><code>faction_relations</code></td><td>jsonb</td><td>否</td><td>{"evil": 0, "neutral": 0, "righteous": 0…</td><td>三阵营好感度JSON</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-character_locations">
+<h3>📄 character_locations <span class="tbl-meta">12 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>character_id</code></td><td>bigint</td><td>否</td><td></td><td>角色ID</td></tr>
+<tr><td><code>map_id</code></td><td>varchar</td><td>否</td><td>map_001'::character varying</td><td>地图ID（默认map_001）</td></tr>
+<tr><td><code>land_id</code></td><td>varchar</td><td>是</td><td></td><td>地块ID</td></tr>
+<tr><td><code>region</code></td><td>locations_region 枚举</td><td>否</td><td>central_city'::character_locations_regio…</td><td>区域（central_city主城/black_forest黑森林/iron_mine铁矿/gold_plain金原/wilderness野外）</td></tr>
+<tr><td><code>pos_x</code></td><td>int</td><td>否</td><td>0</td><td>X坐标</td></tr>
+<tr><td><code>pos_y</code></td><td>int</td><td>否</td><td>0</td><td>Y坐标</td></tr>
+<tr><td><code>pos_z</code></td><td>int</td><td>否</td><td>0</td><td>Z坐标（高度层）</td></tr>
+<tr><td><code>building</code></td><td>varchar</td><td>是</td><td></td><td>所在建筑</td></tr>
+<tr><td><code>indoors</code></td><td>bool</td><td>否</td><td>false</td><td>是否室内</td></tr>
+<tr><td><code>last_move_at</code></td><td>timestamp</td><td>是</td><td></td><td>上次移动时间</td></tr>
+<tr><td><code>path_history</code></td><td>jsonb</td><td>否</td><td>[]'::jsonb</td><td>路径历史JSON（行为分析）</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-character_martial_arts">
+<h3>📄 character_martial_arts <span class="tbl-meta">5 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>character_id</code></td><td>bigint</td><td>否</td><td></td><td>角色ID</td></tr>
+<tr><td><code>art_type</code></td><td>martial_arts_art_type 枚举</td><td>否</td><td></td><td>武学类别（fist拳/palm掌/leg腿/weapon兵器）</td></tr>
+<tr><td><code>level</code></td><td>int</td><td>否</td><td>0</td><td>该类武学熟练等级</td></tr>
+<tr><td><code>skills</code></td><td>jsonb</td><td>否</td><td>[]'::jsonb</td><td>已学技能列表JSON</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-character_memories">
+<h3>📄 character_memories <span class="tbl-meta">8 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>character_id</code></td><td>bigint</td><td>否</td><td></td><td>角色ID</td></tr>
+<tr><td><code>employers</code></td><td>jsonb</td><td>否</td><td>[]'::jsonb</td><td>雇主记忆JSON（职业相关）</td></tr>
+<tr><td><code>interactions</code></td><td>jsonb</td><td>否</td><td>[]'::jsonb</td><td>互动记忆JSON（社交剧情）</td></tr>
+<tr><td><code>secrets</code></td><td>jsonb</td><td>否</td><td>[]'::jsonb</td><td>知晓的秘密JSON（情报）</td></tr>
+<tr><td><code>friends</code></td><td>jsonb</td><td>否</td><td>[]'::jsonb</td><td>朋友记忆JSON</td></tr>
+<tr><td><code>enemies</code></td><td>jsonb</td><td>否</td><td>[]'::jsonb</td><td>仇敌记忆JSON</td></tr>
+<tr><td><code>rumors</code></td><td>jsonb</td><td>否</td><td>[]'::jsonb</td><td>江湖传闻JSON（情报交易）</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-character_needs">
+<h3>📄 character_needs <span class="tbl-meta">7 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>character_id</code></td><td>bigint</td><td>否</td><td></td><td>角色ID</td></tr>
+<tr><td><code>survival</code></td><td>int</td><td>否</td><td>50</td><td>生存需求（食物/资源，默认50）</td></tr>
+<tr><td><code>safety</code></td><td>int</td><td>否</td><td>50</td><td>安全需求（默认50）</td></tr>
+<tr><td><code>belonging</code></td><td>int</td><td>否</td><td>50</td><td>归属需求（社交，默认50）</td></tr>
+<tr><td><code>esteem</code></td><td>int</td><td>否</td><td>50</td><td>尊重需求（声望，默认50）</td></tr>
+<tr><td><code>actualization</code></td><td>int</td><td>否</td><td>50</td><td>自我实现需求（武学巅峰，默认50）</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-character_profiles">
+<h3>📄 character_profiles <span class="tbl-meta">6 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>character_id</code></td><td>bigint</td><td>否</td><td></td><td>角色ID</td></tr>
+<tr><td><code>avatar</code></td><td>jsonb</td><td>否</td><td>{}'::jsonb</td><td>头像配置JSON</td></tr>
+<tr><td><code>videos</code></td><td>jsonb</td><td>否</td><td>{}'::jsonb</td><td>视频配置JSON</td></tr>
+<tr><td><code>bio</code></td><td>jsonb</td><td>否</td><td>{}'::jsonb</td><td>个人简介JSON</td></tr>
+<tr><td><code>background</code></td><td>jsonb</td><td>否</td><td>{}'::jsonb</td><td>背景故事JSON</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-character_qualifications">
+<h3>📄 character_qualifications <span class="tbl-meta">5 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>character_id</code></td><td>bigint</td><td>否</td><td></td><td>角色ID</td></tr>
+<tr><td><code>qualification</code></td><td>int</td><td>否</td><td>2</td><td>资质值（默认2，决定武学成长上限）</td></tr>
+<tr><td><code>qualification_type</code></td><td>qualifications_qualification_type 枚举</td><td>否</td><td>normal'::character_qualifications_qualif…</td><td>资质类型</td></tr>
+<tr><td><code>is_consumable</code></td><td>bool</td><td>否</td><td>false</td><td>是否消耗性资质</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-character_relationships">
+<h3>📄 character_relationships <span class="tbl-meta">8 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>character_id</code></td><td>bigint</td><td>否</td><td></td><td>角色ID</td></tr>
+<tr><td><code>target_id</code></td><td>bigint</td><td>否</td><td></td><td>关系目标角色ID</td></tr>
+<tr><td><code>favorability</code></td><td>int</td><td>否</td><td>0</td><td>好感度（社交积累）</td></tr>
+<tr><td><code>level</code></td><td>relationships_level 枚举</td><td>否</td><td>stranger'::character_relationships_level…</td><td>关系等级（stranger陌生/friend友人/confidant知己/enemy仇敌等）</td></tr>
+<tr><td><code>status</code></td><td>relationships_status 枚举</td><td>否</td><td>normal'::character_relationships_status_…</td><td>关系状态</td></tr>
+<tr><td><code>history</code></td><td>jsonb</td><td>否</td><td>[]'::jsonb</td><td>关系事件历史JSON</td></tr>
+<tr><td><code>triggers</code></td><td>jsonb</td><td>否</td><td>{}'::jsonb</td><td>触发记录JSON（剧情钩子）</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-character_resources">
+<h3>📄 character_resources <span class="tbl-meta">7 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>character_id</code></td><td>bigint</td><td>否</td><td></td><td>角色ID</td></tr>
+<tr><td><code>food</code></td><td>int</td><td>否</td><td>0</td><td>食物（生存资源）</td></tr>
+<tr><td><code>wood</code></td><td>int</td><td>否</td><td>0</td><td>木材（建造/生计）</td></tr>
+<tr><td><code>iron</code></td><td>int</td><td>否</td><td>0</td><td>铁（打造/武备）</td></tr>
+<tr><td><code>herb</code></td><td>int</td><td>否</td><td>0</td><td>草药（医术/炼丹）</td></tr>
+<tr><td><code>gold</code></td><td>int</td><td>否</td><td>0</td><td>金银（通用财富）</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-character_special_effects">
+<h3>📄 character_special_effects <span class="tbl-meta">7 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>character_id</code></td><td>bigint</td><td>否</td><td></td><td>角色ID</td></tr>
+<tr><td><code>code</code></td><td>varchar</td><td>否</td><td></td><td>效果编码（程序识别）</td></tr>
+<tr><td><code>name</code></td><td>varchar</td><td>否</td><td></td><td>效果名称</td></tr>
+<tr><td><code>description</code></td><td>varchar</td><td>是</td><td></td><td>效果描述</td></tr>
+<tr><td><code>active</code></td><td>bool</td><td>否</td><td>true</td><td>是否生效</td></tr>
+<tr><td><code>params</code></td><td>jsonb</td><td>否</td><td>{}'::jsonb</td><td>效果参数JSON</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-character_specialties">
+<h3>📄 character_specialties <span class="tbl-meta">5 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>character_id</code></td><td>bigint</td><td>否</td><td></td><td>角色ID</td></tr>
+<tr><td><code>primary_specialty</code></td><td>varchar</td><td>否</td><td></td><td>主特长（职业方向）</td></tr>
+<tr><td><code>secondary_specialties</code></td><td>jsonb</td><td>否</td><td>[]'::jsonb</td><td>副特长列表JSON</td></tr>
+<tr><td><code>efficiency</code></td><td>jsonb</td><td>否</td><td>{"primary": 1, "secondary": 1}'::jsonb</td><td>各特长效率系数JSON</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-character_statuses">
+<h3>📄 character_statuses <span class="tbl-meta">12 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>character_id</code></td><td>bigint</td><td>否</td><td></td><td>角色ID</td></tr>
+<tr><td><code>health</code></td><td>int</td><td>否</td><td>100</td><td>气血（生命，默认100）</td></tr>
+<tr><td><code>mana</code></td><td>int</td><td>否</td><td>100</td><td>内力（基础篇技能消耗，默认100）</td></tr>
+<tr><td><code>max_mana</code></td><td>int</td><td>否</td><td>100</td><td>内力上限</td></tr>
+<tr><td><code>wealth</code></td><td>bigint</td><td>否</td><td>0'::bigint</td><td>身家财富</td></tr>
+<tr><td><code>reputation</code></td><td>int</td><td>否</td><td>50</td><td>江湖声望（默认50，社交核心）</td></tr>
+<tr><td><code>is_alive</code></td><td>bool</td><td>否</td><td>true</td><td>是否存活（江湖死亡制）</td></tr>
+<tr><td><code>death_cause</code></td><td>varchar</td><td>是</td><td></td><td>死亡原因</td></tr>
+<tr><td><code>death_date</code></td><td>timestamp</td><td>是</td><td></td><td>死亡时间</td></tr>
+<tr><td><code>season</code></td><td>int</td><td>否</td><td>1</td><td>世代编号（江湖传承）</td></tr>
+<tr><td><code>family</code></td><td>jsonb</td><td>否</td><td>[]'::jsonb</td><td>家族成员JSON（传承/复仇）</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-characters">
+<h3>📄 characters <span class="tbl-meta">12 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>player_id</code></td><td>bigint</td><td>是</td><td></td><td>所属玩家ID（NPC为空）</td></tr>
+<tr><td><code>name</code></td><td>varchar</td><td>否</td><td></td><td>姓名</td></tr>
+<tr><td><code>nickname</code></td><td>varchar</td><td>否</td><td></td><td>昵称</td></tr>
+<tr><td><code>profession</code></td><td>profession 枚举</td><td>否</td><td></td><td>职业（farmer农夫/lumberjack樵夫/miner矿工/merchant商人/guard守卫/craftsman工匠/doctor医生/teacher教书/beggar乞丐/killer杀手/noble贵族/monk和尚/assassin刺客/spy密探/blacksmith铁匠/alchemist药师/scholar书生/general将军/thief小偷）</td></tr>
+<tr><td><code>gender</code></td><td>gender 枚举</td><td>否</td><td></td><td>性别（male/female）</td></tr>
+<tr><td><code>age</code></td><td>int</td><td>否</td><td></td><td>年龄（随赛季成长）</td></tr>
+<tr><td><code>birthday</code></td><td>varchar</td><td>是</td><td></td><td>生日（农历字符串）</td></tr>
+<tr><td><code>is_npc</code></td><td>bool</td><td>否</td><td>false</td><td>是否NPC</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+<tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
+<tr><td><code>deleted_at</code></td><td>timestamp</td><td>是</td><td></td><td>软删除时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-chat_messages">
+<h3>📄 chat_messages <span class="tbl-meta">8 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>channel</code></td><td>messages_channel 枚举</td><td>否</td><td></td><td>频道（world世界/private私聊/guild帮派）</td></tr>
+<tr><td><code>sender_id</code></td><td>bigint</td><td>否</td><td></td><td>发送者ID</td></tr>
+<tr><td><code>sender_name</code></td><td>varchar</td><td>否</td><td></td><td>发送者昵称快照</td></tr>
+<tr><td><code>recipient_id</code></td><td>bigint</td><td>是</td><td></td><td>接收者ID（私聊）</td></tr>
+<tr><td><code>guild_id</code></td><td>bigint</td><td>是</td><td></td><td>帮派ID（帮派频道）</td></tr>
+<tr><td><code>content</code></td><td>text</td><td>否</td><td></td><td>消息内容</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-combat_logs">
+<h3>📄 combat_logs <span class="tbl-meta">11 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>attacker_id</code></td><td>bigint</td><td>否</td><td></td><td>攻击方角色ID</td></tr>
+<tr><td><code>defender_id</code></td><td>bigint</td><td>否</td><td></td><td>防御方角色ID</td></tr>
+<tr><td><code>scene_id</code></td><td>bigint</td><td>是</td><td></td><td>战斗场景ID</td></tr>
+<tr><td><code>team_id</code></td><td>varchar</td><td>是</td><td></td><td>队伍ID（组队战斗）</td></tr>
+<tr><td><code>combat_type</code></td><td>logs_combat_type 枚举</td><td>否</td><td></td><td>战斗类型（pve/pvp/guild_war帮战）</td></tr>
+<tr><td><code>result</code></td><td>logs_result 枚举</td><td>否</td><td></td><td>结果（胜负/平）</td></tr>
+<tr><td><code>damage_json</code></td><td>jsonb</td><td>否</td><td>{}'::jsonb</td><td>伤害明细JSON（技能/命中/暴击）</td></tr>
+<tr><td><code>reward_json</code></td><td>jsonb</td><td>否</td><td>{}'::jsonb</td><td>奖励明细JSON</td></tr>
+<tr><td><code>duration_ms</code></td><td>int</td><td>否</td><td>0</td><td>战斗时长（毫秒）</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-drop_templates">
+<h3>📄 drop_templates <span class="tbl-meta">8 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>name</code></td><td>varchar</td><td>否</td><td></td><td>掉落模板名称</td></tr>
+<tr><td><code>drop_items</code></td><td>jsonb</td><td>否</td><td>[]'::jsonb</td><td>掉落物品列表JSON（模板ID+数量+权重）</td></tr>
+<tr><td><code>drop_rate</code></td><td>float8</td><td>否</td><td>1'::double precision</td><td>总掉落率（默认1.0）</td></tr>
+<tr><td><code>max_drops</code></td><td>int</td><td>否</td><td>1</td><td>最大掉落物数量</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+<tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
+<tr><td><code>deleted_at</code></td><td>timestamp</td><td>是</td><td></td><td>软删除时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-friends">
+<h3>📄 friends <span class="tbl-meta">7 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>player_id</code></td><td>bigint</td><td>否</td><td></td><td>玩家ID</td></tr>
+<tr><td><code>friend_id</code></td><td>bigint</td><td>否</td><td></td><td>好友玩家ID</td></tr>
+<tr><td><code>status</code></td><td>status 枚举</td><td>否</td><td>pending'::friends_status_enum</td><td>状态（pending待处理/accepted已接受/blocked已拉黑）</td></tr>
+<tr><td><code>remark</code></td><td>varchar</td><td>是</td><td></td><td>好友备注</td></tr>
+<tr><td><code>last_chat_time</code></td><td>timestamp</td><td>是</td><td></td><td>最近聊天时间</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-gm_operate_logs">
+<h3>📄 gm_operate_logs <span class="tbl-meta">7 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>admin_id</code></td><td>bigint</td><td>否</td><td></td><td>操作管理员ID</td></tr>
+<tr><td><code>target_player_id</code></td><td>bigint</td><td>是</td><td></td><td>目标玩家ID</td></tr>
+<tr><td><code>operation</code></td><td>varchar</td><td>否</td><td></td><td>操作类型（发奖/封禁/修改等）</td></tr>
+<tr><td><code>change_before</code></td><td>jsonb</td><td>否</td><td>{}'::jsonb</td><td>变更前快照JSON</td></tr>
+<tr><td><code>change_after</code></td><td>jsonb</td><td>否</td><td>{}'::jsonb</td><td>变更后快照JSON</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-guild_donates">
+<h3>📄 guild_donates <span class="tbl-meta">7 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>guild_id</code></td><td>bigint</td><td>否</td><td></td><td>帮派ID</td></tr>
+<tr><td><code>player_id</code></td><td>bigint</td><td>否</td><td></td><td>捐献玩家ID</td></tr>
+<tr><td><code>donate_type</code></td><td>donates_donate_type 枚举</td><td>否</td><td></td><td>捐献类型（gold金币/diamond钻石/item物品）</td></tr>
+<tr><td><code>amount</code></td><td>bigint</td><td>否</td><td>0'::bigint</td><td>捐献数量</td></tr>
+<tr><td><code>contribution_gained</code></td><td>int</td><td>否</td><td>0</td><td>获得帮贡</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-guild_members">
+<h3>📄 guild_members <span class="tbl-meta">6 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>guild_id</code></td><td>bigint</td><td>否</td><td></td><td>帮派ID</td></tr>
+<tr><td><code>player_id</code></td><td>bigint</td><td>否</td><td></td><td>成员玩家ID</td></tr>
+<tr><td><code>role</code></td><td>members_role 枚举</td><td>否</td><td>member'::guild_members_role_enum</td><td>职位（leader帮主/officer副帮主/elite精英/member成员）</td></tr>
+<tr><td><code>contribution</code></td><td>int</td><td>否</td><td>0</td><td>帮贡累计</td></tr>
+<tr><td><code>joined_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>入帮时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-guilds">
+<h3>📄 guilds <span class="tbl-meta">10 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>name</code></td><td>varchar</td><td>否</td><td></td><td>帮派名称（唯一）</td></tr>
+<tr><td><code>leader_id</code></td><td>bigint</td><td>否</td><td></td><td>帮主玩家ID</td></tr>
+<tr><td><code>level</code></td><td>int</td><td>否</td><td>1</td><td>帮派等级</td></tr>
+<tr><td><code>member_count</code></td><td>int</td><td>否</td><td>1</td><td>成员数量</td></tr>
+<tr><td><code>guild_icon</code></td><td>varchar</td><td>是</td><td></td><td>帮派图标</td></tr>
+<tr><td><code>guild_buff</code></td><td>jsonb</td><td>否</td><td>{}'::jsonb</td><td>帮派Buff配置JSON（全体加成）</td></tr>
+<tr><td><code>announcement</code></td><td>text</td><td>是</td><td></td><td>公告</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+<tr><td><code>disbanded_at</code></td><td>timestamp</td><td>是</td><td></td><td>解散时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-inventory_items">
+<h3>📄 inventory_items <span class="tbl-meta">11 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>player_id</code></td><td>bigint</td><td>否</td><td></td><td>玩家ID</td></tr>
+<tr><td><code>item_template_id</code></td><td>bigint</td><td>否</td><td></td><td>物品模板ID</td></tr>
+<tr><td><code>quantity</code></td><td>int</td><td>否</td><td>1</td><td>数量</td></tr>
+<tr><td><code>slot_index</code></td><td>int</td><td>否</td><td>0</td><td>背包格子索引</td></tr>
+<tr><td><code>bind_status</code></td><td>items_bind_status 枚举</td><td>否</td><td>unbound'::inventory_items_bind_status_en…</td><td>绑定状态（unbound未绑定/bound已绑定）</td></tr>
+<tr><td><code>expire_at</code></td><td>timestamp</td><td>是</td><td></td><td>过期时间（限时物品）</td></tr>
+<tr><td><code>extra_attrs</code></td><td>jsonb</td><td>是</td><td></td><td>附加属性JSON（随机词条/强化）</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+<tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
+<tr><td><code>deleted_at</code></td><td>timestamp</td><td>是</td><td></td><td>软删除时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-item_templates">
+<h3>📄 item_templates <span class="tbl-meta">14 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>name</code></td><td>varchar</td><td>否</td><td></td><td>物品名称</td></tr>
+<tr><td><code>item_type</code></td><td>templates_item_type 枚举</td><td>否</td><td>material'::item_templates_item_type_enum</td><td>物品类型（material材料/consumable消耗/equipment装备等）</td></tr>
+<tr><td><code>rarity</code></td><td>templates_rarity 枚举</td><td>否</td><td>common'::item_templates_rarity_enum</td><td>稀有度（common普通/rare稀有/epic史诗/legendary传说）</td></tr>
+<tr><td><code>max_stack</code></td><td>int</td><td>否</td><td>99</td><td>最大堆叠（默认99）</td></tr>
+<tr><td><code>sell_price</code></td><td>bigint</td><td>否</td><td>0'::bigint</td><td>商店出售价</td></tr>
+<tr><td><code>can_trade</code></td><td>bool</td><td>否</td><td>true</td><td>是否可玩家交易</td></tr>
+<tr><td><code>can_drop</code></td><td>bool</td><td>否</td><td>true</td><td>是否可掉落</td></tr>
+<tr><td><code>bind_type</code></td><td>templates_bind_type 枚举</td><td>否</td><td>none'::item_templates_bind_type_enum</td><td>绑定类型（none不绑定/equip穿戴绑定/acquire获得绑定）</td></tr>
+<tr><td><code>description</code></td><td>varchar</td><td>是</td><td></td><td>物品描述</td></tr>
+<tr><td><code>config_json</code></td><td>jsonb</td><td>否</td><td>{}'::jsonb</td><td>功能配置JSON（使用效果/装备属性）</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+<tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
+<tr><td><code>deleted_at</code></td><td>timestamp</td><td>是</td><td></td><td>软删除时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-mails">
+<h3>📄 mails <span class="tbl-meta">13 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>recipient_id</code></td><td>bigint</td><td>是</td><td></td><td>收件人玩家ID</td></tr>
+<tr><td><code>sender_type</code></td><td>sender_type 枚举</td><td>否</td><td>system'::mails_sender_type_enum</td><td>发件类型（system系统/player玩家）</td></tr>
+<tr><td><code>sender_id</code></td><td>bigint</td><td>是</td><td></td><td>发件人ID（系统为0）</td></tr>
+<tr><td><code>title</code></td><td>varchar</td><td>否</td><td></td><td>邮件标题</td></tr>
+<tr><td><code>content</code></td><td>text</td><td>否</td><td></td><td>邮件正文</td></tr>
+<tr><td><code>attachment_json</code></td><td>jsonb</td><td>否</td><td>{}'::jsonb</td><td>附件奖励JSON</td></tr>
+<tr><td><code>batch_id</code></td><td>varchar</td><td>是</td><td></td><td>批量发送批次ID</td></tr>
+<tr><td><code>template_id</code></td><td>int</td><td>是</td><td></td><td>邮件模板ID</td></tr>
+<tr><td><code>is_read</code></td><td>bool</td><td>否</td><td>false</td><td>是否已读</td></tr>
+<tr><td><code>is_claimed</code></td><td>bool</td><td>否</td><td>false</td><td>附件是否已领取</td></tr>
+<tr><td><code>expired_at</code></td><td>timestamp</td><td>是</td><td></td><td>过期时间（未领附件消失）</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-monster_templates">
+<h3>📄 monster_templates <span class="tbl-meta">14 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>name</code></td><td>varchar</td><td>否</td><td></td><td>怪物名称</td></tr>
+<tr><td><code>res_key</code></td><td>varchar</td><td>否</td><td></td><td>3D资源键</td></tr>
+<tr><td><code>scale</code></td><td>float8</td><td>否</td><td>1'::double precision</td><td>模型缩放</td></tr>
+<tr><td><code>base_hp</code></td><td>bigint</td><td>否</td><td>100'::bigint</td><td>基础气血</td></tr>
+<tr><td><code>base_atk</code></td><td>int</td><td>否</td><td>10</td><td>基础攻击</td></tr>
+<tr><td><code>drop_template_id</code></td><td>bigint</td><td>是</td><td></td><td>掉落模板ID</td></tr>
+<tr><td><code>refresh_cd</code></td><td>int</td><td>否</td><td>30</td><td>刷新冷却（秒）</td></tr>
+<tr><td><code>aggro_range</code></td><td>int</td><td>否</td><td>5</td><td>仇恨触发范围</td></tr>
+<tr><td><code>ai_type</code></td><td>templates_ai_type 枚举</td><td>否</td><td>guard'::monster_templates_ai_type_enum</td><td>AI类型（guard守卫/patrol巡逻/aggro主动攻击等）</td></tr>
+<tr><td><code>attr</code></td><td>jsonb</td><td>否</td><td>{}'::jsonb</td><td>附加属性JSON（三级武学抗性等）</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+<tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
+<tr><td><code>deleted_at</code></td><td>timestamp</td><td>是</td><td></td><td>软删除时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-notices">
+<h3>📄 notices <span class="tbl-meta">12 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>title</code></td><td>varchar</td><td>否</td><td></td><td>公告标题</td></tr>
+<tr><td><code>content</code></td><td>text</td><td>否</td><td></td><td>公告内容</td></tr>
+<tr><td><code>notice_type</code></td><td>notice_type 枚举</td><td>否</td><td>popup'::notices_notice_type_enum</td><td>类型（popup弹窗/marquee滚动/mail邮件）</td></tr>
+<tr><td><code>is_active</code></td><td>bool</td><td>否</td><td>true</td><td>是否生效</td></tr>
+<tr><td><code>sort_order</code></td><td>int</td><td>否</td><td>0</td><td>排序</td></tr>
+<tr><td><code>start_at</code></td><td>timestamp</td><td>是</td><td></td><td>开始展示时间</td></tr>
+<tr><td><code>end_at</code></td><td>timestamp</td><td>是</td><td></td><td>结束展示时间</td></tr>
+<tr><td><code>created_by</code></td><td>bigint</td><td>是</td><td></td><td>创建管理员ID</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+<tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
+<tr><td><code>deleted_at</code></td><td>timestamp</td><td>是</td><td></td><td>软删除时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-npc_templates">
+<h3>📄 npc_templates <span class="tbl-meta">13 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>name</code></td><td>varchar</td><td>否</td><td></td><td>NPC名称</td></tr>
+<tr><td><code>res_key</code></td><td>varchar</td><td>否</td><td></td><td>3D资源键</td></tr>
+<tr><td><code>scale</code></td><td>float8</td><td>否</td><td>1'::double precision</td><td>模型缩放</td></tr>
+<tr><td><code>default_anim</code></td><td>varchar</td><td>是</td><td></td><td>默认动画</td></tr>
+<tr><td><code>interact_type</code></td><td>templates_interact_type 枚举</td><td>否</td><td>talk'::npc_templates_interact_type_enum</td><td>交互类型（talk对话/shop商店/quest任务/trade交易等）</td></tr>
+<tr><td><code>dialogue_id</code></td><td>int</td><td>是</td><td></td><td>对话脚本ID</td></tr>
+<tr><td><code>move_range</code></td><td>int</td><td>否</td><td>0</td><td>活动范围（0=固定）</td></tr>
+<tr><td><code>is_auto_wander</code></td><td>bool</td><td>否</td><td>false</td><td>是否自动巡逻</td></tr>
+<tr><td><code>attr</code></td><td>jsonb</td><td>否</td><td>{}'::jsonb</td><td>附加属性JSON</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+<tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
+<tr><td><code>deleted_at</code></td><td>timestamp</td><td>是</td><td></td><td>软删除时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-object_templates">
+<h3>📄 object_templates <span class="tbl-meta">11 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>name</code></td><td>varchar</td><td>否</td><td></td><td>物体名称</td></tr>
+<tr><td><code>res_key</code></td><td>varchar</td><td>否</td><td></td><td>3D资源键</td></tr>
+<tr><td><code>type</code></td><td>templates_type 枚举</td><td>否</td><td>chest'::object_templates_type_enum</td><td>类型（chest宝箱/collect采集点/stone石头/plant植物）</td></tr>
+<tr><td><code>interact_cd</code></td><td>int</td><td>否</td><td>0</td><td>交互冷却（秒）</td></tr>
+<tr><td><code>reward</code></td><td>jsonb</td><td>是</td><td></td><td>交互奖励JSON</td></tr>
+<tr><td><code>anim_open</code></td><td>varchar</td><td>是</td><td></td><td>开启动画键</td></tr>
+<tr><td><code>is_one_time</code></td><td>bool</td><td>否</td><td>false</td><td>是否一次性</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+<tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
+<tr><td><code>deleted_at</code></td><td>timestamp</td><td>是</td><td></td><td>软删除时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-player_achievements">
+<h3>📄 player_achievements <span class="tbl-meta">9 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>player_id</code></td><td>varchar</td><td>否</td><td></td><td>玩家ID</td></tr>
+<tr><td><code>achievement_id</code></td><td>varchar</td><td>否</td><td></td><td>成就模板ID</td></tr>
+<tr><td><code>current_value</code></td><td>int</td><td>否</td><td>0</td><td>当前进度值</td></tr>
+<tr><td><code>is_unlocked</code></td><td>bool</td><td>否</td><td>false</td><td>是否已解锁</td></tr>
+<tr><td><code>is_reward_claimed</code></td><td>bool</td><td>否</td><td>false</td><td>奖励是否已领取</td></tr>
+<tr><td><code>unlocked_at</code></td><td>timestamp</td><td>是</td><td></td><td>解锁时间</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+<tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-player_activities">
+<h3>📄 player_activities <span class="tbl-meta">9 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>player_id</code></td><td>varchar</td><td>否</td><td></td><td>玩家ID</td></tr>
+<tr><td><code>activity_id</code></td><td>varchar</td><td>否</td><td></td><td>活动模板ID</td></tr>
+<tr><td><code>activity_type</code></td><td>activities_activity_type 枚举</td><td>否</td><td></td><td>活动类型</td></tr>
+<tr><td><code>progress</code></td><td>int</td><td>否</td><td>0</td><td>活动进度</td></tr>
+<tr><td><code>is_reward_claimed</code></td><td>bool</td><td>否</td><td>false</td><td>奖励是否已领取</td></tr>
+<tr><td><code>joined_at</code></td><td>timestamp</td><td>否</td><td></td><td>参与时间</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+<tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-player_behavior_logs">
+<h3>📄 player_behavior_logs <span class="tbl-meta">6 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>player_id</code></td><td>varchar</td><td>否</td><td></td><td>玩家ID</td></tr>
+<tr><td><code>behavior_type</code></td><td>behavior_logs_behavior_type 枚举</td><td>否</td><td></td><td>行为类型（login登录/logout登出/purchase购买/level_up升级/quest_complete完成任务/pvp_battlePVP）</td></tr>
+<tr><td><code>detail_json</code></td><td>jsonb</td><td>否</td><td>{}'::jsonb</td><td>行为明细JSON</td></tr>
+<tr><td><code>ip_address</code></td><td>varchar</td><td>是</td><td></td><td>IP地址</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-player_currencies">
+<h3>📄 player_currencies <span class="tbl-meta">5 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>player_id</code></td><td>bigint</td><td>否</td><td></td><td>玩家ID</td></tr>
+<tr><td><code>currency_type</code></td><td>currencies_currency_type 枚举</td><td>否</td><td></td><td>货币类型（gold金币/diamond钻石/bound_diamond绑定钻石）</td></tr>
+<tr><td><code>amount</code></td><td>bigint</td><td>否</td><td>0'::bigint</td><td>持有数量</td></tr>
+<tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-player_item_change_logs">
+<h3>📄 player_item_change_logs <span class="tbl-meta">8 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>player_id</code></td><td>bigint</td><td>否</td><td></td><td>玩家ID</td></tr>
+<tr><td><code>item_template_id</code></td><td>bigint</td><td>否</td><td></td><td>物品模板ID</td></tr>
+<tr><td><code>change_type</code></td><td>item_change_logs_change_type 枚举</td><td>否</td><td></td><td>变更类型（add获得/remove移除/trade交易/destroy销毁）</td></tr>
+<tr><td><code>quantity</code></td><td>int</td><td>否</td><td></td><td>变更数量</td></tr>
+<tr><td><code>op_trace</code></td><td>varchar</td><td>否</td><td></td><td>操作追踪标识（防作弊审计）</td></tr>
+<tr><td><code>balance_after</code></td><td>int</td><td>否</td><td></td><td>变更后剩余数量</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-player_quests">
+<h3>📄 player_quests <span class="tbl-meta">9 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>player_id</code></td><td>bigint</td><td>否</td><td></td><td>玩家ID</td></tr>
+<tr><td><code>quest_template_id</code></td><td>bigint</td><td>否</td><td></td><td>任务模板ID</td></tr>
+<tr><td><code>progress</code></td><td>int</td><td>否</td><td>0</td><td>当前进度</td></tr>
+<tr><td><code>status</code></td><td>quests_status 枚举</td><td>否</td><td>not_started'::player_quests_status_enum</td><td>状态（not_started未接/in_progress进行中/completed可提交/claimed已领奖）</td></tr>
+<tr><td><code>complete_times</code></td><td>int</td><td>否</td><td>0</td><td>已完成次数（重复任务）</td></tr>
+<tr><td><code>accepted_at</code></td><td>timestamp</td><td>是</td><td></td><td>接取时间</td></tr>
+<tr><td><code>completed_at</code></td><td>timestamp</td><td>是</td><td></td><td>完成时间</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-players">
+<h3>📄 players <span class="tbl-meta">16 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>account_id</code></td><td>bigint</td><td>否</td><td></td><td>账号ID（唯一）</td></tr>
+<tr><td><code>nickname</code></td><td>varchar</td><td>否</td><td></td><td>玩家昵称（唯一）</td></tr>
+<tr><td><code>avatar_url</code></td><td>varchar</td><td>是</td><td></td><td>头像URL</td></tr>
+<tr><td><code>level</code></td><td>int</td><td>否</td><td>1</td><td>玩家等级</td></tr>
+<tr><td><code>exp</code></td><td>bigint</td><td>否</td><td>0'::bigint</td><td>经验值</td></tr>
+<tr><td><code>vip_level</code></td><td>int</td><td>否</td><td>0</td><td>VIP等级</td></tr>
+<tr><td><code>vip_exp</code></td><td>int</td><td>否</td><td>0</td><td>VIP经验</td></tr>
+<tr><td><code>total_recharge</code></td><td>bigint</td><td>否</td><td>0'::bigint</td><td>累计充值额</td></tr>
+<tr><td><code>safe_password_hash</code></td><td>varchar</td><td>是</td><td></td><td>安全密码哈希（交易保护）</td></tr>
+<tr><td><code>last_activity_at</code></td><td>timestamp</td><td>是</td><td></td><td>最后活跃时间</td></tr>
+<tr><td><code>last_logout_at</code></td><td>timestamp</td><td>是</td><td></td><td>最后登出时间</td></tr>
+<tr><td><code>online_status</code></td><td>bool</td><td>否</td><td>false</td><td>是否在线</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+<tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
+<tr><td><code>deleted_at</code></td><td>timestamp</td><td>是</td><td></td><td>软删除时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-quest_templates">
+<h3>📄 quest_templates <span class="tbl-meta">13 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>name</code></td><td>varchar</td><td>否</td><td></td><td>任务名称</td></tr>
+<tr><td><code>quest_type</code></td><td>templates_quest_type 枚举</td><td>否</td><td>main'::quest_templates_quest_type_enum</td><td>类型（main主线/daily日常/weekly周常/achievement成就）</td></tr>
+<tr><td><code>min_level</code></td><td>int</td><td>否</td><td>1</td><td>接取最低等级</td></tr>
+<tr><td><code>accept_limit</code></td><td>int</td><td>否</td><td>1</td><td>接取次数上限</td></tr>
+<tr><td><code>auto_reward</code></td><td>bool</td><td>否</td><td>false</td><td>是否自动发奖（无需手动领取）</td></tr>
+<tr><td><code>target_json</code></td><td>jsonb</td><td>否</td><td>{}'::jsonb</td><td>目标配置JSON（杀怪/收集/社交行为）</td></tr>
+<tr><td><code>reward_json</code></td><td>jsonb</td><td>否</td><td>{}'::jsonb</td><td>奖励配置JSON</td></tr>
+<tr><td><code>prerequisite_ids</code></td><td>int[]</td><td>否</td><td>{}'::integer[]</td><td>前置任务ID数组</td></tr>
+<tr><td><code>repeatable</code></td><td>bool</td><td>否</td><td>false</td><td>是否可重复接取</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+<tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
+<tr><td><code>deleted_at</code></td><td>timestamp</td><td>是</td><td></td><td>软删除时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-ranking_records">
+<h3>📄 ranking_records <span class="tbl-meta">7 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>ranking_type</code></td><td>records_ranking_type 枚举</td><td>否</td><td></td><td>榜单类型（power战力/level等级/wealth财富）</td></tr>
+<tr><td><code>player_id</code></td><td>bigint</td><td>否</td><td></td><td>玩家ID</td></tr>
+<tr><td><code>player_name</code></td><td>varchar</td><td>否</td><td></td><td>玩家昵称快照</td></tr>
+<tr><td><code>rank_value</code></td><td>bigint</td><td>否</td><td></td><td>排行数值</td></tr>
+<tr><td><code>rank_order</code></td><td>int</td><td>否</td><td></td><td>名次</td></tr>
+<tr><td><code>snapshot_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>快照时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-recharge_orders">
+<h3>📄 recharge_orders <span class="tbl-meta">11 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>order_no</code></td><td>varchar</td><td>否</td><td></td><td>订单号（唯一）</td></tr>
+<tr><td><code>player_id</code></td><td>varchar</td><td>否</td><td></td><td>玩家ID</td></tr>
+<tr><td><code>product_id</code></td><td>varchar</td><td>否</td><td></td><td>充值商品ID</td></tr>
+<tr><td><code>amount</code></td><td>bigint</td><td>否</td><td></td><td>充值金额</td></tr>
+<tr><td><code>currency</code></td><td>varchar</td><td>否</td><td>CNY'::character varying</td><td>币种（默认CNY）</td></tr>
+<tr><td><code>status</code></td><td>orders_status 枚举</td><td>否</td><td>pending'::recharge_orders_status_enum</td><td>状态（pending待支付/paid已支付/failed失败/delivered已发货）</td></tr>
+<tr><td><code>platform</code></td><td>varchar</td><td>否</td><td>mock'::character varying</td><td>支付平台（默认mock模拟）</td></tr>
+<tr><td><code>callback_at</code></td><td>timestamp</td><td>是</td><td></td><td>支付回调时间</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+<tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-recharge_products">
+<h3>📄 recharge_products <span class="tbl-meta">9 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>name</code></td><td>varchar</td><td>否</td><td></td><td>商品名称</td></tr>
+<tr><td><code>amount</code></td><td>bigint</td><td>否</td><td></td><td>充值金额</td></tr>
+<tr><td><code>reward_json</code></td><td>jsonb</td><td>否</td><td>{}'::jsonb</td><td>赠送内容JSON（钻石/绑定钻石）</td></tr>
+<tr><td><code>is_hot</code></td><td>bool</td><td>否</td><td>false</td><td>是否热门推荐</td></tr>
+<tr><td><code>sort_order</code></td><td>int</td><td>否</td><td>0</td><td>排序</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+<tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
+<tr><td><code>deleted_at</code></td><td>timestamp</td><td>是</td><td></td><td>软删除时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-remote_configs">
+<h3>📄 remote_configs <span class="tbl-meta">10 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>config_key</code></td><td>varchar</td><td>否</td><td></td><td>配置键（唯一）</td></tr>
+<tr><td><code>value</code></td><td>text</td><td>否</td><td></td><td>配置值</td></tr>
+<tr><td><code>configType</code></td><td>configs_configtype 枚举</td><td>否</td><td>string'::remote_configs_configtype_enum</td><td>类型（string字符串/number数字/boolean布尔/json）</td></tr>
+<tr><td><code>description</code></td><td>text</td><td>是</td><td></td><td>配置说明</td></tr>
+<tr><td><code>version</code></td><td>int</td><td>否</td><td>1</td><td>版本号（热更校验）</td></tr>
+<tr><td><code>is_active</code></td><td>bool</td><td>否</td><td>true</td><td>是否生效</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+<tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
+<tr><td><code>deleted_at</code></td><td>timestamp</td><td>是</td><td></td><td>软删除时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-retention_stats">
+<h3>📄 retention_stats <span class="tbl-meta">8 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>stat_date</code></td><td>date</td><td>否</td><td></td><td>统计日期</td></tr>
+<tr><td><code>cohort_date</code></td><td>date</td><td>否</td><td></td><td>注册队列日期</td></tr>
+<tr><td><code>period</code></td><td>stats_period 枚举</td><td>否</td><td></td><td>统计周期（daily日/weekly周/monthly月）</td></tr>
+<tr><td><code>cohort_size</code></td><td>int</td><td>否</td><td></td><td>队列人数</td></tr>
+<tr><td><code>retained_count</code></td><td>int</td><td>否</td><td>0</td><td>留存人数</td></tr>
+<tr><td><code>retention_rate</code></td><td>numeric</td><td>否</td><td>0'::numeric</td><td>留存率（0-1）</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-scene_entity_spawns">
+<h3>📄 scene_entity_spawns <span class="tbl-meta">13 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>scene_id</code></td><td>bigint</td><td>否</td><td></td><td>场景ID</td></tr>
+<tr><td><code>entity_type</code></td><td>entity_spawns_entity_type 枚举</td><td>否</td><td></td><td>实体类型（npc/monster/object）</td></tr>
+<tr><td><code>template_id</code></td><td>bigint</td><td>否</td><td></td><td>模板ID（对应类型表）</td></tr>
+<tr><td><code>spawn_x</code></td><td>int</td><td>否</td><td>0</td><td>出生X坐标</td></tr>
+<tr><td><code>spawn_y</code></td><td>int</td><td>否</td><td>0</td><td>出生Y坐标</td></tr>
+<tr><td><code>spawn_rotation</code></td><td>int</td><td>否</td><td>0</td><td>出生朝向</td></tr>
+<tr><td><code>spawn_count</code></td><td>int</td><td>否</td><td>1</td><td>出生数量</td></tr>
+<tr><td><code>spawn_radius</code></td><td>int</td><td>否</td><td>0</td><td>出生点半径</td></tr>
+<tr><td><code>is_active</code></td><td>bool</td><td>否</td><td>true</td><td>是否启用</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+<tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
+<tr><td><code>deleted_at</code></td><td>timestamp</td><td>是</td><td></td><td>软删除时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-scene_triggers">
+<h3>📄 scene_triggers <span class="tbl-meta">13 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>trigger_type</code></td><td>triggers_trigger_type 枚举</td><td>否</td><td></td><td>触发器类型（transport传送/story剧情/battle战斗/activity活动）</td></tr>
+<tr><td><code>area_x</code></td><td>int</td><td>否</td><td>0</td><td>触发区域X</td></tr>
+<tr><td><code>area_y</code></td><td>int</td><td>否</td><td>0</td><td>触发区域Y</td></tr>
+<tr><td><code>area_w</code></td><td>int</td><td>否</td><td>100</td><td>触发区域宽</td></tr>
+<tr><td><code>area_h</code></td><td>int</td><td>否</td><td>100</td><td>触发区域高</td></tr>
+<tr><td><code>target_scene_id</code></td><td>bigint</td><td>是</td><td></td><td>目标场景（传送）</td></tr>
+<tr><td><code>story_id</code></td><td>int</td><td>是</td><td></td><td>剧情ID（剧情触发）</td></tr>
+<tr><td><code>condition</code></td><td>jsonb</td><td>是</td><td></td><td>触发条件JSON</td></tr>
+<tr><td><code>once_only</code></td><td>bool</td><td>否</td><td>false</td><td>是否单次触发</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+<tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
+<tr><td><code>deleted_at</code></td><td>timestamp</td><td>是</td><td></td><td>软删除时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-scenes">
+<h3>📄 scenes <span class="tbl-meta">15 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>name</code></td><td>varchar</td><td>否</td><td></td><td>场景名称</td></tr>
+<tr><td><code>scene_type</code></td><td>scene_type 枚举</td><td>否</td><td>town'::scenes_scene_type_enum</td><td>场景类型（town城镇/wild野外/dungeon副本/arena擂台等）</td></tr>
+<tr><td><code>map_res_key</code></td><td>varchar</td><td>否</td><td></td><td>地图资源键</td></tr>
+<tr><td><code>map_width</code></td><td>int</td><td>否</td><td>1000</td><td>地图宽度</td></tr>
+<tr><td><code>map_height</code></td><td>int</td><td>否</td><td>1000</td><td>地图高度</td></tr>
+<tr><td><code>layer_config</code></td><td>jsonb</td><td>否</td><td>{}'::jsonb</td><td>图层配置JSON</td></tr>
+<tr><td><code>refresh_rule</code></td><td>jsonb</td><td>是</td><td></td><td>刷新规则JSON</td></tr>
+<tr><td><code>trigger_group_ids</code></td><td>int[]</td><td>否</td><td>{}'::integer[]</td><td>触发器组ID数组</td></tr>
+<tr><td><code>min_level</code></td><td>int</td><td>否</td><td>1</td><td>进入最低等级</td></tr>
+<tr><td><code>max_players</code></td><td>int</td><td>否</td><td>100</td><td>场景人数上限</td></tr>
+<tr><td><code>status</code></td><td>status 枚举</td><td>否</td><td>open'::scenes_status_enum</td><td>状态（open开放/maintenance维护）</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+<tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
+<tr><td><code>deleted_at</code></td><td>timestamp</td><td>是</td><td></td><td>软删除时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-server_statuses">
+<h3>📄 server_statuses <span class="tbl-meta">9 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>server_name</code></td><td>varchar</td><td>否</td><td></td><td>服务器名称</td></tr>
+<tr><td><code>state</code></td><td>statuses_state 枚举</td><td>否</td><td>running'::server_statuses_state_enum</td><td>状态（running运行/maintenance维护/closed关闭）</td></tr>
+<tr><td><code>max_online</code></td><td>int</td><td>否</td><td>0</td><td>最高在线人数</td></tr>
+<tr><td><code>current_online</code></td><td>int</td><td>否</td><td>0</td><td>当前在线人数</td></tr>
+<tr><td><code>maintenance_message</code></td><td>text</td><td>是</td><td></td><td>维护公告</td></tr>
+<tr><td><code>version</code></td><td>varchar</td><td>否</td><td>1.0.0'::character varying</td><td>服务器版本</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+<tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-sign_in_records">
+<h3>📄 sign_in_records <span class="tbl-meta">8 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>player_id</code></td><td>varchar</td><td>否</td><td></td><td>玩家ID</td></tr>
+<tr><td><code>activity_id</code></td><td>varchar</td><td>否</td><td></td><td>签到活动ID</td></tr>
+<tr><td><code>sign_in_date</code></td><td>date</td><td>否</td><td></td><td>签到日期</td></tr>
+<tr><td><code>sign_in_cycle</code></td><td>in_records_sign_in_cycle 枚举</td><td>否</td><td></td><td>签到周期（daily日/weekly周/monthly月）</td></tr>
+<tr><td><code>consecutive_days</code></td><td>int</td><td>否</td><td>1</td><td>连续签到天数</td></tr>
+<tr><td><code>reward_claimed</code></td><td>bool</td><td>否</td><td>false</td><td>奖励是否已领取</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-skill_templates">
+<h3>📄 skill_templates <span class="tbl-meta">13 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>name</code></td><td>varchar</td><td>否</td><td></td><td>技能名称</td></tr>
+<tr><td><code>skill_type</code></td><td>templates_skill_type 枚举</td><td>否</td><td>active'::skill_templates_skill_type_enum</td><td>技能类型（active主动/passive被动）</td></tr>
+<tr><td><code>art_type</code></td><td>templates_art_type 枚举</td><td>是</td><td></td><td>武学类别（fist拳/palm掌/leg腿/weapon兵器）</td></tr>
+<tr><td><code>base_damage</code></td><td>int</td><td>否</td><td>10</td><td>基础伤害</td></tr>
+<tr><td><code>cooldown</code></td><td>int</td><td>否</td><td>5</td><td>冷却时间（秒）</td></tr>
+<tr><td><code>mp_cost</code></td><td>int</td><td>否</td><td>0</td><td>内力消耗（基础篇耗内力）</td></tr>
+<tr><td><code>range</code></td><td>int</td><td>否</td><td>1</td><td>作用距离</td></tr>
+<tr><td><code>effect_json</code></td><td>jsonb</td><td>否</td><td>{}'::jsonb</td><td>效果配置JSON（三级境界效果/Buff/位移）</td></tr>
+<tr><td><code>min_level</code></td><td>int</td><td>否</td><td>1</td><td>习得最低角色等级</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+<tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
+<tr><td><code>deleted_at</code></td><td>timestamp</td><td>是</td><td></td><td>软删除时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-trade_orders">
+<h3>📄 trade_orders <span class="tbl-meta">11 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>seller_id</code></td><td>varchar</td><td>否</td><td></td><td>卖家玩家ID</td></tr>
+<tr><td><code>buyer_id</code></td><td>varchar</td><td>是</td><td></td><td>买家玩家ID</td></tr>
+<tr><td><code>item_template_id</code></td><td>varchar</td><td>否</td><td></td><td>物品模板ID</td></tr>
+<tr><td><code>item_name</code></td><td>varchar</td><td>否</td><td></td><td>物品名称快照</td></tr>
+<tr><td><code>quantity</code></td><td>int</td><td>否</td><td></td><td>交易数量</td></tr>
+<tr><td><code>price_per_unit</code></td><td>bigint</td><td>否</td><td></td><td>单价</td></tr>
+<tr><td><code>currency_type</code></td><td>varchar</td><td>否</td><td>gold'::character varying</td><td>币种（默认gold金币）</td></tr>
+<tr><td><code>status</code></td><td>orders_status 枚举</td><td>否</td><td>pending'::trade_orders_status_enum</td><td>状态（pending待处理/accepted已接受/completed已完成/cancelled已取消）</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+<tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-transactions">
+<h3>📄 transactions <span class="tbl-meta">11 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>player_id</code></td><td>bigint</td><td>否</td><td></td><td>玩家ID</td></tr>
+<tr><td><code>tx_type</code></td><td>tx_type 枚举</td><td>否</td><td></td><td>流水类型（earn收入/spend支出/trade交易/recharge充值/reward奖励）</td></tr>
+<tr><td><code>currency_type</code></td><td>currency_type 枚举</td><td>否</td><td></td><td>货币类型</td></tr>
+<tr><td><code>amount</code></td><td>bigint</td><td>否</td><td></td><td>变动金额（正负）</td></tr>
+<tr><td><code>source</code></td><td>varchar</td><td>否</td><td></td><td>来源系统</td></tr>
+<tr><td><code>op_trace</code></td><td>varchar</td><td>否</td><td></td><td>操作追踪标识</td></tr>
+<tr><td><code>order_no</code></td><td>varchar</td><td>是</td><td></td><td>关联订单号</td></tr>
+<tr><td><code>balance_after</code></td><td>bigint</td><td>否</td><td></td><td>变动后余额</td></tr>
+<tr><td><code>related_id</code></td><td>varchar</td><td>是</td><td></td><td>关联业务ID</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-vip_configs">
+<h3>📄 vip_configs <span class="tbl-meta">7 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>level</code></td><td>int</td><td>否</td><td></td><td>VIP等级（唯一）</td></tr>
+<tr><td><code>required_exp</code></td><td>int</td><td>否</td><td></td><td>升级所需VIP经验</td></tr>
+<tr><td><code>daily_reward_json</code></td><td>jsonb</td><td>否</td><td>{}'::jsonb</td><td>每日奖励JSON</td></tr>
+<tr><td><code>privilege_json</code></td><td>jsonb</td><td>否</td><td>{}'::jsonb</td><td>特权配置JSON（功能解锁/加成）</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+<tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
+</tbody></table></div>
+</section>

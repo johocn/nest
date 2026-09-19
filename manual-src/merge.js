@@ -1,0 +1,14 @@
+const fs = require('fs');
+const path = require('path');
+const base = 'e:/code/nest/manual-src';
+const out = 'e:/code/nest/manual/index.html';
+let html = fs.readFileSync(path.join(base, 'main-part.html'), 'utf8');
+const dict = fs.readFileSync(path.join(base, 'dict-part.html'), 'utf8');
+const api = fs.readFileSync(path.join(base, 'api-part.html'), 'utf8');
+const enums = fs.readFileSync(path.join(base, 'enums-part.html'), 'utf8');
+html = html.replace('<!--DICT_PART-->', dict);
+html = html.replace('<!--API_PART-->', api);
+html = html.replace('<!--ENUM_PART-->', enums);
+fs.mkdirSync(path.dirname(out), { recursive: true });
+fs.writeFileSync(out, html, 'utf8');
+console.log('MERGED_OK size=' + (html.length / 1024).toFixed(1) + 'KB');
