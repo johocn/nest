@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
+import { AuthAdminController } from './auth-admin.controller';
 import { AdminAuthService } from './admin-auth.service';
 import { AdminAuthController } from './admin-auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -27,7 +28,7 @@ import { PlayerModule } from '@modules/player/player.module';
     JwtModule.register({ global: true }),
     PlayerModule,
   ],
-  controllers: [AuthController, AdminAuthController],
+  controllers: [AuthController, AdminAuthController, AuthAdminController],
   providers: [AuthService, AdminAuthService, JwtStrategy],
   exports: [AuthService, AdminAuthService, JwtModule],
 })
