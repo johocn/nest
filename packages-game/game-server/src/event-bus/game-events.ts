@@ -102,6 +102,8 @@ export const GameEvents = {
   NOTICE_REACTED: 'notice.reacted',
   FEEDBACK_SUBMITTED: 'community.feedback.submitted',
   AMBASSADOR_APPOINTED: 'community.ambassador.appointed',
+  REPORT_SUBMITTED: 'community.report.submitted',
+  PLAYER_BLOCKED: 'social.player.blocked',
 
   // 聊天深化事件（14.8-14.12）
   CHAT_SIGN_IN: 'chat.sign_in',

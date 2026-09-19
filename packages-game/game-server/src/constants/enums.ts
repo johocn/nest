@@ -712,3 +712,25 @@ export enum BarterStatus {
   COMPLETED = 'completed',
   CANCELLED = 'cancelled',
 }
+
+// ===== 社交治理枚举 =====
+
+export enum ReportTargetType {
+  PLAYER = 'player',
+  CHAT_MESSAGE = 'chat_message',
+  GUILD = 'guild',
+}
+
+export enum ReportReason {
+  ABUSE = 'abuse',
+  AD = 'ad',
+  FRAUD = 'fraud',
+  CHEAT = 'cheat',
+  OTHER = 'other',
+}
+
+export enum ReportStatus {
+  PENDING = 'pending',
+  PROCESSED = 'processed',
+  IGNORED = 'ignored',
+}
