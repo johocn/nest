@@ -118,6 +118,14 @@ export class SocialService {
   // ===== Friends =====
 
   async applyFriend(playerId: string, friendId: string): Promise<Friend> {
+    const blocked = await this.isBlocked(playerId, friendId);
+    if (blocked) {
+      throw new GameException(
+        ErrorCodes.TARGET_BLOCKED_YOU,
+        '对方已将你拉黑，无法申请好友',
+      );
+    }
+
     const existing = await this.friendRepo.findOne({
       where: { playerId, friendId },
     });
@@ -1519,6 +1527,17 @@ export class SocialService {
     name?: string,
   ): Promise<Kinship> {
     const members = [playerId, ...memberIds];
+
+    for (const m of memberIds) {
+      const blocked = await this.isBlocked(playerId, m);
+      if (blocked) {
+        throw new GameException(
+          ErrorCodes.TARGET_BLOCKED_YOU,
+          '双方存在拉黑关系，无法缔结亲缘',
+        );
+      }
+    }
+
     const sizeOk =
       type === KinshipType.SWORN
         ? members.length >= 3 && members.length <= 8

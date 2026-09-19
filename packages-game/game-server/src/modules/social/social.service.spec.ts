@@ -2011,4 +2011,28 @@ describe('SocialService', () => {
       expect(result).toEqual([]);
     });
   });
+
+  describe('拉黑隔离生效点', () => {
+    let blockRepo: any;
+
+    beforeEach(() => {
+      service = moduleRef.get<SocialService>(SocialService);
+      blockRepo = moduleRef.get(getRepositoryToken(PlayerBlock));
+      jest.clearAllMocks();
+    });
+
+    it('被拉黑时好友申请被拒', async () => {
+      blockRepo.findOne.mockResolvedValueOnce({ id: '1' }); // 目标拉黑了申请人
+      await expect(
+        service.applyFriend('100', '200'),
+      ).rejects.toMatchObject({ response: { code: ErrorCodes.TARGET_BLOCKED_YOU } });
+    });
+
+    it('互拉黑时缔结亲缘被拒', async () => {
+      blockRepo.findOne.mockResolvedValueOnce({ id: '1' });
+      await expect(
+        service.formKinship('100', KinshipType.SWORN, ['200', '300']),
+      ).rejects.toMatchObject({ response: { code: ErrorCodes.TARGET_BLOCKED_YOU } });
+    });
+  });
 });
