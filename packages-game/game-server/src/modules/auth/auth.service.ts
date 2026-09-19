@@ -400,4 +400,19 @@ export class AuthService {
     });
     await this.securityEventRepo.save(evt);
   }
+
+  async recordSecurityConfirm(
+    accountId: string,
+    loginIp: string,
+    deviceInfo?: string,
+  ): Promise<void> {
+    const evt = this.securityEventRepo.create({
+      accountId,
+      type: 'verify_ok',
+      loginIp,
+      deviceInfo: deviceInfo ?? null,
+      result: 'ok',
+    });
+    await this.securityEventRepo.save(evt);
+  }
 }
