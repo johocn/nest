@@ -506,6 +506,9 @@ export class CharacterService {
     characterId: string,
     titleId: string,
   ): Promise<CharacterTitle> {
+    if (!/^\d+$/.test(titleId)) {
+      throw new GameException(ErrorCodes.TITLE_NOT_FOUND, '称号不存在');
+    }
     const existing = await this.charTitleRepo.findOne({
       where: { characterId, titleId },
     });
@@ -527,6 +530,9 @@ export class CharacterService {
     titleId: string,
     equip: boolean,
   ): Promise<void> {
+    if (!/^\d+$/.test(titleId)) {
+      throw new GameException(ErrorCodes.TITLE_NOT_OWNED, '未获得该称号');
+    }
     const owned = await this.charTitleRepo.findOne({
       where: { characterId, titleId },
     });
