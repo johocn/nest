@@ -33,4 +33,10 @@ export class CharacterEspionage {
 
   @Column({ type: 'jsonb', nullable: true })
   disguise: any;
+
+  @Column({ name: 'intelligence_value', type: 'int', default: 0 })
+  intelligenceValue: number;
+
+  @Column({ name: 'counter_spy_level', type: 'int', default: 0 })
+  counterSpyLevel: number;
 }

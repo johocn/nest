@@ -125,6 +125,9 @@ export enum RelationshipLevel {
   TRUST = 'trust',
   CLOSE = 'close',
   SOULMATE = 'soulmate',
+  FRIEND = 'friend',
+  CONFIDANT = 'confidant',
+  SWORN = 'sworn',
 }
 
 export enum RelationshipStatus {
@@ -330,12 +333,93 @@ export enum GuildRole {
   OFFICER = 'officer',
   ELITE = 'elite',
   MEMBER = 'member',
+  VICE_LEADER = 'vice_leader',
+  HALL_MASTER = 'hall_master',
+  INCENSE_MASTER = 'incense_master',
 }
 
 export enum DonateType {
   GOLD = 'gold',
   DIAMOND = 'diamond',
   ITEM = 'item',
+}
+
+export enum IntelligenceGrade {
+  E = 'E',
+  D = 'D',
+  C = 'C',
+  B = 'B',
+  A = 'A',
+}
+
+export enum IntelType {
+  RUMOR = 'rumor',
+  SECRET = 'secret',
+}
+
+export enum IntelSourceType {
+  SPY = 'spy',
+  INQUIRE = 'inquire',
+  EAVESDROP = 'eavesdrop',
+  MARKET = 'market',
+}
+
+export enum IntelStatus {
+  ACTIVE = 'active',
+  LISTED = 'listed',
+  SOLD = 'sold',
+  EXPIRED = 'expired',
+  CONSUMED = 'consumed',
+}
+
+export enum KinshipType {
+  SWORN = 'sworn',
+  MASTER = 'master',
+  COUPLE = 'couple',
+}
+
+export enum KinshipStatus {
+  ACTIVE = 'active',
+  DISBANDED = 'disbanded',
+}
+
+export enum GuildBuildingType {
+  MEETING_HALL = 'meeting_hall',
+  TRAINING_ROOM = 'training_room',
+  SCRIPTURE_LIBRARY = 'scripture_library',
+  BLACKSMITH = 'blacksmith',
+  HERB_GARDEN = 'herb_garden',
+}
+
+export enum GuildActivityType {
+  BANQUET = 'banquet',
+  QUIZ = 'quiz',
+  INSTANCE = 'instance',
+  EXPEDITION = 'expedition',
+}
+
+export enum GuildActivityStatus {
+  SCHEDULED = 'scheduled',
+  ACTIVE = 'active',
+  ENDED = 'ended',
+}
+
+export enum GuildDiplomacyRelation {
+  FRIENDLY = 'friendly',
+  NEUTRAL = 'neutral',
+  HOSTILE = 'hostile',
+}
+
+export enum GuildShopRewardType {
+  SKILL_POINT = 'skill_point',
+  RESOURCE_PACK = 'resource_pack',
+  TITLE = 'title',
+}
+
+export enum GuildImpeachmentStatus {
+  PENDING = 'pending',
+  DONE = 'done',
+  REJECTED = 'rejected',
 }
 
 // ===== 邮件模块枚举 =====

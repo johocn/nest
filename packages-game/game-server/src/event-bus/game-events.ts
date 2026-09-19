@@ -23,6 +23,11 @@ export const GameEvents = {
   FAVOR_GAINED: 'economy.favor.gained',
   GUILD_CONTRIB_GAINED: 'economy.guild_contrib.gained',
   FACE_CHANGED: 'economy.face.changed',
+  INTEL_GAINED: 'social.intel.gained',
+  INTEL_SOLD: 'social.intel.sold',
+  RELATIONSHIP_LEVEL_UP: 'social.relationship.level_up',
+  KINSHIP_FORMED: 'social.kinship.formed',
+  KINSHIP_BROKEN: 'social.kinship.broken',
 
   // 世界事件
   ENTITY_SPAWNED: 'world.entity.spawned',
@@ -43,6 +48,10 @@ export const GameEvents = {
 
   // 公会事件
   GUILD_DONATED: 'social.guild.donated',
+  GUILD_ROLE_CHANGED: 'social.guild.role_changed',
+  GUILD_FUND_CHANGED: 'social.guild.fund_changed',
+  GUILD_DIPLOMACY_CHANGED: 'social.guild.diplomacy_changed',
+  GUILD_IMPEACHMENT: 'social.guild.impeachment',
 
   // 聊天事件
   CHAT_WORLD: 'chat.world',
