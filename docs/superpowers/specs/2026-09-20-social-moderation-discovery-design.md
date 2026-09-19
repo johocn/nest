@@ -106,8 +106,8 @@ admin（community 模块，复用阶段 4 台账模式）：
 ### 4.3 禁言生效（补 chat 链路缺口）
 
 - `chat.service.sendChannelMessage` 入口新增校验：
-  1. 读取账号 `mutedUntil`（经 auth 门面/服务），未过期则拒绝发言（错误码 `MUTED`，返回剩余时长）
-  2. 私聊（channel=PRIVATE）校验 `(senderId, recipientId)` 双向拉黑，命中则拒绝（错误码 `TARGET_BLOCKED_YOU`）
+  1. 经 `player.account_id` 取账号，调 `authService.getAccountRestrictions(accountId)` 读取 `mutedUntil`，未过期则拒绝发言（复用预留错误码 `ACCOUNT_MUTED`，返回剩余时长）
+  2. 私聊（channel=PRIVATE）经 `SocialService.isBlocked` 校验 `(senderId, recipientId)` 双向拉黑，命中则拒绝（错误码 `TARGET_BLOCKED_YOU`）
 - gateway `chat.send` 已统一走 `sendChannelMessage`，天然生效，无需重复校验
 
 ### 4.4 拉黑隔离生效点
@@ -159,7 +159,7 @@ admin（community 模块，复用阶段 4 台账模式）：
 | `BLOCK_SELF` | 不能拉黑自己 |
 | `BLOCK_LIMIT` | 拉黑数超上限（200） |
 | `TARGET_BLOCKED_YOU` | 被对方拉黑（私聊/好友申请/亲缘被拒） |
-| `MUTED` | 禁言中（返回剩余时长） |
+| `ACCOUNT_MUTED`（复用 50006 预留码） | 禁言中（返回剩余时长） |
 | `REPORT_COOLDOWN` | 24h 内重复举报同一目标 |
 | `REPORT_INVALID_TARGET` | 举报目标不存在或类型非法 |
 
@@ -167,7 +167,7 @@ admin（community 模块，复用阶段 4 台账模式）：
 
 - **单元**：
   - social.service：举报创建/去重/自举报拒绝、拉黑增删查/上限/自拉黑、推荐打分/排除集/理由生成
-  - chat.service：mutedUntil 未过期拒绝、过期放行、私聊双向拉黑拦截
+  - chat.service：mutedUntil 未过期拒绝（`ACCOUNT_MUTED`）、过期放行、私聊双向拉黑拦截
   - social 链路：friend/apply 被拉黑自动拒绝、kinship/form 互拉黑拒绝
   - community 台账：handle 幂等、IGNORE/WARN/MUTE/BAN 分发、GM 日志记录
 - **冒烟**：新增 `scripts/smoke-stage5.sh`（复用 smoke-stage4.sh 结构），覆盖：举报提交→台账→处理闭环（含 MUTE 后发言被拒）、拉黑→私聊/好友申请/亲缘全链路拦截、推荐接口返回结构与理由字段
