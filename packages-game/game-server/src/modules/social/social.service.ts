@@ -41,6 +41,7 @@ import {
   GuildActivityType,
   GuildActivityStatus,
   GuildDiplomacyRelation,
+  GuildShopRewardType,
 } from '@constants/enums';
 import { CacheService } from '@cache/cache.service';
 import { EconomyService } from '@modules/economy/economy.service';
@@ -718,6 +719,108 @@ export class SocialService {
     return this.diplomacyRepo.find({
       where: { guildId },
       order: { updatedAt: 'DESC' },
+    });
+  }
+
+  // ===== Guild Shop & Salary =====
+
+  private static readonly SHOP_PRICES: Record<GuildShopRewardType, number> = {
+    [GuildShopRewardType.SKILL_POINT]: 100,
+    [GuildShopRewardType.RESOURCE_PACK]: 50,
+    [GuildShopRewardType.TITLE]: 200,
+  };
+
+  private static readonly SALARY_BY_ROLE: Record<string, number> = {
+    [GuildRole.LEADER]: 5000,
+    [GuildRole.VICE_LEADER]: 3000,
+    [GuildRole.HALL_MASTER]: 2000,
+    [GuildRole.INCENSE_MASTER]: 1000,
+    [GuildRole.MEMBER]: 500,
+    [GuildRole.OFFICER]: 500,
+    [GuildRole.ELITE]: 500,
+  };
+
+  async exchangeGuildShop(
+    contributorId: string,
+    guildId: string,
+    rewardType: GuildShopRewardType,
+  ): Promise<{ rewardType: GuildShopRewardType; cost: number; balanceAfter: string }> {
+    await this.getGuildMemberOrThrow(contributorId, guildId);
+    const cost = SocialService.SHOP_PRICES[rewardType] ?? 50;
+    const { balanceAfter } = await this.economyService.deductCurrency(
+      contributorId,
+      CurrencyType.GUILD_CONTRIB,
+      cost,
+      'guild_shop',
+      'social.exchangeGuildShop',
+    );
+    return { rewardType, cost, balanceAfter };
+  }
+
+  async paySalaries(
+    operatorId: string,
+    guildId: string,
+  ): Promise<{ paid: Array<{ playerId: string; amount: number }>; total: number }> {
+    await this.requireGuildLeaderOrVice(operatorId, guildId);
+    const guild = await this.getGuildOrThrow(guildId);
+    const members = await this.guildMemberRepo.find({ where: { guildId } });
+
+    const paid: Array<{ playerId: string; amount: number }> = [];
+    for (const member of members) {
+      const player = await this.playerService.getById(member.playerId);
+      const lastActive = player?.lastActivityAt;
+      if (!lastActive || lastActive.getTime() <= Date.now() - 7 * 24 * 3600 * 1000) {
+        continue;
+      }
+      const salary = SocialService.SALARY_BY_ROLE[member.role] ?? 500;
+      if (salary <= 0) {
+        continue;
+      }
+      paid.push({ playerId: member.playerId, amount: salary });
+    }
+
+    const total = paid.reduce((sum, p) => sum + p.amount, 0);
+    const fund = BigInt(guild.fund ?? '0');
+    if (fund < BigInt(total)) {
+      throw new GameException(ErrorCodes.GUILD_FUND_NOT_ENOUGH, '帮派资金不足支付周薪');
+    }
+
+    for (const p of paid) {
+      await this.economyService.addCurrency(
+        p.playerId,
+        CurrencyType.GOLD,
+        p.amount,
+        'guild_salary',
+        'social.paySalaries',
+      );
+    }
+
+    guild.fund = (fund - BigInt(total)).toString();
+    await this.guildRepo.save(guild);
+    const log = this.fundLogRepo.create({
+      guildId,
+      playerId: operatorId,
+      amount: total.toString(),
+      type: GuildFundType.EXPENSE,
+      reason: 'guild_salary',
+    });
+    await this.fundLogRepo.save(log);
+    this.eventBus.emit(GameEvents.GUILD_FUND_CHANGED, {
+      guildId,
+      amount: -total,
+      reason: 'guild_salary',
+      balance: guild.fund,
+    });
+
+    return { paid, total };
+  }
+
+  async getGuildContributionRank(
+    guildId: string,
+  ): Promise<GuildMember[]> {
+    return this.guildMemberRepo.find({
+      where: { guildId },
+      order: { contribution: 'DESC' },
     });
   }
 

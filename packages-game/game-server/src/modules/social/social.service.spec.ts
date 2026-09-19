@@ -43,6 +43,7 @@ import {
   GuildActivityType,
   GuildActivityStatus,
   GuildDiplomacyRelation,
+  GuildShopRewardType,
 } from '@constants/enums';
 import type { Repository } from 'typeorm';
 
@@ -1670,6 +1671,111 @@ describe('SocialService', () => {
       diplomacyRepo.find.mockResolvedValue([{ id: 'd1' }] as any);
       const result = await service.getGuildDiplomacies('1');
       expect(result).toHaveLength(1);
+    });
+  });
+
+  describe('exchangeGuildShop', () => {
+    it('deducts GUILD_CONTRIB and returns cost', async () => {
+      guildMemberRepo.findOne.mockResolvedValue({
+        id: '1', guildId: '1', playerId: 'p1', role: GuildRole.MEMBER,
+      } as GuildMember);
+      economyService.deductCurrency.mockResolvedValue({ balanceAfter: '50' });
+
+      const result = await service.exchangeGuildShop(
+        'p1', '1', GuildShopRewardType.SKILL_POINT,
+      );
+
+      expect(result.cost).toBe(100);
+      expect(economyService.deductCurrency).toHaveBeenCalledWith(
+        'p1', CurrencyType.GUILD_CONTRIB, 100, 'guild_shop', 'social.exchangeGuildShop',
+      );
+      expect(result.balanceAfter).toBe('50');
+    });
+
+    it('throws GUILD_PERMISSION_DENIED when not a member', async () => {
+      guildMemberRepo.findOne.mockResolvedValue(null);
+      await expect(
+        service.exchangeGuildShop('p1', '1', GuildShopRewardType.TITLE),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.GUILD_PERMISSION_DENIED },
+      });
+    });
+  });
+
+  describe('paySalaries', () => {
+    it('pays only active members by role and deducts guild fund', async () => {
+      guildMemberRepo.findOne.mockResolvedValue({
+        id: '1', guildId: '1', playerId: 'op', role: GuildRole.LEADER,
+      } as GuildMember);
+      const guild = { id: '1', fund: '100000' } as any;
+      guildRepo.findOne.mockResolvedValue(guild);
+      guildRepo.save = jest.fn().mockImplementation((g: any) => Promise.resolve(g));
+      guildMemberRepo.find.mockResolvedValue([
+        { id: '1', guildId: '1', playerId: 'op', role: GuildRole.LEADER },
+        { id: '2', guildId: '1', playerId: 'v1', role: GuildRole.VICE_LEADER },
+        { id: '3', guildId: '1', playerId: 'inactive', role: GuildRole.HALL_MASTER },
+      ] as any);
+      playerService.getById.mockImplementation(async (id: string) =>
+        id === 'inactive'
+          ? { lastActivityAt: new Date(Date.now() - 10 * 24 * 3600 * 1000) }
+          : { lastActivityAt: new Date(Date.now() - 3600 * 1000) },
+      );
+      economyService.addCurrency.mockResolvedValue({ balanceAfter: '0' });
+      fundLogRepo.save.mockImplementation((d: any) => Promise.resolve(d));
+
+      const result = await service.paySalaries('op', '1');
+
+      expect(result.total).toBe(8000); // leader 5000 + vice 3000
+      expect(economyService.addCurrency).toHaveBeenCalledWith(
+        'op', CurrencyType.GOLD, 5000, 'guild_salary', 'social.paySalaries',
+      );
+      expect(economyService.addCurrency).toHaveBeenCalledWith(
+        'v1', CurrencyType.GOLD, 3000, 'guild_salary', 'social.paySalaries',
+      );
+      expect(economyService.addCurrency).not.toHaveBeenCalledWith(
+        'inactive', expect.anything(), expect.anything(), 'guild_salary', 'social.paySalaries',
+      );
+      expect(guild.fund).toBe('92000');
+      expect(fundLogRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: '8000', type: GuildFundType.EXPENSE, reason: 'guild_salary' }),
+      );
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        GameEvents.GUILD_FUND_CHANGED,
+        expect.objectContaining({ amount: -8000 }),
+      );
+    });
+
+    it('throws GUILD_FUND_NOT_ENOUGH when fund below total salary', async () => {
+      guildMemberRepo.findOne.mockResolvedValue({
+        id: '1', guildId: '1', playerId: 'op', role: GuildRole.LEADER,
+      } as GuildMember);
+      const guild = { id: '1', fund: '1000' } as any;
+      guildRepo.findOne.mockResolvedValue(guild);
+      guildMemberRepo.find.mockResolvedValue([
+        { id: '1', guildId: '1', playerId: 'op', role: GuildRole.LEADER },
+      ] as any);
+      playerService.getById.mockResolvedValue({
+        lastActivityAt: new Date(Date.now() - 3600 * 1000),
+      } as any);
+
+      await expect(service.paySalaries('op', '1')).rejects.toMatchObject({
+        response: { code: ErrorCodes.GUILD_FUND_NOT_ENOUGH },
+      });
+    });
+  });
+
+  describe('getGuildContributionRank', () => {
+    it('returns members sorted by contribution desc', async () => {
+      const members = [
+        { id: '1', playerId: 'a', contribution: 100 },
+        { id: '2', playerId: 'b', contribution: 50 },
+      ] as any;
+      guildMemberRepo.find.mockResolvedValue(members);
+      const result = await service.getGuildContributionRank('1');
+      expect(result).toHaveLength(2);
+      expect(guildMemberRepo.find).toHaveBeenCalledWith(
+        expect.objectContaining({ order: { contribution: 'DESC' } }),
+      );
     });
   });
 });
