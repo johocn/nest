@@ -7,6 +7,9 @@ import { EventBusService } from '@event-bus/event-bus.service';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
 import { ActivityType, ActivityStatus, SignInCycle } from '@constants/enums';
+import { AdminService } from '@modules/admin/admin.service';
+import { Player } from '@modules/player/entities/player.entity';
+import { PlayerBehaviorLog } from '@modules/analytics/entities/player-behavior-log.entity';
 import type { Repository } from 'typeorm';
 
 describe('ActivityService', () => {
@@ -16,6 +19,7 @@ describe('ActivityService', () => {
   let signInRepo: jest.Mocked<Repository<SignInRecord>>;
   let cacheService: jest.Mocked<CacheService>;
   let eventBus: jest.Mocked<EventBusService>;
+  let adminService: jest.Mocked<AdminService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -38,6 +42,8 @@ describe('ActivityService', () => {
           useValue: {
             findOne: jest.fn(),
             find: jest.fn(),
+            count: jest.fn(),
+            createQueryBuilder: jest.fn(),
             create: jest.fn((data: any) => ({ ...data })),
             save: jest
               .fn()
@@ -49,10 +55,30 @@ describe('ActivityService', () => {
           useValue: {
             findOne: jest.fn(),
             find: jest.fn(),
+            count: jest.fn(),
             create: jest.fn((data: any) => ({ ...data })),
             save: jest
               .fn()
               .mockImplementation((data: any) => Promise.resolve(data)),
+          },
+        },
+        {
+          provide: getRepositoryToken(Player),
+          useValue: {
+            find: jest.fn(),
+          },
+        },
+        {
+          provide: getRepositoryToken(PlayerBehaviorLog),
+          useValue: {
+            find: jest.fn(),
+          },
+        },
+        {
+          provide: AdminService,
+          useValue: {
+            logOperation: jest.fn(),
+            findLatestOperation: jest.fn(),
           },
         },
         {
@@ -78,6 +104,7 @@ describe('ActivityService', () => {
     signInRepo = module.get(getRepositoryToken(SignInRecord));
     cacheService = module.get(CacheService);
     eventBus = module.get(EventBusService);
+    adminService = module.get(AdminService);
   });
 
   describe('getActiveActivities', () => {
@@ -306,6 +333,161 @@ describe('ActivityService', () => {
       const result = await service.getTemplates(1, 20);
 
       expect(result.total).toBe(0);
+    });
+  });
+
+  describe('publish / gray-verify / rollback（13.6 工作台）', () => {
+    const draftTemplate = () =>
+      ({
+        id: 'a1',
+        name: '灰度活动',
+        status: ActivityStatus.DRAFT,
+        conditionJson: { level: 5 },
+        rewardJson: { gold: 100 },
+        startAt: new Date('2026-09-01'),
+        endAt: new Date('2026-10-01'),
+        grayWhitelistJson: {},
+        publishedVersion: 0,
+        publishedAt: null,
+      }) as any;
+
+    it('should publish to GRAY with whitelist', async () => {
+      const tpl = draftTemplate();
+      templateRepo.findOne.mockResolvedValue(tpl);
+
+      const result = await service.publishActivity('admin1', 'a1', {
+        playerIds: ['p1', 'p2'],
+      });
+
+      expect(result.status).toBe(ActivityStatus.GRAY);
+      expect(result.publishedVersion).toBe(1);
+      expect(result.publishedAt).toBeInstanceOf(Date);
+      expect(adminService.logOperation).toHaveBeenCalledWith(
+        expect.objectContaining({ operation: 'activity.publish' }),
+      );
+    });
+
+    it('should publish to ACTIVE without whitelist', async () => {
+      const tpl = draftTemplate();
+      templateRepo.findOne.mockResolvedValue(tpl);
+
+      const result = await service.publishActivity('admin1', 'a1');
+
+      expect(result.status).toBe(ActivityStatus.ACTIVE);
+    });
+
+    it('should reject publish when not draft', async () => {
+      templateRepo.findOne.mockResolvedValue({
+        ...draftTemplate(),
+        status: ActivityStatus.ACTIVE,
+      });
+
+      await expect(
+        service.publishActivity('admin1', 'a1'),
+      ).rejects.toThrow(GameException);
+    });
+
+    it('gray verify pass → ACTIVE', async () => {
+      templateRepo.findOne.mockResolvedValue({
+        ...draftTemplate(),
+        status: ActivityStatus.GRAY,
+      });
+
+      const result = await service.grayVerifyActivity('admin1', 'a1', true);
+
+      expect(result.status).toBe(ActivityStatus.ACTIVE);
+    });
+
+    it('gray verify fail → DRAFT and whitelist cleared', async () => {
+      templateRepo.findOne.mockResolvedValue({
+        ...draftTemplate(),
+        status: ActivityStatus.GRAY,
+        grayWhitelistJson: { playerIds: ['p1'] },
+      });
+
+      const result = await service.grayVerifyActivity('admin1', 'a1', false);
+
+      expect(result.status).toBe(ActivityStatus.DRAFT);
+      expect(result.grayWhitelistJson).toEqual({});
+    });
+
+    it('rollback restores pre-publish snapshot', async () => {
+      templateRepo.findOne.mockResolvedValue({
+        ...draftTemplate(),
+        status: ActivityStatus.ACTIVE,
+        conditionJson: { level: 99 },
+        rewardJson: { gold: 999 },
+      });
+      adminService.findLatestOperation.mockResolvedValue({
+        changeBefore: {
+          id: 'a1',
+          status: ActivityStatus.DRAFT,
+          conditionJson: { level: 5 },
+          rewardJson: { gold: 100 },
+          startAt: new Date('2026-09-01'),
+          endAt: new Date('2026-10-01'),
+          grayWhitelistJson: {},
+        },
+      } as any);
+
+      const result = await service.rollbackActivity('admin1', 'a1');
+
+      expect(result.status).toBe(ActivityStatus.DRAFT);
+      expect(result.conditionJson).toEqual({ level: 5 });
+      expect(result.rewardJson).toEqual({ gold: 100 });
+    });
+
+    it('rollback without publish record → ACTIVITY_NOT_PUBLISHED', async () => {
+      templateRepo.findOne.mockResolvedValue(draftTemplate());
+      adminService.findLatestOperation.mockResolvedValue(null);
+
+      await expect(service.rollbackActivity('admin1', 'a1')).rejects.toThrow(
+        GameException,
+      );
+    });
+  });
+
+  describe('灰度白名单可见性', () => {
+    it('getActiveActivities filters GRAY for non-whitelisted player', async () => {
+      const now = new Date();
+      templateRepo.find.mockResolvedValue([
+        {
+          id: 'g1',
+          status: ActivityStatus.GRAY,
+          grayWhitelistJson: { playerIds: ['p1'] },
+          startAt: new Date(now.getTime() - 3600000),
+          endAt: new Date(now.getTime() + 3600000),
+        },
+        {
+          id: 'a1',
+          status: ActivityStatus.ACTIVE,
+          grayWhitelistJson: {},
+          startAt: new Date(now.getTime() - 3600000),
+          endAt: new Date(now.getTime() + 3600000),
+        },
+      ] as any);
+
+      const forP2 = await service.getActiveActivities('p2');
+      expect(forP2.map((a) => a.id)).toEqual(['a1']);
+
+      const forP1 = await service.getActiveActivities('p1');
+      expect(forP1.map((a) => a.id)).toEqual(['g1', 'a1']);
+    });
+
+    it('joinActivity rejects GRAY non-whitelisted player', async () => {
+      const now = new Date();
+      templateRepo.findOne.mockResolvedValue({
+        id: 'g1',
+        status: ActivityStatus.GRAY,
+        grayWhitelistJson: { playerIds: ['p1'] },
+        startAt: new Date(now.getTime() - 3600000),
+        endAt: new Date(now.getTime() + 3600000),
+      } as any);
+
+      await expect(service.joinActivity('p2', 'g1')).rejects.toThrow(
+        GameException,
+      );
+      await expect(service.joinActivity('p1', 'g1')).resolves.toBeTruthy();
     });
   });
 });

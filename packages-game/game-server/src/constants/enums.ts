@@ -474,10 +474,12 @@ export enum ActivityType {
   LIMITED_TIME = 'limited_time',
   SIGN_IN = 'sign_in',
   LADDER = 'ladder',
+  CHANNEL = 'channel', // 频道活动（彩蛋口令类，14.8③）
 }
 
 export enum ActivityStatus {
   DRAFT = 'draft',
+  GRAY = 'gray', // 灰度中（白名单可见）
   ACTIVE = 'active',
   ENDED = 'ended',
 }

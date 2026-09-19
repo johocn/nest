@@ -13,6 +13,8 @@ import { ConfigManageService } from './config.service';
 import { SetConfigDto } from './dto/set-config.dto';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { AdminGuard } from '@common/guards/admin.guard';
+import { CurrentAdmin } from '@common/decorators/current-admin.decorator';
+import type { AdminJwtPayload } from '@common/guards/admin.guard';
 
 @ApiTags('Config')
 @ApiBearerAuth()
@@ -40,14 +42,44 @@ export class ConfigController {
 
   @UseGuards(AdminGuard)
   @Post('api/admin/v1/config')
-  @ApiOperation({ summary: '设置配置（创建/更新）' })
-  async setConfig(@Body() dto: SetConfigDto) {
+  @ApiOperation({ summary: '设置配置（创建/更新，写版本历史）' })
+  async setConfig(
+    @CurrentAdmin() admin: AdminJwtPayload,
+    @Body() dto: SetConfigDto,
+  ) {
     return this.configService.setConfig(
       dto.key,
       dto.value,
       dto.configType,
       dto.description,
+      admin.adminId,
     );
+  }
+
+  @UseGuards(AdminGuard)
+  @Get('api/admin/v1/config/:key/versions')
+  @ApiOperation({ summary: '配置版本历史' })
+  async getConfigVersions(
+    @Param('key') key: string,
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
+  ) {
+    return this.configService.listConfigVersions(
+      key,
+      Number(page),
+      Number(limit),
+    );
+  }
+
+  @UseGuards(AdminGuard)
+  @Post('api/admin/v1/config/:key/rollback')
+  @ApiOperation({ summary: '配置版本回滚' })
+  async rollbackConfig(
+    @CurrentAdmin() admin: AdminJwtPayload,
+    @Param('key') key: string,
+    @Body() body: { version: number },
+  ) {
+    return this.configService.rollbackConfig(admin.adminId, key, body.version);
   }
 
   @UseGuards(AdminGuard)

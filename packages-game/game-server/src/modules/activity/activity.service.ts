@@ -1,6 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThanOrEqual, MoreThanOrEqual } from 'typeorm';
+import {
+  Repository,
+  LessThanOrEqual,
+  MoreThanOrEqual,
+  MoreThan,
+  In,
+} from 'typeorm';
 import { ActivityTemplate, PlayerActivity, SignInRecord } from './entities';
 import { CacheService } from '@cache/cache.service';
 import { EventBusService } from '@event-bus/event-bus.service';
@@ -8,11 +14,29 @@ import { GameEvents } from '@event-bus/game-events';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
 import { ActivityType, ActivityStatus, SignInCycle } from '@constants/enums';
+import { AdminService } from '@modules/admin/admin.service';
+import { Player } from '@modules/player/entities/player.entity';
+import { PlayerBehaviorLog } from '@modules/analytics/entities/player-behavior-log.entity';
+import { BehaviorType } from '@constants/enums';
 
 export interface ClaimRewardResult {
   reward: Record<string, any>;
   isRewardClaimed: boolean;
 }
+
+export interface ActivityDashboard {
+  activityId: string;
+  participantCount: number;
+  signInCount: number;
+  todaySignInCount: number;
+  rewardClaimedCount: number;
+  levelDistribution: Record<string, number>;
+  nextDayRetentionRate: number | null;
+  dailyTrend: { date: string; participants: number }[];
+  generatedAt: string;
+}
+
+const PUBLISH_OPERATION = 'activity.publish';
 
 @Injectable()
 export class ActivityService {
@@ -23,20 +47,85 @@ export class ActivityService {
     private readonly playerActivityRepo: Repository<PlayerActivity>,
     @InjectRepository(SignInRecord)
     private readonly signInRepo: Repository<SignInRecord>,
+    @InjectRepository(Player)
+    private readonly playerRepo: Repository<Player>,
+    @InjectRepository(PlayerBehaviorLog)
+    private readonly behaviorLogRepo: Repository<PlayerBehaviorLog>,
     private readonly cacheService: CacheService,
     private readonly eventBus: EventBusService,
+    private readonly adminService: AdminService,
   ) {}
 
-  async getActiveActivities(): Promise<ActivityTemplate[]> {
+  async getActiveActivities(playerId?: string): Promise<ActivityTemplate[]> {
     const now = new Date();
-    return this.templateRepo.find({
+    const templates = await this.templateRepo.find({
       where: {
-        status: ActivityStatus.ACTIVE,
+        status: In([ActivityStatus.ACTIVE, ActivityStatus.GRAY]),
         startAt: LessThanOrEqual(now),
         endAt: MoreThanOrEqual(now),
       },
       order: { startAt: 'ASC' },
     });
+    if (!playerId) {
+      return templates.filter((t) => t.status === ActivityStatus.ACTIVE);
+    }
+    return templates.filter(
+      (t) =>
+        t.status === ActivityStatus.ACTIVE ||
+        this.isWhitelisted(t, playerId),
+    );
+  }
+
+  private isWhitelisted(
+    template: ActivityTemplate,
+    playerId: string,
+  ): boolean {
+    const whitelist = template.grayWhitelistJson ?? {};
+    if (Array.isArray(whitelist)) {
+      return whitelist.includes(playerId);
+    }
+    if (typeof whitelist === 'string') {
+      return this.matchPercent(whitelist, playerId);
+    }
+    if (Array.isArray(whitelist.playerIds)) {
+      if (whitelist.playerIds.includes(playerId)) return true;
+    }
+    if (whitelist.percent) {
+      return this.matchPercent(String(whitelist.percent), playerId);
+    }
+    return false;
+  }
+
+  private matchPercent(percentStr: string, playerId: string): boolean {
+    const percent = parseInt(percentStr.replace('%', ''), 10);
+    if (Number.isNaN(percent) || percent <= 0) return false;
+    let hash = 0;
+    for (let i = 0; i < playerId.length; i++) {
+      hash = (hash * 31 + playerId.charCodeAt(i)) >>> 0;
+    }
+    return hash % 100 < Math.min(percent, 100);
+  }
+
+  private assertPlayable(
+    template: ActivityTemplate,
+    playerId: string,
+  ): void {
+    if (template.status !== ActivityStatus.ACTIVE) {
+      if (
+        template.status === ActivityStatus.GRAY &&
+        this.isWhitelisted(template, playerId)
+      ) {
+        return;
+      }
+      throw new GameException(
+        template.status === ActivityStatus.GRAY
+          ? ErrorCodes.ACTIVITY_WHITELIST_REJECTED
+          : ErrorCodes.ACTIVITY_NOT_ACTIVE,
+        template.status === ActivityStatus.GRAY
+          ? '活动灰度中，不在白名单内'
+          : '活动未开放',
+      );
+    }
   }
 
   async joinActivity(
@@ -51,9 +140,7 @@ export class ActivityService {
     }
 
     const now = new Date();
-    if (template.status !== ActivityStatus.ACTIVE) {
-      throw new GameException(ErrorCodes.ACTIVITY_NOT_ACTIVE, '活动未开放');
-    }
+    this.assertPlayable(template, playerId);
     if (now < template.startAt || now > template.endAt) {
       throw new GameException(
         ErrorCodes.ACTIVITY_NOT_ACTIVE,
@@ -91,11 +178,8 @@ export class ActivityService {
     }
 
     const now = new Date();
-    if (
-      template.status !== ActivityStatus.ACTIVE ||
-      now < template.startAt ||
-      now > template.endAt
-    ) {
+    this.assertPlayable(template, playerId);
+    if (now < template.startAt || now > template.endAt) {
       throw new GameException(ErrorCodes.ACTIVITY_NOT_ACTIVE, '活动未开放');
     }
 
@@ -168,6 +252,257 @@ export class ActivityService {
 
   async getPlayerActivities(playerId: string): Promise<PlayerActivity[]> {
     return this.playerActivityRepo.find({ where: { playerId } });
+  }
+
+  // ===== 运营工作台（13.6 预配置→灰度→回滚）=====
+
+  private snapshot(template: ActivityTemplate): Record<string, any> {
+    return {
+      id: template.id,
+      status: template.status,
+      conditionJson: template.conditionJson,
+      rewardJson: template.rewardJson,
+      startAt: template.startAt,
+      endAt: template.endAt,
+      grayWhitelistJson: template.grayWhitelistJson,
+    };
+  }
+
+  async publishActivity(
+    adminId: string,
+    activityId: string,
+    grayWhitelist?: unknown,
+  ): Promise<ActivityTemplate> {
+    const template = await this.templateRepo.findOne({
+      where: { id: activityId },
+    });
+    if (!template) {
+      throw new GameException(ErrorCodes.ACTIVITY_NOT_FOUND, '活动不存在');
+    }
+    if (template.status !== ActivityStatus.DRAFT) {
+      throw new GameException(ErrorCodes.ACTIVITY_NOT_ACTIVE, '仅草稿可发布');
+    }
+
+    const before = this.snapshot(template);
+    const whitelist = this.normalizeWhitelist(grayWhitelist);
+    const useGray = this.hasWhitelist(whitelist);
+    template.grayWhitelistJson = whitelist;
+    template.status = useGray ? ActivityStatus.GRAY : ActivityStatus.ACTIVE;
+    template.publishedVersion += 1;
+    template.publishedAt = new Date();
+    const saved = await this.templateRepo.save(template);
+
+    await this.adminService.logOperation({
+      adminId,
+      targetPlayerId: activityId,
+      operation: PUBLISH_OPERATION,
+      changeBefore: before,
+      changeAfter: {
+        id: saved.id,
+        status: saved.status,
+        publishedVersion: saved.publishedVersion,
+      },
+    });
+    return saved;
+  }
+
+  private normalizeWhitelist(raw: unknown): Record<string, any> {
+    if (raw === undefined || raw === null || raw === '') return {};
+    if (typeof raw === 'string' || Array.isArray(raw)) {
+      return raw as Record<string, any>;
+    }
+    return raw as Record<string, any>;
+  }
+
+  private hasWhitelist(whitelist: any): boolean {
+    if (Array.isArray(whitelist)) return whitelist.length > 0;
+    if (typeof whitelist === 'string') return whitelist.trim().length > 0;
+    if (Array.isArray(whitelist.playerIds) && whitelist.playerIds.length > 0) {
+      return true;
+    }
+    return Boolean(whitelist.percent);
+  }
+
+  async grayVerifyActivity(
+    adminId: string,
+    activityId: string,
+    passed: boolean,
+  ): Promise<ActivityTemplate> {
+    const template = await this.templateRepo.findOne({
+      where: { id: activityId },
+    });
+    if (!template) {
+      throw new GameException(ErrorCodes.ACTIVITY_NOT_FOUND, '活动不存在');
+    }
+    if (template.status !== ActivityStatus.GRAY) {
+      throw new GameException(
+        ErrorCodes.ACTIVITY_NOT_ACTIVE,
+        '仅灰度中活动可验证',
+      );
+    }
+
+    const before = this.snapshot(template);
+    if (passed) {
+      template.status = ActivityStatus.ACTIVE;
+    } else {
+      template.status = ActivityStatus.DRAFT;
+      template.grayWhitelistJson = {};
+    }
+    const saved = await this.templateRepo.save(template);
+
+    await this.adminService.logOperation({
+      adminId,
+      targetPlayerId: activityId,
+      operation: passed ? 'activity.gray_verify_pass' : 'activity.gray_verify_fail',
+      changeBefore: before,
+      changeAfter: {
+        id: saved.id,
+        status: saved.status,
+        publishedVersion: saved.publishedVersion,
+      },
+    });
+    return saved;
+  }
+
+  async rollbackActivity(
+    adminId: string,
+    activityId: string,
+  ): Promise<ActivityTemplate> {
+    const template = await this.templateRepo.findOne({
+      where: { id: activityId },
+    });
+    if (!template) {
+      throw new GameException(ErrorCodes.ACTIVITY_NOT_FOUND, '活动不存在');
+    }
+
+    const publishLog = await this.adminService.findLatestOperation(
+      PUBLISH_OPERATION,
+      { id: activityId },
+    );
+    if (!publishLog) {
+      throw new GameException(
+        ErrorCodes.ACTIVITY_NOT_PUBLISHED,
+        '该活动无发布记录，无法回滚',
+      );
+    }
+
+    const before = this.snapshot(template);
+    const snapshot = publishLog.changeBefore as Record<string, any>;
+    template.status = ActivityStatus.DRAFT;
+    template.conditionJson = snapshot.conditionJson ?? {};
+    template.rewardJson = snapshot.rewardJson ?? {};
+    template.startAt = snapshot.startAt ?? template.startAt;
+    template.endAt = snapshot.endAt ?? template.endAt;
+    template.grayWhitelistJson = {};
+    const saved = await this.templateRepo.save(template);
+
+    await this.adminService.logOperation({
+      adminId,
+      targetPlayerId: activityId,
+      operation: 'activity.rollback',
+      changeBefore: before,
+      changeAfter: {
+        id: saved.id,
+        status: saved.status,
+        publishedVersion: saved.publishedVersion,
+      },
+    });
+    return saved;
+  }
+
+  async getActivityDashboard(
+    activityId: string,
+    days = 7,
+  ): Promise<ActivityDashboard> {
+    const template = await this.templateRepo.findOne({
+      where: { id: activityId },
+    });
+    if (!template) {
+      throw new GameException(ErrorCodes.ACTIVITY_NOT_FOUND, '活动不存在');
+    }
+
+    const [participantCount, signInCount, rewardClaimedCount] =
+      await Promise.all([
+        this.playerActivityRepo.count({ where: { activityId } }),
+        this.signInRepo.count({ where: { activityId } }),
+        this.playerActivityRepo.count({
+          where: { activityId, isRewardClaimed: true },
+        }),
+      ]);
+
+    const today = new Date().toISOString().slice(0, 10);
+    const todaySignInCount = await this.signInRepo.count({
+      where: { activityId, signInDate: today },
+    });
+
+    const participants = await this.playerActivityRepo.find({
+      where: { activityId },
+    });
+    const ids = participants.map((p) => p.playerId);
+
+    const levelDistribution: Record<string, number> = {};
+    if (ids.length > 0) {
+      const players = await this.playerRepo.find({
+        where: { id: In(ids) },
+        select: { id: true, level: true },
+      });
+      for (const p of players) {
+        const key = String(p.level);
+        levelDistribution[key] = (levelDistribution[key] ?? 0) + 1;
+      }
+    }
+
+    let nextDayRetentionRate: number | null = null;
+    if (ids.length > 0) {
+      const joinedLogs = await this.behaviorLogRepo.find({
+        where: { playerId: In(ids), behaviorType: BehaviorType.LOGIN },
+        select: { playerId: true, createdAt: true },
+      });
+      const joinedAtById = new Map(
+        participants.map((p) => [p.playerId, p.joinedAt.getTime()]),
+      );
+      const returned = new Set<string>();
+      for (const log of joinedLogs) {
+        const joinedAt = joinedAtById.get(log.playerId);
+        if (!joinedAt) continue;
+        const nextDay = joinedAt + 24 * 3600 * 1000;
+        const nextDayEnd = nextDay + 24 * 3600 * 1000;
+        const ts = log.createdAt.getTime();
+        if (ts >= nextDay && ts < nextDayEnd) returned.add(log.playerId);
+      }
+      nextDayRetentionRate =
+        Math.round((returned.size / ids.length) * 10000) / 100;
+    }
+
+    const startDate = new Date(
+      Date.now() - (days - 1) * 24 * 3600 * 1000,
+    );
+    startDate.setHours(0, 0, 0, 0);
+    const trendRows = await this.playerActivityRepo
+      .createQueryBuilder('pa')
+      .select("to_char(pa.joined_at, 'YYYY-MM-DD')", 'date')
+      .addSelect('COUNT(*)', 'count')
+      .where('pa.activity_id = :activityId', { activityId })
+      .andWhere('pa.joined_at >= :start', { start: startDate })
+      .groupBy('date')
+      .orderBy('date', 'ASC')
+      .getRawMany();
+    const dailyTrend = trendRows.map((r: any) => ({
+      date: r.date,
+      participants: parseInt(r.count, 10),
+    }));
+
+    return {
+      activityId,
+      participantCount,
+      signInCount,
+      todaySignInCount,
+      rewardClaimedCount,
+      levelDistribution,
+      nextDayRetentionRate,
+      dailyTrend,
+      generatedAt: new Date().toISOString(),
+    };
   }
 
   // ===== Admin CRUD =====

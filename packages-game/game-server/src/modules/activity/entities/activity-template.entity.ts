@@ -48,6 +48,19 @@ export class ActivityTemplate {
   @Column({ name: 'max_participants', type: 'int', default: 0 })
   maxParticipants: number;
 
+  @Column({
+    name: 'gray_whitelist_json',
+    type: 'jsonb',
+    default: '{}',
+  })
+  grayWhitelistJson: Record<string, any>;
+
+  @Column({ name: 'published_at', type: 'timestamp', nullable: true })
+  publishedAt: Date | null;
+
+  @Column({ name: 'published_version', type: 'int', default: 0 })
+  publishedVersion: number;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

@@ -36,6 +36,25 @@ export class AdminService {
     return this.gmLogRepo.save(log);
   }
 
+  async findLatestOperation(
+    operation: string,
+    matchAfter?: Record<string, any>,
+  ): Promise<GmOperateLog | null> {
+    const logs = await this.gmLogRepo.find({
+      where: { operation },
+      order: { createdAt: 'DESC' },
+      take: 20,
+    });
+    if (!matchAfter) return logs[0] ?? null;
+    return (
+      logs.find((l) =>
+        Object.entries(matchAfter).every(
+          ([k, v]) => (l.changeAfter as any)?.[k] === v,
+        ),
+      ) ?? null
+    );
+  }
+
   async getGmLogs(
     page: number,
     limit: number,

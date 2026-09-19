@@ -1,19 +1,22 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConfigManageService } from './config.service';
-import { RemoteConfig } from './entities';
+import { RemoteConfig, ConfigVersion } from './entities';
 import { CacheService } from '@cache/cache.service';
 import { EventBusService } from '@event-bus/event-bus.service';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
 import { ConfigType } from '@constants/enums';
+import { AdminService } from '@modules/admin/admin.service';
 import type { Repository } from 'typeorm';
 
 describe('ConfigManageService', () => {
   let service: ConfigManageService;
   let configRepo: jest.Mocked<Repository<RemoteConfig>>;
+  let versionRepo: jest.Mocked<Repository<ConfigVersion>>;
   let cacheService: jest.Mocked<CacheService>;
   let eventBus: jest.Mocked<EventBusService>;
+  let adminService: jest.Mocked<AdminService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -33,6 +36,17 @@ describe('ConfigManageService', () => {
           },
         },
         {
+          provide: getRepositoryToken(ConfigVersion),
+          useValue: {
+            findOne: jest.fn(),
+            findAndCount: jest.fn(),
+            create: jest.fn((data: any) => ({ ...data })),
+            save: jest
+              .fn()
+              .mockImplementation((data: any) => Promise.resolve(data)),
+          },
+        },
+        {
           provide: CacheService,
           useValue: {
             get: jest.fn(),
@@ -44,13 +58,21 @@ describe('ConfigManageService', () => {
           provide: EventBusService,
           useValue: { emit: jest.fn() },
         },
+        {
+          provide: AdminService,
+          useValue: {
+            logOperation: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
     service = module.get(ConfigManageService);
     configRepo = module.get(getRepositoryToken(RemoteConfig));
+    versionRepo = module.get(getRepositoryToken(ConfigVersion));
     cacheService = module.get(CacheService);
     eventBus = module.get(EventBusService);
+    adminService = module.get(AdminService);
   });
 
   describe('getConfig', () => {
@@ -197,6 +219,57 @@ describe('ConfigManageService', () => {
       await service.deleteConfig('temp');
 
       expect(cacheService.del).toHaveBeenCalled();
+    });
+  });
+
+  describe('rollbackConfig（13.6 配置回滚）', () => {
+    it('should restore value from target version and bump version', async () => {
+      versionRepo.findOne.mockResolvedValue({
+        configKey: 'max_level',
+        version: 1,
+        value: '50',
+      } as any);
+      configRepo.findOne.mockResolvedValue({
+        id: '1',
+        configKey: 'max_level',
+        value: '100',
+        configType: ConfigType.NUMBER,
+        version: 3,
+      } as any);
+
+      const result = await service.rollbackConfig('admin1', 'max_level', 1);
+
+      expect(result.value).toBe('50');
+      expect(result.version).toBe(4);
+      expect(adminService.logOperation).toHaveBeenCalledWith(
+        expect.objectContaining({ operation: 'config.rollback' }),
+      );
+    });
+
+    it('should reject rollback to nonexistent version', async () => {
+      versionRepo.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.rollbackConfig('admin1', 'max_level', 99),
+      ).rejects.toThrow(GameException);
+    });
+
+    it('should reject rollback to current or newer version', async () => {
+      versionRepo.findOne.mockResolvedValue({
+        configKey: 'max_level',
+        version: 3,
+        value: '90',
+      } as any);
+      configRepo.findOne.mockResolvedValue({
+        id: '1',
+        configKey: 'max_level',
+        value: '100',
+        version: 3,
+      } as any);
+
+      await expect(
+        service.rollbackConfig('admin1', 'max_level', 3),
+      ).rejects.toThrow(GameException);
     });
   });
 });
