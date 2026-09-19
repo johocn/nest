@@ -432,4 +432,10 @@ export class SocialController {
   async getRelationships(@CurrentPlayer() player: CurrentPlayerData) {
     return this.socialService.getSocialSummary(player.playerId);
   }
+
+  @Get('guide/daily')
+  @ApiOperation({ summary: '七日社交引导（注册第 N 天任务）' })
+  async getDailyGuide(@CurrentPlayer() player: CurrentPlayerData) {
+    return this.socialService.getDailyGuide(player.playerId);
+  }
 }

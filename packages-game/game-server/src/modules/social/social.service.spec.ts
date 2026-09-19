@@ -1237,6 +1237,56 @@ describe('SocialService', () => {
     });
   });
 
+  describe('getDailyGuide', () => {
+    it('returns D1 guide for new player with kinship task undone', async () => {
+      playerService.getById.mockResolvedValue({
+        createdAt: new Date(Date.now() - 2 * 3600 * 1000),
+      } as any);
+      friendRepo.find.mockResolvedValue([]);
+      kinshipRepo.find.mockResolvedValue([]);
+      intelligenceRepo.find.mockResolvedValue([]);
+      guildMemberRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.getDailyGuide('p1');
+
+      expect(result.day).toBe(1);
+      expect(result.title).toBe('寻师问路');
+      expect(result.tasks[0].done).toBe(false);
+      expect(result.stats).toEqual({ friends: 0, kinships: 0, intel: 0, inGuild: false });
+    });
+
+    it('marks D4 guild task done when member of a guild', async () => {
+      playerService.getById.mockResolvedValue({
+        createdAt: new Date(Date.now() - 3 * 24 * 3600 * 1000),
+      } as any);
+      friendRepo.find.mockResolvedValue([]);
+      kinshipRepo.find.mockResolvedValue([]);
+      intelligenceRepo.find.mockResolvedValue([]);
+      guildMemberRepo.findOne.mockResolvedValue({ id: 'm1' } as any);
+
+      const result = await service.getDailyGuide('p1');
+
+      expect(result.day).toBe(4);
+      expect(result.tasks[0].done).toBe(true);
+      expect(result.stats.inGuild).toBe(true);
+    });
+
+    it('caps at day 8 daily loop for old players', async () => {
+      playerService.getById.mockResolvedValue({
+        createdAt: new Date(Date.now() - 30 * 24 * 3600 * 1000),
+      } as any);
+      friendRepo.find.mockResolvedValue([]);
+      kinshipRepo.find.mockResolvedValue([]);
+      intelligenceRepo.find.mockResolvedValue([]);
+      guildMemberRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.getDailyGuide('p1');
+
+      expect(result.day).toBe(8);
+      expect(result.title).toBe('日常循环');
+    });
+  });
+
   describe('setGuildRole', () => {
     const member = (role: GuildRole, playerId = 'p1') =>
       ({ id: '1', guildId: '1', playerId, role, contribution: 0 } as GuildMember);

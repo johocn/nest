@@ -1349,6 +1349,92 @@ export class SocialService {
     return { friends, kinships, relationships };
   }
 
+  // ===== Daily Guide =====
+
+  /** 七日社交引导：按注册第 N 天返回当日任务 + 完成状态。 */
+  async getDailyGuide(playerId: string): Promise<{
+    day: number;
+    title: string;
+    tasks: Array<{ id: string; desc: string; done: boolean }>;
+    stats: { friends: number; kinships: number; intel: number; inGuild: boolean };
+  }> {
+    const player = await this.playerService.getById(playerId);
+    const createdAt = player?.createdAt ?? new Date();
+    const day = Math.min(
+      Math.floor((Date.now() - createdAt.getTime()) / (24 * 3600 * 1000)) + 1,
+      8,
+    );
+
+    const [friends, kinships, intelligences, guildMember] = await Promise.all([
+      this.getFriendList(playerId),
+      this.getKinships(playerId),
+      this.getIntelligences(playerId),
+      this.guildMemberRepo.findOne({ where: { playerId } }),
+    ]);
+    const stats = {
+      friends: friends.length,
+      kinships: kinships.length,
+      intel: intelligences.length,
+      inGuild: !!guildMember,
+    };
+
+    const guide: Record<
+      number,
+      { title: string; tasks: Array<{ id: string; desc: string; done: boolean }> }
+    > = {
+      1: {
+        title: '寻师问路',
+        tasks: [
+          { id: 'kinship', desc: '缔结一段师徒或结义亲缘', done: stats.kinships > 0 },
+        ],
+      },
+      2: {
+        title: '以武会友',
+        tasks: [
+          { id: 'friend', desc: '添加 1 位好友', done: stats.friends > 0 },
+        ],
+      },
+      3: {
+        title: '初涉江湖',
+        tasks: [
+          { id: 'intel', desc: '获取 1 条情报（刺探/打听/窃听）', done: stats.intel > 0 },
+        ],
+      },
+      4: {
+        title: '立帮兴业',
+        tasks: [
+          { id: 'guild', desc: '加入或创建帮派', done: stats.inGuild },
+        ],
+      },
+      5: {
+        title: '行商走镖',
+        tasks: [
+          { id: 'escort', desc: '完成 1 次运镖或悬赏', done: false },
+        ],
+      },
+      6: {
+        title: '礼尚往来',
+        tasks: [
+          { id: 'gift', desc: '送出 1 份礼物并获得回礼', done: false },
+        ],
+      },
+      7: {
+        title: '桃园之义',
+        tasks: [
+          { id: 'sworn', desc: '完成结义或正式拜师', done: stats.kinships > 0 },
+        ],
+      },
+      8: {
+        title: '日常循环',
+        tasks: [
+          { id: 'daily', desc: '每日任务与帮派活动循环', done: false },
+        ],
+      },
+    };
+
+    return { day, ...guide[day]!, stats };
+  }
+
   async graduateApprentice(playerId: string, kinshipId: string): Promise<Kinship> {
     const kinship = await this.kinshipRepo.findOne({
       where: { id: kinshipId, status: KinshipStatus.ACTIVE },
