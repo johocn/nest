@@ -12,7 +12,15 @@ import {
 import { CacheService } from '@cache/cache.service';
 import { EventBusService } from '@event-bus/event-bus.service';
 import { GameException } from '@common/exceptions/game.exception';
-import { SceneStatus, SceneType, EntityType } from '@constants/enums';
+import {
+  SceneStatus,
+  SceneType,
+  EntityType,
+  ObjectType,
+  InteractType,
+} from '@constants/enums';
+import { ErrorCodes } from '@constants/error-codes';
+import { EconomyService } from '../economy/economy.service';
 import type { Repository } from 'typeorm';
 
 describe('WorldService', () => {
@@ -20,7 +28,9 @@ describe('WorldService', () => {
   let sceneRepo: jest.Mocked<Repository<Scene>>;
   let spawnRepo: jest.Mocked<Repository<SceneEntitySpawn>>;
   let triggerRepo: jest.Mocked<Repository<SceneTrigger>>;
+  let objectRepo: jest.Mocked<Repository<ObjectTemplate>>;
   let cacheService: jest.Mocked<CacheService>;
+  let economyService: jest.Mocked<EconomyService>;
   let eventBus: jest.Mocked<EventBusService>;
 
   beforeEach(async () => {
@@ -67,6 +77,17 @@ describe('WorldService', () => {
             sMembers: jest.fn(),
             del: jest.fn(),
             exists: jest.fn(),
+            acquireLock: jest.fn(),
+            get: jest.fn(),
+            set: jest.fn(),
+            expire: jest.fn(),
+          },
+        },
+        {
+          provide: EconomyService,
+          useValue: {
+            addCurrency: jest.fn(),
+            deductCurrency: jest.fn(),
           },
         },
         { provide: EventBusService, useValue: { emit: jest.fn() } },
@@ -77,7 +98,9 @@ describe('WorldService', () => {
     sceneRepo = module.get(getRepositoryToken(Scene));
     spawnRepo = module.get(getRepositoryToken(SceneEntitySpawn));
     triggerRepo = module.get(getRepositoryToken(SceneTrigger));
+    objectRepo = module.get(getRepositoryToken(ObjectTemplate));
     cacheService = module.get(CacheService);
+    economyService = module.get(EconomyService);
     eventBus = module.get(EventBusService);
   });
 
@@ -242,6 +265,71 @@ describe('WorldService', () => {
       await expect(
         service.checkEnterRequirement('1', 10),
       ).resolves.toBeUndefined();
+    });
+  });
+
+  describe('物件互动', () => {
+    it('冷却中拒绝', async () => {
+      objectRepo.findOne.mockResolvedValue({
+        id: '1',
+        type: ObjectType.COLLECT,
+        interactCd: 60,
+        isOneTime: false,
+        reward: { type: 'currency', currencyType: 'gold', amount: 10 },
+      } as any);
+      cacheService.acquireLock.mockResolvedValue(false); // 冷却键已存在
+      await expect(
+        service.interactObject('1', '1', InteractType.COLLECT),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.OBJECT_COOLDOWN },
+      });
+    });
+
+    it('一次性物件已开启拒绝', async () => {
+      objectRepo.findOne.mockResolvedValue({
+        id: '2',
+        type: ObjectType.CHEST,
+        interactCd: 0,
+        isOneTime: true,
+        reward: { type: 'currency', currencyType: 'gold', amount: 50 },
+      } as any);
+      cacheService.acquireLock.mockResolvedValue(false); // 已开过
+      await expect(
+        service.interactObject('1', '2', InteractType.COLLECT),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.OBJECT_ALREADY_OPENED },
+      });
+    });
+
+    it('采集产出走资源策略折算', async () => {
+      objectRepo.findOne.mockResolvedValue({
+        id: '3',
+        type: ObjectType.COLLECT,
+        interactCd: 5,
+        isOneTime: false,
+        reward: { type: 'currency', currencyType: 'gold', amount: 100 },
+      } as any);
+      cacheService.acquireLock.mockResolvedValue(true);
+      cacheService.get.mockResolvedValue('31'); // 当日第 31 次采集 + 序号 31
+      economyService.addCurrency.mockResolvedValue({ balanceAfter: '70' });
+
+      await service.interactObject('1', '3', InteractType.COLLECT);
+
+      const amountArg = economyService.addCurrency.mock.calls[0][2];
+      expect(amountArg).toBeLessThan(100); // 效率递减生效
+    });
+
+    it('非采集类物件不走资源策略', async () => {
+      objectRepo.findOne.mockResolvedValue({
+        id: '4',
+        type: ObjectType.LANDMARK,
+        interactCd: 0,
+        isOneTime: false,
+        reward: null,
+      } as any);
+      const result = await service.interactObject('1', '4', InteractType.READ);
+      expect(result).toHaveProperty('ok', true);
+      expect(economyService.addCurrency).not.toHaveBeenCalled();
     });
   });
 });

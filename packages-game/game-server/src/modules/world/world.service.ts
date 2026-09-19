@@ -14,7 +14,14 @@ import { EventBusService } from '@event-bus/event-bus.service';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
 import { GameEvents } from '@event-bus/game-events';
-import { SceneStatus } from '@constants/enums';
+import {
+  SceneStatus,
+  ObjectType,
+  InteractType,
+  CurrencyType,
+} from '@constants/enums';
+import { EconomyService } from '../economy/economy.service';
+import { ResourceBalancePolicy } from './resource-balance.policy';
 
 export interface SceneEnterResult {
   scene: Scene;
@@ -38,6 +45,7 @@ export class WorldService {
     private readonly spawnRepo: Repository<SceneEntitySpawn>,
     private readonly cacheService: CacheService,
     private readonly eventBus: EventBusService,
+    private readonly economyService: EconomyService,
   ) {}
 
   async getScene(id: string): Promise<Scene> {
@@ -136,5 +144,76 @@ export class WorldService {
 
   async getObjectTemplate(id: string): Promise<ObjectTemplate | null> {
     return this.objRepo.findOne({ where: { id } });
+  }
+
+  async interactObject(
+    playerId: string,
+    objectId: string,
+    interactType: InteractType,
+  ): Promise<{ ok: boolean; reward?: any }> {
+    const obj = await this.objRepo.findOne({ where: { id: objectId } });
+    if (!obj) {
+      throw new GameException(ErrorCodes.PARAM_INVALID, '物件不存在');
+    }
+
+    // 冷却校验（interactCd>0 时用 redis SET NX EX）
+    if (obj.interactCd > 0) {
+      const cdKey = `world:obj:cd:${objectId}:${playerId}`;
+      const cdOk = await this.cacheService.acquireLock(cdKey, obj.interactCd);
+      if (!cdOk) {
+        throw new GameException(ErrorCodes.OBJECT_COOLDOWN, '物件冷却中');
+      }
+    }
+
+    // 一次性校验
+    if (obj.isOneTime) {
+      const onceKey = `world:obj:once:${objectId}`;
+      const first = await this.cacheService.acquireLock(onceKey, 31536000);
+      if (!first) {
+        throw new GameException(ErrorCodes.OBJECT_ALREADY_OPENED, '该物件已被开启');
+      }
+    }
+
+    // 奖励发放（支持 { type:'currency', currencyType, amount }）
+    const reward = obj.reward;
+    if (reward && reward.type === 'currency') {
+      let amount = Number(reward.amount);
+      if (
+        obj.type === ObjectType.COLLECT ||
+        obj.type === ObjectType.STONE ||
+        obj.type === ObjectType.PLANT
+      ) {
+        const policy = new ResourceBalancePolicy();
+        const dateKey = new Date().toISOString().slice(0, 10);
+        const harvestKey = `world:harvest:${playerId}:${dateKey}`;
+        const seqKey = `world:seq:${objectId}`;
+        const [harvestCount, seqCount] = await Promise.all([
+          this.cacheService.get(harvestKey),
+          this.cacheService.get(seqKey),
+        ]);
+        const harvestN = Number(harvestCount ?? '0');
+        const seqN = Number(seqCount ?? '0');
+        amount = Math.floor(
+          policy.degradedYield(amount, seqN) *
+            policy.efficiencyFactor(harvestN + 1),
+        );
+        await this.cacheService.set(harvestKey, String(harvestN + 1));
+        await this.cacheService.set(seqKey, String(seqN + 1));
+        if (seqN === 0) {
+          await this.cacheService.expire(seqKey, 6 * 3600);
+        }
+      }
+      await this.economyService.addCurrency(
+        playerId,
+        reward.currencyType as CurrencyType,
+        amount,
+        'object',
+        `object:${objectId}:${interactType}`,
+        objectId,
+      );
+      return { ok: true, reward: { currencyType: reward.currencyType, amount } };
+    }
+
+    return { ok: true };
   }
 }
