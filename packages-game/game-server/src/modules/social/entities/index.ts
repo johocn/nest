@@ -3,6 +3,8 @@ export { Guild } from './guild.entity';
 export { GuildMember } from './guild-member.entity';
 export { GuildDonate } from './guild-donate.entity';
 export { GuildImpeachment } from './guild-impeachment.entity';
+export { GuildBuilding } from './guild-building.entity';
+export { GuildFundLog } from './guild-fund-log.entity';
 export { Intelligence } from './intelligence.entity';
 export { GiftTemplate } from './gift-template.entity';
 export { Kinship } from './kinship.entity';

@@ -7,6 +7,8 @@ import {
   GuildMember,
   GuildDonate,
   GuildImpeachment,
+  GuildBuilding,
+  GuildFundLog,
   Intelligence,
   GiftTemplate,
   Kinship,
@@ -25,6 +27,8 @@ import {
   FriendStatus,
   GuildRole,
   DonateType,
+  GuildBuildingType,
+  GuildFundType,
   IntelligenceGrade,
   IntelType,
   IntelSourceType,
@@ -47,6 +51,8 @@ describe('SocialService', () => {
   let giftRepo: jest.Mocked<Repository<GiftTemplate>>;
   let kinshipRepo: jest.Mocked<Repository<Kinship>>;
   let impeachmentRepo: jest.Mocked<Repository<GuildImpeachment>>;
+  let buildingRepo: jest.Mocked<Repository<GuildBuilding>>;
+  let fundLogRepo: jest.Mocked<Repository<GuildFundLog>>;
   let espionageRepo: jest.Mocked<Repository<CharacterEspionage>>;
   let cacheService: jest.Mocked<CacheService>;
   let economyService: jest.Mocked<EconomyService>;
@@ -109,6 +115,28 @@ describe('SocialService', () => {
           provide: getRepositoryToken(GuildImpeachment),
           useValue: {
             findOne: jest.fn(),
+            save: jest
+              .fn()
+              .mockImplementation((data: any) => Promise.resolve(data)),
+            create: jest.fn((data: any) => ({ ...data, id: '1' })),
+          },
+        },
+        {
+          provide: getRepositoryToken(GuildBuilding),
+          useValue: {
+            findOne: jest.fn(),
+            find: jest.fn(),
+            save: jest
+              .fn()
+              .mockImplementation((data: any) => Promise.resolve(data)),
+            create: jest.fn((data: any) => ({ ...data, id: '1' })),
+          },
+        },
+        {
+          provide: getRepositoryToken(GuildFundLog),
+          useValue: {
+            find: jest.fn(),
+            findAndCount: jest.fn(),
             save: jest
               .fn()
               .mockImplementation((data: any) => Promise.resolve(data)),
@@ -198,6 +226,8 @@ describe('SocialService', () => {
     giftRepo = module.get(getRepositoryToken(GiftTemplate));
     kinshipRepo = module.get(getRepositoryToken(Kinship));
     impeachmentRepo = module.get(getRepositoryToken(GuildImpeachment));
+    buildingRepo = module.get(getRepositoryToken(GuildBuilding));
+    fundLogRepo = module.get(getRepositoryToken(GuildFundLog));
     espionageRepo = module.get(getRepositoryToken(CharacterEspionage));
     cacheService = module.get(CacheService);
     economyService = module.get(EconomyService);
@@ -421,6 +451,9 @@ describe('SocialService', () => {
         contribution: 50,
         joinedAt: new Date(),
       } as GuildMember);
+      guildRepo.findOne.mockResolvedValue({ id: '1', fund: '0' } as any);
+      guildRepo.save = jest.fn().mockImplementation((g: any) => Promise.resolve(g));
+      economyService.addCurrency.mockResolvedValue({ balanceAfter: '1' });
 
       const result = await service.donateToGuild(
         'p1',
@@ -1343,6 +1376,166 @@ describe('SocialService', () => {
       guildRepo.findOne.mockResolvedValue(null);
       const result = await service.getGuildLog('1');
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('buildBuilding', () => {
+    const leader = { id: '1', guildId: '1', playerId: 'p1', role: GuildRole.LEADER } as GuildMember;
+    const member = { id: '1', guildId: '1', playerId: 'p1', role: GuildRole.MEMBER } as GuildMember;
+
+    it('throws GUILD_ROLE_FORBIDDEN for plain member', async () => {
+      guildMemberRepo.findOne.mockResolvedValue(member);
+      await expect(
+        service.buildBuilding('p1', '1', GuildBuildingType.MEETING_HALL),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.GUILD_ROLE_FORBIDDEN },
+      });
+    });
+
+    it('creates Lv1 building and deducts 10000 fund', async () => {
+      guildMemberRepo.findOne.mockResolvedValue(leader);
+      buildingRepo.findOne.mockResolvedValue(null);
+      const guild = { id: '1', fund: '50000' } as any;
+      guildRepo.findOne.mockResolvedValue(guild);
+      guildRepo.save = jest.fn().mockImplementation((g: any) => Promise.resolve(g));
+      fundLogRepo.save.mockImplementation((d: any) => Promise.resolve(d));
+      buildingRepo.save.mockResolvedValue({
+        id: '1', guildId: '1', buildingType: GuildBuildingType.MEETING_HALL, level: 1,
+      } as any);
+
+      const result = await service.buildBuilding(
+        'p1', '1', GuildBuildingType.MEETING_HALL,
+      );
+
+      expect(result.level).toBe(1);
+      expect(guild.fund).toBe('40000');
+      expect(fundLogRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: '10000', type: GuildFundType.EXPENSE }),
+      );
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        GameEvents.GUILD_FUND_CHANGED, expect.any(Object),
+      );
+    });
+
+    it('upgrades existing building Lv1→Lv2 deducting 20000', async () => {
+      guildMemberRepo.findOne.mockResolvedValue(leader);
+      buildingRepo.findOne.mockResolvedValue({
+        id: '1', guildId: '1', buildingType: GuildBuildingType.BLACKSMITH, level: 1,
+      } as any);
+      const guild = { id: '1', fund: '50000' } as any;
+      guildRepo.findOne.mockResolvedValue(guild);
+      guildRepo.save = jest.fn().mockImplementation((g: any) => Promise.resolve(g));
+      fundLogRepo.save.mockImplementation((d: any) => Promise.resolve(d));
+      buildingRepo.save.mockResolvedValue({
+        id: '1', guildId: '1', buildingType: GuildBuildingType.BLACKSMITH, level: 2,
+      } as any);
+
+      const result = await service.buildBuilding(
+        'p1', '1', GuildBuildingType.BLACKSMITH,
+      );
+
+      expect(result.level).toBe(2);
+      expect(guild.fund).toBe('30000');
+    });
+
+    it('throws GUILD_BUILDING_LEVEL_CAP at Lv5', async () => {
+      guildMemberRepo.findOne.mockResolvedValue(leader);
+      buildingRepo.findOne.mockResolvedValue({
+        id: '1', guildId: '1', buildingType: GuildBuildingType.BLACKSMITH, level: 5,
+      } as any);
+      await expect(
+        service.buildBuilding('p1', '1', GuildBuildingType.BLACKSMITH),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.GUILD_BUILDING_LEVEL_CAP },
+      });
+    });
+
+    it('throws GUILD_FUND_NOT_ENOUGH when fund insufficient', async () => {
+      guildMemberRepo.findOne.mockResolvedValue(leader);
+      buildingRepo.findOne.mockResolvedValue(null);
+      const guild = { id: '1', fund: '5000' } as any;
+      guildRepo.findOne.mockResolvedValue(guild);
+      await expect(
+        service.buildBuilding('p1', '1', GuildBuildingType.HERB_GARDEN),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.GUILD_FUND_NOT_ENOUGH },
+      });
+      expect(guild.fund).toBe('5000');
+    });
+  });
+
+  describe('adjustGuildFund', () => {
+    it('records income and emits GUILD_FUND_CHANGED', async () => {
+      guildMemberRepo.findOne.mockResolvedValue({
+        id: '1', guildId: '1', playerId: 'p1', role: GuildRole.VICE_LEADER,
+      } as GuildMember);
+      const guild = { id: '1', fund: '10000' } as any;
+      guildRepo.findOne.mockResolvedValue(guild);
+      guildRepo.save = jest.fn().mockImplementation((g: any) => Promise.resolve(g));
+      fundLogRepo.save.mockImplementation((d: any) => Promise.resolve(d));
+
+      const result = await service.adjustGuildFund('p1', '1', 5000, '拍卖分成');
+
+      expect(guild.fund).toBe('15000');
+      expect(result.type).toBe(GuildFundType.INCOME);
+      expect(fundLogRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: '5000', reason: '拍卖分成' }),
+      );
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        GameEvents.GUILD_FUND_CHANGED,
+        expect.objectContaining({ amount: 5000, balance: '15000' }),
+      );
+    });
+
+    it('throws GUILD_FUND_NOT_ENOUGH when expense exceeds balance', async () => {
+      guildMemberRepo.findOne.mockResolvedValue({
+        id: '1', guildId: '1', playerId: 'p1', role: GuildRole.LEADER,
+      } as GuildMember);
+      const guild = { id: '1', fund: '1000' } as any;
+      guildRepo.findOne.mockResolvedValue(guild);
+      await expect(
+        service.adjustGuildFund('p1', '1', -5000, '支出'),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.GUILD_FUND_NOT_ENOUGH },
+      });
+      expect(guildRepo.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getGuildFundLogs', () => {
+    it('returns paginated fund logs', async () => {
+      fundLogRepo.findAndCount.mockResolvedValue([[{ id: '1' }] as any, 1]);
+      const result = await service.getGuildFundLogs('1', 1, 20);
+      expect(result.items).toHaveLength(1);
+      expect(result.total).toBe(1);
+    });
+  });
+
+  describe('donateToGuild fund & contrib linkage', () => {
+    it('adds gold to guild fund and issues GUILD_CONTRIB currency', async () => {
+      guildMemberRepo.findOne.mockResolvedValue({
+        id: '1', guildId: '1', playerId: 'p1', role: GuildRole.MEMBER, contribution: 0,
+      } as GuildMember);
+      const guild = { id: '1', fund: '0' } as any;
+      guildRepo.findOne.mockResolvedValue(guild);
+      guildRepo.save = jest.fn().mockImplementation((g: any) => Promise.resolve(g));
+      economyService.addCurrency.mockResolvedValue({ balanceAfter: '10' });
+
+      const result = await service.donateToGuild('p1', '1', DonateType.GOLD, '1000');
+
+      expect(result.contributionGained).toBe(10);
+      expect(guild.fund).toBe('1000');
+      expect(economyService.addCurrency).toHaveBeenCalledWith(
+        'p1',
+        CurrencyType.GUILD_CONTRIB,
+        10,
+        'guild_donate',
+        'social.donateToGuild',
+      );
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        GameEvents.GUILD_CONTRIB_GAINED,
+        expect.objectContaining({ amount: 10 }),
+      );
     });
   });
 });

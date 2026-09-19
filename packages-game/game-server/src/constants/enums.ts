@@ -422,6 +422,11 @@ export enum GuildImpeachmentStatus {
   REJECTED = 'rejected',
 }
 
+export enum GuildFundType {
+  INCOME = 'income',
+  EXPENSE = 'expense',
+}
+
 // ===== 邮件模块枚举 =====
 
 export enum MailSenderType {

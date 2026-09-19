@@ -40,6 +40,9 @@ export class Guild {
     at: string;
   }>;
 
+  @Column({ type: 'bigint', default: '0' })
+  fund: string;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

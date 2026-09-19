@@ -7,6 +7,8 @@ import {
   GuildMember,
   GuildDonate,
   GuildImpeachment,
+  GuildBuilding,
+  GuildFundLog,
   Intelligence,
   GiftTemplate,
   Kinship,
@@ -23,6 +25,7 @@ import {
   FriendStatus,
   GuildRole,
   DonateType,
+  GuildBuildingType,
   IntelligenceGrade,
   IntelType,
   IntelSourceType,
@@ -32,6 +35,7 @@ import {
   KinshipType,
   KinshipStatus,
   GuildImpeachmentStatus,
+  GuildFundType,
 } from '@constants/enums';
 import { CacheService } from '@cache/cache.service';
 import { EconomyService } from '@modules/economy/economy.service';
@@ -60,6 +64,10 @@ export class SocialService {
     private readonly guildDonateRepo: Repository<GuildDonate>,
     @InjectRepository(GuildImpeachment)
     private readonly impeachmentRepo: Repository<GuildImpeachment>,
+    @InjectRepository(GuildBuilding)
+    private readonly buildingRepo: Repository<GuildBuilding>,
+    @InjectRepository(GuildFundLog)
+    private readonly fundLogRepo: Repository<GuildFundLog>,
     @InjectRepository(Intelligence)
     private readonly intelligenceRepo: Repository<Intelligence>,
     @InjectRepository(GiftTemplate)
@@ -245,6 +253,33 @@ export class SocialService {
       contributionGained,
     });
     const saved = await this.guildDonateRepo.save(donation);
+
+    if (donateType === DonateType.GOLD) {
+      const guild = await this.getGuildOrThrow(guildId);
+      guild.fund = (BigInt(guild.fund ?? '0') + BigInt(amount)).toString();
+      await this.guildRepo.save(guild);
+      this.eventBus.emit(GameEvents.GUILD_FUND_CHANGED, {
+        guildId,
+        amount: parseInt(amount, 10),
+        reason: 'guild_donate',
+        balance: guild.fund,
+      });
+    }
+
+    if (contributionGained > 0) {
+      await this.economyService.addCurrency(
+        playerId,
+        CurrencyType.GUILD_CONTRIB,
+        contributionGained,
+        'guild_donate',
+        'social.donateToGuild',
+      );
+      this.eventBus.emit(GameEvents.GUILD_CONTRIB_GAINED, {
+        guildId,
+        playerId,
+        amount: contributionGained,
+      });
+    }
 
     this.eventBus.emit(GameEvents.GUILD_DONATED, {
       guildId,
@@ -455,6 +490,132 @@ export class SocialService {
   async getGuildLog(guildId: string): Promise<Guild['actionLog']> {
     const guild = await this.guildRepo.findOne({ where: { id: guildId } });
     return guild ? (guild.actionLog ?? []) : [];
+  }
+
+  // ===== Guild Base & Fund =====
+
+  private static readonly BUILDING_MAX_LEVEL = 5;
+  private static readonly BUILDING_COST_PER_LEVEL = 10000;
+
+  private async getGuildOrThrow(guildId: string): Promise<Guild> {
+    const guild = await this.guildRepo.findOne({ where: { id: guildId } });
+    if (!guild) {
+      throw new GameException(ErrorCodes.GUILD_PERMISSION_DENIED, '公会不存在');
+    }
+    return guild;
+  }
+
+  private async adjustGuildFundInternal(
+    operatorId: string,
+    guildId: string,
+    amount: number,
+    reason: string,
+  ): Promise<GuildFundLog> {
+    const guild = await this.getGuildOrThrow(guildId);
+    const operator = await this.getGuildMemberOrThrow(operatorId, guildId);
+    if (
+      operator.role !== GuildRole.LEADER &&
+      operator.role !== GuildRole.VICE_LEADER
+    ) {
+      throw new GameException(ErrorCodes.GUILD_ROLE_FORBIDDEN, '仅帮主/副帮主可操作资金');
+    }
+
+    const current = BigInt(guild.fund ?? '0');
+    if (amount < 0 && current + BigInt(amount) < BigInt(0)) {
+      throw new GameException(ErrorCodes.GUILD_FUND_NOT_ENOUGH, '帮派资金不足');
+    }
+
+    const type = amount >= 0 ? GuildFundType.INCOME : GuildFundType.EXPENSE;
+    guild.fund = (current + BigInt(amount)).toString();
+    await this.guildRepo.save(guild);
+
+    const log = this.fundLogRepo.create({
+      guildId,
+      playerId: operatorId,
+      amount: Math.abs(amount).toString(),
+      type,
+      reason,
+    });
+    const saved = await this.fundLogRepo.save(log);
+
+    this.eventBus.emit(GameEvents.GUILD_FUND_CHANGED, {
+      guildId,
+      amount,
+      reason,
+      balance: guild.fund,
+    });
+    return saved;
+  }
+
+  async buildBuilding(
+    operatorId: string,
+    guildId: string,
+    buildingType: GuildBuildingType,
+  ): Promise<GuildBuilding> {
+    const operator = await this.getGuildMemberOrThrow(operatorId, guildId);
+    if (
+      operator.role !== GuildRole.LEADER &&
+      operator.role !== GuildRole.VICE_LEADER
+    ) {
+      throw new GameException(ErrorCodes.GUILD_ROLE_FORBIDDEN, '仅帮主/副帮主可建设');
+    }
+
+    const existing = await this.buildingRepo.findOne({
+      where: { guildId, buildingType },
+    });
+    const targetLevel = existing ? existing.level + 1 : 1;
+    if (targetLevel > SocialService.BUILDING_MAX_LEVEL) {
+      throw new GameException(ErrorCodes.GUILD_BUILDING_LEVEL_CAP, '建筑已达最高等级');
+    }
+
+    const cost = targetLevel * SocialService.BUILDING_COST_PER_LEVEL;
+    await this.adjustGuildFundInternal(
+      operatorId,
+      guildId,
+      -cost,
+      `建设${buildingType}至Lv${targetLevel}`,
+    );
+
+    if (existing) {
+      existing.level = targetLevel;
+      return this.buildingRepo.save(existing);
+    }
+    const building = this.buildingRepo.create({
+      guildId,
+      buildingType,
+      level: 1,
+    });
+    return this.buildingRepo.save(building);
+  }
+
+  async getGuildBuildings(guildId: string): Promise<GuildBuilding[]> {
+    return this.buildingRepo.find({
+      where: { guildId },
+      order: { buildingType: 'ASC' },
+    });
+  }
+
+  async adjustGuildFund(
+    operatorId: string,
+    guildId: string,
+    amount: number,
+    reason: string,
+  ): Promise<GuildFundLog> {
+    return this.adjustGuildFundInternal(operatorId, guildId, amount, reason);
+  }
+
+  async getGuildFundLogs(
+    guildId: string,
+    page: number,
+    limit: number,
+  ): Promise<{ items: GuildFundLog[]; total: number }> {
+    const [items, total] = await this.fundLogRepo.findAndCount({
+      where: { guildId },
+      skip: (page - 1) * limit,
+      take: limit,
+      order: { createdAt: 'DESC' },
+    });
+    return { items, total };
   }
 
   // ===== Intelligence =====
