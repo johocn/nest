@@ -21,8 +21,11 @@ import {
   CharacterNeeds,
   CharacterMartialArt,
   CharacterRelationship,
+  TitleTemplate,
+  CharacterTitle,
 } from './entities';
 import { GameException } from '@common/exceptions/game.exception';
+import { ErrorCodes } from '@constants/error-codes';
 import {
   Profession,
   Gender,
@@ -65,6 +68,8 @@ describe('CharacterService', () => {
     needs: mockRepo(),
     martialArt: mockRepo(),
     relationship: mockRepo(),
+    title: mockRepo(),
+    charTitle: mockRepo(),
   };
 
   const entityTokenMap = {
@@ -87,6 +92,8 @@ describe('CharacterService', () => {
     [getRepositoryToken(CharacterNeeds)]: repos.needs,
     [getRepositoryToken(CharacterMartialArt)]: repos.martialArt,
     [getRepositoryToken(CharacterRelationship)]: repos.relationship,
+    [getRepositoryToken(TitleTemplate)]: repos.title,
+    [getRepositoryToken(CharacterTitle)]: repos.charTitle,
   };
 
   beforeEach(async () => {
@@ -262,5 +269,76 @@ describe('CharacterService', () => {
 
     const result = await service.upsertMartialArt('1', MartialArtType.PALM, 20);
     expect(result.level).toBe(20);
+  });
+
+  describe('角色名片与称号', () => {
+    it('updateCard 校验长度并保存', async () => {
+      repos.profile.findOne.mockResolvedValue({
+        characterId: '1',
+        alias: null,
+        poem: null,
+      });
+      repos.profile.save.mockImplementation((v) => Promise.resolve(v));
+
+      await expect(
+        service.updateCard('1', { alias: 'x'.repeat(25) }),
+      ).rejects.toMatchObject({ response: { code: ErrorCodes.PARAM_INVALID } });
+
+      const result = await service.updateCard('1', {
+        alias: '逍遥客',
+        poem: '十步杀一人，千里不留行',
+      });
+      expect(result.alias).toBe('逍遥客');
+    });
+
+    it('equipTitle 未拥有拒绝', async () => {
+      repos.charTitle.findOne.mockResolvedValue(null);
+      await expect(
+        service.equipTitle('1', '10', true),
+      ).rejects.toMatchObject({ response: { code: ErrorCodes.TITLE_NOT_OWNED } });
+    });
+
+    it('grantTitle 幂等：已拥有不重复插入', async () => {
+      repos.title.findOne.mockResolvedValue({
+        id: '10',
+        name: '状元',
+        iconUrl: null,
+      });
+      repos.charTitle.findOne.mockResolvedValue(null);
+      repos.charTitle.save.mockImplementation((v) => Promise.resolve(v));
+
+      await expect(service.grantTitle('1', '10')).resolves.toBeDefined();
+
+      repos.charTitle.findOne.mockResolvedValue({
+        characterId: '1',
+        titleId: '10',
+      });
+      await expect(service.grantTitle('1', '10')).resolves.toBeDefined();
+
+      expect(repos.charTitle.save).toHaveBeenCalledTimes(1);
+    });
+
+    it('getCard 返回脱敏名片', async () => {
+      repos.profile.findOne.mockResolvedValue({
+        characterId: '1',
+        alias: '逍遥客',
+        poem: '十步杀一人',
+      });
+      repos.character.findOne.mockResolvedValue({ id: '1', name: '张三' });
+      repos.charTitle.find.mockResolvedValue([
+        { characterId: '1', titleId: '10', isEquipped: true },
+      ]);
+      repos.title.find.mockResolvedValue([
+        { id: '10', name: '状元', iconUrl: 'icon.png' },
+      ]);
+
+      const result = await service.getCard('1');
+      expect(result).toEqual({
+        name: '张三',
+        alias: '逍遥客',
+        poem: '十步杀一人',
+        titles: [{ name: '状元', iconUrl: 'icon.png' }],
+      });
+    });
   });
 });

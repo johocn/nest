@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import {
   Character,
   CharacterAttribute,
@@ -22,6 +22,8 @@ import {
   CharacterMartialArt,
   CharacterRelationship,
 } from './entities';
+import { TitleTemplate } from './entities/title-template.entity';
+import { CharacterTitle } from './entities/character-title.entity';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
 import {
@@ -108,6 +110,10 @@ export class CharacterService {
     private readonly maRepo: Repository<CharacterMartialArt>,
     @InjectRepository(CharacterRelationship)
     private readonly relRepo: Repository<CharacterRelationship>,
+    @InjectRepository(TitleTemplate)
+    private readonly titleRepo: Repository<TitleTemplate>,
+    @InjectRepository(CharacterTitle)
+    private readonly charTitleRepo: Repository<CharacterTitle>,
   ) {}
 
   async createCharacter(dto: CreateCharacterDto): Promise<Character> {
@@ -428,5 +434,121 @@ export class CharacterService {
     characterId: string,
   ): Promise<CharacterRelationship[]> {
     return this.relRepo.find({ where: { characterId } });
+  }
+
+  async updateCard(
+    characterId: string,
+    data: { alias?: string; poem?: string },
+  ): Promise<{ alias: string | null; poem: string | null }> {
+    const profile = await this.profileRepo.findOne({
+      where: { characterId },
+    });
+    if (!profile) {
+      throw new GameException(ErrorCodes.PLAYER_NOT_FOUND, '角色档案不存在');
+    }
+    if (data.alias !== undefined) {
+      const alias = data.alias.trim();
+      if (alias.length > 24) {
+        throw new GameException(ErrorCodes.PARAM_INVALID, '名号最长24字');
+      }
+      profile.alias = alias || null;
+    }
+    if (data.poem !== undefined) {
+      const poem = data.poem.trim();
+      if (poem.length > 64) {
+        throw new GameException(ErrorCodes.PARAM_INVALID, '诗号最长64字');
+      }
+      profile.poem = poem || null;
+    }
+    const saved = await this.profileRepo.save(profile);
+    return { alias: saved.alias, poem: saved.poem };
+  }
+
+  async getCard(characterId: string): Promise<{
+    name: string;
+    alias: string | null;
+    poem: string | null;
+    titles: { name: string; iconUrl: string | null }[];
+  }> {
+    const profile = await this.profileRepo.findOne({
+      where: { characterId },
+    });
+    const character = await this.charRepo.findOne({
+      where: { id: characterId },
+    });
+    if (!profile || !character) {
+      throw new GameException(ErrorCodes.PLAYER_NOT_FOUND, '角色不存在');
+    }
+    const titles = await this.charTitleRepo.find({
+      where: { characterId, isEquipped: true },
+    });
+    const titleTemplates = titles.length
+      ? await this.titleRepo.find({
+          where: { id: In(titles.map((t) => t.titleId)) },
+        })
+      : [];
+    const titleMap = new Map(titleTemplates.map((t) => [t.id, t]));
+    return {
+      name: character.name,
+      alias: profile.alias,
+      poem: profile.poem,
+      titles: titles.map((t) => {
+        const tmpl = titleMap.get(t.titleId);
+        return {
+          name: tmpl?.name ?? '',
+          iconUrl: tmpl?.iconUrl ?? null,
+        };
+      }),
+    };
+  }
+
+  async grantTitle(
+    characterId: string,
+    titleId: string,
+  ): Promise<CharacterTitle> {
+    const existing = await this.charTitleRepo.findOne({
+      where: { characterId, titleId },
+    });
+    if (existing) return existing;
+    const title = await this.titleRepo.findOne({ where: { id: titleId } });
+    if (!title) {
+      throw new GameException(ErrorCodes.TITLE_NOT_FOUND, '称号不存在');
+    }
+    const record = this.charTitleRepo.create({
+      characterId,
+      titleId,
+      isEquipped: false,
+    });
+    return this.charTitleRepo.save(record);
+  }
+
+  async equipTitle(
+    characterId: string,
+    titleId: string,
+    equip: boolean,
+  ): Promise<void> {
+    const owned = await this.charTitleRepo.findOne({
+      where: { characterId, titleId },
+    });
+    if (!owned) {
+      throw new GameException(ErrorCodes.TITLE_NOT_OWNED, '未获得该称号');
+    }
+    if (equip) {
+      await this.charTitleRepo.update(
+        { characterId, isEquipped: true },
+        { isEquipped: false },
+      );
+      owned.isEquipped = true;
+    } else {
+      owned.isEquipped = false;
+    }
+    await this.charTitleRepo.save(owned);
+  }
+
+  async getTitles(characterId: string): Promise<CharacterTitle[]> {
+    return this.charTitleRepo.find({
+      where: { characterId },
+      order: { obtainedAt: 'DESC' },
+    });
   }
 }
