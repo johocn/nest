@@ -14,7 +14,10 @@ import {
   Intelligence,
   GiftTemplate,
   Kinship,
+  PlayerReport,
+  PlayerBlock,
 } from './entities';
+import { Player } from '@modules/player/entities/player.entity';
 import { CharacterEspionage } from '@modules/character/entities';
 import { CharacterService } from '@modules/character/character.service';
 import { InventoryService } from '@modules/inventory/inventory.service';
@@ -44,10 +47,14 @@ import {
   GuildActivityStatus,
   GuildDiplomacyRelation,
   GuildShopRewardType,
+  ReportTargetType,
+  ReportReason,
+  ReportStatus,
 } from '@constants/enums';
 import type { Repository } from 'typeorm';
 
 describe('SocialService', () => {
+  let moduleRef: TestingModule;
   let service: SocialService;
   let friendRepo: jest.Mocked<Repository<Friend>>;
   let guildRepo: jest.Mocked<Repository<Guild>>;
@@ -242,10 +249,41 @@ describe('SocialService', () => {
           provide: PlayerService,
           useValue: { getById: jest.fn() },
         },
+        {
+          provide: getRepositoryToken(PlayerReport),
+          useValue: {
+            findOne: jest.fn(),
+            find: jest.fn(),
+            create: jest.fn(),
+            save: jest.fn(),
+            count: jest.fn(),
+            delete: jest.fn(),
+            createQueryBuilder: jest.fn(),
+          },
+        },
+        {
+          provide: getRepositoryToken(PlayerBlock),
+          useValue: {
+            findOne: jest.fn(),
+            find: jest.fn(),
+            create: jest.fn(),
+            save: jest.fn(),
+            count: jest.fn(),
+            delete: jest.fn(),
+          },
+        },
+        {
+          provide: getRepositoryToken(Player),
+          useValue: {
+            findOne: jest.fn(),
+            find: jest.fn(),
+          },
+        },
         { provide: Function, useValue: random },
       ],
     }).compile();
 
+    moduleRef = module;
     service = module.get(SocialService);
     friendRepo = module.get(getRepositoryToken(Friend));
     guildRepo = module.get(getRepositoryToken(Guild));
@@ -1834,6 +1872,79 @@ describe('SocialService', () => {
       expect(guildMemberRepo.find).toHaveBeenCalledWith(
         expect.objectContaining({ order: { contribution: 'DESC' } }),
       );
+    });
+  });
+
+  describe('举报与拉黑', () => {
+    let reportRepo: any;
+    let blockRepo: any;
+    let playerRepo: any;
+
+    beforeEach(() => {
+      service = moduleRef.get<SocialService>(SocialService);
+      reportRepo = moduleRef.get(getRepositoryToken(PlayerReport));
+      blockRepo = moduleRef.get(getRepositoryToken(PlayerBlock));
+      playerRepo = moduleRef.get(getRepositoryToken(Player));
+      playerService.getById.mockResolvedValue({ id: '200' });
+      jest.clearAllMocks();
+    });
+
+    it('提交举报成功并触发事件', async () => {
+      reportRepo.findOne.mockResolvedValueOnce(null); // 无重复
+      reportRepo.create.mockReturnValue({});
+      reportRepo.save.mockResolvedValue({
+        id: '1', reporterId: '100', targetType: ReportTargetType.PLAYER,
+        targetId: '200', reason: ReportReason.ABUSE, status: ReportStatus.PENDING,
+      });
+
+      const result = await service.submitReport(
+        '100', ReportTargetType.PLAYER, '200', ReportReason.ABUSE, '测试',
+      );
+      expect(result.status).toBe(ReportStatus.PENDING);
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        GameEvents.REPORT_SUBMITTED,
+        expect.objectContaining({ reportId: '1', targetId: '200' }),
+      );
+    });
+
+    it('24h 内重复举报同一目标被拒', async () => {
+      reportRepo.findOne.mockResolvedValueOnce({ id: '1' }); // 命中重复
+      await expect(
+        service.submitReport('100', ReportTargetType.PLAYER, '200', ReportReason.AD),
+      ).rejects.toMatchObject({ response: { code: ErrorCodes.REPORT_COOLDOWN } });
+    });
+
+    it('拉黑自己被拒', async () => {
+      await expect(
+        service.blockPlayer('100', '100'),
+      ).rejects.toMatchObject({ response: { code: ErrorCodes.BLOCK_SELF } });
+    });
+
+    it('拉黑超上限被拒', async () => {
+      blockRepo.count.mockResolvedValueOnce(200);
+      await expect(
+        service.blockPlayer('100', '200'),
+      ).rejects.toMatchObject({ response: { code: ErrorCodes.BLOCK_LIMIT } });
+    });
+
+    it('重复拉黑幂等成功', async () => {
+      blockRepo.count.mockResolvedValueOnce(0);
+      blockRepo.findOne.mockResolvedValueOnce({ id: '1', playerId: '100', blockedId: '200' });
+      const result = await service.blockPlayer('100', '200');
+      expect(result.id).toBe('1');
+    });
+
+    it('isBlocked 双向命中', async () => {
+      blockRepo.findOne.mockResolvedValueOnce({ id: '1' });
+      expect(await service.isBlocked('100', '200')).toBe(true);
+      blockRepo.findOne.mockResolvedValueOnce(null);
+      expect(await service.isBlocked('100', '200')).toBe(false);
+    });
+
+    it('取消拉黑删除双向记录', async () => {
+      blockRepo.delete.mockResolvedValue({ affected: 1 });
+      await service.unblockPlayer('100', '200');
+      expect(blockRepo.delete).toHaveBeenCalledTimes(1);
     });
   });
 });

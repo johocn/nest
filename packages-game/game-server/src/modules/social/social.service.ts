@@ -1,6 +1,6 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Raw } from 'typeorm';
+import { Repository, Raw, MoreThan } from 'typeorm';
 import {
   Friend,
   Guild,
@@ -14,6 +14,8 @@ import {
   Intelligence,
   GiftTemplate,
   Kinship,
+  PlayerReport,
+  PlayerBlock,
 } from './entities';
 import { CharacterEspionage, CharacterRelationship } from '@modules/character/entities';
 import { CharacterService } from '@modules/character/character.service';
@@ -42,6 +44,9 @@ import {
   GuildActivityStatus,
   GuildDiplomacyRelation,
   GuildShopRewardType,
+  ReportTargetType,
+  ReportReason,
+  ReportStatus,
 } from '@constants/enums';
 import { CacheService } from '@cache/cache.service';
 import { EconomyService } from '@modules/economy/economy.service';
@@ -84,6 +89,10 @@ export class SocialService {
     private readonly giftRepo: Repository<GiftTemplate>,
     @InjectRepository(Kinship)
     private readonly kinshipRepo: Repository<Kinship>,
+    @InjectRepository(PlayerReport)
+    private readonly reportRepo: Repository<PlayerReport>,
+    @InjectRepository(PlayerBlock)
+    private readonly blockRepo: Repository<PlayerBlock>,
     @InjectRepository(CharacterEspionage)
     private readonly espionageRepo: Repository<CharacterEspionage>,
     private readonly cacheService: CacheService,
@@ -152,6 +161,109 @@ export class SocialService {
   async removeFriend(playerId: string, friendId: string): Promise<void> {
     await this.friendRepo.delete({ playerId, friendId });
     await this.friendRepo.delete({ playerId: friendId, friendId: playerId });
+  }
+
+  // ===== 举报与拉黑（阶段5批1） =====
+
+  async submitReport(
+    playerId: string,
+    targetType: ReportTargetType,
+    targetId: string,
+    reason: ReportReason,
+    content?: string,
+  ): Promise<PlayerReport> {
+    if (
+      !Object.values(ReportTargetType).includes(targetType) ||
+      !Object.values(ReportReason).includes(reason)
+    ) {
+      throw new GameException(ErrorCodes.PARAM_INVALID, '举报类型或原因非法');
+    }
+    if (targetType === ReportTargetType.PLAYER && targetId === playerId) {
+      throw new GameException(ErrorCodes.REPORT_INVALID_TARGET, '不能举报自己');
+    }
+    if (targetType === ReportTargetType.PLAYER) {
+      const target = await this.playerService.getById(targetId);
+      if (!target) {
+        throw new GameException(ErrorCodes.REPORT_INVALID_TARGET, '举报目标不存在');
+      }
+    }
+    const since = new Date(Date.now() - 24 * 3600 * 1000);
+    const dup = await this.reportRepo.findOne({
+      where: { reporterId: playerId, targetType, targetId, createdAt: MoreThan(since) },
+    });
+    if (dup) {
+      throw new GameException(ErrorCodes.REPORT_COOLDOWN, '24小时内已举报该目标');
+    }
+    const record = await this.reportRepo.save(
+      this.reportRepo.create({
+        reporterId: playerId,
+        targetType,
+        targetId,
+        reason,
+        content: content?.trim() || null,
+        status: ReportStatus.PENDING,
+      }),
+    );
+    this.eventBus.emit(GameEvents.REPORT_SUBMITTED, {
+      reportId: record.id,
+      reporterId: playerId,
+      targetType,
+      targetId,
+    });
+    return record;
+  }
+
+  async blockPlayer(playerId: string, targetId: string): Promise<PlayerBlock> {
+    if (playerId === targetId) {
+      throw new GameException(ErrorCodes.BLOCK_SELF, '不能拉黑自己');
+    }
+    const count = await this.blockRepo.count({ where: { playerId } });
+    if (count >= 200) {
+      throw new GameException(ErrorCodes.BLOCK_LIMIT, '拉黑数量已达上限');
+    }
+    const existing = await this.blockRepo.findOne({
+      where: { playerId, blockedId: targetId },
+    });
+    if (existing) return existing;
+    const record = await this.blockRepo.save(
+      this.blockRepo.create({ playerId, blockedId: targetId }),
+    );
+    this.eventBus.emit(GameEvents.PLAYER_BLOCKED, {
+      playerId,
+      blockedId: targetId,
+    });
+    return record;
+  }
+
+  async unblockPlayer(playerId: string, targetId: string): Promise<void> {
+    await this.blockRepo.delete({ playerId, blockedId: targetId });
+  }
+
+  async listBlocks(
+    playerId: string,
+    page = 1,
+    limit = 20,
+  ): Promise<{ items: PlayerBlock[]; total: number }> {
+    const [items, total] = await Promise.all([
+      this.blockRepo.find({
+        where: { playerId },
+        order: { createdAt: 'DESC' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.blockRepo.count({ where: { playerId } }),
+    ]);
+    return { items, total };
+  }
+
+  async isBlocked(a: string, b: string): Promise<boolean> {
+    const found = await this.blockRepo.findOne({
+      where: [
+        { playerId: a, blockedId: b },
+        { playerId: b, blockedId: a },
+      ],
+    });
+    return Boolean(found);
   }
 
   // ===== Guild =====
