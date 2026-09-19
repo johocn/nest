@@ -3,6 +3,11 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { SocialService } from './social.service';
 import { SocialController } from './social.controller';
 import { Friend, Guild, GuildMember, GuildDonate, Intelligence, GiftTemplate, Kinship } from './entities';
+import { CharacterEspionage } from '@modules/character/entities';
+import { EconomyModule } from '@modules/economy/economy.module';
+import { CharacterModule } from '@modules/character/character.module';
+import { InventoryModule } from '@modules/inventory/inventory.module';
+import { PlayerModule } from '@modules/player/player.module';
 
 @Module({
   imports: [
@@ -14,7 +19,12 @@ import { Friend, Guild, GuildMember, GuildDonate, Intelligence, GiftTemplate, Ki
       Intelligence,
       GiftTemplate,
       Kinship,
+      CharacterEspionage,
     ]),
+    EconomyModule,
+    CharacterModule,
+    InventoryModule,
+    PlayerModule,
   ],
   controllers: [SocialController],
   providers: [SocialService],

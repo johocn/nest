@@ -1,10 +1,38 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { SocialService } from './social.service';
-import { Friend, Guild, GuildMember, GuildDonate } from './entities';
+import {
+  Friend,
+  Guild,
+  GuildMember,
+  GuildDonate,
+  Intelligence,
+  GiftTemplate,
+  Kinship,
+} from './entities';
+import { CharacterEspionage } from '@modules/character/entities';
+import { CharacterService } from '@modules/character/character.service';
+import { InventoryService } from '@modules/inventory/inventory.service';
+import { PlayerService } from '@modules/player/player.service';
 import { EventBusService } from '@event-bus/event-bus.service';
+import { CacheService } from '@cache/cache.service';
+import { EconomyService } from '@modules/economy/economy.service';
 import { GameException } from '@common/exceptions/game.exception';
-import { FriendStatus, GuildRole, DonateType } from '@constants/enums';
+import { ErrorCodes } from '@constants/error-codes';
+import { GameEvents } from '@event-bus/game-events';
+import {
+  FriendStatus,
+  GuildRole,
+  DonateType,
+  IntelligenceGrade,
+  IntelType,
+  IntelSourceType,
+  IntelStatus,
+  CurrencyType,
+  RelationshipLevel,
+  KinshipType,
+  KinshipStatus,
+} from '@constants/enums';
 import type { Repository } from 'typeorm';
 
 describe('SocialService', () => {
@@ -13,9 +41,20 @@ describe('SocialService', () => {
   let guildRepo: jest.Mocked<Repository<Guild>>;
   let guildMemberRepo: jest.Mocked<Repository<GuildMember>>;
   let guildDonateRepo: jest.Mocked<Repository<GuildDonate>>;
+  let intelligenceRepo: jest.Mocked<Repository<Intelligence>>;
+  let giftRepo: jest.Mocked<Repository<GiftTemplate>>;
+  let kinshipRepo: jest.Mocked<Repository<Kinship>>;
+  let espionageRepo: jest.Mocked<Repository<CharacterEspionage>>;
+  let cacheService: jest.Mocked<CacheService>;
+  let economyService: jest.Mocked<EconomyService>;
+  let characterService: jest.Mocked<CharacterService>;
+  let inventoryService: jest.Mocked<InventoryService>;
+  let playerService: jest.Mocked<PlayerService>;
   let eventBus: jest.Mocked<EventBusService>;
+  let random: jest.Mock<number>;
 
   beforeEach(async () => {
+    random = jest.fn(() => 0);
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SocialService,
@@ -64,6 +103,75 @@ describe('SocialService', () => {
           },
         },
         { provide: EventBusService, useValue: { emit: jest.fn() } },
+        {
+          provide: getRepositoryToken(Intelligence),
+          useValue: {
+            findOne: jest.fn(),
+            find: jest.fn(),
+            findAndCount: jest.fn(),
+            save: jest
+              .fn()
+              .mockImplementation((data: any) => Promise.resolve(data)),
+            create: jest.fn((data: any) => ({ ...data, id: '1' })),
+          },
+        },
+        {
+          provide: getRepositoryToken(GiftTemplate),
+          useValue: {
+            findOne: jest.fn(),
+            save: jest
+              .fn()
+              .mockImplementation((data: any) => Promise.resolve(data)),
+            create: jest.fn((data: any) => ({ ...data, id: '1' })),
+          },
+        },
+        {
+          provide: getRepositoryToken(Kinship),
+          useValue: {
+            findOne: jest.fn(),
+            find: jest.fn(),
+            save: jest
+              .fn()
+              .mockImplementation((data: any) => Promise.resolve(data)),
+            create: jest.fn((data: any) => ({ ...data, id: '1' })),
+          },
+        },
+        {
+          provide: getRepositoryToken(CharacterEspionage),
+          useValue: {
+            findOne: jest.fn(),
+            save: jest
+              .fn()
+              .mockImplementation((data: any) => Promise.resolve(data)),
+          },
+        },
+        {
+          provide: CacheService,
+          useValue: { get: jest.fn(), set: jest.fn(), del: jest.fn() },
+        },
+        {
+          provide: EconomyService,
+          useValue: {
+            addCurrency: jest.fn(),
+            deductCurrency: jest.fn(),
+          },
+        },
+        {
+          provide: CharacterService,
+          useValue: {
+            increaseFavorability: jest.fn(),
+            getRelationshipLevel: jest.fn(),
+          },
+        },
+        {
+          provide: InventoryService,
+          useValue: { removeItem: jest.fn() },
+        },
+        {
+          provide: PlayerService,
+          useValue: { getById: jest.fn() },
+        },
+        { provide: Function, useValue: random },
       ],
     }).compile();
 
@@ -72,6 +180,15 @@ describe('SocialService', () => {
     guildRepo = module.get(getRepositoryToken(Guild));
     guildMemberRepo = module.get(getRepositoryToken(GuildMember));
     guildDonateRepo = module.get(getRepositoryToken(GuildDonate));
+    intelligenceRepo = module.get(getRepositoryToken(Intelligence));
+    giftRepo = module.get(getRepositoryToken(GiftTemplate));
+    kinshipRepo = module.get(getRepositoryToken(Kinship));
+    espionageRepo = module.get(getRepositoryToken(CharacterEspionage));
+    cacheService = module.get(CacheService);
+    economyService = module.get(EconomyService);
+    characterService = module.get(CharacterService);
+    inventoryService = module.get(InventoryService);
+    playerService = module.get(PlayerService);
     eventBus = module.get(EventBusService);
   });
 
@@ -303,6 +420,727 @@ describe('SocialService', () => {
         'social.guild.donated',
         expect.any(Object),
       );
+    });
+  });
+
+  // ===== Intelligence: spy =====
+
+  describe('spyIntelligence', () => {
+    it('creates intel and sets cooldown on success (no espionage record -> level 0)', async () => {
+      espionageRepo.findOne.mockResolvedValue(null);
+      random.mockReturnValue(0);
+
+      const result = await service.spyIntelligence('p1', 'c2');
+
+      expect(result.status).toBe(IntelStatus.ACTIVE);
+      expect([IntelligenceGrade.C, IntelligenceGrade.D]).toContain(
+        result.grade,
+      );
+      expect(result.intelType).toBe(IntelType.RUMOR);
+      expect(result.sourceType).toBe(IntelSourceType.SPY);
+      expect(result.sourceId).toBe('c2');
+      expect(result.freshnessExpireAt).toBeInstanceOf(Date);
+      expect(cacheService.set).toHaveBeenCalledWith('intel:spy:p1', '1', 600);
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        GameEvents.INTEL_GAINED,
+        expect.any(Object),
+      );
+      expect(espionageRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('throws INTEL_COOLDOWN when in cooldown', async () => {
+      cacheService.get.mockResolvedValue('1');
+
+      await expect(service.spyIntelligence('p1', 'c2')).rejects.toMatchObject({
+        response: { code: ErrorCodes.INTEL_COOLDOWN },
+      });
+      expect(espionageRepo.findOne).not.toHaveBeenCalled();
+      expect(intelligenceRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('throws INTEL_SPY_FAILED on failure and does not create intel', async () => {
+      espionageRepo.findOne.mockResolvedValue(null);
+      random.mockReturnValue(1);
+
+      await expect(service.spyIntelligence('p1', 'c2')).rejects.toMatchObject({
+        response: { code: ErrorCodes.INTEL_SPY_FAILED },
+      });
+      expect(intelligenceRepo.create).not.toHaveBeenCalled();
+      expect(cacheService.set).not.toHaveBeenCalled();
+    });
+
+    it('accumulates +10 intelligenceValue and levels up across threshold (95->105, level 0->1)', async () => {
+      const record = {
+        id: '1',
+        characterId: 'p1',
+        canSpy: true,
+        canInfiltrate: false,
+        espionageLevel: 0,
+        intelligenceValue: 95,
+        currentMission: null,
+        disguise: null,
+        counterSpyLevel: 0,
+      } as CharacterEspionage;
+      espionageRepo.findOne.mockImplementation((opts: any) =>
+        opts.where.characterId === 'p1'
+          ? Promise.resolve(record)
+          : Promise.resolve(null),
+      );
+      random.mockReturnValue(0);
+
+      await service.spyIntelligence('p1', 'c2');
+
+      expect(record.intelligenceValue).toBe(105);
+      expect(record.espionageLevel).toBe(1);
+      expect(espionageRepo.save).toHaveBeenCalledWith(record);
+    });
+  });
+
+  // ===== Intelligence: inquire =====
+
+  describe('inquireIntelligence', () => {
+    it('deducts 100 gold and produces D-grade intel', async () => {
+      economyService.deductCurrency.mockResolvedValue({ balanceAfter: '0' });
+      espionageRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.inquireIntelligence('p1', '某某传闻');
+
+      expect(economyService.deductCurrency).toHaveBeenCalledWith(
+        'p1',
+        CurrencyType.GOLD,
+        100,
+        'inquire',
+        'intel_inquire',
+      );
+      expect(result.grade).toBe(IntelligenceGrade.D);
+      expect(result.sourceType).toBe(IntelSourceType.INQUIRE);
+      expect(result.title).toBe('打听：某某传闻');
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        GameEvents.INTEL_GAINED,
+        expect.any(Object),
+      );
+    });
+
+    it('propagates CURRENCY_NOT_ENOUGH when gold insufficient', async () => {
+      economyService.deductCurrency.mockRejectedValue(
+        new GameException(ErrorCodes.CURRENCY_NOT_ENOUGH, '货币不足'),
+      );
+
+      await expect(
+        service.inquireIntelligence('p1', 'x'),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.CURRENCY_NOT_ENOUGH },
+      });
+    });
+  });
+
+  // ===== Intelligence: eavesdrop =====
+
+  describe('eavesdropIntelligence', () => {
+    it('throws INTEL_LEVEL_NOT_ENOUGH when espionage level < 5', async () => {
+      espionageRepo.findOne.mockResolvedValue({
+        id: '1',
+        characterId: 'p1',
+        espionageLevel: 3,
+        canInfiltrate: true,
+      } as CharacterEspionage);
+
+      await expect(
+        service.eavesdropIntelligence('p1', 'c2'),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.INTEL_LEVEL_NOT_ENOUGH },
+      });
+    });
+
+    it('throws INTEL_LEVEL_NOT_ENOUGH when canInfiltrate is false', async () => {
+      espionageRepo.findOne.mockResolvedValue({
+        id: '1',
+        characterId: 'p1',
+        espionageLevel: 5,
+        canInfiltrate: false,
+      } as CharacterEspionage);
+
+      await expect(
+        service.eavesdropIntelligence('p1', 'c2'),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.INTEL_LEVEL_NOT_ENOUGH },
+      });
+    });
+
+    it('produces B-grade SECRET intel when level >= 5 and canInfiltrate', async () => {
+      const record = {
+        id: '1',
+        characterId: 'p1',
+        espionageLevel: 5,
+        canInfiltrate: true,
+        intelligenceValue: 100,
+        counterSpyLevel: 0,
+      } as CharacterEspionage;
+      espionageRepo.findOne.mockResolvedValue(record);
+
+      const result = await service.eavesdropIntelligence('p1', 'c2');
+
+      expect(result.grade).toBe(IntelligenceGrade.B);
+      expect(result.intelType).toBe(IntelType.SECRET);
+      expect(result.freshnessExpireAt).toBeInstanceOf(Date);
+      expect(record.intelligenceValue).toBe(120);
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        GameEvents.INTEL_GAINED,
+        expect.any(Object),
+      );
+    });
+  });
+
+  // ===== Intelligence: query =====
+
+  describe('getIntelligences', () => {
+    it('marks expired B-grade intel as EXPIRED on read', async () => {
+      const expired = {
+        id: '1',
+        ownerId: 'p1',
+        grade: IntelligenceGrade.B,
+        freshnessExpireAt: new Date(Date.now() - 60_000),
+        status: IntelStatus.ACTIVE,
+      } as Intelligence;
+      intelligenceRepo.find.mockResolvedValue([expired]);
+      intelligenceRepo.save.mockImplementation((data: any) =>
+        Promise.resolve(data),
+      );
+
+      const result = await service.getIntelligences('p1');
+
+      expect(result[0].status).toBe(IntelStatus.EXPIRED);
+      expect(intelligenceRepo.save).toHaveBeenCalled();
+    });
+
+    it('keeps C-grade intel untouched (no freshness check)', async () => {
+      const c = {
+        id: '2',
+        ownerId: 'p1',
+        grade: IntelligenceGrade.C,
+        freshnessExpireAt: null,
+        status: IntelStatus.ACTIVE,
+      } as Intelligence;
+      intelligenceRepo.find.mockResolvedValue([c]);
+      intelligenceRepo.save.mockImplementation((data: any) =>
+        Promise.resolve(data),
+      );
+
+      const result = await service.getIntelligences('p1');
+
+      expect(result[0].status).toBe(IntelStatus.ACTIVE);
+      expect(intelligenceRepo.save).not.toHaveBeenCalled();
+    });
+  });
+
+  // ===== Intelligence: market =====
+
+  describe('listIntelligence', () => {
+    it('throws INTEL_NOT_FOUND when not owner', async () => {
+      intelligenceRepo.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.listIntelligence('p1', '1', 100),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.INTEL_NOT_FOUND },
+      });
+    });
+
+    it('throws INTEL_ALREADY_LISTED when already listed', async () => {
+      intelligenceRepo.findOne.mockResolvedValue({
+        id: '1',
+        ownerId: 'p1',
+        status: IntelStatus.LISTED,
+        isListed: true,
+      } as Intelligence);
+
+      await expect(
+        service.listIntelligence('p1', '1', 100),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.INTEL_ALREADY_LISTED },
+      });
+    });
+
+    it('throws INTEL_EXPIRED when not active', async () => {
+      intelligenceRepo.findOne.mockResolvedValue({
+        id: '1',
+        ownerId: 'p1',
+        status: IntelStatus.EXPIRED,
+        isListed: false,
+      } as Intelligence);
+
+      await expect(
+        service.listIntelligence('p1', '1', 100),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.INTEL_EXPIRED },
+      });
+    });
+
+    it('lists an active intel', async () => {
+      const intel = {
+        id: '1',
+        ownerId: 'p1',
+        status: IntelStatus.ACTIVE,
+        isListed: false,
+      } as Intelligence;
+      intelligenceRepo.findOne.mockResolvedValue(intel);
+      intelligenceRepo.save.mockImplementation((data: any) =>
+        Promise.resolve(data),
+      );
+
+      const result = await service.listIntelligence('p1', '1', 500);
+
+      expect(result.isListed).toBe(true);
+      expect(result.status).toBe(IntelStatus.LISTED);
+      expect(result.price).toBe('500');
+    });
+  });
+
+  describe('getIntelMarket', () => {
+    it('returns paginated listed intel', async () => {
+      intelligenceRepo.findAndCount.mockResolvedValue([
+        [{ id: '1' } as Intelligence],
+        1,
+      ]);
+
+      const result = await service.getIntelMarket(1, 10);
+
+      expect(result.total).toBe(1);
+      expect(result.items).toHaveLength(1);
+      expect(intelligenceRepo.findAndCount).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { isListed: true } }),
+      );
+    });
+  });
+
+  describe('buyIntelligence', () => {
+    it('transfers intel, settles currency and emits INTEL_SOLD', async () => {
+      const listed = {
+        id: '1',
+        ownerId: 'seller',
+        status: IntelStatus.LISTED,
+        isListed: true,
+        price: '500',
+        sellerTrace: null,
+      } as Intelligence;
+      intelligenceRepo.findOne.mockResolvedValue(listed);
+      economyService.deductCurrency.mockResolvedValue({ balanceAfter: '0' });
+      economyService.addCurrency.mockResolvedValue({ balanceAfter: '500' });
+      intelligenceRepo.save.mockImplementation((data: any) =>
+        Promise.resolve(data),
+      );
+
+      const result = await service.buyIntelligence('buyer', '1');
+
+      expect(economyService.deductCurrency).toHaveBeenCalledWith(
+        'buyer',
+        CurrencyType.GOLD,
+        500,
+        'intel_buy',
+        'intel_market',
+      );
+      expect(economyService.addCurrency).toHaveBeenCalledWith(
+        'seller',
+        CurrencyType.GOLD,
+        500,
+        'intel_sale',
+        'intel_market',
+      );
+      expect(result.ownerId).toBe('buyer');
+      expect(result.status).toBe(IntelStatus.ACTIVE);
+      expect(result.isListed).toBe(false);
+      expect(result.price).toBeNull();
+      expect(result.sellerTrace).toMatchObject({
+        sellerId: 'seller',
+        price: 500,
+      });
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        GameEvents.INTEL_SOLD,
+        expect.any(Object),
+      );
+    });
+
+    it('rejects buying own intel', async () => {
+      intelligenceRepo.findOne.mockResolvedValue({
+        id: '1',
+        ownerId: 'buyer',
+        status: IntelStatus.LISTED,
+        isListed: true,
+        price: '100',
+      } as Intelligence);
+
+      await expect(service.buyIntelligence('buyer', '1')).rejects.toMatchObject(
+        {
+          response: {
+            code: ErrorCodes.INTEL_NOT_FOUND,
+            msg: '不能购买自己的情报',
+          },
+        },
+      );
+      expect(economyService.deductCurrency).not.toHaveBeenCalled();
+    });
+
+    it('rejects when intel is not listed', async () => {
+      intelligenceRepo.findOne.mockResolvedValue({
+        id: '1',
+        ownerId: 'seller',
+        status: IntelStatus.ACTIVE,
+        isListed: false,
+        price: null,
+      } as Intelligence);
+
+      await expect(service.buyIntelligence('buyer', '1')).rejects.toMatchObject(
+        {
+          response: {
+            code: ErrorCodes.INTEL_NOT_FOUND,
+            msg: '情报不可购买',
+          },
+        },
+      );
+    });
+  });
+
+  describe('consumeIntelligence', () => {
+    it('consumes owned intel', async () => {
+      const intel = {
+        id: '1',
+        ownerId: 'p1',
+        status: IntelStatus.ACTIVE,
+      } as Intelligence;
+      intelligenceRepo.findOne.mockResolvedValue(intel);
+      intelligenceRepo.save.mockImplementation((data: any) =>
+        Promise.resolve(data),
+      );
+
+      const result = await service.consumeIntelligence('p1', '1');
+
+      expect(result.status).toBe(IntelStatus.CONSUMED);
+      expect(intelligenceRepo.save).toHaveBeenCalledWith(intel);
+    });
+
+    it('throws INTEL_NOT_FOUND when not owner', async () => {
+      intelligenceRepo.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.consumeIntelligence('p1', '1'),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.INTEL_NOT_FOUND },
+      });
+    });
+  });
+
+  describe('sendGift', () => {
+    beforeEach(() => {
+      friendRepo.findOne.mockResolvedValue({
+        id: '1',
+        playerId: 'p1',
+        friendId: 't1',
+        status: FriendStatus.ACCEPTED,
+      } as any);
+      giftRepo.findOne.mockResolvedValue({
+        id: '1',
+        itemId: 'g1',
+        giftWeight: 10,
+        dailyCap: 5,
+      } as any);
+      cacheService.get.mockResolvedValue(null);
+      inventoryService.removeItem.mockResolvedValue({} as any);
+      characterService.increaseFavorability.mockResolvedValue({
+        id: '1',
+        characterId: 'p1',
+        targetId: 't1',
+        favorability: 60,
+        level: RelationshipLevel.ACQUAINTANCE,
+      } as any);
+    });
+
+    it('delivers gift, bumps favorability and opens reciprocate window', async () => {
+      const result = await service.sendGift('p1', 't1', 'g1');
+      expect(result).toMatchObject({
+        giftWeight: 10,
+        favorability: 60,
+        level: RelationshipLevel.ACQUAINTANCE,
+      });
+      expect(inventoryService.removeItem).toHaveBeenCalledWith(
+        'p1',
+        'g1',
+        1,
+        'gift_send',
+      );
+      expect(characterService.increaseFavorability).toHaveBeenCalledWith(
+        'p1',
+        't1',
+        10,
+      );
+      expect(cacheService.set).toHaveBeenCalledWith(
+        'gift:send:p1',
+        '1',
+        86400,
+      );
+      expect(cacheService.set).toHaveBeenCalledWith(
+        'gift:reciprocate:t1:p1',
+        '1',
+        86400,
+      );
+    });
+
+    it('throws NOT_FRIEND when target is not an accepted friend', async () => {
+      friendRepo.findOne.mockResolvedValue(null);
+      await expect(service.sendGift('p1', 't1', 'g1')).rejects.toMatchObject({
+        response: { code: ErrorCodes.NOT_FRIEND },
+      });
+      expect(characterService.increaseFavorability).not.toHaveBeenCalled();
+    });
+
+    it('throws GIFT_NOT_FOUND without template', async () => {
+      giftRepo.findOne.mockResolvedValue(null);
+      await expect(service.sendGift('p1', 't1', 'g1')).rejects.toMatchObject({
+        response: { code: ErrorCodes.GIFT_NOT_FOUND },
+      });
+    });
+
+    it('throws GIFT_DAILY_CAP when daily count reached', async () => {
+      cacheService.get.mockResolvedValue('5');
+      await expect(service.sendGift('p1', 't1', 'g1')).rejects.toMatchObject({
+        response: { code: ErrorCodes.GIFT_DAILY_CAP },
+      });
+      expect(inventoryService.removeItem).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('reciprocateGift', () => {
+    beforeEach(() => {
+      giftRepo.findOne.mockResolvedValue({
+        id: '1',
+        itemId: 'g1',
+        giftWeight: 10,
+        dailyCap: 5,
+      } as any);
+      cacheService.get.mockResolvedValue(null);
+      cacheService.get.mockImplementation(async (key: string) =>
+        key === 'gift:reciprocate:t1:p1' ? '1' : null,
+      );
+      inventoryService.removeItem.mockResolvedValue({} as any);
+      characterService.increaseFavorability.mockResolvedValue({
+        id: '1',
+        favorability: 30,
+        level: RelationshipLevel.STRANGER,
+      } as any);
+    });
+
+    it('delivers gift and clears the reciprocate window', async () => {
+      const result = await service.reciprocateGift('t1', 'p1', 'g1');
+      expect(result).toMatchObject({ giftWeight: 10, favorability: 30 });
+      expect(cacheService.del).toHaveBeenCalledWith('gift:reciprocate:t1:p1');
+      expect(characterService.increaseFavorability).toHaveBeenCalledWith(
+        't1',
+        'p1',
+        10,
+      );
+    });
+
+    it('throws GIFT_RECIPROCATE_EXPIRED without window', async () => {
+      cacheService.get.mockResolvedValue(null);
+      await expect(
+        service.reciprocateGift('t1', 'p1', 'g1'),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.GIFT_RECIPROCATE_EXPIRED },
+      });
+      expect(inventoryService.removeItem).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('formKinship', () => {
+    beforeEach(() => {
+      characterService.getRelationshipLevel.mockResolvedValue(
+        RelationshipLevel.CONFIDANT,
+      );
+      kinshipRepo.findOne.mockResolvedValue(null);
+      playerService.getById.mockResolvedValue({ level: 50 } as any);
+    });
+
+    it('rejects sworn with 2 members', async () => {
+      await expect(
+        service.formKinship('p1', KinshipType.SWORN, ['p2']),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.KINSHIP_SIZE_INVALID },
+      });
+    });
+
+    it('creates sworn kinship with 3 members', async () => {
+      const result = await service.formKinship(
+        'p1',
+        KinshipType.SWORN,
+        ['p2', 'p3'],
+        '桃园三义',
+      );
+      expect(result).toMatchObject({
+        type: KinshipType.SWORN,
+        leaderId: 'p1',
+        name: '桃园三义',
+        status: KinshipStatus.ACTIVE,
+      });
+      expect(result.members).toEqual(['p1', 'p2', 'p3']);
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        GameEvents.KINSHIP_FORMED,
+        expect.objectContaining({ type: KinshipType.SWORN }),
+      );
+    });
+
+    it('rejects sworn with 9 members', async () => {
+      await expect(
+        service.formKinship('p1', KinshipType.SWORN, [
+          'p2',
+          'p3',
+          'p4',
+          'p5',
+          'p6',
+          'p7',
+          'p8',
+          'p9',
+        ]),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.KINSHIP_SIZE_INVALID },
+      });
+    });
+
+    it('throws RELATIONSHIP_NOT_ENOUGH when favorability below confidant', async () => {
+      characterService.getRelationshipLevel.mockResolvedValue(
+        RelationshipLevel.FRIEND,
+      );
+      await expect(
+        service.formKinship('p1', KinshipType.COUPLE, ['p2']),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.RELATIONSHIP_NOT_ENOUGH },
+      });
+    });
+
+    it('throws KINSHIP_LEVEL_GAP for master with insufficient level gap', async () => {
+      playerService.getById.mockImplementation(async (id: string) =>
+        id === 'p1' ? { level: 20 } : { level: 15 },
+      );
+      await expect(
+        service.formKinship('p1', KinshipType.MASTER, ['p2']),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.KINSHIP_LEVEL_GAP },
+      });
+    });
+
+    it('creates master kinship when level gap >= 10', async () => {
+      playerService.getById.mockImplementation(async (id: string) =>
+        id === 'p1' ? { level: 50 } : { level: 30 },
+      );
+      const result = await service.formKinship(
+        'p1',
+        KinshipType.MASTER,
+        ['p2'],
+        '师门',
+      );
+      expect(result).toMatchObject({
+        type: KinshipType.MASTER,
+        leaderId: 'p1',
+      });
+      expect(result.members).toEqual(['p1', 'p2']);
+    });
+
+    it('throws KINSHIP_EXISTS when participant has active kinship', async () => {
+      kinshipRepo.findOne.mockResolvedValue({
+        id: 'k1',
+        type: KinshipType.COUPLE,
+        leaderId: 'p9',
+        members: ['p9', 'p2'],
+        status: KinshipStatus.ACTIVE,
+      } as any);
+      await expect(
+        service.formKinship('p1', KinshipType.COUPLE, ['p2']),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.KINSHIP_EXISTS },
+      });
+    });
+  });
+
+  describe('breakKinship', () => {
+    it('disbands kinship by member and emits event', async () => {
+      kinshipRepo.findOne.mockResolvedValue({
+        id: 'k1',
+        type: KinshipType.COUPLE,
+        leaderId: 'p1',
+        members: ['p1', 'p2'],
+        status: KinshipStatus.ACTIVE,
+      } as any);
+      const result = await service.breakKinship('p2', 'k1');
+      expect(result.status).toBe(KinshipStatus.DISBANDED);
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        GameEvents.KINSHIP_BROKEN,
+        expect.objectContaining({ kinshipId: 'k1', playerId: 'p2' }),
+      );
+    });
+
+    it('throws KINSHIP_NOT_OWNER for outsider', async () => {
+      kinshipRepo.findOne.mockResolvedValue({
+        id: 'k1',
+        type: KinshipType.COUPLE,
+        leaderId: 'p1',
+        members: ['p1', 'p2'],
+        status: KinshipStatus.ACTIVE,
+      } as any);
+      await expect(service.breakKinship('p9', 'k1')).rejects.toMatchObject({
+        response: { code: ErrorCodes.KINSHIP_NOT_OWNER },
+      });
+    });
+  });
+
+  describe('graduateApprentice', () => {
+    it('graduates apprentice when level reached', async () => {
+      kinshipRepo.findOne.mockResolvedValue({
+        id: 'k1',
+        type: KinshipType.MASTER,
+        leaderId: 'p1',
+        members: ['p1', 'p2'],
+        status: KinshipStatus.ACTIVE,
+      } as any);
+      playerService.getById.mockImplementation(async (id: string) =>
+        id === 'p1' ? { level: 50 } : { level: 50 },
+      );
+      const result = await service.graduateApprentice('p1', 'k1');
+      expect(result.status).toBe(KinshipStatus.DISBANDED);
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        GameEvents.KINSHIP_BROKEN,
+        expect.objectContaining({ reason: 'graduate' }),
+      );
+    });
+
+    it('throws KINSHIP_LEVEL_GAP when apprentice below master level', async () => {
+      kinshipRepo.findOne.mockResolvedValue({
+        id: 'k1',
+        type: KinshipType.MASTER,
+        leaderId: 'p1',
+        members: ['p1', 'p2'],
+        status: KinshipStatus.ACTIVE,
+      } as any);
+      playerService.getById.mockImplementation(async (id: string) =>
+        id === 'p1' ? { level: 50 } : { level: 49 },
+      );
+      await expect(
+        service.graduateApprentice('p1', 'k1'),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.KINSHIP_LEVEL_GAP },
+      });
+    });
+
+    it('throws KINSHIP_NOT_OWNER when not the master', async () => {
+      kinshipRepo.findOne.mockResolvedValue({
+        id: 'k1',
+        type: KinshipType.MASTER,
+        leaderId: 'p1',
+        members: ['p1', 'p2'],
+        status: KinshipStatus.ACTIVE,
+      } as any);
+      await expect(
+        service.graduateApprentice('p2', 'k1'),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.KINSHIP_NOT_OWNER },
+      });
     });
   });
 });
