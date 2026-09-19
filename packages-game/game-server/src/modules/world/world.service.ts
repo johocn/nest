@@ -8,6 +8,11 @@ import {
   ObjectTemplate,
   SceneTrigger,
   SceneEntitySpawn,
+  TriggerUnlock,
+  PlayerMount,
+  StreetGame,
+  GameSession,
+  LandmarkMessage,
 } from './entities';
 import { CacheService } from '@cache/cache.service';
 import { EventBusService } from '@event-bus/event-bus.service';
@@ -18,6 +23,8 @@ import {
   SceneStatus,
   ObjectType,
   InteractType,
+  TriggerType,
+  GameSessionStatus,
   CurrencyType,
 } from '@constants/enums';
 import { EconomyService } from '../economy/economy.service';
@@ -46,6 +53,16 @@ export class WorldService {
     private readonly cacheService: CacheService,
     private readonly eventBus: EventBusService,
     private readonly economyService: EconomyService,
+    @InjectRepository(TriggerUnlock)
+    private readonly triggerUnlockRepo: Repository<TriggerUnlock>,
+    @InjectRepository(PlayerMount)
+    private readonly mountRepo: Repository<PlayerMount>,
+    @InjectRepository(StreetGame)
+    private readonly gameRepo: Repository<StreetGame>,
+    @InjectRepository(GameSession)
+    private readonly sessionRepo: Repository<GameSession>,
+    @InjectRepository(LandmarkMessage)
+    private readonly landmarkMsgRepo: Repository<LandmarkMessage>,
   ) {}
 
   async getScene(id: string): Promise<Scene> {
@@ -215,5 +232,208 @@ export class WorldService {
     }
 
     return { ok: true };
+  }
+
+  async activateTrigger(
+    playerId: string,
+    triggerId: string,
+    memberIds: string[] = [],
+  ): Promise<{ unlocked: boolean; members: string[] }> {
+    const trigger = await this.triggerRepo.findOne({
+      where: { id: triggerId },
+    });
+    if (!trigger) {
+      throw new GameException(ErrorCodes.PARAM_INVALID, '机关不存在');
+    }
+    if (
+      trigger.triggerType !== TriggerType.PUZZLE &&
+      trigger.triggerType !== TriggerType.GATE &&
+      trigger.triggerType !== TriggerType.TRAP
+    ) {
+      throw new GameException(ErrorCodes.PARAM_INVALID, '该触发器非机关类型');
+    }
+    const required = trigger.condition?.requiredPlayers ?? 1;
+    const members = [playerId, ...memberIds.filter((m) => m !== playerId)];
+    if (members.length < required) {
+      throw new GameException(
+        ErrorCodes.TRIGGER_NOT_READY,
+        `机关需要 ${required} 人配合，当前 ${members.length} 人`,
+      );
+    }
+    const records = members.map((pid) =>
+      this.triggerUnlockRepo.create({ triggerId, playerId: pid }),
+    );
+    await this.triggerUnlockRepo.save(records);
+    return { unlocked: true, members };
+  }
+
+  async equipMount(
+    characterId: string,
+    mountId: string,
+  ): Promise<{ ok: boolean }> {
+    const existing = await this.mountRepo.findOne({
+      where: { characterId, mountId },
+    });
+    if (existing) {
+      await this.mountRepo.update(
+        { characterId, isActive: true },
+        { isActive: false },
+      );
+      existing.isActive = true;
+      await this.mountRepo.save(existing);
+      return { ok: true };
+    }
+    const mount = this.mountRepo.create({
+      characterId,
+      mountId,
+      isActive: true,
+    });
+    await this.mountRepo.save(mount);
+    return { ok: true };
+  }
+
+  async rideMount(
+    characterId: string,
+    mountId: string,
+    ride: boolean,
+  ): Promise<{ ok: boolean }> {
+    const existing = await this.mountRepo.findOne({
+      where: { characterId, mountId },
+    });
+    if (!existing) {
+      throw new GameException(ErrorCodes.PARAM_INVALID, '坐骑未获得');
+    }
+    await this.mountRepo.update(
+      { id: existing.id },
+      { isActive: ride },
+    );
+    return { ok: true };
+  }
+
+  async startGame(
+    playerId: string,
+    gameId: string,
+    betAmount: number,
+  ): Promise<GameSession> {
+    const game = await this.gameRepo.findOne({ where: { id: gameId } });
+    if (!game) {
+      throw new GameException(ErrorCodes.GAME_NOT_FOUND, '玩法不存在');
+    }
+    const range = game.betRange ?? { min: 10, max: 1000 };
+    if (betAmount < range.min || betAmount > range.max) {
+      throw new GameException(ErrorCodes.BET_INVALID, '下注金额超出范围');
+    }
+    await this.economyService.deductCurrency(
+      playerId,
+      CurrencyType.GOLD,
+      betAmount,
+      'street_game',
+      `game:${gameId}:start`,
+      gameId,
+    );
+    const session = this.sessionRepo.create({
+      gameId,
+      hostPlayerId: playerId,
+      status: GameSessionStatus.OPEN,
+      betPool: betAmount.toString(),
+    });
+    return this.sessionRepo.save(session);
+  }
+
+  async betGame(
+    playerId: string,
+    sessionId: string,
+    betAmount: number,
+  ): Promise<{ betPool: string }> {
+    const session = await this.sessionRepo.findOne({
+      where: { id: sessionId },
+    });
+    if (!session) {
+      throw new GameException(ErrorCodes.GAME_NOT_FOUND, '对局不存在');
+    }
+    if (session.status !== GameSessionStatus.OPEN) {
+      throw new GameException(ErrorCodes.GAME_NOT_OPEN, '对局已开始或已结束');
+    }
+    const game = await this.gameRepo.findOne({
+      where: { id: session.gameId },
+    });
+    const range = game?.betRange ?? { min: 10, max: 1000 };
+    if (betAmount < range.min || betAmount > range.max) {
+      throw new GameException(ErrorCodes.BET_INVALID, '下注金额超出范围');
+    }
+    await this.economyService.deductCurrency(
+      playerId,
+      CurrencyType.GOLD,
+      betAmount,
+      'street_game_bet',
+      `session:${sessionId}:bet`,
+      sessionId,
+    );
+    session.betPool = (
+      BigInt(session.betPool) + BigInt(betAmount)
+    ).toString();
+    await this.sessionRepo.save(session);
+    return { betPool: session.betPool };
+  }
+
+  async finishGame(
+    playerId: string,
+    sessionId: string,
+    winnerPlayerId: string,
+  ): Promise<{ winner: string; payout: string }> {
+    const session = await this.sessionRepo.findOne({
+      where: { id: sessionId },
+    });
+    if (!session) {
+      throw new GameException(ErrorCodes.GAME_NOT_FOUND, '对局不存在');
+    }
+    if (session.hostPlayerId !== playerId) {
+      throw new GameException(ErrorCodes.FORBIDDEN, '只有房主可结算');
+    }
+    if (session.status === GameSessionStatus.FINISHED) {
+      throw new GameException(ErrorCodes.GAME_NOT_OPEN, '对局已结束');
+    }
+    const pool = BigInt(session.betPool);
+    const payout = (pool * 95n) / 100n; // 5% 场景税
+    if (payout > 0n) {
+      await this.economyService.addCurrency(
+        winnerPlayerId,
+        CurrencyType.GOLD,
+        Number(payout),
+        'street_game_win',
+        `session:${sessionId}:finish`,
+        sessionId,
+      );
+    }
+    session.status = GameSessionStatus.FINISHED;
+    session.winnerPlayerId = winnerPlayerId;
+    session.finishedAt = new Date();
+    await this.sessionRepo.save(session);
+    return { winner: winnerPlayerId, payout: payout.toString() };
+  }
+
+  async leaveLandmarkMessage(
+    playerId: string,
+    objectId: string,
+    content: string,
+  ): Promise<LandmarkMessage> {
+    const trimmed = content.trim();
+    if (!trimmed || trimmed.length > 100) {
+      throw new GameException(ErrorCodes.PARAM_INVALID, '留言1-100字');
+    }
+    const msg = this.landmarkMsgRepo.create({
+      objectId,
+      playerId,
+      content: trimmed,
+    });
+    return this.landmarkMsgRepo.save(msg);
+  }
+
+  async listLandmarkMessages(objectId: string): Promise<LandmarkMessage[]> {
+    return this.landmarkMsgRepo.find({
+      where: { objectId },
+      order: { createdAt: 'DESC' },
+      take: 50,
+    });
   }
 }

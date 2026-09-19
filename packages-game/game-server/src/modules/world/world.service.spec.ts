@@ -8,6 +8,11 @@ import {
   ObjectTemplate,
   SceneTrigger,
   SceneEntitySpawn,
+  TriggerUnlock,
+  PlayerMount,
+  StreetGame,
+  GameSession,
+  LandmarkMessage,
 } from './entities';
 import { CacheService } from '@cache/cache.service';
 import { EventBusService } from '@event-bus/event-bus.service';
@@ -18,6 +23,8 @@ import {
   EntityType,
   ObjectType,
   InteractType,
+  TriggerType,
+  GameSessionStatus,
 } from '@constants/enums';
 import { ErrorCodes } from '@constants/error-codes';
 import { EconomyService } from '../economy/economy.service';
@@ -32,12 +39,18 @@ describe('WorldService', () => {
   let cacheService: jest.Mocked<CacheService>;
   let economyService: jest.Mocked<EconomyService>;
   let eventBus: jest.Mocked<EventBusService>;
+  let triggerUnlockRepo: jest.Mocked<Repository<TriggerUnlock>>;
+  let mountRepo: jest.Mocked<Repository<PlayerMount>>;
+  let gameRepo: jest.Mocked<Repository<StreetGame>>;
+  let sessionRepo: jest.Mocked<Repository<GameSession>>;
+  let landmarkMsgRepo: jest.Mocked<Repository<LandmarkMessage>>;
 
   beforeEach(async () => {
     const createMockRepo = () => ({
       findOne: jest.fn(),
       find: jest.fn(),
       save: jest.fn(),
+      update: jest.fn(),
       create: jest.fn((data: any) => ({ ...data, id: '1' })),
       findAndCount: jest.fn(),
     });
@@ -64,6 +77,26 @@ describe('WorldService', () => {
         },
         {
           provide: getRepositoryToken(SceneEntitySpawn),
+          useValue: createMockRepo(),
+        },
+        {
+          provide: getRepositoryToken(TriggerUnlock),
+          useValue: createMockRepo(),
+        },
+        {
+          provide: getRepositoryToken(PlayerMount),
+          useValue: createMockRepo(),
+        },
+        {
+          provide: getRepositoryToken(StreetGame),
+          useValue: createMockRepo(),
+        },
+        {
+          provide: getRepositoryToken(GameSession),
+          useValue: createMockRepo(),
+        },
+        {
+          provide: getRepositoryToken(LandmarkMessage),
           useValue: createMockRepo(),
         },
         {
@@ -102,6 +135,11 @@ describe('WorldService', () => {
     cacheService = module.get(CacheService);
     economyService = module.get(EconomyService);
     eventBus = module.get(EventBusService);
+    triggerUnlockRepo = module.get(getRepositoryToken(TriggerUnlock));
+    mountRepo = module.get(getRepositoryToken(PlayerMount));
+    gameRepo = module.get(getRepositoryToken(StreetGame));
+    sessionRepo = module.get(getRepositoryToken(GameSession));
+    landmarkMsgRepo = module.get(getRepositoryToken(LandmarkMessage));
   });
 
   const makeScene = (overrides: Partial<Scene> = {}): Scene =>
@@ -330,6 +368,52 @@ describe('WorldService', () => {
       const result = await service.interactObject('1', '4', InteractType.READ);
       expect(result).toHaveProperty('ok', true);
       expect(economyService.addCurrency).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('机关/坐骑/街头玩法/地标', () => {
+    it('机关激活：人数不足拒绝', async () => {
+      triggerRepo.findOne.mockResolvedValue({
+        id: '1',
+        triggerType: TriggerType.PUZZLE,
+        onceOnly: false,
+        condition: { requiredPlayers: 3 },
+      } as any);
+      await expect(
+        service.activateTrigger('1', '1', ['2']), // 共2人 < 3
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.TRIGGER_NOT_READY },
+      });
+    });
+
+    it('街头玩法：下注计入奖池', async () => {
+      gameRepo.findOne.mockResolvedValue({
+        id: '1',
+        name: '对弈',
+        betRange: { min: 10, max: 1000 },
+      } as any);
+      sessionRepo.findOne.mockResolvedValue({
+        id: 's1',
+        gameId: '1',
+        hostPlayerId: '1',
+        status: GameSessionStatus.OPEN,
+        betPool: '0',
+      } as any);
+      economyService.deductCurrency.mockResolvedValue({
+        balanceAfter: '90',
+      } as any);
+      sessionRepo.save.mockImplementation((v: any) => Promise.resolve(v));
+
+      const res = await service.betGame('2', 's1', 100);
+      expect(res.betPool).toBe('100');
+    });
+
+    it('地标留言：长度校验', async () => {
+      await expect(
+        service.leaveLandmarkMessage('1', '1', 'x'.repeat(101)),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.PARAM_INVALID },
+      });
     });
   });
 });
