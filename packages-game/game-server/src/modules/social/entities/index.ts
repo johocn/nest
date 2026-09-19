@@ -10,3 +10,5 @@ export { GuildDiplomacy } from './guild-diplomacy.entity';
 export { Intelligence } from './intelligence.entity';
 export { GiftTemplate } from './gift-template.entity';
 export { Kinship } from './kinship.entity';
+export { PlayerReport } from './player-report.entity';
+export { PlayerBlock } from './player-block.entity';
