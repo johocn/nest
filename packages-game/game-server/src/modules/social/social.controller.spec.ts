@@ -2,7 +2,7 @@ import { Test } from '@nestjs/testing';
 import { SocialController } from './social.controller';
 import { SocialService } from './social.service';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
-import { DonateType } from '@constants/enums';
+import { DonateType, ReportReason, ReportTargetType } from '@constants/enums';
 
 const player = { playerId: 'p1' } as any;
 
@@ -48,6 +48,10 @@ describe('SocialController', () => {
     exchangeGuildShop: jest.fn(),
     paySalaries: jest.fn(),
     getGuildContributionRank: jest.fn(),
+    submitReport: jest.fn(),
+    blockPlayer: jest.fn(),
+    unblockPlayer: jest.fn(),
+    listBlocks: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -357,6 +361,47 @@ describe('SocialController', () => {
       const result = await controller.getGuildContributionRank('g1');
       expect(service.getGuildContributionRank).toHaveBeenCalledWith('g1');
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('举报/拉黑路由', () => {
+    it('submitReport passes playerId, targetType, targetId, reason and content', async () => {
+      service.submitReport.mockResolvedValue({ id: 'r1', status: 'pending' });
+      const result = await controller.submitReport(player, {
+        targetType: ReportTargetType.PLAYER,
+        targetId: 'p2',
+        reason: ReportReason.ABUSE,
+        content: 'x',
+      } as any);
+      expect(service.submitReport).toHaveBeenCalledWith(
+        'p1',
+        ReportTargetType.PLAYER,
+        'p2',
+        ReportReason.ABUSE,
+        'x',
+      );
+      expect(result).toEqual({ id: 'r1', status: 'pending' });
+    });
+
+    it('blockPlayer passes playerId and target playerId', async () => {
+      service.blockPlayer.mockResolvedValue({ id: 'b1' });
+      const result = await controller.blockPlayer(player, { playerId: 'p2' });
+      expect(service.blockPlayer).toHaveBeenCalledWith('p1', 'p2');
+      expect(result).toEqual({ id: 'b1' });
+    });
+
+    it('unblockPlayer passes playerId and target playerId', async () => {
+      service.unblockPlayer.mockResolvedValue(undefined);
+      const result = await controller.unblockPlayer(player, 'p2');
+      expect(service.unblockPlayer).toHaveBeenCalledWith('p1', 'p2');
+      expect(result).toEqual({ success: true });
+    });
+
+    it('listBlocks passes playerId, page and limit', async () => {
+      service.listBlocks.mockResolvedValue({ items: [], total: 0 });
+      const result = await controller.listBlocks(player, 1, 20);
+      expect(service.listBlocks).toHaveBeenCalledWith('p1', 1, 20);
+      expect(result).toEqual({ items: [], total: 0 });
     });
   });
 });

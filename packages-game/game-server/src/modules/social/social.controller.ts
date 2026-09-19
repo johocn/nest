@@ -33,7 +33,7 @@ import { ExchangeGuildShopDto } from './dto/guild-shop.dto';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { CurrentPlayer } from '@common/decorators/current-player.decorator';
 import type { CurrentPlayerData } from '@common/decorators/current-player.decorator';
-import { DonateType } from '@constants/enums';
+import { DonateType, ReportReason, ReportTargetType } from '@constants/enums';
 
 @ApiTags('Social')
 @ApiBearerAuth()
@@ -437,5 +437,61 @@ export class SocialController {
   @ApiOperation({ summary: '七日社交引导（注册第 N 天任务）' })
   async getDailyGuide(@CurrentPlayer() player: CurrentPlayerData) {
     return this.socialService.getDailyGuide(player.playerId);
+  }
+
+  // ===== 举报与拉黑（阶段5批1） =====
+
+  @Post('report')
+  @ApiOperation({ summary: '提交举报' })
+  async submitReport(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Body()
+    body: {
+      targetType: ReportTargetType;
+      targetId: string;
+      reason: ReportReason;
+      content?: string;
+    },
+  ) {
+    return this.socialService.submitReport(
+      player.playerId,
+      body.targetType,
+      body.targetId,
+      body.reason,
+      body.content,
+    );
+  }
+
+  @Post('block')
+  @ApiOperation({ summary: '拉黑玩家' })
+  async blockPlayer(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Body() body: { playerId: string },
+  ) {
+    return this.socialService.blockPlayer(player.playerId, body.playerId);
+  }
+
+  @Delete('block/:playerId')
+  @ApiOperation({ summary: '取消拉黑' })
+  async unblockPlayer(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Param('playerId') playerId: string,
+  ) {
+    await this.socialService.unblockPlayer(player.playerId, playerId);
+    return { success: true };
+  }
+
+  @Get('block/list')
+  @ApiOperation({ summary: '我的拉黑列表' })
+  async listBlocks(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
+  ) {
+    return this.socialService.listBlocks(
+      player.playerId,
+      Number(page),
+      Number(limit),
+    );
   }
 }
