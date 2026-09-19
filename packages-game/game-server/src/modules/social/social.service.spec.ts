@@ -9,6 +9,8 @@ import {
   GuildImpeachment,
   GuildBuilding,
   GuildFundLog,
+  GuildActivity,
+  GuildDiplomacy,
   Intelligence,
   GiftTemplate,
   Kinship,
@@ -38,6 +40,9 @@ import {
   KinshipType,
   KinshipStatus,
   GuildImpeachmentStatus,
+  GuildActivityType,
+  GuildActivityStatus,
+  GuildDiplomacyRelation,
 } from '@constants/enums';
 import type { Repository } from 'typeorm';
 
@@ -53,6 +58,8 @@ describe('SocialService', () => {
   let impeachmentRepo: jest.Mocked<Repository<GuildImpeachment>>;
   let buildingRepo: jest.Mocked<Repository<GuildBuilding>>;
   let fundLogRepo: jest.Mocked<Repository<GuildFundLog>>;
+  let activityRepo: jest.Mocked<Repository<GuildActivity>>;
+  let diplomacyRepo: jest.Mocked<Repository<GuildDiplomacy>>;
   let espionageRepo: jest.Mocked<Repository<CharacterEspionage>>;
   let cacheService: jest.Mocked<CacheService>;
   let economyService: jest.Mocked<EconomyService>;
@@ -137,6 +144,27 @@ describe('SocialService', () => {
           useValue: {
             find: jest.fn(),
             findAndCount: jest.fn(),
+            save: jest
+              .fn()
+              .mockImplementation((data: any) => Promise.resolve(data)),
+            create: jest.fn((data: any) => ({ ...data, id: '1' })),
+          },
+        },
+        {
+          provide: getRepositoryToken(GuildActivity),
+          useValue: {
+            find: jest.fn(),
+            save: jest
+              .fn()
+              .mockImplementation((data: any) => Promise.resolve(data)),
+            create: jest.fn((data: any) => ({ ...data, id: '1' })),
+          },
+        },
+        {
+          provide: getRepositoryToken(GuildDiplomacy),
+          useValue: {
+            findOne: jest.fn(),
+            find: jest.fn(),
             save: jest
               .fn()
               .mockImplementation((data: any) => Promise.resolve(data)),
@@ -228,6 +256,8 @@ describe('SocialService', () => {
     impeachmentRepo = module.get(getRepositoryToken(GuildImpeachment));
     buildingRepo = module.get(getRepositoryToken(GuildBuilding));
     fundLogRepo = module.get(getRepositoryToken(GuildFundLog));
+    activityRepo = module.get(getRepositoryToken(GuildActivity));
+    diplomacyRepo = module.get(getRepositoryToken(GuildDiplomacy));
     espionageRepo = module.get(getRepositoryToken(CharacterEspionage));
     cacheService = module.get(CacheService);
     economyService = module.get(EconomyService);
@@ -1536,6 +1566,110 @@ describe('SocialService', () => {
         GameEvents.GUILD_CONTRIB_GAINED,
         expect.objectContaining({ amount: 10 }),
       );
+    });
+  });
+
+  describe('createGuildActivity', () => {
+    it('creates scheduled activity as leader', async () => {
+      guildMemberRepo.findOne.mockResolvedValue({
+        id: '1', guildId: '1', playerId: 'p1', role: GuildRole.LEADER,
+      } as GuildMember);
+      activityRepo.save.mockImplementation((d: any) => Promise.resolve(d));
+
+      const result = await service.createGuildActivity(
+        'p1', '1', GuildActivityType.BANQUET, new Date('2026-10-01T10:00:00Z'),
+      );
+
+      expect(result.status).toBe(GuildActivityStatus.SCHEDULED);
+      expect(result.activityType).toBe(GuildActivityType.BANQUET);
+      expect(activityRepo.create).toHaveBeenCalled();
+    });
+
+    it('throws GUILD_ROLE_FORBIDDEN for member', async () => {
+      guildMemberRepo.findOne.mockResolvedValue({
+        id: '1', guildId: '1', playerId: 'p1', role: GuildRole.MEMBER,
+      } as GuildMember);
+      await expect(
+        service.createGuildActivity('p1', '1', GuildActivityType.QUIZ, new Date()),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.GUILD_ROLE_FORBIDDEN },
+      });
+    });
+  });
+
+  describe('getGuildActivities', () => {
+    it('returns activities ordered by schedule', async () => {
+      activityRepo.find.mockResolvedValue([{ id: 'a1' }] as any);
+      const result = await service.getGuildActivities('1');
+      expect(result).toHaveLength(1);
+      expect(activityRepo.find).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { guildId: '1' } }),
+      );
+    });
+  });
+
+  describe('setDiplomacy', () => {
+    it('creates friendly diplomacy and emits event', async () => {
+      guildMemberRepo.findOne.mockResolvedValue({
+        id: '1', guildId: '1', playerId: 'p1', role: GuildRole.LEADER,
+      } as GuildMember);
+      guildRepo.findOne
+        .mockResolvedValueOnce({ id: '1' } as any)
+        .mockResolvedValueOnce({ id: '2' } as any);
+      diplomacyRepo.findOne.mockResolvedValue(null);
+      diplomacyRepo.save.mockImplementation((d: any) => Promise.resolve(d));
+
+      const result = await service.setDiplomacy(
+        'p1', '1', '2', GuildDiplomacyRelation.FRIENDLY,
+      );
+
+      expect(result.relation).toBe(GuildDiplomacyRelation.FRIENDLY);
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        GameEvents.GUILD_DIPLOMACY_CHANGED,
+        expect.objectContaining({ guildId: '1', targetGuildId: '2' }),
+      );
+    });
+
+    it('updates existing diplomacy relation', async () => {
+      guildMemberRepo.findOne.mockResolvedValue({
+        id: '1', guildId: '1', playerId: 'p1', role: GuildRole.LEADER,
+      } as GuildMember);
+      guildRepo.findOne
+        .mockResolvedValueOnce({ id: '1' } as any)
+        .mockResolvedValueOnce({ id: '2' } as any);
+      diplomacyRepo.findOne.mockResolvedValue({
+        id: 'd1', guildId: '1', targetGuildId: '2', relation: GuildDiplomacyRelation.NEUTRAL,
+      } as any);
+      diplomacyRepo.save.mockImplementation((d: any) => Promise.resolve(d));
+
+      const result = await service.setDiplomacy(
+        'p1', '1', '2', GuildDiplomacyRelation.HOSTILE,
+      );
+
+      expect(result.relation).toBe(GuildDiplomacyRelation.HOSTILE);
+      expect(diplomacyRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('throws GUILD_DIPLOMACY_EXISTS when targeting self', async () => {
+      guildMemberRepo.findOne.mockResolvedValue({
+        id: '1', guildId: '1', playerId: 'p1', role: GuildRole.LEADER,
+      } as GuildMember);
+      guildRepo.findOne
+        .mockResolvedValueOnce({ id: '1' } as any)
+        .mockResolvedValueOnce({ id: '1' } as any);
+      await expect(
+        service.setDiplomacy('p1', '1', '1', GuildDiplomacyRelation.FRIENDLY),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.GUILD_DIPLOMACY_EXISTS },
+      });
+    });
+  });
+
+  describe('getGuildDiplomacies', () => {
+    it('returns diplomacy list', async () => {
+      diplomacyRepo.find.mockResolvedValue([{ id: 'd1' }] as any);
+      const result = await service.getGuildDiplomacies('1');
+      expect(result).toHaveLength(1);
     });
   });
 });

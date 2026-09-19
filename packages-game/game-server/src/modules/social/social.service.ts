@@ -9,6 +9,8 @@ import {
   GuildImpeachment,
   GuildBuilding,
   GuildFundLog,
+  GuildActivity,
+  GuildDiplomacy,
   Intelligence,
   GiftTemplate,
   Kinship,
@@ -36,6 +38,9 @@ import {
   KinshipStatus,
   GuildImpeachmentStatus,
   GuildFundType,
+  GuildActivityType,
+  GuildActivityStatus,
+  GuildDiplomacyRelation,
 } from '@constants/enums';
 import { CacheService } from '@cache/cache.service';
 import { EconomyService } from '@modules/economy/economy.service';
@@ -68,6 +73,10 @@ export class SocialService {
     private readonly buildingRepo: Repository<GuildBuilding>,
     @InjectRepository(GuildFundLog)
     private readonly fundLogRepo: Repository<GuildFundLog>,
+    @InjectRepository(GuildActivity)
+    private readonly activityRepo: Repository<GuildActivity>,
+    @InjectRepository(GuildDiplomacy)
+    private readonly diplomacyRepo: Repository<GuildDiplomacy>,
     @InjectRepository(Intelligence)
     private readonly intelligenceRepo: Repository<Intelligence>,
     @InjectRepository(GiftTemplate)
@@ -616,6 +625,100 @@ export class SocialService {
       order: { createdAt: 'DESC' },
     });
     return { items, total };
+  }
+
+  // ===== Guild Activity & Diplomacy =====
+
+  private async requireGuildLeaderOrVice(
+    operatorId: string,
+    guildId: string,
+  ): Promise<GuildMember> {
+    const operator = await this.getGuildMemberOrThrow(operatorId, guildId);
+    if (
+      operator.role !== GuildRole.LEADER &&
+      operator.role !== GuildRole.VICE_LEADER
+    ) {
+      throw new GameException(ErrorCodes.GUILD_ROLE_FORBIDDEN, '仅帮主/副帮主可操作');
+    }
+    return operator;
+  }
+
+  async createGuildActivity(
+    operatorId: string,
+    guildId: string,
+    activityType: GuildActivityType,
+    scheduleAt: Date,
+  ): Promise<GuildActivity> {
+    await this.requireGuildLeaderOrVice(operatorId, guildId);
+    const activity = this.activityRepo.create({
+      guildId,
+      activityType,
+      scheduleAt,
+      status: GuildActivityStatus.SCHEDULED,
+    });
+    return this.activityRepo.save(activity);
+  }
+
+  async getGuildActivities(
+    guildId: string,
+  ): Promise<GuildActivity[]> {
+    return this.activityRepo.find({
+      where: { guildId },
+      order: { scheduleAt: 'ASC' },
+    });
+  }
+
+  async setDiplomacy(
+    operatorId: string,
+    guildId: string,
+    targetGuildId: string,
+    relation: GuildDiplomacyRelation,
+  ): Promise<GuildDiplomacy> {
+    await this.requireGuildLeaderOrVice(operatorId, guildId);
+    const [guild, target] = await Promise.all([
+      this.getGuildOrThrow(guildId),
+      this.getGuildOrThrow(targetGuildId),
+    ]);
+    if (guild.id === target.id) {
+      throw new GameException(ErrorCodes.GUILD_DIPLOMACY_EXISTS, '不能与自身建立外交');
+    }
+
+    const existing = await this.diplomacyRepo.findOne({
+      where: { guildId, targetGuildId },
+    });
+    if (existing) {
+      existing.relation = relation;
+      const saved = await this.diplomacyRepo.save(existing);
+      this.eventBus.emit(GameEvents.GUILD_DIPLOMACY_CHANGED, {
+        guildId,
+        targetGuildId,
+        relation,
+      });
+      return saved;
+    }
+
+    const diplomacy = this.diplomacyRepo.create({
+      guildId,
+      targetGuildId,
+      relation,
+      reputation: 0,
+    });
+    const saved = await this.diplomacyRepo.save(diplomacy);
+    this.eventBus.emit(GameEvents.GUILD_DIPLOMACY_CHANGED, {
+      guildId,
+      targetGuildId,
+      relation,
+    });
+    return saved;
+  }
+
+  async getGuildDiplomacies(
+    guildId: string,
+  ): Promise<GuildDiplomacy[]> {
+    return this.diplomacyRepo.find({
+      where: { guildId },
+      order: { updatedAt: 'DESC' },
+    });
   }
 
   // ===== Intelligence =====
