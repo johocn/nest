@@ -20,6 +20,9 @@ export const GameEvents = {
   // 社交事件
   GUILD_JOINED: 'social.guild.joined',
   FRIEND_ADDED: 'social.friend.added',
+  FAVOR_GAINED: 'economy.favor.gained',
+  GUILD_CONTRIB_GAINED: 'economy.guild_contrib.gained',
+  FACE_CHANGED: 'economy.face.changed',
 
   // 世界事件
   ENTITY_SPAWNED: 'world.entity.spawned',

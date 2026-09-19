@@ -21,6 +21,9 @@ export enum CurrencyType {
   GOLD = 'gold',
   DIAMOND = 'diamond',
   BOUND_DIAMOND = 'bound_diamond',
+  FAVOR = 'favor', // 人情值
+  GUILD_CONTRIB = 'guild_contrib', // 帮贡
+  FACE = 'face', // 颜面
 }
 
 export enum TransactionType {
@@ -206,6 +209,7 @@ export enum ObjectType {
   COLLECT = 'collect',
   STONE = 'stone',
   PLANT = 'plant',
+  LANDMARK = 'landmark',
 }
 
 export enum TriggerType {
@@ -213,6 +217,9 @@ export enum TriggerType {
   STORY = 'story',
   BATTLE = 'battle',
   ACTIVITY = 'activity',
+  PUZZLE = 'puzzle',
+  GATE = 'gate',
+  TRAP = 'trap',
 }
 
 export enum EntityType {
@@ -228,6 +235,33 @@ export enum EntityState {
   DEAD = 'dead',
   CLOSED = 'closed',
   OPENED = 'opened',
+}
+
+export enum InteractType {
+  COLLECT = 'collect',
+  HIDE = 'hide',
+  CAMP = 'camp',
+  SIT = 'sit',
+  LIE = 'lie',
+  CARVE = 'carve',
+  READ = 'read',
+  MOUNT = 'mount',
+  FISH = 'fish',
+  PLAY = 'play',
+}
+
+export enum GameType {
+  FISHING = 'fishing',
+  CHESS = 'chess',
+  ARCHERY = 'archery',
+  CRICKET = 'cricket',
+  RING = 'ring',
+}
+
+export enum GameSessionStatus {
+  OPEN = 'open',
+  PLAYING = 'playing',
+  FINISHED = 'finished',
 }
 
 // ===== 战斗技能模块枚举 =====
@@ -281,6 +315,14 @@ export enum FriendStatus {
   PENDING = 'pending',
   ACCEPTED = 'accepted',
   BLOCKED = 'blocked',
+}
+
+export enum PenaltyLevel {
+  WARNING = 'warning',
+  MUTE = 'mute',
+  GUILD_REMOVE = 'guild_remove',
+  TRADE_LIMIT = 'trade_limit',
+  BAN = 'ban',
 }
 
 export enum GuildRole {
