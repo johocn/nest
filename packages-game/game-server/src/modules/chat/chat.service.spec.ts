@@ -12,6 +12,8 @@ import { CacheService } from '@cache/cache.service';
 import { EventBusService } from '@event-bus/event-bus.service';
 import { ConfigManageService } from '@modules/config/config.service';
 import { AdminService } from '@modules/admin/admin.service';
+import { AuthService } from '@modules/auth/auth.service';
+import { SocialService } from '@modules/social/social.service';
 import { Player } from '@modules/player/entities/player.entity';
 import { Friend } from '@modules/social/entities/friend.entity';
 import { GuildMember } from '@modules/social/entities/guild-member.entity';
@@ -21,6 +23,7 @@ import {
   ChatChannel,
   SupportTicketStatus,
   VoiceRoomType,
+  FriendStatus,
 } from '@constants/enums';
 import type { Repository } from 'typeorm';
 
@@ -38,6 +41,8 @@ describe('ChatService', () => {
   let configService: jest.Mocked<ConfigManageService>;
   let adminService: jest.Mocked<AdminService>;
   let eventBus: jest.Mocked<EventBusService>;
+  let authService: any;
+  let socialService: any;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -134,6 +139,18 @@ describe('ChatService', () => {
           useValue: { logOperation: jest.fn() },
         },
         { provide: EventBusService, useValue: { emit: jest.fn() } },
+        {
+          provide: AuthService,
+          useValue: {
+            getAccountRestrictions: jest.fn(),
+          },
+        },
+        {
+          provide: SocialService,
+          useValue: {
+            isBlocked: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -150,6 +167,14 @@ describe('ChatService', () => {
     configService = module.get(ConfigManageService);
     adminService = module.get(AdminService);
     eventBus = module.get(EventBusService);
+    authService = module.get(AuthService);
+    socialService = module.get(SocialService);
+    // 默认无禁言/无拉黑，避免既有 sendChannelMessage 用例受新校验影响
+    authService.getAccountRestrictions.mockResolvedValue({
+      mutedUntil: null,
+      tradeLockedUntil: null,
+    });
+    socialService.isBlocked.mockResolvedValue(false);
   });
 
   const makeMessage = (overrides: Partial<ChatMessage> = {}): ChatMessage =>
@@ -441,6 +466,71 @@ describe('ChatService', () => {
       const result = await service.leaveVoiceRoom('p1', '1');
       expect(result).toEqual({ closed: true });
       expect(voiceRoomRepo.remove).toHaveBeenCalled();
+    });
+  });
+
+  describe('发言限制（禁言/拉黑）', () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+    });
+
+    it('禁言未过期拒绝发言', async () => {
+      // checkChannelPermission(世界频道) 与 enforceChatRestrictions 各查一次 player
+      playerRepo.findOne.mockResolvedValue({ id: '100', accountId: '1' } as any);
+      authService.getAccountRestrictions.mockResolvedValue({
+        mutedUntil: new Date(Date.now() + 3600_000),
+        tradeLockedUntil: null,
+      });
+      await expect(
+        service.sendChannelMessage({
+          senderId: '100',
+          senderName: 'A',
+          channel: ChatChannel.WORLD,
+          content: 'hello',
+        }),
+      ).rejects.toMatchObject({ response: { code: ErrorCodes.ACCOUNT_MUTED } });
+    });
+
+    it('禁言已过期放行', async () => {
+      playerRepo.findOne.mockResolvedValue({ id: '100', accountId: '1' } as any);
+      authService.getAccountRestrictions.mockResolvedValue({
+        mutedUntil: null,
+        tradeLockedUntil: null,
+      });
+      cacheService.incr.mockResolvedValue(1);
+      cacheService.expire.mockResolvedValue(true);
+      statRepo.findOne.mockResolvedValue(null);
+      signInRepo.findOne.mockResolvedValue(null);
+      const result = await service.sendChannelMessage({
+        senderId: '100',
+        senderName: 'A',
+        channel: ChatChannel.WORLD,
+        content: 'hello',
+      });
+      expect(result.message).toBeDefined();
+    });
+
+    it('私聊被对方拉黑拒绝', async () => {
+      friendRepo.findOne.mockResolvedValue({
+        playerId: '100',
+        friendId: '200',
+        status: FriendStatus.ACCEPTED,
+      } as any);
+      playerRepo.findOne.mockResolvedValue({ id: '100', accountId: '1' } as any);
+      authService.getAccountRestrictions.mockResolvedValue({
+        mutedUntil: null,
+        tradeLockedUntil: null,
+      });
+      socialService.isBlocked.mockResolvedValue(true);
+      await expect(
+        service.sendChannelMessage({
+          senderId: '100',
+          senderName: 'A',
+          channel: ChatChannel.PRIVATE,
+          content: 'hi',
+          recipientId: '200',
+        }),
+      ).rejects.toMatchObject({ response: { code: ErrorCodes.TARGET_BLOCKED_YOU } });
     });
   });
 });

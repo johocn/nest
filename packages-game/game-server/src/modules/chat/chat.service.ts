@@ -22,6 +22,8 @@ import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
 import { ConfigManageService } from '@modules/config/config.service';
 import { AdminService } from '@modules/admin/admin.service';
+import { AuthService } from '@modules/auth/auth.service';
+import { SocialService } from '@modules/social/social.service';
 import { Player } from '@modules/player/entities/player.entity';
 import { Friend } from '@modules/social/entities/friend.entity';
 import { GuildMember } from '@modules/social/entities/guild-member.entity';
@@ -77,6 +79,8 @@ export class ChatService {
     private readonly configService: ConfigManageService,
     private readonly adminService: AdminService,
     private readonly eventBus: EventBusService,
+    private readonly authService: AuthService,
+    private readonly socialService: SocialService,
   ) {
     this.filter = new SensitiveWordFilter();
   }
@@ -194,6 +198,7 @@ export class ChatService {
     const { senderId, senderName, channel, content, recipientId, guildId } =
       params;
     await this.checkChannelPermission(senderId, channel, recipientId, guildId);
+    await this.enforceChatRestrictions(senderId, channel, recipientId);
     await this.checkRateLimit(senderId);
 
     const filtered = this.filter.filter(content);
@@ -217,6 +222,33 @@ export class ChatService {
     const support = await this.checkSupportTrigger(senderId, channel, filtered);
 
     return { message: saved, supportReply: support.autoReply ?? null };
+  }
+
+  private async enforceChatRestrictions(
+    senderId: string,
+    channel: ChatChannel,
+    recipientId?: string,
+  ): Promise<void> {
+    const player = await this.playerRepo.findOne({ where: { id: senderId } });
+    if (player) {
+      const restrictions = await this.authService.getAccountRestrictions(
+        player.accountId,
+      );
+      if (restrictions.mutedUntil) {
+        throw new GameException(ErrorCodes.ACCOUNT_MUTED, '账号禁言中', {
+          until: restrictions.mutedUntil,
+        });
+      }
+    }
+    if (channel === ChatChannel.PRIVATE && recipientId) {
+      const blocked = await this.socialService.isBlocked(senderId, recipientId);
+      if (blocked) {
+        throw new GameException(
+          ErrorCodes.TARGET_BLOCKED_YOU,
+          '无法向对方发送消息',
+        );
+      }
+    }
   }
 
   async getSenderName(playerId: string): Promise<string> {
