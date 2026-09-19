@@ -17,3 +17,5 @@ export { CharacterDarkened } from './character-darkened.entity';
 export { CharacterNeeds } from './character-needs.entity';
 export { CharacterMartialArt } from './character-martial-art.entity';
 export { CharacterRelationship } from './character-relationship.entity';
+export { TitleTemplate } from './title-template.entity';
+export { CharacterTitle } from './character-title.entity';

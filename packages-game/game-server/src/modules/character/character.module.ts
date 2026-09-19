@@ -23,6 +23,8 @@ import {
   CharacterNeeds,
   CharacterMartialArt,
   CharacterRelationship,
+  TitleTemplate,
+  CharacterTitle,
 } from './entities';
 
 @Module({
@@ -47,6 +49,8 @@ import {
       CharacterNeeds,
       CharacterMartialArt,
       CharacterRelationship,
+      TitleTemplate,
+      CharacterTitle,
     ]),
   ],
   controllers: [CharacterController, CharacterAdminController],

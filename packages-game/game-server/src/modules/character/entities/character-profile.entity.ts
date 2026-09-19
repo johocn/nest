@@ -30,4 +30,13 @@ export class CharacterProfile {
 
   @Column({ type: 'jsonb', default: {} })
   background: any;
+
+  @Column({ name: 'alias', type: 'varchar', length: 24, nullable: true })
+  alias: string | null;
+
+  @Column({ name: 'poem', type: 'varchar', length: 64, nullable: true })
+  poem: string | null;
+
+  @Column({ name: 'social_bio', type: 'jsonb', default: [] })
+  socialBio: any;
 }
