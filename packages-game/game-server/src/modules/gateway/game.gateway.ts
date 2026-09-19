@@ -17,6 +17,8 @@ import { ConnectionService } from './connection.service';
 import { WsExceptionFilter } from './ws-exception.filter';
 import { ErrorCodes } from '@constants/error-codes';
 import { GameEvents } from '@event-bus/game-events';
+import { ChatService } from '@modules/chat/chat.service';
+import { ChatChannel } from '@constants/enums';
 import type { JwtPayload } from '@modules/auth/auth.service';
 
 @WebSocketGateway({
@@ -45,6 +47,7 @@ export class GameGateway
     private readonly authService: AuthService,
     private readonly connectionService: ConnectionService,
     private readonly worldService: WorldService,
+    private readonly chatService: ChatService,
   ) {}
 
   setServer(server: Server) {
@@ -237,6 +240,89 @@ export class GameGateway
       code: 0,
       msg: 'success',
       data: {},
+    };
+  }
+
+  @SubscribeMessage('chat.send')
+  async handleChatSend(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() message: any,
+  ) {
+    const playerId = client.data?.playerId;
+    if (!playerId) {
+      return {
+        cmd: 'chat.send',
+        seq: message?.seq ?? 0,
+        code: ErrorCodes.TOKEN_INVALID,
+        msg: '未认证',
+      };
+    }
+
+    const { channel, content, recipientId, guildId } = message?.data ?? {};
+    if (!channel || !content) {
+      return {
+        cmd: 'chat.send',
+        seq: message?.seq ?? 0,
+        code: ErrorCodes.PARAM_INVALID,
+        msg: '缺少频道或内容',
+      };
+    }
+
+    const senderName = await this.chatService.getSenderName(playerId);
+    const result = await this.chatService.sendChannelMessage({
+      senderId: playerId,
+      senderName,
+      channel,
+      content,
+      recipientId,
+      guildId,
+    });
+
+    const payload = {
+      cmd: 'chat.message',
+      seq: 0,
+      code: 0,
+      msg: 'success',
+      data: {
+        channel,
+        senderId: playerId,
+        senderName,
+        content: result.message.content,
+        messageId: result.message.id,
+        recipientId: recipientId ?? null,
+        guildId: guildId ?? null,
+      },
+    };
+    if (channel === ChatChannel.WORLD) {
+      this.server.emit('message', payload);
+    } else if (channel === ChatChannel.GUILD && guildId) {
+      this.server.to(`guild:${guildId}`).emit('message', payload);
+    } else if (channel === ChatChannel.PRIVATE && recipientId) {
+      const [sender, recipient] = await Promise.all([
+        this.connectionService.getPlayerConnection(playerId),
+        this.connectionService.getPlayerConnection(recipientId),
+      ]);
+      if (sender?.socketId) this.server.to(sender.socketId).emit('message', payload);
+      if (recipient?.socketId)
+        this.server.to(recipient.socketId).emit('message', payload);
+    }
+
+    if (result.supportReply) {
+      client.emit('message', {
+        cmd: 'chat.support_reply',
+        seq: 0,
+        code: 0,
+        msg: 'success',
+        data: { reply: result.supportReply },
+      });
+    }
+
+    return {
+      cmd: 'chat.send',
+      seq: message?.seq ?? 0,
+      code: 0,
+      msg: 'success',
+      data: { messageId: result.message.id },
     };
   }
 }

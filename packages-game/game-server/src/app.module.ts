@@ -22,6 +22,7 @@ import { SocialModule } from '@modules/social/social.module';
 import { AdminModule } from '@modules/admin/admin.module';
 import { ChatModule } from '@modules/chat/chat.module';
 import { NoticeModule } from '@modules/notice/notice.module';
+import { CommunityModule } from '@modules/community/community.module';
 import { RankingModule } from '@modules/ranking/ranking.module';
 import { ServerStatusModule } from '@modules/server-status/server-status.module';
 import { ActivityModule } from '@modules/activity/activity.module';
@@ -70,6 +71,7 @@ import { RateLimitGuard } from '@common/guards/rate-limit.guard';
     AdminModule,
     ChatModule,
     NoticeModule,
+    CommunityModule,
     RankingModule,
     ServerStatusModule,
     ActivityModule,

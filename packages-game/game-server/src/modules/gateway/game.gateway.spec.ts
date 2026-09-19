@@ -3,6 +3,7 @@ import { GameGateway } from './game.gateway';
 import { ConnectionService } from './connection.service';
 import { AuthService } from '@modules/auth/auth.service';
 import { WorldService } from '@modules/world/world.service';
+import { ChatService } from '@modules/chat/chat.service';
 import { JwtService } from '@nestjs/jwt';
 
 describe('GameGateway', () => {
@@ -44,6 +45,19 @@ describe('GameGateway', () => {
         {
           provide: JwtService,
           useValue: { verify: jest.fn() },
+        },
+        {
+          provide: ChatService,
+          useValue: {
+            getSenderName: jest.fn().mockResolvedValue('test'),
+            sendChannelMessage: jest.fn().mockResolvedValue({
+              message: {
+                id: '1',
+                content: 'hello',
+              },
+              supportReply: null,
+            }),
+          },
         },
       ],
     }).compile();

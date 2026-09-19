@@ -1,16 +1,42 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ChatService } from './chat.service';
-import { ChatMessage } from './entities';
+import {
+  ChatMessage,
+  ChatPlayerStat,
+  ChatSignIn,
+  SupportTicket,
+  VoiceRoom,
+} from './entities';
 import { CacheService } from '@cache/cache.service';
 import { EventBusService } from '@event-bus/event-bus.service';
-import { ChatChannel } from '@constants/enums';
+import { ConfigManageService } from '@modules/config/config.service';
+import { AdminService } from '@modules/admin/admin.service';
+import { Player } from '@modules/player/entities/player.entity';
+import { Friend } from '@modules/social/entities/friend.entity';
+import { GuildMember } from '@modules/social/entities/guild-member.entity';
+import { GameException } from '@common/exceptions/game.exception';
+import { ErrorCodes } from '@constants/error-codes';
+import {
+  ChatChannel,
+  SupportTicketStatus,
+  VoiceRoomType,
+} from '@constants/enums';
 import type { Repository } from 'typeorm';
 
 describe('ChatService', () => {
   let service: ChatService;
   let chatRepo: jest.Mocked<Repository<ChatMessage>>;
+  let statRepo: jest.Mocked<Repository<ChatPlayerStat>>;
+  let signInRepo: jest.Mocked<Repository<ChatSignIn>>;
+  let ticketRepo: jest.Mocked<Repository<SupportTicket>>;
+  let voiceRoomRepo: jest.Mocked<Repository<VoiceRoom>>;
+  let playerRepo: jest.Mocked<Repository<Player>>;
+  let friendRepo: jest.Mocked<Repository<Friend>>;
+  let guildMemberRepo: jest.Mocked<Repository<GuildMember>>;
   let cacheService: jest.Mocked<CacheService>;
+  let configService: jest.Mocked<ConfigManageService>;
+  let adminService: jest.Mocked<AdminService>;
   let eventBus: jest.Mocked<EventBusService>;
 
   beforeEach(async () => {
@@ -30,12 +56,82 @@ describe('ChatService', () => {
           },
         },
         {
+          provide: getRepositoryToken(ChatPlayerStat),
+          useValue: {
+            findOne: jest.fn(),
+            create: jest.fn((data: any) => ({ ...data })),
+            save: jest
+              .fn()
+              .mockImplementation((data: any) => Promise.resolve(data)),
+          },
+        },
+        {
+          provide: getRepositoryToken(ChatSignIn),
+          useValue: {
+            findOne: jest.fn(),
+            create: jest.fn((data: any) => ({ ...data })),
+            save: jest
+              .fn()
+              .mockImplementation((data: any) => Promise.resolve(data)),
+          },
+        },
+        {
+          provide: getRepositoryToken(SupportTicket),
+          useValue: {
+            findOne: jest.fn(),
+            find: jest.fn(),
+            findAndCount: jest.fn(),
+            create: jest.fn((data: any) => ({ ...data })),
+            save: jest
+              .fn()
+              .mockImplementation((data: any) => Promise.resolve(data)),
+          },
+        },
+        {
+          provide: getRepositoryToken(VoiceRoom),
+          useValue: {
+            findOne: jest.fn(),
+            find: jest.fn(),
+            create: jest.fn((data: any) => ({ ...data })),
+            save: jest
+              .fn()
+              .mockImplementation((data: any) => Promise.resolve(data)),
+            remove: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: getRepositoryToken(Player),
+          useValue: { findOne: jest.fn() },
+        },
+        {
+          provide: getRepositoryToken(Friend),
+          useValue: { findOne: jest.fn() },
+        },
+        {
+          provide: getRepositoryToken(GuildMember),
+          useValue: { findOne: jest.fn() },
+        },
+        {
           provide: CacheService,
           useValue: {
-            sMembers: jest.fn(),
+            incr: jest.fn(),
+            expire: jest.fn(),
             get: jest.fn(),
             set: jest.fn(),
+            sMembers: jest.fn(),
           },
+        },
+        {
+          provide: ConfigManageService,
+          useValue: {
+            getConfig: jest
+              .fn()
+              .mockRejectedValue(new Error('not found')), // 默认走 fallback
+          },
+        },
+        {
+          provide: AdminService,
+          useValue: { logOperation: jest.fn() },
         },
         { provide: EventBusService, useValue: { emit: jest.fn() } },
       ],
@@ -43,7 +139,16 @@ describe('ChatService', () => {
 
     service = module.get(ChatService);
     chatRepo = module.get(getRepositoryToken(ChatMessage));
+    statRepo = module.get(getRepositoryToken(ChatPlayerStat));
+    signInRepo = module.get(getRepositoryToken(ChatSignIn));
+    ticketRepo = module.get(getRepositoryToken(SupportTicket));
+    voiceRoomRepo = module.get(getRepositoryToken(VoiceRoom));
+    playerRepo = module.get(getRepositoryToken(Player));
+    friendRepo = module.get(getRepositoryToken(Friend));
+    guildMemberRepo = module.get(getRepositoryToken(GuildMember));
     cacheService = module.get(CacheService);
+    configService = module.get(ConfigManageService);
+    adminService = module.get(AdminService);
     eventBus = module.get(EventBusService);
   });
 
@@ -124,23 +229,218 @@ describe('ChatService', () => {
 
       expect(result).toHaveLength(1);
     });
+  });
 
-    it('should return empty array when no messages', async () => {
-      chatRepo.find.mockResolvedValue([]);
+  describe('sendChannelMessage（统一入口）', () => {
+    it('世界频道：等级达标 + 限频通过 + 统计/签到触发', async () => {
+      playerRepo.findOne.mockResolvedValue({ id: 'p1', level: 5 } as any);
+      cacheService.incr.mockResolvedValue(1);
+      cacheService.expire.mockResolvedValue(true);
+      statRepo.findOne.mockResolvedValue(null);
+      signInRepo.findOne.mockResolvedValue(null);
 
-      const result = await service.getChatHistory(ChatChannel.WORLD, 20);
+      const result = await service.sendChannelMessage({
+        senderId: 'p1',
+        senderName: '张三',
+        channel: ChatChannel.WORLD,
+        content: '大家好，今天天气不错',
+      });
 
-      expect(result).toEqual([]);
+      expect(result.message.content).toBe('大家好，今天天气不错');
+      expect(statRepo.save).toHaveBeenCalled();
+      expect(signInRepo.save).toHaveBeenCalled(); // 世界频道当日首条 → 签到
+    });
+
+    it('世界频道等级不足拒绝', async () => {
+      playerRepo.findOne.mockResolvedValue({ id: 'p1', level: 1 } as any);
+      const err: any = await service
+        .sendChannelMessage({
+          senderId: 'p1',
+          senderName: '张三',
+          channel: ChatChannel.WORLD,
+          content: 'hello',
+        })
+        .catch((e) => e);
+      expect(err).toBeInstanceOf(GameException);
+      expect(err.response.code).toBe(ErrorCodes.FORBIDDEN);
+    });
+
+    it('限频拦截（5秒内第2条）', async () => {
+      playerRepo.findOne.mockResolvedValue({ id: 'p1', level: 5 } as any);
+      cacheService.incr.mockResolvedValue(2);
+      const err: any = await service
+        .sendChannelMessage({
+          senderId: 'p1',
+          senderName: '张三',
+          channel: ChatChannel.WORLD,
+          content: 'hello world',
+        })
+        .catch((e) => e);
+      expect(err.response.code).toBe(ErrorCodes.RATE_LIMIT_EXCEEDED);
+    });
+
+    it('帮派频道非帮众拒绝', async () => {
+      guildMemberRepo.findOne.mockResolvedValue(null);
+      const err: any = await service
+        .sendChannelMessage({
+          senderId: 'p1',
+          senderName: '张三',
+          channel: ChatChannel.GUILD,
+          content: 'hello',
+          guildId: 'g1',
+        })
+        .catch((e) => e);
+      expect(err.response.code).toBe(ErrorCodes.FORBIDDEN);
+    });
+
+    it('私聊频道非好友拒绝', async () => {
+      friendRepo.findOne.mockResolvedValue(null);
+      const err: any = await service
+        .sendChannelMessage({
+          senderId: 'p1',
+          senderName: '张三',
+          channel: ChatChannel.PRIVATE,
+          content: 'hello',
+          recipientId: 'p2',
+        })
+        .catch((e) => e);
+      expect(err.response.code).toBe(ErrorCodes.FORBIDDEN);
+    });
+
+    it('命中客服关键词返回自动回复', async () => {
+      playerRepo.findOne.mockResolvedValue({ id: 'p1', level: 5 } as any);
+      cacheService.incr.mockResolvedValue(1);
+      cacheService.expire.mockResolvedValue(true);
+      statRepo.findOne.mockResolvedValue(null);
+      signInRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.sendChannelMessage({
+        senderId: 'p1',
+        senderName: '张三',
+        channel: ChatChannel.WORLD,
+        content: '我要投诉这个bug',
+      });
+
+      expect(result.supportReply).toBeTruthy();
+      expect(ticketRepo.save).toHaveBeenCalled();
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        expect.stringContaining('support'),
+        expect.any(Object),
+      );
     });
   });
 
-  describe('getChatHistory (admin)', () => {
-    it('should return paginated messages', async () => {
-      chatRepo.findAndCount.mockResolvedValue([[makeMessage()], 1]);
+  describe('channelSignIn', () => {
+    it('今日首签成功并发事件', async () => {
+      signInRepo.findOne.mockResolvedValue(null);
+      const result = await service.channelSignIn('p1');
+      expect(result.rewardJson).toEqual({ favor: 1 });
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        'chat.sign_in',
+        expect.any(Object),
+      );
+    });
 
-      const result = await service.getChatLogList(1, 20);
+    it('重复签到拒绝', async () => {
+      signInRepo.findOne.mockResolvedValue({ id: '9' } as any);
+      const err: any = await service.channelSignIn('p1').catch((e) => e);
+      expect(err.response.code).toBe(ErrorCodes.CHAT_SIGN_IN_DONE);
+    });
+  });
 
-      expect(result.items).toHaveLength(1);
+  describe('getHotTopics', () => {
+    it('话题聚合计数并按热度排序', async () => {
+      cacheService.get.mockResolvedValue(null);
+      chatRepo.find.mockResolvedValue([
+        makeMessage({ content: '#江湖大会 今天开打 @张三' }),
+        makeMessage({ content: '#江湖大会 再战一轮' }),
+        makeMessage({ content: '#京城风云 论剑' }),
+      ]);
+
+      const result = await service.getHotTopics(1, 10);
+
+      expect(result.topics[0]).toEqual({ name: '#江湖大会', count: 2 });
+      expect(result.mentions[0]).toEqual({ name: '@张三', count: 1 });
+      expect(cacheService.set).toHaveBeenCalled();
+    });
+
+    it('无话题空数据抛错', async () => {
+      cacheService.get.mockResolvedValue(null);
+      chatRepo.find.mockResolvedValue([makeMessage({ content: '普通消息' })]);
+      const err: any = await service.getHotTopics(1, 10).catch((e) => e);
+      expect(err.response.code).toBe(ErrorCodes.CHAT_TOPIC_EMPTY);
+    });
+  });
+
+  describe('drawLuckyStar', () => {
+    it('去水过滤后抽取并审计', async () => {
+      chatRepo.find.mockResolvedValue([
+        makeMessage({ senderId: 'p1', content: '这是一条足够长的有效发言消息' }),
+        makeMessage({ senderId: 'p2', content: '短' }),
+      ]);
+      const result = await service.drawLuckyStar('1', 3, 1);
+      expect(result.players).toEqual(['p1']);
+      expect(adminService.logOperation).toHaveBeenCalled();
+    });
+
+    it('无候选拒绝', async () => {
+      chatRepo.find.mockResolvedValue([makeMessage({ content: '短' })]);
+      const err: any = await service.drawLuckyStar('1', 3, 1).catch((e) => e);
+      expect(err.response.code).toBe(ErrorCodes.LUCKY_STAR_NO_CANDIDATE);
+    });
+  });
+
+  describe('replyTicket', () => {
+    it('GM回复后工单关闭', async () => {
+      ticketRepo.findOne.mockResolvedValue({
+        id: '1',
+        status: SupportTicketStatus.NEEDS_GM,
+      } as any);
+      const result = await service.replyTicket('1', '1', '已处理，补偿发放');
+      expect(result.status).toBe(SupportTicketStatus.RESOLVED);
+      expect(result.gmReply).toBe('已处理，补偿发放');
+    });
+
+    it('工单不存在拒绝', async () => {
+      ticketRepo.findOne.mockResolvedValue(null);
+      const err: any = await service
+        .replyTicket('1', '99', '回复')
+        .catch((e) => e);
+      expect(err.response.code).toBe(ErrorCodes.SUPPORT_TICKET_NOT_FOUND);
+    });
+  });
+
+  describe('语音房', () => {
+    it('创建房间自动入座', async () => {
+      const result = await service.createVoiceRoom(
+        'p1',
+        '茶馆',
+        VoiceRoomType.TEA_HOUSE,
+      );
+      expect(result.members).toEqual(['p1']);
+    });
+
+    it('满员拒绝加入', async () => {
+      voiceRoomRepo.findOne.mockResolvedValue({
+        id: '1',
+        maxMembers: 1,
+        members: ['p1'],
+      } as any);
+      const err: any = await service
+        .joinVoiceRoom('p2', '1')
+        .catch((e) => e);
+      expect(err.response.code).toBe(ErrorCodes.VOICE_ROOM_FULL);
+    });
+
+    it('最后一人离开自动删房', async () => {
+      voiceRoomRepo.findOne.mockResolvedValue({
+        id: '1',
+        maxMembers: 8,
+        members: ['p1'],
+      } as any);
+      const result = await service.leaveVoiceRoom('p1', '1');
+      expect(result).toEqual({ closed: true });
+      expect(voiceRoomRepo.remove).toHaveBeenCalled();
     });
   });
 });

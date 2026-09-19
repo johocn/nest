@@ -8,9 +8,11 @@ import { PlayerBehaviorLog, RetentionStat } from './entities';
 import { Transaction } from '@modules/economy/entities/transaction.entity';
 import { Friend } from '@modules/social/entities/friend.entity';
 import { Kinship } from '@modules/social/entities/kinship.entity';
+import { GuildMember } from '@modules/social/entities/guild-member.entity';
 import { Player } from '@modules/player/entities/player.entity';
 import { PlayerCurrency } from '@modules/player/entities/player-currency.entity';
 import { CombatLog } from '@modules/combat/entities/combat-log.entity';
+import { ChatMessage } from '@modules/chat/entities/chat-message.entity';
 
 @Module({
   imports: [
@@ -20,9 +22,11 @@ import { CombatLog } from '@modules/combat/entities/combat-log.entity';
       Transaction,
       Friend,
       Kinship,
+      GuildMember,
       Player,
       PlayerCurrency,
       CombatLog,
+      ChatMessage,
     ]),
   ],
   controllers: [AnalyticsController, BalanceAuditController],

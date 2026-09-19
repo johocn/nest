@@ -452,6 +452,44 @@ export enum NoticeType {
   LOGIN = 'login',
 }
 
+// ===== 社区运营枚举（13.7）=====
+
+export enum NoticeReactionType {
+  LIKE = 'like',
+  ACK = 'ack',
+}
+
+export enum FeedbackCategory {
+  SUGGESTION = 'suggestion',
+  BUG = 'bug',
+}
+
+export enum FeedbackStatus {
+  PENDING = 'pending',
+  ACCEPTED = 'accepted',
+  REJECTED = 'rejected',
+  DONE = 'done',
+}
+
+export enum AmbassadorStatus {
+  ACTIVE = 'active',
+  REVOKED = 'revoked',
+}
+
+// ===== 聊天深化枚举（14.8-14.12）=====
+
+export enum SupportTicketStatus {
+  AUTO_REPLIED = 'auto_replied',
+  NEEDS_GM = 'needs_gm',
+  RESOLVED = 'resolved',
+}
+
+export enum VoiceRoomType {
+  TEA_HOUSE = 'tea_house',
+  GUILD = 'guild',
+  PRIVATE = 'private',
+}
+
 // ===== 排行榜模块枚举 =====
 
 export enum RankingType {

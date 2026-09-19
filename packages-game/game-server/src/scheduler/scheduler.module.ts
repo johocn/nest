@@ -3,7 +3,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { SchedulerService } from './scheduler.service';
 import { ActivityModule } from '@modules/activity/activity.module';
 import { RankingModule } from '@modules/ranking/ranking.module';
-import { GatewayModule } from '@modules/gateway/gateway.module';
+import { ConnectionModule } from '@modules/gateway/connection.module';
 import { MatchmakingModule } from '@modules/matchmaking/matchmaking.module';
 
 @Module({
@@ -11,7 +11,7 @@ import { MatchmakingModule } from '@modules/matchmaking/matchmaking.module';
     ScheduleModule.forRoot(),
     ActivityModule,
     RankingModule,
-    GatewayModule,
+    ConnectionModule,
     MatchmakingModule,
   ],
   providers: [SchedulerService],

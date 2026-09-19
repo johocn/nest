@@ -3,10 +3,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ServerStatusService } from './server-status.service';
 import { ServerStatusController } from './server-status.controller';
 import { ServerStatus } from './entities';
-import { GatewayModule } from '@modules/gateway/gateway.module';
+import { ConnectionModule } from '@modules/gateway/connection.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([ServerStatus]), GatewayModule],
+  imports: [TypeOrmModule.forFeature([ServerStatus]), ConnectionModule],
   controllers: [ServerStatusController],
   providers: [ServerStatusService],
   exports: [ServerStatusService],

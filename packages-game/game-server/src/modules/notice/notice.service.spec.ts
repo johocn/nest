@@ -1,13 +1,18 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { NoticeService } from './notice.service';
-import { Notice } from './entities';
-import { NoticeType } from '@constants/enums';
+import { Notice, NoticeReaction } from './entities';
+import { NoticeReactionType, NoticeType } from '@constants/enums';
+import { GameException } from '@common/exceptions/game.exception';
+import { ErrorCodes } from '@constants/error-codes';
+import { EventBusService } from '@event-bus/event-bus.service';
 import type { Repository } from 'typeorm';
 
 describe('NoticeService', () => {
   let service: NoticeService;
   let noticeRepo: jest.Mocked<Repository<Notice>>;
+  let reactionRepo: jest.Mocked<Repository<NoticeReaction>>;
+  let eventBus: jest.Mocked<EventBusService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -26,11 +31,27 @@ describe('NoticeService', () => {
             softRemove: jest.fn(),
           },
         },
+        {
+          provide: getRepositoryToken(NoticeReaction),
+          useValue: {
+            findOne: jest.fn(),
+            create: jest.fn((data: any) => ({ ...data })),
+            save: jest
+              .fn()
+              .mockImplementation((data: any) => Promise.resolve(data)),
+          },
+        },
+        {
+          provide: EventBusService,
+          useValue: { emit: jest.fn() },
+        },
       ],
     }).compile();
 
     service = module.get(NoticeService);
     noticeRepo = module.get(getRepositoryToken(Notice));
+    reactionRepo = module.get(getRepositoryToken(NoticeReaction));
+    eventBus = module.get(EventBusService);
   });
 
   const makeNotice = (overrides: Partial<Notice> = {}): Notice =>
@@ -131,6 +152,56 @@ describe('NoticeService', () => {
       const result = await service.getNoticeList(1, 20);
 
       expect(result.items).toHaveLength(1);
+    });
+  });
+
+  describe('react', () => {
+    it('点赞计数递增并发事件', async () => {
+      noticeRepo.findOne.mockResolvedValue(
+        makeNotice({ likeCount: 0, ackCount: 0 }),
+      );
+      reactionRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.react('1', '2', NoticeReactionType.LIKE);
+
+      expect(result.likes).toBe(1);
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        expect.stringContaining('notice'),
+        expect.objectContaining({ noticeId: '1' }),
+      );
+    });
+
+    it('重复互动拒绝', async () => {
+      noticeRepo.findOne.mockResolvedValue(makeNotice());
+      reactionRepo.findOne.mockResolvedValue({ id: '9' } as any);
+
+      const err: any = await service
+        .react('1', '2', NoticeReactionType.ACK)
+        .catch((e) => e);
+      expect(err).toBeInstanceOf(GameException);
+      expect(err.response.code).toBe(ErrorCodes.NOTICE_REACTION_EXISTS);
+    });
+
+    it('公告不存在拒绝', async () => {
+      noticeRepo.findOne.mockResolvedValue(null);
+
+      const err: any = await service
+        .react('99', '2', NoticeReactionType.LIKE)
+        .catch((e) => e);
+      expect(err).toBeInstanceOf(GameException);
+      expect(err.response.code).toBe(ErrorCodes.NOTICE_REACTION_EXISTS);
+    });
+  });
+
+  describe('getReactions', () => {
+    it('返回互动计数', async () => {
+      noticeRepo.findOne.mockResolvedValue(
+        makeNotice({ likeCount: 3, ackCount: 1 }),
+      );
+
+      const result = await service.getReactions('1');
+
+      expect(result).toEqual({ noticeId: '1', likes: 3, acks: 1 });
     });
   });
 });

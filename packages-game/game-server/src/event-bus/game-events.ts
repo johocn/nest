@@ -97,6 +97,18 @@ export const GameEvents = {
 
   // 配置事件
   CONFIG_UPDATED: 'config.updated',
+
+  // 社区运营事件（13.7）
+  NOTICE_REACTED: 'notice.reacted',
+  FEEDBACK_SUBMITTED: 'community.feedback.submitted',
+  AMBASSADOR_APPOINTED: 'community.ambassador.appointed',
+
+  // 聊天深化事件（14.8-14.12）
+  CHAT_SIGN_IN: 'chat.sign_in',
+  LUCKY_STAR_DRAWN: 'chat.lucky_star.drawn',
+  SUPPORT_TICKET_CREATED: 'support.ticket.created',
+  VOICE_ROOM_JOINED: 'voice.room.joined',
+  VOICE_ROOM_LEFT: 'voice.room.left',
 } as const;
 
 export type GameEvent = (typeof GameEvents)[keyof typeof GameEvents];

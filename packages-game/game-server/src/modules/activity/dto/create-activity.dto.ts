@@ -1,7 +1,7 @@
 import {
   IsString,
   IsEnum,
-  IsDateString,
+  IsDate,
   IsInt,
   IsOptional,
   IsObject,
@@ -21,11 +21,11 @@ export class CreateActivityDto {
   @IsString()
   description?: string;
 
-  @IsDateString()
+  @IsDate()
   @Type(() => Date)
   startAt: Date;
 
-  @IsDateString()
+  @IsDate()
   @Type(() => Date)
   endAt: Date;
 

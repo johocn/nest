@@ -33,6 +33,12 @@ export class Notice {
   @Column({ name: 'sort_order', type: 'int', default: 0 })
   sortOrder: number;
 
+  @Column({ name: 'like_count', type: 'int', default: 0 })
+  likeCount: number;
+
+  @Column({ name: 'ack_count', type: 'int', default: 0 })
+  ackCount: number;
+
   @Column({ name: 'start_at', type: 'timestamp', nullable: true })
   startAt: Date | null;
 
