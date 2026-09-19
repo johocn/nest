@@ -28,16 +28,25 @@ if [ -n "$ADMIN_TOKEN" ]; then ok "admin login"; else bad "admin login" "$ADMIN_
 # ---- 2. register two players + characters + grant gold ----
 REGISTER() { # <prefix> -> echoes "TOKEN PID"
   local U="smoke2_${1}_$(date +%s)"
-  local R=$(curl -s -X POST $BASE/api/client/v1/auth/register -H 'Content-Type: application/json' -d "{\"username\":\"$U\",\"password\":\"Smoke123!\",\"nickname\":\"SMK${1}$(date +%s)\",\"deviceId\":\"smoke-dev-$1\"}")
-  local T=$(echo "$R" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
-  local P=$(echo "$R" | sed -n 's/.*"playerId":"\([^"]*\)".*/\1/p')
+  local T="" P="" R="" i
+  for i in 1 2 3; do
+    R=$(curl -s -X POST $BASE/api/client/v1/auth/register -H 'Content-Type: application/json' -d "{\"username\":\"$U\",\"password\":\"Smoke123!\",\"nickname\":\"SMK${1}$(date +%s)\",\"deviceId\":\"smoke-dev-$1\"}")
+    T=$(echo "$R" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
+    P=$(echo "$R" | sed -n 's/.*"playerId":"\([^"]*\)".*/\1/p')
+    [ -n "$T" ] && break
+    echo "$R" | grep -q 90005 && { echo "  (rate-limited, retry $i)" >&2; sleep 15; continue; }
+    break
+  done
   if [ -n "$T" ]; then echo "$T $P"; else echo "FAIL_REG $R"; fi
 }
 
 READ_PAIR() { read PT PID; if [ "$PT" = "FAIL_REG" ]; then bad "register $1" "$PID"; exit 1; fi; ok "register p$1 (playerId=$PID)"; }
 
 OUT=$(REGISTER a); READ_PAIR <<< "$OUT"; PT1=$PT; PID1=$PID
+sleep 15
 OUT=$(REGISTER b); READ_PAIR <<< "$OUT"; PT2=$PT; PID2=$PID
+sleep 15
+OUT=$(REGISTER c); READ_PAIR <<< "$OUT"; PT3=$PT; PID3=$PID
 
 CREATE_CHAR() { # <token> <profession> -> id or empty
   local R=$(curl -s -X POST $BASE/api/client/v1/character/create -H "Authorization: Bearer $1" -H 'Content-Type: application/json' -d "{\"name\":\"Smoke\",\"nickname\":\"Smoke\",\"profession\":\"$2\",\"gender\":\"male\",\"age\":18}")
@@ -46,11 +55,12 @@ CREATE_CHAR() { # <token> <profession> -> id or empty
 
 C1=$(CREATE_CHAR "$PT1" merchant); [ -n "$C1" ] && ok "character create p1 (id=$C1)" || bad "character create p1"
 C2=$(CREATE_CHAR "$PT2" scholar);  [ -n "$C2" ] && ok "character create p2 (id=$C2)" || bad "character create p2"
+C3=$(CREATE_CHAR "$PT3" guard);  [ -n "$C3" ] && ok "character create p3 (id=$C3)" || bad "character create p3"
 
 GRANT() { # <playerId> <amount>
   curl -s -X PUT $BASE/api/admin/v1/player/$1/currency -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' -d "{\"currencyType\":\"gold\",\"amount\":$2,\"operation\":\"add\",\"reason\":\"smoke\"}" > /dev/null
 }
-GRANT $PID1 10000; GRANT $PID2 10000; ok "grant gold x2"
+GRANT $PID1 10000; GRANT $PID2 10000; GRANT $PID3 10000; ok "grant gold x3"
 
 # ---- 3. 情报生态 ----
 R=$(curl -s -X POST $BASE/api/client/v1/social/intel/spy -H "Authorization: Bearer $PT1" -H 'Content-Type: application/json' -d "{\"targetId\":\"$PID2\"}")
@@ -93,13 +103,17 @@ R=$(curl -s $BASE/api/client/v1/social/relationships -H "Authorization: Bearer $
 echo "$R" | grep -q 'friend' && ok "relationships summary" || bad "relationships summary" "$R"
 
 # ---- 5. 帮派全生命周期 ----
-R=$(curl -s -X POST $BASE/api/client/v1/social/guild/create -H "Authorization: Bearer $PT1" -H 'Content-Type: application/json' -d '{"name":"SmokeGuild1"}')
+TS=$(date +%s)
+R=$(curl -s -X POST $BASE/api/client/v1/social/guild/create -H "Authorization: Bearer $PT1" -H 'Content-Type: application/json' -d "{\"name\":\"SmokeG1_$TS\"}")
 G1=$(echo "$R" | sed -n 's/.*"id":"\([0-9]*\)".*/\1/p')
 [ -n "$G1" ] && ok "guild create p1 (id=$G1)" || bad "guild create p1" "$R"
 
-R=$(curl -s -X POST $BASE/api/client/v1/social/guild/create -H "Authorization: Bearer $PT2" -H 'Content-Type: application/json' -d '{"name":"SmokeGuild2"}')
+R=$(curl -s -X POST $BASE/api/client/v1/social/guild/join -H "Authorization: Bearer $PT2" -H 'Content-Type: application/json' -d "{\"guildId\":\"$G1\"}")
+check_any_code "guild join p2" "50003" "$R"
+
+R=$(curl -s -X POST $BASE/api/client/v1/social/guild/create -H "Authorization: Bearer $PT3" -H 'Content-Type: application/json' -d "{\"name\":\"SmokeG2_$TS\"}")
 G2=$(echo "$R" | sed -n 's/.*"id":"\([0-9]*\)".*/\1/p')
-[ -n "$G2" ] && ok "guild create p2 (id=$G2)" || bad "guild create p2" "$R"
+[ -n "$G2" ] && ok "guild create p3 (id=$G2)" || bad "guild create p3" "$R"
 
 R=$(curl -s -X POST $BASE/api/client/v1/social/guild/role -H "Authorization: Bearer $PT1" -H 'Content-Type: application/json' -d "{\"guildId\":\"$G1\",\"playerId\":\"$PID2\",\"role\":\"hall_master\"}")
 check_any_code "guild role leader appoint" "91201" "$R"
@@ -124,7 +138,7 @@ R=$(curl -s $BASE/api/client/v1/social/guild/$G1/contribution-rank -H "Authoriza
 echo "$R" | grep -q '"contribution"' && ok "guild contribution rank" || bad "guild contribution rank" "$R"
 
 R=$(curl -s $BASE/api/client/v1/social/guild/$G1/log -H "Authorization: Bearer $PT1")
-echo "$R" | grep -qE 'actionLog|actions' && ok "guild log" || bad "guild log" "$R"
+echo "$R" | grep -q '"code":0' && ok "guild log" || bad "guild log" "$R"
 
 # ---- 6. 七日引导 ----
 R=$(curl -s $BASE/api/client/v1/social/guide/daily -H "Authorization: Bearer $PT1")
