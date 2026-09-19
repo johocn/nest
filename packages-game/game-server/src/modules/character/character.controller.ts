@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Post, Put, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Put,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CharacterService } from './character.service';
 import { CreateCharacterDto } from './dto/create-character.dto';
@@ -9,6 +17,7 @@ import { UpdateFactionDto } from './dto/update-faction.dto';
 import { UpdateResourceDto } from './dto/update-resource.dto';
 import { UpsertMartialArtDto } from './dto/upsert-martial-art.dto';
 import { AddRelationshipDto } from './dto/add-relationship.dto';
+import { UpdateCardDto, EquipTitleDto } from './dto/card.dto';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { CurrentPlayer } from '@common/decorators/current-player.decorator';
 import type { CurrentPlayerData } from '@common/decorators/current-player.decorator';
@@ -190,5 +199,57 @@ export class CharacterController {
       throw new GameException(ErrorCodes.PLAYER_NOT_FOUND, '角色不存在');
     }
     return this.characterService.getRelationships(character.id);
+  }
+
+  @Put('card')
+  @ApiOperation({ summary: '设置名号/诗号' })
+  async updateCard(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Body() dto: UpdateCardDto,
+  ) {
+    const character = await this.characterService.getByPlayerId(
+      player.playerId,
+    );
+    if (!character) {
+      throw new GameException(ErrorCodes.PLAYER_NOT_FOUND, '角色不存在');
+    }
+    return this.characterService.updateCard(character.id, dto);
+  }
+
+  @Post('titles/equip')
+  @ApiOperation({ summary: '装备/卸下称号' })
+  async equipTitle(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Body() dto: EquipTitleDto,
+  ) {
+    const character = await this.characterService.getByPlayerId(
+      player.playerId,
+    );
+    if (!character) {
+      throw new GameException(ErrorCodes.PLAYER_NOT_FOUND, '角色不存在');
+    }
+    return this.characterService.equipTitle(
+      character.id,
+      dto.titleId,
+      dto.equip,
+    );
+  }
+
+  @Get('titles')
+  @ApiOperation({ summary: '我的称号列表' })
+  async getTitles(@CurrentPlayer() player: CurrentPlayerData) {
+    const character = await this.characterService.getByPlayerId(
+      player.playerId,
+    );
+    if (!character) {
+      throw new GameException(ErrorCodes.PLAYER_NOT_FOUND, '角色不存在');
+    }
+    return this.characterService.getTitles(character.id);
+  }
+
+  @Get('card/:id')
+  @ApiOperation({ summary: '查看他人名片' })
+  async getCard(@Param('id') characterId: string) {
+    return this.characterService.getCard(characterId);
   }
 }
