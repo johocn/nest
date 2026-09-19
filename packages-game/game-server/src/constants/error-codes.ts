@@ -158,6 +158,14 @@ export const ErrorCodes = {
   CREDIT_OVERDUE: 91510,
   BARTER_NOT_FOUND: 91511,
   BARTER_CONFIRM_MISMATCH: 91512,
+
+  // 生态联动 91601-91699
+  ECO_SIGN_INVALID: 91601,
+  ECO_REPLAY: 91602,
+  ECO_SSO_NOT_BOUND: 91603,
+  ECO_UNKNOWN_ACTION: 91604,
+  SSO_AUTH_FAILED: 91605,
+  SSO_ACCOUNT_EXISTS: 91606,
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

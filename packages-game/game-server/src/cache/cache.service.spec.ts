@@ -11,6 +11,7 @@ const mockRedis = {
   del: jest.fn(),
   exists: jest.fn(),
   expire: jest.fn(),
+  incr: jest.fn(),
   hSet: jest.fn(),
   hGet: jest.fn(),
   hGetAll: jest.fn(),
@@ -58,6 +59,13 @@ describe('CacheService', () => {
     mockRedis.del.mockResolvedValue(1);
     const result = await service.del('key');
     expect(result).toBe(1);
+  });
+
+  it('should increment a counter', async () => {
+    mockRedis.incr.mockResolvedValue(3);
+    const result = await service.incr('eco:daily:p1:view_article');
+    expect(mockRedis.incr).toHaveBeenCalledWith('eco:daily:p1:view_article');
+    expect(result).toBe(3);
   });
 
   it('should acquire and release a lock', async () => {

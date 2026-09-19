@@ -27,6 +27,34 @@ describe('Quest Social Domain Contracts', () => {
     expect(QuestHelpStatus.CLOSED).toBe('closed');
   });
 
+  it('should expose game-added social target types', () => {
+    expect(SocialTargetType.FORM_FORMATION).toBe('form_formation');
+    expect(SocialTargetType.ACTIVATE_FORMATION).toBe('activate_formation');
+    expect(SocialTargetType.PERFORM_COMBO).toBe('perform_combo');
+    expect(SocialTargetType.RESCUE_SUCCESS).toBe('rescue_success');
+    expect(SocialTargetType.LOOT_DISTRIBUTED).toBe('loot_distributed');
+    expect(SocialTargetType.ARBITRATION_SETTLED).toBe('arbitration_settled');
+    expect(SocialTargetType.NEGOTIATION_DONE).toBe('negotiation_done');
+    expect(SocialTargetType.ESCROW_RELEASED).toBe('escrow_released');
+    expect(SocialTargetType.BOUNTY_PUBLISHED).toBe('bounty_published');
+    expect(SocialTargetType.BOUNTY_COMPLETED).toBe('bounty_completed');
+    expect(SocialTargetType.CREDIT_REPAID).toBe('credit_repaid');
+    expect(SocialTargetType.BARTER_DONE).toBe('barter_done');
+  });
+
+  it('should expose eco target types', () => {
+    expect(SocialTargetType.VIEW_ARTICLE).toBe('view_article');
+    expect(SocialTargetType.VIEW_COURSE).toBe('view_course');
+    expect(SocialTargetType.VIEW_PRODUCT).toBe('view_product');
+    expect(SocialTargetType.VIEW_PRICE).toBe('view_price');
+    expect(SocialTargetType.VIEW_ACTIVITY).toBe('view_activity');
+    expect(SocialTargetType.JOIN_ACTIVITY).toBe('join_activity');
+    expect(SocialTargetType.LIKE).toBe('like');
+    expect(SocialTargetType.COMMENT).toBe('comment');
+    expect(SocialTargetType.PURCHASE).toBe('purchase');
+    expect(SocialTargetType.DISTRIBUTE).toBe('distribute');
+  });
+
   it('should expose quest help error codes', () => {
     expect(ErrorCodes.QUEST_SOCIAL_PRE_REQ).toBe(91401);
     expect(ErrorCodes.QUEST_HELP_EXISTS).toBe(91402);

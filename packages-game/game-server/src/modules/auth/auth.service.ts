@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
@@ -32,11 +32,19 @@ export interface AuthResult {
   playerId: string;
 }
 
+interface SsoUserInfo {
+  ssoId: string;
+  username: string;
+}
+
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   private readonly jwtSecret: string;
   private readonly jwtExpiresIn: string;
   private readonly realNameSecret: string;
+  private readonly ssoBaseUrl: string;
+  private readonly ssoCallbackUrl: string;
 
   constructor(
     @InjectRepository(AuthAccount)
@@ -57,6 +65,10 @@ export class AuthService {
     this.realNameSecret =
       this.configService.get<string>('auth.realNameSecret') ??
       (jwtConfig?.secret ?? 'default-secret');
+    this.ssoBaseUrl =
+      this.configService.get<string>('SSO_BASE_URL') ?? 'https://h.joho.cn';
+    this.ssoCallbackUrl =
+      this.configService.get<string>('SSO_CALLBACK_URL') ?? '';
   }
 
   async register(
@@ -175,6 +187,105 @@ export class AuthService {
     );
 
     return { token, accountId: savedAccount.id, playerId: player.id };
+  }
+
+  buildSsoLoginUrl(redirect?: string): string {
+    const redirectUri = encodeURIComponent(redirect ?? this.ssoCallbackUrl);
+    return `${this.ssoBaseUrl}/api/zhao-sso/v1/auth/authorize?app_code=game&redirect_uri=${redirectUri}&response_type=code`;
+  }
+
+  async handleSsoCallback(code: string): Promise<AuthResult> {
+    const ssoUser = await this.exchangeSsoCode(code);
+    let account = await this.accountRepo.findOne({
+      where: { ssoId: ssoUser.ssoId },
+    });
+    let player: Awaited<ReturnType<PlayerService['createPlayer']>> | null = null;
+    if (!account) {
+      const created = await this.createSsoAccount(ssoUser);
+      account = created.account;
+      player = created.player;
+    } else {
+      player = await this.playerService.getByAccountId(account.id);
+    }
+    if (!player) {
+      throw new GameException(ErrorCodes.PLAYER_NOT_FOUND, '玩家档案不存在');
+    }
+    if (account.status === AccountStatus.BANNED) {
+      throw new GameException(ErrorCodes.ACCOUNT_BANNED, '账号已被封禁');
+    }
+
+    const newTokenVersion = account.tokenVersion + 1;
+    await this.accountRepo.update(
+      { id: account.id },
+      { tokenVersion: newTokenVersion, lastLoginAt: new Date() },
+    );
+    const token = this.generateToken(account.id, player.id, newTokenVersion);
+    this.logger.log(`SSO 登录成功 accountId=${account.id} ssoId=${ssoUser.ssoId}`);
+    return { token, accountId: account.id, playerId: player.id };
+  }
+
+  private async createSsoAccount(ssoUser: SsoUserInfo): Promise<{
+    account: AuthAccount;
+    player: Awaited<ReturnType<PlayerService['createPlayer']>>;
+  }> {
+    const baseUsername = ssoUser.username || `sso_${ssoUser.ssoId.slice(0, 12)}`;
+    let username = baseUsername;
+    let suffix = 1;
+    while (await this.accountRepo.findOne({ where: { username } })) {
+      username = `${baseUsername}_g${suffix}`;
+      suffix += 1;
+    }
+    const passwordHash = await this.hashPassword(randomUUID());
+    const account = this.accountRepo.create({
+      username,
+      passwordHash,
+      accountType: AccountType.SSO,
+      ssoId: ssoUser.ssoId,
+      ssoProvider: 'zhao-sso',
+      deviceId: null,
+      tokenVersion: 0,
+      status: AccountStatus.ACTIVE,
+    });
+    const savedAccount = await this.accountRepo.save(account);
+    const player = await this.playerService.createPlayer(
+      savedAccount.id,
+      username,
+    );
+    return { account: savedAccount, player };
+  }
+
+  private async exchangeSsoCode(code: string): Promise<SsoUserInfo> {
+    let response: globalThis.Response;
+    try {
+      response = await fetch(
+        `${this.ssoBaseUrl}/api/zhao-sso/v1/auth/exchange-token`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code,
+            app_code: 'game',
+            redirect_uri: this.ssoCallbackUrl,
+          }),
+          signal: AbortSignal.timeout(2000),
+        },
+      );
+    } catch {
+      throw new GameException(ErrorCodes.SSO_AUTH_FAILED, 'SSO 换码失败');
+    }
+    if (!response.ok) {
+      throw new GameException(ErrorCodes.SSO_AUTH_FAILED, 'SSO 换码失败');
+    }
+    const data = (await response.json()) as {
+      user?: { uuid?: string; username?: string };
+    };
+    if (!data.user?.uuid) {
+      throw new GameException(ErrorCodes.SSO_AUTH_FAILED, 'SSO 换码失败');
+    }
+    return {
+      ssoId: String(data.user.uuid),
+      username: String(data.user.username ?? ''),
+    };
   }
 
   async validateToken(payload: JwtPayload): Promise<boolean> {

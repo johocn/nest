@@ -37,6 +37,9 @@ const mockJwtService = {
 const mockConfigService = {
   get: jest.fn((key: string) => {
     if (key === 'jwt') return { secret: 'test-secret', expiresIn: '7d' };
+    if (key === 'SSO_BASE_URL') return 'https://sso.test.local';
+    if (key === 'SSO_CALLBACK_URL')
+      return 'https://game.test.local/api/client/v1/auth/sso/callback';
     return undefined;
   }),
 };
@@ -324,5 +327,192 @@ describe('账号安全扩展', () => {
       { id: '1' },
       { mutedUntil: null },
     );
+  });
+});
+
+describe('SSO 登录', () => {
+  let service: AuthService;
+  const mockFetch = jest.fn();
+
+  const buildMock = (body: unknown) => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => body,
+    } as Response);
+  };
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    global.fetch = mockFetch as unknown as typeof fetch;
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        AuthService,
+        { provide: getRepositoryToken(AuthAccount), useValue: mockAccountRepo },
+        {
+          provide: getRepositoryToken(AccountLoginLog),
+          useValue: mockLoginLogRepo,
+        },
+        {
+          provide: getRepositoryToken(AccountPenalty),
+          useValue: mockPenaltyRepo,
+        },
+        {
+          provide: getRepositoryToken(AccountSecurityEvent),
+          useValue: mockSecurityEventRepo,
+        },
+        { provide: PlayerService, useValue: mockPlayerService },
+        { provide: JwtService, useValue: mockJwtService },
+        { provide: ConfigService, useValue: mockConfigService },
+      ],
+    }).compile();
+
+    service = moduleRef.get(AuthService);
+  });
+
+  it('buildSsoLoginUrl 拼接 authorize 参数（默认回调）', () => {
+    const url = service.buildSsoLoginUrl();
+    expect(url).toBe(
+      'https://sso.test.local/api/zhao-sso/v1/auth/authorize?app_code=game&redirect_uri=' +
+        encodeURIComponent(
+          'https://game.test.local/api/client/v1/auth/sso/callback',
+        ) +
+        '&response_type=code',
+    );
+  });
+
+  it('buildSsoLoginUrl 支持自定义 redirect 参数', () => {
+    const url = service.buildSsoLoginUrl('https://game.test.local/after-sso');
+    expect(url).toContain(
+      'redirect_uri=' +
+        encodeURIComponent('https://game.test.local/after-sso'),
+    );
+  });
+
+  it('换码成功自动建档并签发 token', async () => {
+    buildMock({ user: { uuid: 'sso-uuid-1', username: 'sso_hero' } });
+    mockAccountRepo.findOne.mockImplementation(({ where }: any) => {
+      if (where.ssoId) return Promise.resolve(null);
+      if (where.username) return Promise.resolve(null);
+      return Promise.resolve(null);
+    });
+    mockAccountRepo.create.mockImplementation((data) => data);
+    mockAccountRepo.save.mockImplementation(async (data) => ({
+      ...data,
+      id: '100',
+    }));
+    mockPlayerService.createPlayer.mockResolvedValue({
+      id: 'p100',
+      nickname: 'sso_hero',
+    });
+    mockPlayerService.getByAccountId.mockResolvedValue({ id: 'p100' });
+    mockAccountRepo.update.mockResolvedValue({});
+    jest.spyOn(service as any, 'hashPassword').mockResolvedValue('hash');
+
+    const result = await service.handleSsoCallback('auth-code-1');
+
+    expect(result.token).toBe('mock-jwt-token');
+    expect(result.accountId).toBe('100');
+    expect(result.playerId).toBe('p100');
+    expect(mockFetch).toHaveBeenCalledWith(
+      'https://sso.test.local/api/zhao-sso/v1/auth/exchange-token',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"code":"auth-code-1"'),
+      }),
+    );
+    expect(mockAccountRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        username: 'sso_hero',
+        accountType: AccountType.SSO,
+        ssoId: 'sso-uuid-1',
+        ssoProvider: 'zhao-sso',
+      }),
+    );
+    expect(mockPlayerService.createPlayer).toHaveBeenCalledWith(
+      '100',
+      'sso_hero',
+    );
+    expect(mockAccountRepo.update).toHaveBeenCalledWith(
+      { id: '100' },
+      expect.objectContaining({ tokenVersion: 1 }),
+    );
+  });
+
+  it('ssoId 已存在时幂等复用并签发 token', async () => {
+    buildMock({ user: { uuid: 'sso-uuid-1', username: 'sso_hero' } });
+    mockAccountRepo.findOne.mockImplementation(({ where }: any) => {
+      if (where.ssoId)
+        return Promise.resolve({
+          id: '50',
+          username: 'sso_hero',
+          tokenVersion: 3,
+          status: AccountStatus.ACTIVE,
+        });
+      return Promise.resolve(null);
+    });
+    mockPlayerService.getByAccountId.mockResolvedValue({ id: 'p50' });
+    mockAccountRepo.update.mockResolvedValue({});
+
+    const result = await service.handleSsoCallback('auth-code-2');
+
+    expect(result.accountId).toBe('50');
+    expect(result.playerId).toBe('p50');
+    expect(mockAccountRepo.update).toHaveBeenCalledWith(
+      { id: '50' },
+      expect.objectContaining({ tokenVersion: 4 }),
+    );
+    expect(mockPlayerService.createPlayer).not.toHaveBeenCalled();
+    expect(mockAccountRepo.create).not.toHaveBeenCalled();
+  });
+
+  it('用户名与既有账号冲突时追加 _g1 后缀', async () => {
+    buildMock({ user: { uuid: 'sso-uuid-2', username: 'hero' } });
+    mockAccountRepo.findOne.mockImplementation(({ where }: any) => {
+      if (where.ssoId) return Promise.resolve(null);
+      if (where.username === 'hero')
+        return Promise.resolve({ id: '9', username: 'hero' });
+      return Promise.resolve(null);
+    });
+    mockAccountRepo.create.mockImplementation((data) => data);
+    mockAccountRepo.save.mockImplementation(async (data) => ({
+      ...data,
+      id: '101',
+    }));
+    mockPlayerService.createPlayer.mockResolvedValue({ id: 'p101' });
+    mockPlayerService.getByAccountId.mockResolvedValue({ id: 'p101' });
+    mockAccountRepo.update.mockResolvedValue({});
+    jest.spyOn(service as any, 'hashPassword').mockResolvedValue('hash');
+
+    const result = await service.handleSsoCallback('auth-code-3');
+
+    expect(mockAccountRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ username: 'hero_g1', ssoId: 'sso-uuid-2' }),
+    );
+    expect(result.accountId).toBe('101');
+  });
+
+  it('网络异常时换码失败抛 SSO_AUTH_FAILED', async () => {
+    mockFetch.mockRejectedValue(new Error('timeout'));
+    await expect(service.handleSsoCallback('bad-code')).rejects.toMatchObject({
+      response: { code: ErrorCodes.SSO_AUTH_FAILED },
+    });
+  });
+
+  it('换码返回非 2xx 时抛 SSO_AUTH_FAILED', async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({ error: 'invalid_grant' }),
+    } as Response);
+    await expect(service.handleSsoCallback('bad-code')).rejects.toMatchObject({
+      response: { code: ErrorCodes.SSO_AUTH_FAILED },
+    });
+  });
+
+  it('换码返回缺少用户信息时抛 SSO_AUTH_FAILED', async () => {
+    buildMock({ error: 'invalid_grant' });
+    await expect(service.handleSsoCallback('bad-code')).rejects.toMatchObject({
+      response: { code: ErrorCodes.SSO_AUTH_FAILED },
+    });
   });
 });

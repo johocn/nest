@@ -21,6 +21,7 @@ import {
 import { CharacterService } from '@modules/character/character.service';
 import { SocialService } from '@modules/social/social.service';
 import { EconomyService } from '@modules/economy/economy.service';
+import { CacheService } from '@cache/cache.service';
 import type { Repository } from 'typeorm';
 
 describe('QuestService', () => {
@@ -32,6 +33,7 @@ describe('QuestService', () => {
   let characterService: jest.Mocked<CharacterService>;
   let socialService: jest.Mocked<SocialService>;
   let economyService: jest.Mocked<EconomyService>;
+  let cacheService: jest.Mocked<CacheService>;
 
   beforeEach(async () => {
     characterService = {
@@ -48,6 +50,10 @@ describe('QuestService', () => {
         .fn()
         .mockResolvedValue({ balanceAfter: '100' }),
     } as unknown as jest.Mocked<EconomyService>;
+    cacheService = {
+      incr: jest.fn().mockResolvedValue(1),
+      expire: jest.fn().mockResolvedValue(true),
+    } as unknown as jest.Mocked<CacheService>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -89,6 +95,7 @@ describe('QuestService', () => {
         { provide: CharacterService, useValue: characterService },
         { provide: SocialService, useValue: socialService },
         { provide: EconomyService, useValue: economyService },
+        { provide: CacheService, useValue: cacheService },
       ],
     }).compile();
 
@@ -97,6 +104,7 @@ describe('QuestService', () => {
     playerQuestRepo = module.get(getRepositoryToken(PlayerQuest));
     questHelpRepo = module.get(getRepositoryToken(QuestHelpRequest));
     eventBus = module.get(EventBusService);
+    cacheService = module.get(CacheService);
   });
 
   const makeTemplate = (
@@ -528,6 +536,73 @@ describe('QuestService', () => {
         service.advanceSocialTarget('p1', 'spy' as any),
       ).resolves.toBeUndefined();
       expect(playerQuestRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('should count eco browse actions via redis and advance within daily limit', async () => {
+      cacheService.incr.mockResolvedValue(3);
+      playerQuestRepo.find.mockResolvedValue([
+        makePlayerQuest({
+          id: 'pq1',
+          questTemplateId: 'q1',
+          progress: 0,
+          status: QuestStatus.IN_PROGRESS,
+        }),
+      ]);
+      questTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({ id: 'q1', targetType: 'view_article' }),
+      );
+
+      await service.advanceSocialTarget('p1', 'view_article' as any);
+
+      expect(cacheService.incr).toHaveBeenCalledWith(
+        'eco:daily:p1:view_article',
+      );
+      expect(cacheService.expire).toHaveBeenCalledWith(
+        'eco:daily:p1:view_article',
+        86400,
+      );
+      expect(playerQuestRepo.save).toHaveBeenCalled();
+    });
+
+    it('should skip eco browse target when daily count exceeds 10', async () => {
+      cacheService.incr.mockResolvedValue(11);
+      playerQuestRepo.find.mockResolvedValue([
+        makePlayerQuest({
+          id: 'pq1',
+          questTemplateId: 'q1',
+          progress: 0,
+          status: QuestStatus.IN_PROGRESS,
+        }),
+      ]);
+      questTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({ id: 'q1', targetType: 'view_article' }),
+      );
+
+      await service.advanceSocialTarget('p1', 'view_article' as any);
+
+      expect(cacheService.incr).toHaveBeenCalledWith(
+        'eco:daily:p1:view_article',
+      );
+      expect(playerQuestRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('should not apply daily limit to purchase/join_activity targets', async () => {
+      playerQuestRepo.find.mockResolvedValue([
+        makePlayerQuest({
+          id: 'pq1',
+          questTemplateId: 'q1',
+          progress: 0,
+          status: QuestStatus.IN_PROGRESS,
+        }),
+      ]);
+      questTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({ id: 'q1', targetType: 'purchase' }),
+      );
+
+      await service.advanceSocialTarget('p1', 'purchase' as any);
+
+      expect(cacheService.incr).not.toHaveBeenCalled();
+      expect(playerQuestRepo.save).toHaveBeenCalled();
     });
   });
 

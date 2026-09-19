@@ -3,6 +3,8 @@ import {
   Controller,
   Get,
   Post,
+  Query,
+  Redirect,
   UseGuards,
   Ip,
   Headers,
@@ -49,6 +51,21 @@ export class AuthController {
   @ApiOperation({ summary: '游客登录' })
   async guest(@Ip() ip: string, @Headers('user-agent') userAgent?: string) {
     return this.authService.createGuest(ip, userAgent);
+  }
+
+  @Public()
+  @Get('sso/login')
+  @Redirect()
+  @ApiOperation({ summary: 'SSO 授权登录跳转' })
+  async ssoLogin(@Query('redirect') redirect?: string) {
+    return { url: this.authService.buildSsoLoginUrl(redirect), statusCode: 302 };
+  }
+
+  @Public()
+  @Get('sso/callback')
+  @ApiOperation({ summary: 'SSO 回调换码登录' })
+  async ssoCallback(@Query('code') code: string) {
+    return this.authService.handleSsoCallback(code);
   }
 
   @UseGuards(JwtAuthGuard)

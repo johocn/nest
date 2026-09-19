@@ -34,6 +34,7 @@ import { VipModule } from '@modules/vip/vip.module';
 import { SandboxModule } from '@modules/sandbox/sandbox.module';
 import { MatchmakingModule } from '@modules/matchmaking/matchmaking.module';
 import { OfflineModule } from '@modules/offline/offline.module';
+import { EcoModule } from '@modules/eco/eco.module';
 import { SchedulerModule } from '@scheduler/scheduler.module';
 import { HealthModule } from '@health/health.module';
 import { RequestIdMiddleware } from '@common/middleware/request-id.middleware';
@@ -81,6 +82,7 @@ import { RateLimitGuard } from '@common/guards/rate-limit.guard';
     SandboxModule,
     MatchmakingModule,
     OfflineModule,
+    EcoModule,
 
     // 定时任务
     SchedulerModule,

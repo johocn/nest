@@ -3,6 +3,7 @@ export enum AccountType {
   GUEST = 'guest',
   WECHAT = 'wechat',
   GOOGLE = 'google',
+  SSO = 'sso',
 }
 
 export enum AccountStatus {
@@ -603,6 +604,30 @@ export enum SocialTargetType {
   DONATE_GUILD = 'donate_guild',
   JOIN_GUILD = 'join_guild',
   INTEL_BUY = 'intel_buy',
+  // 游戏内补充
+  FORM_FORMATION = 'form_formation',
+  ACTIVATE_FORMATION = 'activate_formation',
+  PERFORM_COMBO = 'perform_combo',
+  RESCUE_SUCCESS = 'rescue_success',
+  LOOT_DISTRIBUTED = 'loot_distributed',
+  ARBITRATION_SETTLED = 'arbitration_settled',
+  NEGOTIATION_DONE = 'negotiation_done',
+  ESCROW_RELEASED = 'escrow_released',
+  BOUNTY_PUBLISHED = 'bounty_published',
+  BOUNTY_COMPLETED = 'bounty_completed',
+  CREDIT_REPAID = 'credit_repaid',
+  BARTER_DONE = 'barter_done',
+  // 生态域
+  VIEW_ARTICLE = 'view_article',
+  VIEW_COURSE = 'view_course',
+  VIEW_PRODUCT = 'view_product',
+  VIEW_PRICE = 'view_price',
+  VIEW_ACTIVITY = 'view_activity',
+  JOIN_ACTIVITY = 'join_activity',
+  LIKE = 'like',
+  COMMENT = 'comment',
+  PURCHASE = 'purchase',
+  DISTRIBUTE = 'distribute',
 }
 
 export enum QuestHelpStatus {

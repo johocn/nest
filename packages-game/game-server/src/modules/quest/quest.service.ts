@@ -18,6 +18,7 @@ import {
 import { CharacterService } from '@modules/character/character.service';
 import { SocialService } from '@modules/social/social.service';
 import { EconomyService } from '@modules/economy/economy.service';
+import { CacheService } from '@cache/cache.service';
 
 export interface QuestWithTemplate {
   playerQuest: PlayerQuest;
@@ -65,6 +66,18 @@ export class QuestService {
     CurrencyType.FACE,
   ];
 
+  private static readonly ECO_DAILY_LIMIT = 10;
+  private static readonly ECO_DAILY_TTL_SECONDS = 86400;
+  private static readonly ECO_DAILY_LIMITED_TARGETS: SocialTargetType[] = [
+    SocialTargetType.VIEW_ARTICLE,
+    SocialTargetType.VIEW_COURSE,
+    SocialTargetType.VIEW_PRODUCT,
+    SocialTargetType.VIEW_PRICE,
+    SocialTargetType.VIEW_ACTIVITY,
+    SocialTargetType.LIKE,
+    SocialTargetType.COMMENT,
+  ];
+
   constructor(
     @InjectRepository(QuestTemplate)
     private readonly templateRepo: Repository<QuestTemplate>,
@@ -76,6 +89,7 @@ export class QuestService {
     private readonly characterService: CharacterService,
     private readonly socialService: SocialService,
     private readonly economyService: EconomyService,
+    private readonly cacheService: CacheService,
   ) {}
 
   async acceptQuest(
@@ -341,6 +355,13 @@ export class QuestService {
     playerId: string,
     targetType: SocialTargetType,
   ): Promise<void> {
+    if (QuestService.ECO_DAILY_LIMITED_TARGETS.includes(targetType)) {
+      const dailyKey = `eco:daily:${playerId}:${targetType}`;
+      const count = await this.cacheService.incr(dailyKey);
+      if (count > QuestService.ECO_DAILY_LIMIT) return;
+      await this.cacheService.expire(dailyKey, QuestService.ECO_DAILY_TTL_SECONDS);
+    }
+
     const activeQuests = await this.playerQuestRepo.find({
       where: { playerId, status: QuestStatus.IN_PROGRESS },
     });

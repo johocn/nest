@@ -32,6 +32,7 @@ export const GameEvents = {
   GUILD_CONTRIB_GAINED: 'economy.guild_contrib.gained',
   FACE_CHANGED: 'economy.face.changed',
   INTEL_GAINED: 'social.intel.gained',
+  INTEL_BOUGHT: 'social.intel.bought',
   INTEL_SOLD: 'social.intel.sold',
   RELATIONSHIP_LEVEL_UP: 'social.relationship.level_up',
   KINSHIP_FORMED: 'social.kinship.formed',
@@ -77,6 +78,12 @@ export const GameEvents = {
   AUCTION_LISTED: 'auction.listed',
   AUCTION_BID: 'auction.bid',
   AUCTION_SOLD: 'auction.sold',
+  NEGOTIATION_COMPLETED: 'trade.negotiation.completed',
+  ESCROW_RELEASED: 'trade.escrow.released',
+  BOUNTY_PUBLISHED: 'trade.bounty.published',
+  BOUNTY_COMPLETED: 'trade.bounty.completed',
+  CREDIT_SETTLED: 'trade.credit.settled',
+  BARTER_COMPLETED: 'trade.barter.completed',
 
   // 成就事件
   ACHIEVEMENT_UNLOCKED: 'achievement.unlocked',
@@ -84,6 +91,9 @@ export const GameEvents = {
 
   // 数据统计事件
   PLAYER_BEHAVIOR: 'analytics.behavior',
+
+  // 生态事件
+  ECO_ACTION: 'eco.action',
 
   // 配置事件
   CONFIG_UPDATED: 'config.updated',

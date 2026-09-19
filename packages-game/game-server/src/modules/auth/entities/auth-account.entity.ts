@@ -31,6 +31,13 @@ export class AuthAccount {
   @Column({ name: 'device_id', type: 'varchar', length: 128, nullable: true })
   deviceId: string | null;
 
+  @Index({ unique: true })
+  @Column({ name: 'sso_id', type: 'varchar', length: 64, nullable: true })
+  ssoId: string | null;
+
+  @Column({ name: 'sso_provider', type: 'varchar', length: 32, nullable: true })
+  ssoProvider: string | null;
+
   @Column({ name: 'bind_phone', type: 'varchar', length: 20, nullable: true })
   bindPhone: string | null;
 

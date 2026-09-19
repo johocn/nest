@@ -419,6 +419,10 @@ describe('SocialService', () => {
       const result = await service.joinGuild('p1', '1');
 
       expect(result.role).toBe(GuildRole.MEMBER);
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        GameEvents.GUILD_JOINED,
+        expect.objectContaining({ playerId: 'p1', guildId: '1' }),
+      );
     });
 
     it('should throw when guild not found', async () => {
@@ -836,6 +840,10 @@ describe('SocialService', () => {
       expect(eventBus.emit).toHaveBeenCalledWith(
         GameEvents.INTEL_SOLD,
         expect.any(Object),
+      );
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        GameEvents.INTEL_BOUGHT,
+        { playerId: 'buyer' },
       );
     });
 

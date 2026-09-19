@@ -123,4 +123,157 @@ describe('QuestEventListener', () => {
       listener.onFriendAdded({ playerId: 'p1', friendId: 'p2' }),
     ).resolves.toBeUndefined();
   });
+
+  it('should map ECO_ACTION view_article to view_article target', async () => {
+    await listener.onEcoAction({ playerId: 'p1', action: 'view_article' });
+    expect(questService.advanceSocialTarget).toHaveBeenCalledWith(
+      'p1',
+      SocialTargetType.VIEW_ARTICLE,
+    );
+  });
+
+  it('should map ECO_ACTION course/product/price/activity views', async () => {
+    await listener.onEcoAction({ playerId: 'p1', action: 'view_course' });
+    await listener.onEcoAction({ playerId: 'p1', action: 'view_product' });
+    await listener.onEcoAction({ playerId: 'p1', action: 'view_price' });
+    await listener.onEcoAction({ playerId: 'p1', action: 'view_activity' });
+    expect(questService.advanceSocialTarget).toHaveBeenNthCalledWith(
+      1,
+      'p1',
+      SocialTargetType.VIEW_COURSE,
+    );
+    expect(questService.advanceSocialTarget).toHaveBeenNthCalledWith(
+      2,
+      'p1',
+      SocialTargetType.VIEW_PRODUCT,
+    );
+    expect(questService.advanceSocialTarget).toHaveBeenNthCalledWith(
+      3,
+      'p1',
+      SocialTargetType.VIEW_PRICE,
+    );
+    expect(questService.advanceSocialTarget).toHaveBeenNthCalledWith(
+      4,
+      'p1',
+      SocialTargetType.VIEW_ACTIVITY,
+    );
+  });
+
+  it('should map ECO_ACTION join/like/comment/purchase/distribute', async () => {
+    await listener.onEcoAction({ playerId: 'p1', action: 'join_activity' });
+    await listener.onEcoAction({ playerId: 'p1', action: 'like' });
+    await listener.onEcoAction({ playerId: 'p1', action: 'comment' });
+    await listener.onEcoAction({ playerId: 'p1', action: 'purchase' });
+    await listener.onEcoAction({ playerId: 'p1', action: 'distribute' });
+    expect(questService.advanceSocialTarget).toHaveBeenNthCalledWith(
+      1,
+      'p1',
+      SocialTargetType.JOIN_ACTIVITY,
+    );
+    expect(questService.advanceSocialTarget).toHaveBeenNthCalledWith(
+      2,
+      'p1',
+      SocialTargetType.LIKE,
+    );
+    expect(questService.advanceSocialTarget).toHaveBeenNthCalledWith(
+      3,
+      'p1',
+      SocialTargetType.COMMENT,
+    );
+    expect(questService.advanceSocialTarget).toHaveBeenNthCalledWith(
+      4,
+      'p1',
+      SocialTargetType.PURCHASE,
+    );
+    expect(questService.advanceSocialTarget).toHaveBeenNthCalledWith(
+      5,
+      'p1',
+      SocialTargetType.DISTRIBUTE,
+    );
+  });
+
+  it('should ignore unknown ECO_ACTION without advancing', async () => {
+    await listener.onEcoAction({ playerId: 'p1', action: 'unknown' });
+    expect(questService.advanceSocialTarget).not.toHaveBeenCalled();
+  });
+
+  it('should map FORMATION_ACTIVATED to activate_formation for leader', async () => {
+    await listener.onFormationActivated({ formationId: 'f1', leaderId: 'p1' });
+    expect(questService.advanceSocialTarget).toHaveBeenCalledWith(
+      'p1',
+      SocialTargetType.ACTIVATE_FORMATION,
+    );
+  });
+
+  it('should map COMBO_TRIGGERED to perform_combo for attacker', async () => {
+    await listener.onComboTriggered({ attackerId: 'p1', partnerId: 'p2' });
+    expect(questService.advanceSocialTarget).toHaveBeenCalledWith(
+      'p1',
+      SocialTargetType.PERFORM_COMBO,
+    );
+  });
+
+  it('should map RESCUE_SUCCESS to rescue_success for rescuer', async () => {
+    await listener.onRescueSuccess({ rescuerId: 'p1', targetId: 'p2' });
+    expect(questService.advanceSocialTarget).toHaveBeenCalledWith(
+      'p1',
+      SocialTargetType.RESCUE_SUCCESS,
+    );
+  });
+
+  it('should map LOOT_DISTRIBUTED to loot_distributed for all players', async () => {
+    await listener.onLootDistributed({
+      combatLogId: 'c1',
+      playersJson: [{ playerId: 'p1' }, { playerId: 'p2' }],
+    });
+    expect(questService.advanceSocialTarget).toHaveBeenCalledTimes(2);
+    expect(questService.advanceSocialTarget).toHaveBeenCalledWith(
+      'p1',
+      SocialTargetType.LOOT_DISTRIBUTED,
+    );
+    expect(questService.advanceSocialTarget).toHaveBeenCalledWith(
+      'p2',
+      SocialTargetType.LOOT_DISTRIBUTED,
+    );
+  });
+
+  it('should map ARBITRATION_SETTLED to arbitration_settled for both parties', async () => {
+    await listener.onArbitrationSettled({
+      arbitrationId: 'a1',
+      partyA: 'p1',
+      partyB: 'p2',
+    });
+    expect(questService.advanceSocialTarget).toHaveBeenCalledTimes(2);
+    expect(questService.advanceSocialTarget).toHaveBeenCalledWith(
+      'p1',
+      SocialTargetType.ARBITRATION_SETTLED,
+    );
+    expect(questService.advanceSocialTarget).toHaveBeenCalledWith(
+      'p2',
+      SocialTargetType.ARBITRATION_SETTLED,
+    );
+  });
+
+  it('should map GUILD_JOINED to join_guild target', async () => {
+    await listener.onGuildJoined({ guildId: 'g1', playerId: 'p1' });
+    expect(questService.advanceSocialTarget).toHaveBeenCalledWith(
+      'p1',
+      SocialTargetType.JOIN_GUILD,
+    );
+  });
+
+  it('should map INTEL_BOUGHT to intel_buy target', async () => {
+    await listener.onIntelBought({ playerId: 'p1' });
+    expect(questService.advanceSocialTarget).toHaveBeenCalledWith(
+      'p1',
+      SocialTargetType.INTEL_BUY,
+    );
+  });
+
+  it('should not leak eco handler errors to main flow', async () => {
+    questService.advanceSocialTarget.mockRejectedValue(new Error('boom'));
+    await expect(
+      listener.onEcoAction({ playerId: 'p1', action: 'like' }),
+    ).resolves.toBeUndefined();
+  });
 });

@@ -63,6 +63,10 @@ export class CacheService implements OnModuleInit, OnModuleDestroy {
     return result === 1;
   }
 
+  async incr(key: string): Promise<number> {
+    return this.client.incr(key);
+  }
+
   // ===== Hash 操作 =====
   async hSet(key: string, field: string, value: string): Promise<number> {
     return this.client.hSet(key, field, value);

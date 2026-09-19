@@ -130,6 +130,8 @@ export class ArbitrationService {
       status: saved.status,
       successRate,
       result,
+      partyA,
+      partyB,
     });
     return saved;
   }

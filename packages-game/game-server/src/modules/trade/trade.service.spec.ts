@@ -13,20 +13,48 @@ import {
 import { EventBusService } from '@event-bus/event-bus.service';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
-import { TradeStatus, AuctionStatus } from '@constants/enums';
+import { TradeStatus, AuctionStatus, NegotiationStatus, EscrowStatus, BountyStatus, CreditStatus, BarterStatus } from '@constants/enums';
 import { EconomyService } from '@modules/economy/economy.service';
 import { SocialService } from '@modules/social/social.service';
 import { CharacterService } from '@modules/character/character.service';
 import { CombatService } from '@modules/combat/combat.service';
+import { GameEvents } from '@event-bus/game-events';
 import type { Repository } from 'typeorm';
 
 describe('TradeService', () => {
   let service: TradeService;
   let tradeRepo: jest.Mocked<Repository<TradeOrder>>;
   let auctionRepo: jest.Mocked<Repository<AuctionItem>>;
+  let negotiationRepo: jest.Mocked<Repository<Negotiation>>;
+  let escrowRepo: jest.Mocked<Repository<EscrowAgreement>>;
+  let bountyRepo: jest.Mocked<Repository<Bounty>>;
+  let creditRepo: jest.Mocked<Repository<CreditDebt>>;
+  let barterRepo: jest.Mocked<Repository<BarterDeal>>;
+  let economyService: jest.Mocked<EconomyService>;
+  let socialService: jest.Mocked<SocialService>;
+  let characterService: jest.Mocked<CharacterService>;
+  let combatService: jest.Mocked<CombatService>;
   let eventBus: jest.Mocked<EventBusService>;
 
   beforeEach(async () => {
+    economyService = {
+      addCurrency: jest.fn().mockResolvedValue({ balanceAfter: '0' }),
+      deductCurrency: jest.fn().mockResolvedValue({ balanceAfter: '0' }),
+      getBalance: jest.fn().mockResolvedValue('0'),
+    } as unknown as jest.Mocked<EconomyService>;
+    socialService = {
+      getFriendList: jest.fn().mockResolvedValue([]),
+      getMyGuildRole: jest.fn().mockResolvedValue(null),
+      getKinships: jest.fn().mockResolvedValue([]),
+      getIntelligences: jest.fn().mockResolvedValue([]),
+    } as unknown as jest.Mocked<SocialService>;
+    characterService = {
+      getRelationshipLevel: jest.fn(),
+      increaseFavorability: jest.fn().mockResolvedValue({}),
+    } as unknown as jest.Mocked<CharacterService>;
+    combatService = {
+      getCombatLogs: jest.fn().mockResolvedValue({ items: [], total: 0 }),
+    } as unknown as jest.Mocked<CombatService>;
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TradeService,
@@ -118,42 +146,25 @@ describe('TradeService', () => {
           provide: EventBusService,
           useValue: { emit: jest.fn() },
         },
-        {
-          provide: EconomyService,
-          useValue: {
-            addCurrency: jest.fn().mockResolvedValue({ balanceAfter: '0' }),
-            deductCurrency: jest.fn().mockResolvedValue({ balanceAfter: '0' }),
-            getBalance: jest.fn().mockResolvedValue('0'),
-          },
-        },
-        {
-          provide: SocialService,
-          useValue: {
-            getFriendList: jest.fn().mockResolvedValue([]),
-            getMyGuildRole: jest.fn().mockResolvedValue(null),
-            getKinships: jest.fn().mockResolvedValue([]),
-            getIntelligences: jest.fn().mockResolvedValue([]),
-          },
-        },
-        {
-          provide: CharacterService,
-          useValue: {
-            getRelationshipLevel: jest.fn(),
-            increaseFavorability: jest.fn(),
-          },
-        },
-        {
-          provide: CombatService,
-          useValue: {
-            getCombatLogs: jest.fn().mockResolvedValue({ items: [], total: 0 }),
-          },
-        },
+        { provide: EconomyService, useValue: economyService },
+        { provide: SocialService, useValue: socialService },
+        { provide: CharacterService, useValue: characterService },
+        { provide: CombatService, useValue: combatService },
       ],
     }).compile();
 
     service = module.get(TradeService);
     tradeRepo = module.get(getRepositoryToken(TradeOrder));
     auctionRepo = module.get(getRepositoryToken(AuctionItem));
+    negotiationRepo = module.get(getRepositoryToken(Negotiation));
+    escrowRepo = module.get(getRepositoryToken(EscrowAgreement));
+    bountyRepo = module.get(getRepositoryToken(Bounty));
+    creditRepo = module.get(getRepositoryToken(CreditDebt));
+    barterRepo = module.get(getRepositoryToken(BarterDeal));
+    economyService = module.get(EconomyService);
+    socialService = module.get(SocialService);
+    characterService = module.get(CharacterService);
+    combatService = module.get(CombatService);
     eventBus = module.get(EventBusService);
   });
 
@@ -382,6 +393,147 @@ describe('TradeService', () => {
       const result = await service.getAuctionList(1, 20);
 
       expect(result.total).toBe(0);
+    });
+  });
+
+  // ===== Social Economy Event Emissions =====
+
+  describe('acceptNegotiation', () => {
+    it('should emit NEGOTIATION_COMPLETED for buyer on accepted deal', async () => {
+      negotiationRepo.findOne.mockResolvedValue({
+        id: 'n1',
+        buyerId: 'buyer',
+        sellerId: 'seller',
+        tradeOrderId: 't1',
+        askPrice: '100',
+        replyPrice: '90',
+        step: 1,
+        maxSteps: 3,
+        status: NegotiationStatus.PENDING,
+      } as any);
+      tradeRepo.findOne.mockResolvedValue({
+        id: 't1',
+        sellerId: 'seller',
+        buyerId: null,
+        status: TradeStatus.PENDING,
+      } as any);
+      economyService.getBalance.mockResolvedValue('0');
+
+      const result = await service.acceptNegotiation('buyer', 'n1');
+
+      expect(result.status).toBe(NegotiationStatus.COMPLETED);
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        GameEvents.NEGOTIATION_COMPLETED,
+        { playerId: 'buyer' },
+      );
+    });
+  });
+
+  describe('inspectGoods', () => {
+    it('should emit ESCROW_RELEASED for guarantor on release', async () => {
+      escrowRepo.findOne.mockResolvedValue({
+        id: 'e1',
+        buyerId: 'buyer',
+        sellerId: 'seller',
+        guarantorId: 'guarantor',
+        amount: '100',
+        feePercent: 2,
+        status: EscrowStatus.PENDING,
+      } as any);
+
+      const result = await service.inspectGoods('guarantor', 'e1');
+
+      expect(result.status).toBe(EscrowStatus.RELEASED);
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        GameEvents.ESCROW_RELEASED,
+        { playerId: 'guarantor' },
+      );
+    });
+  });
+
+  describe('createBounty', () => {
+    it('should emit BOUNTY_PUBLISHED for publisher on creation', async () => {
+      const result = await service.createBounty(
+        'publisher',
+        'kill',
+        { targetId: 'm1' },
+        '100',
+      );
+
+      expect(result.status).toBe(BountyStatus.ACTIVE);
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        GameEvents.BOUNTY_PUBLISHED,
+        { playerId: 'publisher' },
+      );
+    });
+  });
+
+  describe('completeBounty', () => {
+    it('should emit BOUNTY_COMPLETED for acceptor on verified completion', async () => {
+      bountyRepo.findOne.mockResolvedValue({
+        id: 'b1',
+        publisherId: 'publisher',
+        acceptorId: 'acceptor',
+        type: 'collect',
+        targetJson: {},
+        goldReward: '100',
+        deadline: null,
+        status: BountyStatus.ACCEPTED,
+      } as any);
+
+      const result = await service.completeBounty('acceptor', 'b1');
+
+      expect(result.status).toBe(BountyStatus.COMPLETED);
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        GameEvents.BOUNTY_COMPLETED,
+        { playerId: 'acceptor' },
+      );
+    });
+  });
+
+  describe('repayCredit', () => {
+    it('should emit CREDIT_SETTLED for borrower on repayment', async () => {
+      creditRepo.findOne.mockResolvedValue({
+        id: 'c1',
+        borrowerId: 'borrower',
+        lenderId: 'lender',
+        amount: '100',
+        status: CreditStatus.ACTIVE,
+      } as any);
+
+      const result = await service.repayCredit('borrower', 'c1');
+
+      expect(result.status).toBe(CreditStatus.SETTLED);
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        GameEvents.CREDIT_SETTLED,
+        { playerId: 'borrower' },
+      );
+    });
+  });
+
+  describe('acceptBarter', () => {
+    it('should emit BARTER_COMPLETED for party B on dual confirm', async () => {
+      barterRepo.findOne.mockResolvedValue({
+        id: 'd1',
+        partyAId: 'pA',
+        partyBId: null,
+        itemsAJson: {},
+        itemsBJson: {},
+        goldAmount: '0',
+        aConfirm: true,
+        bConfirm: false,
+        status: BarterStatus.PENDING,
+      } as any);
+
+      const result = await service.acceptBarter('pB', 'd1', {
+        itemX: 1,
+      });
+
+      expect(result.status).toBe(BarterStatus.COMPLETED);
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        GameEvents.BARTER_COMPLETED,
+        { playerId: 'pB' },
+      );
     });
   });
 });

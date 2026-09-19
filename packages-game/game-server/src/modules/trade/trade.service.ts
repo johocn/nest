@@ -340,7 +340,9 @@ export class TradeService {
     negotiation.status = NegotiationStatus.COMPLETED;
     negotiation.discountPercent = discount;
     negotiation.message = `成交价${finalPrice.toString()}`;
-    return this.negotiationRepo.save(negotiation);
+    const saved = await this.negotiationRepo.save(negotiation);
+    this.eventBus.emit(GameEvents.NEGOTIATION_COMPLETED, { playerId: buyerId });
+    return saved;
   }
 
   async rejectNegotiation(
@@ -480,7 +482,11 @@ export class TradeService {
 
     escrow.status = EscrowStatus.RELEASED;
     escrow.releasedAt = new Date();
-    return this.escrowRepo.save(escrow);
+    const saved = await this.escrowRepo.save(escrow);
+    this.eventBus.emit(GameEvents.ESCROW_RELEASED, {
+      playerId: guarantorId,
+    });
+    return saved;
   }
 
   async penalizeEscrow(escrowId: string): Promise<EscrowAgreement> {
@@ -632,6 +638,7 @@ export class TradeService {
       borrowerId,
       5,
     );
+    this.eventBus.emit(GameEvents.CREDIT_SETTLED, { playerId: borrowerId });
     return saved;
   }
 
@@ -715,6 +722,9 @@ export class TradeService {
     deal.bConfirm = true;
     if (deal.aConfirm && deal.bConfirm) {
       deal.status = BarterStatus.COMPLETED;
+      this.eventBus.emit(GameEvents.BARTER_COMPLETED, {
+        playerId: partyBId,
+      });
       this.eventBus.emit(GameEvents.TRADE_COMPLETED, {
         barterId: deal.id,
         partyAId: deal.partyAId,
@@ -760,7 +770,11 @@ export class TradeService {
       acceptorId: null,
       status: BountyStatus.ACTIVE,
     });
-    return this.bountyRepo.save(bounty);
+    const saved = await this.bountyRepo.save(bounty);
+    this.eventBus.emit(GameEvents.BOUNTY_PUBLISHED, {
+      playerId: publisherId,
+    });
+    return saved;
   }
 
   async acceptBounty(
@@ -815,6 +829,9 @@ export class TradeService {
     );
     bounty.status = BountyStatus.COMPLETED;
     const saved = await this.bountyRepo.save(bounty);
+    this.eventBus.emit(GameEvents.BOUNTY_COMPLETED, {
+      playerId: acceptorId,
+    });
     this.eventBus.emit(GameEvents.TRADE_COMPLETED, {
       bountyId: bounty.id,
       acceptorId,

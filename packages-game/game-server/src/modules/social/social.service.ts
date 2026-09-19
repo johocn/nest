@@ -1095,6 +1095,7 @@ export class SocialService {
     };
     const saved = await this.intelligenceRepo.save(intel);
 
+    this.eventBus.emit(GameEvents.INTEL_BOUGHT, { playerId: buyerId });
     this.eventBus.emit(GameEvents.INTEL_SOLD, {
       intelId,
       buyerId,
