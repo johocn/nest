@@ -1964,10 +1964,11 @@ describe('SocialService', () => {
     });
 
     it('推荐排除好友/自己/拉黑，按共同好友打分并附理由', async () => {
-      // 我的好友：200（共同好友桥梁）
+      // 好友全量：100-200 双向（我的好友）、200-300（候选 300 与 200 是好友 → 共同好友 = 1）
       friendRepo.find.mockResolvedValueOnce([
         { playerId: '100', friendId: '200', status: FriendStatus.ACCEPTED },
         { playerId: '200', friendId: '100', status: FriendStatus.ACCEPTED },
+        { playerId: '200', friendId: '300', status: FriendStatus.ACCEPTED },
       ]);
       // 全量玩家：100(自己)、200(好友，排除)、300(候选：与200是好友)
       playerRepo.find.mockResolvedValueOnce([
@@ -1977,10 +1978,6 @@ describe('SocialService', () => {
       ]);
       // 拉黑：无
       blockRepo.find.mockResolvedValueOnce([]);
-      // 循环内候选 300 的好友：与 200 是好友 → 300 与 100 的共同好友 = 1
-      friendRepo.find.mockResolvedValueOnce([
-        { playerId: '200', friendId: '300', status: FriendStatus.ACCEPTED },
-      ]);
 
       const result = await service.recommendFriends('100', 10);
       expect(result.length).toBe(1);

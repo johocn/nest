@@ -334,18 +334,19 @@ export class SocialService {
       playerGuild.get(g.playerId)!.add(g.guildId);
     }
 
+    // 全量好友邻接表（候选共同好友计算用，避免逐候选查库）
+    const adjacency = new Map<string, Set<string>>();
+    for (const f of allFriends) {
+      if (!adjacency.has(f.playerId)) adjacency.set(f.playerId, new Set());
+      if (!adjacency.has(f.friendId)) adjacency.set(f.friendId, new Set());
+      adjacency.get(f.playerId)!.add(f.friendId);
+      adjacency.get(f.friendId)!.add(f.playerId);
+    }
+
     const scored: FriendRecommendation[] = [];
     for (const c of allPlayers) {
       if (exclude.has(c.id)) continue;
-      // 候选的好友（双向解析）
-      const rows = await this.friendRepo.find({
-        where: { playerId: c.id, status: FriendStatus.ACCEPTED },
-      });
-      const cFriends = new Set<string>();
-      for (const row of rows) {
-        if (row.playerId === c.id) cFriends.add(row.friendId);
-        if (row.friendId === c.id) cFriends.add(row.playerId);
-      }
+      const cFriends = adjacency.get(c.id) ?? new Set<string>();
       let common = 0;
       for (const f of cFriends) if (myFriendIds.has(f)) common++;
       let score = 0;
