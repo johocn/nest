@@ -36,7 +36,10 @@ import {
   QualificationType,
   CompanionType,
   MartialArtType,
+  RelationshipLevel,
 } from '@constants/enums';
+import { EventBusService } from '@event-bus/event-bus.service';
+import { GameEvents } from '@event-bus/game-events';
 
 export interface CreateCharacterDto {
   playerId: string;
@@ -114,6 +117,7 @@ export class CharacterService {
     private readonly titleRepo: Repository<TitleTemplate>,
     @InjectRepository(CharacterTitle)
     private readonly charTitleRepo: Repository<CharacterTitle>,
+    private readonly eventBus: EventBusService,
   ) {}
 
   async createCharacter(dto: CreateCharacterDto): Promise<Character> {
@@ -434,6 +438,75 @@ export class CharacterService {
     characterId: string,
   ): Promise<CharacterRelationship[]> {
     return this.relRepo.find({ where: { characterId } });
+  }
+
+  private static readonly RELATIONSHIP_THRESHOLDS: ReadonlyArray<{
+    level: RelationshipLevel;
+    threshold: number;
+  }> = [
+    { level: RelationshipLevel.STRANGER, threshold: 0 },
+    { level: RelationshipLevel.ACQUAINTANCE, threshold: 50 },
+    { level: RelationshipLevel.FRIEND, threshold: 150 },
+    { level: RelationshipLevel.CONFIDANT, threshold: 300 },
+    { level: RelationshipLevel.SWORN, threshold: 500 },
+  ];
+
+  private levelOf(favorability: number): RelationshipLevel {
+    const thresholds = CharacterService.RELATIONSHIP_THRESHOLDS;
+    for (let i = thresholds.length - 1; i >= 0; i -= 1) {
+      if (favorability >= thresholds[i].threshold) {
+        return thresholds[i].level;
+      }
+    }
+    return RelationshipLevel.STRANGER;
+  }
+
+  async increaseFavorability(
+    characterId: string,
+    targetId: string,
+    delta: number,
+  ): Promise<CharacterRelationship> {
+    let rel = await this.relRepo.findOne({ where: { characterId, targetId } });
+    if (!rel) {
+      rel = this.relRepo.create({
+        characterId,
+        targetId,
+        favorability: 0,
+      });
+    }
+
+    const fromLevel = this.levelOf(rel.favorability);
+    rel.favorability += delta;
+    const toLevel = this.levelOf(rel.favorability);
+    if (toLevel !== fromLevel) {
+      rel.level = toLevel;
+      rel.history = [
+        ...(Array.isArray(rel.history) ? rel.history : []),
+        {
+          type: 'level_up',
+          from: fromLevel,
+          to: toLevel,
+          favorability: rel.favorability,
+          at: new Date().toISOString(),
+        },
+      ];
+      this.eventBus.emit(GameEvents.RELATIONSHIP_LEVEL_UP, {
+        characterId,
+        targetId,
+        from: fromLevel,
+        to: toLevel,
+        favorability: rel.favorability,
+      });
+    }
+    return this.relRepo.save(rel);
+  }
+
+  async getRelationshipLevel(
+    characterId: string,
+    targetId: string,
+  ): Promise<RelationshipLevel> {
+    const rel = await this.relRepo.findOne({ where: { characterId, targetId } });
+    return rel ? this.levelOf(rel.favorability) : RelationshipLevel.STRANGER;
   }
 
   async updateCard(

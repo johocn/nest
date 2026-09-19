@@ -32,7 +32,10 @@ import {
   Faction,
   CombatStyle,
   MartialArtType,
+  RelationshipLevel,
 } from '@constants/enums';
+import { EventBusService } from '@event-bus/event-bus.service';
+import { GameEvents } from '@event-bus/game-events';
 
 describe('CharacterService', () => {
   let service: CharacterService;
@@ -40,7 +43,7 @@ describe('CharacterService', () => {
   // Create a mock repository factory
   function mockRepo() {
     return {
-      create: jest.fn((data) => data),
+      create: jest.fn((data) => ({ ...data })),
       save: jest.fn(async (data) => ({ ...data, id: data.id || '1' })),
       findOne: jest.fn(),
       find: jest.fn(),
@@ -71,6 +74,8 @@ describe('CharacterService', () => {
     title: mockRepo(),
     charTitle: mockRepo(),
   };
+
+  const eventBus = { emit: jest.fn() };
 
   const entityTokenMap = {
     [getRepositoryToken(Character)]: repos.character,
@@ -111,6 +116,7 @@ describe('CharacterService', () => {
           provide: token,
           useValue: repo,
         })),
+        { provide: EventBusService, useValue: eventBus },
       ],
     }).compile();
     service = moduleRef.get<CharacterService>(CharacterService);
@@ -339,6 +345,97 @@ describe('CharacterService', () => {
         poem: '十步杀一人',
         titles: [{ name: '状元', iconUrl: 'icon.png' }],
       });
+    });
+  });
+
+  describe('increaseFavorability', () => {
+    it('creates relationship and levels up at 50 with event', async () => {
+      repos.relationship.findOne.mockResolvedValue(null);
+      eventBus.emit.mockClear();
+      const result = await service.increaseFavorability('c1', 'c2', 60);
+      expect(repos.relationship.create).toHaveBeenCalledWith({
+        characterId: 'c1',
+        targetId: 'c2',
+        favorability: 0,
+      });
+      expect(result.favorability).toBe(60);
+      expect(result.level).toBe(RelationshipLevel.ACQUAINTANCE);
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        GameEvents.RELATIONSHIP_LEVEL_UP,
+        expect.objectContaining({
+          characterId: 'c1',
+          targetId: 'c2',
+          from: RelationshipLevel.STRANGER,
+          to: RelationshipLevel.ACQUAINTANCE,
+          favorability: 60,
+        }),
+      );
+    });
+
+    it('levels up from FRIEND to CONFIDANT at 300 and appends history', async () => {
+      repos.relationship.findOne.mockResolvedValue({
+        id: 'r1',
+        characterId: 'c1',
+        targetId: 'c2',
+        favorability: 280,
+        level: RelationshipLevel.FRIEND,
+        history: [],
+      });
+      const result = await service.increaseFavorability('c1', 'c2', 40);
+      expect(result.favorability).toBe(320);
+      expect(result.level).toBe(RelationshipLevel.CONFIDANT);
+      expect(result.history).toHaveLength(1);
+      expect(result.history[0]).toMatchObject({
+        type: 'level_up',
+        from: RelationshipLevel.FRIEND,
+        to: RelationshipLevel.CONFIDANT,
+      });
+    });
+
+    it('does not emit or record when level unchanged', async () => {
+      repos.relationship.findOne.mockResolvedValue({
+        id: 'r1',
+        favorability: 60,
+        level: RelationshipLevel.ACQUAINTANCE,
+        history: [],
+      });
+      eventBus.emit.mockClear();
+      const result = await service.increaseFavorability('c1', 'c2', 10);
+      expect(result.favorability).toBe(70);
+      expect(result.level).toBe(RelationshipLevel.ACQUAINTANCE);
+      expect(result.history).toHaveLength(0);
+      expect(eventBus.emit).not.toHaveBeenCalled();
+    });
+
+    it('sworn requires 500 favorability', async () => {
+      repos.relationship.findOne.mockResolvedValue({
+        id: 'r1',
+        favorability: 499,
+        level: RelationshipLevel.CONFIDANT,
+        history: [],
+      });
+      const result = await service.increaseFavorability('c1', 'c2', 1);
+      expect(result.level).toBe(RelationshipLevel.SWORN);
+    });
+  });
+
+  describe('getRelationshipLevel', () => {
+    it('returns STRANGER when no relationship', async () => {
+      repos.relationship.findOne.mockResolvedValue(null);
+      await expect(service.getRelationshipLevel('c1', 'c2')).resolves.toBe(
+        RelationshipLevel.STRANGER,
+      );
+    });
+
+    it('computes level from favorability regardless of stored level', async () => {
+      repos.relationship.findOne.mockResolvedValue({
+        id: 'r1',
+        favorability: 500,
+        level: RelationshipLevel.FRIEND,
+      });
+      await expect(service.getRelationshipLevel('c1', 'c2')).resolves.toBe(
+        RelationshipLevel.SWORN,
+      );
     });
   });
 });
