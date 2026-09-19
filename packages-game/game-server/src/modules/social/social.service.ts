@@ -21,6 +21,7 @@ import { CharacterEspionage, CharacterRelationship } from '@modules/character/en
 import { CharacterService } from '@modules/character/character.service';
 import { InventoryService } from '@modules/inventory/inventory.service';
 import { PlayerService } from '@modules/player/player.service';
+import { Player } from '@modules/player/entities/player.entity';
 import { EventBusService } from '@event-bus/event-bus.service';
 import { GameEvents } from '@event-bus/game-events';
 import { GameException } from '@common/exceptions/game.exception';
@@ -55,6 +56,14 @@ export interface DonateResult {
   donation: GuildDonate;
   contributionGained: number;
   newTotal: number;
+}
+
+export interface FriendRecommendation {
+  playerId: string;
+  name: string;
+  level: number;
+  score: number;
+  reason: string;
 }
 
 @Injectable()
@@ -93,6 +102,8 @@ export class SocialService {
     private readonly reportRepo: Repository<PlayerReport>,
     @InjectRepository(PlayerBlock)
     private readonly blockRepo: Repository<PlayerBlock>,
+    @InjectRepository(Player)
+    private readonly playerRepo: Repository<Player>,
     @InjectRepository(CharacterEspionage)
     private readonly espionageRepo: Repository<CharacterEspionage>,
     private readonly cacheService: CacheService,
@@ -264,6 +275,114 @@ export class SocialService {
       ],
     });
     return Boolean(found);
+  }
+
+  // ===== 图谱协同好友推荐（阶段5批1） =====
+
+  async recommendFriends(
+    playerId: string,
+    limit = 10,
+  ): Promise<FriendRecommendation[]> {
+    const n = Math.min(Math.max(Math.floor(limit) || 10, 1), 20);
+    const now = Date.now();
+    const day7 = new Date(now - 7 * 86400000);
+
+    const [allFriends, allKinships, allGuildMembers, allPlayers, blocks] =
+      await Promise.all([
+        this.friendRepo.find({ where: { status: FriendStatus.ACCEPTED } }),
+        this.kinshipRepo.find({ where: { status: KinshipStatus.ACTIVE } }),
+        this.guildMemberRepo.find(),
+        this.playerRepo.find(),
+        this.blockRepo.find(),
+      ]);
+
+    const me = allPlayers.find((p) => p.id === playerId);
+    if (!me) return [];
+
+    // 我的好友集合（双向）
+    const myFriendIds = new Set<string>();
+    for (const f of allFriends) {
+      if (f.playerId === playerId) myFriendIds.add(f.friendId);
+      if (f.friendId === playerId) myFriendIds.add(f.playerId);
+    }
+    // 我的帮派集合
+    const myGuildIds = new Set(
+      allGuildMembers
+        .filter((g) => g.playerId === playerId)
+        .map((g) => g.guildId),
+    );
+    // 我的亲缘成员集合（仅我作为 leader 的亲缘）
+    const myKinshipIds = new Set<string>();
+    for (const k of allKinships) {
+      if (k.leaderId === playerId) {
+        const members = Array.isArray(k.members) ? k.members : [];
+        members.forEach((m) => m !== playerId && myKinshipIds.add(m));
+      }
+    }
+    // 候选排除集：自己 / 好友 / 拉黑
+    const blockedSet = new Set<string>();
+    for (const b of blocks) {
+      if (b.playerId === playerId) blockedSet.add(b.blockedId);
+      if (b.blockedId === playerId) blockedSet.add(b.playerId);
+    }
+    const exclude = new Set<string>([playerId, ...myFriendIds, ...blockedSet]);
+
+    // 玩家帮派全量（同帮派加分用）
+    const playerGuild = new Map<string, Set<string>>();
+    for (const g of allGuildMembers) {
+      if (!playerGuild.has(g.playerId)) playerGuild.set(g.playerId, new Set());
+      playerGuild.get(g.playerId)!.add(g.guildId);
+    }
+
+    const scored: FriendRecommendation[] = [];
+    for (const c of allPlayers) {
+      if (exclude.has(c.id)) continue;
+      // 候选的好友（双向解析）
+      const rows = await this.friendRepo.find({
+        where: { playerId: c.id, status: FriendStatus.ACCEPTED },
+      });
+      const cFriends = new Set<string>();
+      for (const row of rows) {
+        if (row.playerId === c.id) cFriends.add(row.friendId);
+        if (row.friendId === c.id) cFriends.add(row.playerId);
+      }
+      let common = 0;
+      for (const f of cFriends) if (myFriendIds.has(f)) common++;
+      let score = 0;
+      const reasons: string[] = [];
+      if (common > 0) {
+        score += common * 3;
+        reasons.push(`共同好友${common}人`);
+      }
+      const guilds = playerGuild.get(c.id);
+      if (guilds && [...guilds].some((g) => myGuildIds.has(g))) {
+        score += 2;
+        reasons.push('同帮派');
+      }
+      let kinshipCommon = 0;
+      for (const f of cFriends) if (myKinshipIds.has(f)) kinshipCommon++;
+      if (kinshipCommon > 0) {
+        score += kinshipCommon * 1.5;
+        reasons.push('亲缘网络');
+      }
+      if (c.lastActivityAt && c.lastActivityAt >= day7) {
+        score += 1;
+        reasons.push('活跃玩家');
+      }
+      if (Math.abs(c.level - me.level) <= 5) score += 0.5;
+      if (score > 0) {
+        scored.push({
+          playerId: c.id,
+          name: c.nickname,
+          level: c.level,
+          score: Math.round(score * 10) / 10,
+          reason: reasons.join('、'),
+        });
+      }
+    }
+
+    scored.sort((a, b) => b.score - a.score || this.random() - this.random());
+    return scored.slice(0, n);
   }
 
   // ===== Guild =====

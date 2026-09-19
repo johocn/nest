@@ -52,6 +52,7 @@ describe('SocialController', () => {
     blockPlayer: jest.fn(),
     unblockPlayer: jest.fn(),
     listBlocks: jest.fn(),
+    recommendFriends: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -402,6 +403,13 @@ describe('SocialController', () => {
       const result = await controller.listBlocks(player, 1, 20);
       expect(service.listBlocks).toHaveBeenCalledWith('p1', 1, 20);
       expect(result).toEqual({ items: [], total: 0 });
+    });
+
+    it('recommendFriends passes playerId and limit', async () => {
+      service.recommendFriends.mockResolvedValue([]);
+      const result = await controller.recommendFriends(player, 5);
+      expect(service.recommendFriends).toHaveBeenCalledWith('p1', 5);
+      expect(result).toEqual([]);
     });
   });
 });

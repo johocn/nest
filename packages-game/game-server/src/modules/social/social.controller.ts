@@ -494,4 +494,13 @@ export class SocialController {
       Number(limit),
     );
   }
+
+  @Get('recommend/friends')
+  @ApiOperation({ summary: '好友推荐（图谱协同）' })
+  async recommendFriends(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Query('limit') limit = 10,
+  ) {
+    return this.socialService.recommendFriends(player.playerId, Number(limit));
+  }
 }

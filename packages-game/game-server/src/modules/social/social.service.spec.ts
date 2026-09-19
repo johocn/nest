@@ -1947,4 +1947,71 @@ describe('SocialService', () => {
       expect(blockRepo.delete).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('好友推荐', () => {
+    let blockRepo: any;
+    let playerRepo: any;
+
+    beforeEach(() => {
+      service = moduleRef.get<SocialService>(SocialService);
+      friendRepo = moduleRef.get(getRepositoryToken(Friend));
+      blockRepo = moduleRef.get(getRepositoryToken(PlayerBlock));
+      playerRepo = moduleRef.get(getRepositoryToken(Player));
+      jest.clearAllMocks();
+      // 亲缘/帮派默认空数组（查询顺序：好友→亲缘→帮派→玩家→拉黑）
+      kinshipRepo.find.mockResolvedValue([]);
+      guildMemberRepo.find.mockResolvedValue([]);
+    });
+
+    it('推荐排除好友/自己/拉黑，按共同好友打分并附理由', async () => {
+      // 我的好友：200（共同好友桥梁）
+      friendRepo.find.mockResolvedValueOnce([
+        { playerId: '100', friendId: '200', status: FriendStatus.ACCEPTED },
+        { playerId: '200', friendId: '100', status: FriendStatus.ACCEPTED },
+      ]);
+      // 全量玩家：100(自己)、200(好友，排除)、300(候选：与200是好友)
+      playerRepo.find.mockResolvedValueOnce([
+        { id: '100', nickname: '我', level: 5, lastActivityAt: new Date() },
+        { id: '200', nickname: '好友', level: 6, lastActivityAt: new Date() },
+        { id: '300', nickname: '候选', level: 6, lastActivityAt: new Date() },
+      ]);
+      // 拉黑：无
+      blockRepo.find.mockResolvedValueOnce([]);
+      // 循环内候选 300 的好友：与 200 是好友 → 300 与 100 的共同好友 = 1
+      friendRepo.find.mockResolvedValueOnce([
+        { playerId: '200', friendId: '300', status: FriendStatus.ACCEPTED },
+      ]);
+
+      const result = await service.recommendFriends('100', 10);
+      expect(result.length).toBe(1);
+      expect(result[0].playerId).toBe('300');
+      expect(result[0].score).toBeGreaterThan(0);
+      expect(result[0].reason).toContain('共同好友');
+    });
+
+    it('拉黑对象被排除', async () => {
+      friendRepo.find.mockResolvedValueOnce([]);
+      playerRepo.find.mockResolvedValueOnce([
+        { id: '100', nickname: '我', level: 5, lastActivityAt: new Date() },
+        { id: '300', nickname: '候选', level: 6, lastActivityAt: new Date() },
+      ]);
+      blockRepo.find.mockResolvedValueOnce([
+        { playerId: '100', blockedId: '300' },
+      ]);
+
+      const result = await service.recommendFriends('100', 10);
+      expect(result).toEqual([]);
+    });
+
+    it('无候选返回空数组', async () => {
+      friendRepo.find.mockResolvedValueOnce([]);
+      playerRepo.find.mockResolvedValueOnce([
+        { id: '100', nickname: '我', level: 5, lastActivityAt: new Date() },
+      ]);
+      blockRepo.find.mockResolvedValueOnce([]);
+
+      const result = await service.recommendFriends('100', 10);
+      expect(result).toEqual([]);
+    });
+  });
 });
