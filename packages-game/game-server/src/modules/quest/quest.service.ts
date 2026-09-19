@@ -373,18 +373,33 @@ export class QuestService {
       });
       if (template?.targetType !== targetType) continue;
 
-      quest.progress += 1;
+      // 原子自增：并发事件（如同一秒多个生态回调）各自读-改-写会丢更新，
+      // 统一走 UPDATE progress = progress + 1 保证计数不丢失
+      await this.playerQuestRepo.increment(
+        { id: quest.id, status: QuestStatus.IN_PROGRESS },
+        'progress',
+        1,
+      );
       const targetCount =
         template.targetJson?.count ?? template.targetJson?.kill_count ?? 1;
-      if (targetCount > 0 && quest.progress >= targetCount) {
-        quest.status = QuestStatus.COMPLETED;
-        this.eventBus.emit(GameEvents.QUEST_COMPLETED, {
-          playerId,
-          questTemplateId: quest.questTemplateId,
-          reward: template.rewardJson,
+      if (targetCount > 0) {
+        const updated = await this.playerQuestRepo.findOne({
+          where: { id: quest.id },
         });
+        if (updated && updated.progress >= targetCount) {
+          const res = await this.playerQuestRepo.update(
+            { id: quest.id, status: QuestStatus.IN_PROGRESS },
+            { status: QuestStatus.COMPLETED },
+          );
+          if (res.affected && res.affected > 0) {
+            this.eventBus.emit(GameEvents.QUEST_COMPLETED, {
+              playerId,
+              questTemplateId: quest.questTemplateId,
+              reward: template.rewardJson,
+            });
+          }
+        }
       }
-      await this.playerQuestRepo.save(quest);
     }
   }
 

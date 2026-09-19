@@ -78,6 +78,8 @@ describe('QuestService', () => {
               .mockImplementation((data: any) => Promise.resolve(data)),
             create: jest.fn((data: any) => ({ ...data, id: '1' })),
             findAndCount: jest.fn(),
+            increment: jest.fn().mockResolvedValue({ affected: 1 }),
+            update: jest.fn().mockResolvedValue({ affected: 1 }),
           },
         },
         {
@@ -507,12 +509,26 @@ describe('QuestService', () => {
           targetJson: { count: 2 },
         }),
       );
+      playerQuestRepo.findOne.mockResolvedValue(
+        makePlayerQuest({
+          id: 'pq1',
+          questTemplateId: 'q1',
+          progress: 2,
+          status: QuestStatus.IN_PROGRESS,
+        }),
+      );
 
       await service.advanceSocialTarget('p1', 'send_gift' as any);
 
-      const saved = (playerQuestRepo.save as jest.Mock).mock.calls[0][0];
-      expect(saved.progress).toBe(2);
-      expect(saved.status).toBe(QuestStatus.COMPLETED);
+      expect(playerQuestRepo.increment).toHaveBeenCalledWith(
+        { id: 'pq1', status: QuestStatus.IN_PROGRESS },
+        'progress',
+        1,
+      );
+      expect(playerQuestRepo.update).toHaveBeenCalledWith(
+        { id: 'pq1', status: QuestStatus.IN_PROGRESS },
+        { status: QuestStatus.COMPLETED },
+      );
       expect(eventBus.emit).toHaveBeenCalledWith(
         'quest.completed',
         expect.any(Object),
@@ -535,7 +551,7 @@ describe('QuestService', () => {
       await expect(
         service.advanceSocialTarget('p1', 'spy' as any),
       ).resolves.toBeUndefined();
-      expect(playerQuestRepo.save).not.toHaveBeenCalled();
+      expect(playerQuestRepo.increment).not.toHaveBeenCalled();
     });
 
     it('should count eco browse actions via redis and advance within daily limit', async () => {
@@ -551,6 +567,14 @@ describe('QuestService', () => {
       questTemplateRepo.findOne.mockResolvedValue(
         makeTemplate({ id: 'q1', targetType: 'view_article' }),
       );
+      playerQuestRepo.findOne.mockResolvedValue(
+        makePlayerQuest({
+          id: 'pq1',
+          questTemplateId: 'q1',
+          progress: 1,
+          status: QuestStatus.IN_PROGRESS,
+        }),
+      );
 
       await service.advanceSocialTarget('p1', 'view_article' as any);
 
@@ -561,7 +585,7 @@ describe('QuestService', () => {
         'eco:daily:p1:view_article',
         86400,
       );
-      expect(playerQuestRepo.save).toHaveBeenCalled();
+      expect(playerQuestRepo.increment).toHaveBeenCalled();
     });
 
     it('should skip eco browse target when daily count exceeds 10', async () => {
@@ -583,7 +607,7 @@ describe('QuestService', () => {
       expect(cacheService.incr).toHaveBeenCalledWith(
         'eco:daily:p1:view_article',
       );
-      expect(playerQuestRepo.save).not.toHaveBeenCalled();
+      expect(playerQuestRepo.increment).not.toHaveBeenCalled();
     });
 
     it('should not apply daily limit to purchase/join_activity targets', async () => {
@@ -598,11 +622,19 @@ describe('QuestService', () => {
       questTemplateRepo.findOne.mockResolvedValue(
         makeTemplate({ id: 'q1', targetType: 'purchase' }),
       );
+      playerQuestRepo.findOne.mockResolvedValue(
+        makePlayerQuest({
+          id: 'pq1',
+          questTemplateId: 'q1',
+          progress: 1,
+          status: QuestStatus.IN_PROGRESS,
+        }),
+      );
 
       await service.advanceSocialTarget('p1', 'purchase' as any);
 
       expect(cacheService.incr).not.toHaveBeenCalled();
-      expect(playerQuestRepo.save).toHaveBeenCalled();
+      expect(playerQuestRepo.increment).toHaveBeenCalled();
     });
   });
 

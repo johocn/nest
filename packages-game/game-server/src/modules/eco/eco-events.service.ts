@@ -75,7 +75,7 @@ export class EcoEventsService {
       return this.reject('重复上报', ErrorCodes.ECO_REPLAY);
     }
 
-    if (!ECO_ACTIONS.includes(dto.action)) {
+    if (!(ECO_ACTIONS as readonly string[]).includes(dto.action)) {
       return this.reject('未知行为类型', ErrorCodes.ECO_UNKNOWN_ACTION);
     }
     this.stats.byAction[dto.action] = (this.stats.byAction[dto.action] ?? 0) + 1;

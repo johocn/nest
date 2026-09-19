@@ -1,4 +1,4 @@
-import { IsString, IsIn, IsObject, IsOptional } from 'class-validator';
+import { IsString, IsObject, IsOptional } from 'class-validator';
 
 export const ECO_ACTIONS = [
   'view_article',
@@ -16,8 +16,8 @@ export const ECO_ACTIONS = [
 export type EcoAction = (typeof ECO_ACTIONS)[number];
 
 export class EcoEventDto {
-  @IsIn(ECO_ACTIONS)
-  action: EcoAction;
+  @IsString()
+  action: string;
 
   @IsString()
   scope: string;

@@ -45,12 +45,25 @@ quest_seg_of() { # <json> <name> -> 任务片段（"playerQuest":{...},"template
 quest_progress_of() { local s=$(quest_seg_of "$1" "$2"); [ -n "$s" ] && echo "$s" | grep -oP '"progress":\K[0-9]+' | head -1; }
 quest_status_of()  { local s=$(quest_seg_of "$1" "$2"); [ -n "$s" ] && echo "$s" | grep -oP '"status":"\K[^"]+' | head -1; }
 
+# 任务进度等待：事件监听器异步推进，需轮询吸收延迟（最长 ~3s）
+wait_quest() { # <token> <name> <want_prog> -> echoes "prog status"
+  local token=$1 name=$2 want=$3 i=0 ql p s
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    ql=$(curl -s $BASE/api/client/v1/quest/list -H "Authorization: Bearer $token")
+    p=$(quest_progress_of "$ql" "$name")
+    s=$(quest_status_of "$ql" "$name")
+    [ "$p" = "$want" ] && break
+    sleep 0.3
+  done
+  echo "$p $s"
+}
+
 # ---- 0. 前置校验 ----
 : "${ECO_SHARED_SECRET:?ERROR: 环境变量 ECO_SHARED_SECRET 未设置（服务器 .env.prod 注入 systemd）}"
 SECRET="$ECO_SHARED_SECRET"
 
 CONTAINER=1Panel-postgresql-4LsS
-PSQL() { docker exec -e PGCLIENTENCODING=UTF8 "$CONTAINER" psql -U game -d game_server -t -A "$@"; }
+PSQL() { docker exec -e PGCLIENTENCODING=UTF8 "$CONTAINER" psql -U game -d game_server -t -A -c "$1"; }
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 SEED_SQL="$SCRIPT_DIR/seed-social-tasks.sql"
@@ -186,13 +199,14 @@ for i in 1 2 3; do
   R=$(ECO_POST "$BODY" "$TS")
   check_code "eco view_article advance $i/3 (p1)" 0 "$R"
 done
-QL=$(curl -s $BASE/api/client/v1/quest/list -H "Authorization: Bearer $PT1")
-VP=$(quest_progress_of "$QL" "初窥门径·浏览文章")
-VS=$(quest_status_of "$QL" "初窥门径·浏览文章")
+Q=$(wait_quest "$PT1" "初窥门径·浏览文章" 3)
+VP=${Q%% *}; VS=${Q##* }
 if [ "$VP" = "3" ] && [ "$VS" = "completed" ]; then ok "view_article quest 3/3 completed"; else bad "view_article quest progress" "prog=$VP status=$VS"; fi
 
 # 5.2 游戏内链路：结阵而战·激活阵法（activate_formation；复用 smoke-stage3 阵法全生命周期，
 #     rescue/escrow 需关系/订单前置较深，阵法链路最稳，属于 seed 游戏内补充任务之一）
+# 清理 formation 1（三才阵）上历次冒烟残留绑定（SMKE 号），保证 5.2 阵法链路确定性
+PSQL "DELETE FROM formation_bindings WHERE formation_id=1 AND player_id IN (SELECT p.id FROM players p WHERE p.nickname LIKE 'SMKE%' OR p.nickname LIKE 'Smoke%');"
 AF_ID=$(PSQL "SELECT id FROM quest_templates WHERE name='结阵而战·激活阵法' LIMIT 1;")
 [ -n "$AF_ID" ] && ok "locate seed quest 结阵而战·激活阵法 (id=$AF_ID)" || bad "locate seed quest 结阵而战·激活阵法" "$AF_ID"
 R=$(curl -s -X POST $BASE/api/client/v1/quest/accept -H "Authorization: Bearer $PT1" -H 'Content-Type: application/json' -d "{\"questTemplateId\":\"$AF_ID\"}")
@@ -210,9 +224,8 @@ check_any_code "formation join p3" "91303" "$R"
 R=$(curl -s -X POST $BASE/api/client/v1/combat/formations/$FID/activate -H "Authorization: Bearer $PT1")
 check_code "formation activate full (p1)" 0 "$R"
 
-QL=$(curl -s $BASE/api/client/v1/quest/list -H "Authorization: Bearer $PT1")
-AP=$(quest_progress_of "$QL" "结阵而战·激活阵法")
-AS=$(quest_status_of "$QL" "结阵而战·激活阵法")
+Q=$(wait_quest "$PT1" "结阵而战·激活阵法" 1)
+AP=${Q%% *}; AS=${Q##* }
 if [ "$AP" = "1" ] && [ "$AS" = "completed" ]; then ok "activate_formation quest advanced by FORMATION_ACTIVATED"; else bad "activate_formation quest" "prog=$AP status=$AS"; fi
 
 # 5.3 join_guild（复用 smoke-stage2 帮派链路：建帮即触发 GUILD_JOINED；
@@ -226,9 +239,8 @@ check_code "quest accept join_guild (p1)" 0 "$R"
 R=$(curl -s -X POST $BASE/api/client/v1/social/guild/create -H "Authorization: Bearer $PT1" -H 'Content-Type: application/json' -d "{\"name\":\"SmokeEcoG1_$TS\"}")
 G1=$(echo "$R" | sed -n 's/.*"id":"\([0-9]*\)".*/\1/p')
 [ -n "$G1" ] && ok "guild create p1 (id=$G1)" || bad "guild create p1" "$R"
-QL=$(curl -s $BASE/api/client/v1/quest/list -H "Authorization: Bearer $PT1")
-GP=$(quest_progress_of "$QL" "$JG_NAME")
-GS=$(quest_status_of "$QL" "$JG_NAME")
+Q=$(wait_quest "$PT1" "$JG_NAME" 1)
+GP=${Q%% *}; GS=${Q##* }
 if [ "$GP" = "1" ] && [ "$GS" = "completed" ]; then ok "join_guild quest advanced by GUILD_JOINED"; else bad "join_guild quest" "prog=$GP status=$GS"; fi
 
 # 5.4 intel_buy（复用 smoke-stage2 情报链路：p1 打听产情报->挂单，p2 购买触发 INTEL_BOUGHT）
@@ -248,9 +260,8 @@ R=$(curl -s -X POST $BASE/api/client/v1/social/intel/list -H "Authorization: Bea
 check_code "intel list (p1)" 0 "$R"
 R=$(curl -s -X POST $BASE/api/client/v1/social/intel/buy -H "Authorization: Bearer $PT2" -H 'Content-Type: application/json' -d "{\"intelId\":\"$IID\"}")
 check_code "intel buy (p2)" 0 "$R"
-QL=$(curl -s $BASE/api/client/v1/quest/list -H "Authorization: Bearer $PT2")
-IP=$(quest_progress_of "$QL" "$IB_NAME")
-IS=$(quest_status_of "$QL" "$IB_NAME")
+Q=$(wait_quest "$PT2" "$IB_NAME" 1)
+IP=${Q%% *}; IS=${Q##* }
 if [ "$IP" = "1" ] && [ "$IS" = "completed" ]; then ok "intel_buy quest advanced by INTEL_BOUGHT"; else bad "intel_buy quest" "prog=$IP status=$IS"; fi
 
 # ---- 6. 浏览类日上限（玩家2 smoke-eco-2；view_article 日限 10 次）----
@@ -268,16 +279,16 @@ for i in 1 2 3 4 5 6 7 8 9 10 11; do
   R=$(ECO_POST "$BODY" "$TS")
   code_of "$R" > /dev/null   # 第 1-10 次推进、第 11 次被日上限拦截；进度统一在下方断言
 done
-QL=$(curl -s $BASE/api/client/v1/quest/list -H "Authorization: Bearer $PT2")
-LP=$(quest_progress_of "$QL" "$CAP_NAME")
+Q=$(wait_quest "$PT2" "$CAP_NAME" 10)
+LP=${Q%% *}
 if [ "$LP" = "10" ]; then ok "eco view_article daily cap: 11 calls -> progress 10/20"; else bad "eco view_article daily cap" "prog=$LP want 10"; fi
 
 # 再发 1 次（累计第 12 次）确认进度不再增加
 TS=$(date +%s)
 BODY='{"action":"view_article","scope":"smoke","ssoId":"smoke-eco-2","targetId":"cap12","extra":{"n":12}}'
 R=$(ECO_POST "$BODY" "$TS")
-QL=$(curl -s $BASE/api/client/v1/quest/list -H "Authorization: Bearer $PT2")
-LP2=$(quest_progress_of "$QL" "$CAP_NAME")
+Q=$(wait_quest "$PT2" "$CAP_NAME" 10)
+LP2=${Q%% *}
 if [ "$LP2" = "10" ]; then ok "eco view_article daily cap stays 10 (12th call)"; else bad "eco view_article daily cap stable" "prog=$LP2 want 10"; fi
 
 # ---- 7. 汇总 ----
