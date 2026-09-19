@@ -1,14 +1,16 @@
 import { NestFactory, Reflector } from '@nestjs/core';
 import { ValidationPipe, ClassSerializerInterceptor } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from '@common/filters/http-exception.filter';
 import { ResponseInterceptor } from '@common/interceptors/response.interceptor';
 import { LoggerService } from '@logger/logger.service';
 import helmet from 'helmet';
+import { join } from 'path';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
 
   // 使用自定义日志服务
   const logger = app.get(LoggerService);
@@ -106,8 +108,27 @@ async function bootstrap() {
     },
   });
 
+  // Static files - admin panel
+  app.useStaticAssets(join(__dirname, '..', '..', 'admin'), { prefix: '/admin' });
+
+  // Static files - sandbox
+  app.useStaticAssets(join(__dirname, '..', '..', 'sandbox', 'dist'), { prefix: '/sandbox' });
+
   // Security headers
-  app.use(helmet());
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net'],
+          styleSrc: ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net'],
+          imgSrc: ["'self'", 'data:'],
+          connectSrc: ["'self'"],
+          fontSrc: ["'self'", 'cdn.jsdelivr.net'],
+        },
+      },
+    }),
+  );
 
   // CORS whitelist
   const corsOrigins = process.env.CORS_ORIGINS

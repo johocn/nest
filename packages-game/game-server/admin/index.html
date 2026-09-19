@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>XGame 管理后台</title>
+  <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@vueuse/core@11.3.0/index.iife.min.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.31.0/dist/tabler-icons.min.css" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --sidebar: 240px; --sidebar-collapsed: 0px;
+      --primary: #6366f1; --primary-hover: #4f46e5;
+      --bg: #f8fafc; --card: #ffffff; --border: #e2e8f0;
+      --text: #1e293b; --text-muted: #64748b;
+      --danger: #ef4444; --success: #22c55e; --warning: #f59e0b;
+    }
+    html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    button { cursor: pointer; font-family: inherit; }
+
+    /* Login */
+    .login-page { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 16px; }
+    .login-card { background: #fff; border-radius: 16px; padding: 40px; width: 100%; max-width: 400px; box-shadow: 0 20px 60px rgba(0,0,0,.15); }
+    .login-card h1 { text-align: center; font-size: 24px; margin-bottom: 8px; }
+    .login-card p { text-align: center; color: var(--text-muted); margin-bottom: 32px; font-size: 14px; }
+    .login-card .field { margin-bottom: 20px; }
+    .login-card label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 6px; color: var(--text); }
+    .login-card input { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; outline: none; transition: border .2s; }
+    .login-card input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(99,102,241,.15); }
+    .login-btn { width: 100%; padding: 11px; background: var(--primary); color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: 500; transition: background .2s; }
+    .login-btn:hover { background: var(--primary-hover); }
+    .login-btn:disabled { opacity: .6; cursor: not-allowed; }
+    .login-error { background: #fef2f2; color: var(--danger); padding: 10px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; text-align: center; }
+
+    /* Layout */
+    .app-layout { display: flex; min-height: 100vh; }
+    .sidebar { position: fixed; top: 0; left: 0; bottom: 0; width: var(--sidebar); background: #1e293b; color: #cbd5e1; display: flex; flex-direction: column; z-index: 50; transition: transform .25s ease; }
+    .sidebar-brand { padding: 20px; font-size: 18px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #334155; }
+    .sidebar-brand i { font-size: 24px; color: var(--primary); }
+    .sidebar-nav { flex: 1; overflow-y: auto; padding: 12px 0; }
+    .sidebar-nav a { display: flex; align-items: center; gap: 10px; padding: 11px 20px; color: #94a3b8; font-size: 14px; transition: all .15s; border-left: 3px solid transparent; }
+    .sidebar-nav a:hover, .sidebar-nav a.active { background: #334155; color: #fff; }
+    .sidebar-nav a.active { border-left-color: var(--primary); color: #fff; }
+    .sidebar-nav a i { font-size: 18px; width: 20px; text-align: center; }
+    .sidebar-footer { padding: 16px 20px; border-top: 1px solid #334155; font-size: 13px; display: flex; align-items: center; justify-content: space-between; }
+    .sidebar-footer button { background: none; border: none; color: #94a3b8; font-size: 13px; }
+    .sidebar-footer button:hover { color: #fff; }
+
+    .main-area { flex: 1; margin-left: var(--sidebar); min-height: 100vh; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; background: #fff; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 40; }
+    .topbar-left { display: flex; align-items: center; gap: 12px; }
+    .menu-toggle { display: none; background: none; border: none; font-size: 24px; color: var(--text); padding: 4px; }
+    .topbar h2 { font-size: 18px; font-weight: 600; }
+    .topbar-right { display: flex; align-items: center; gap: 16px; font-size: 14px; color: var(--text-muted); }
+    .content { padding: 24px; max-width: 1200px; margin: 0 auto; }
+
+    /* Overlay */
+    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 45; }
+
+    /* Cards */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+    .stat-card .label { font-size: 13px; color: var(--text-muted); margin-bottom: 6px; }
+    .stat-card .value { font-size: 28px; font-weight: 700; }
+    .stat-card .value.green { color: var(--success); }
+    .stat-card .value.blue { color: var(--primary); }
+    .stat-card .value.orange { color: var(--warning); }
+
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 20px; }
+    .card-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); flex-wrap: wrap; gap: 8px; }
+    .card-header h3 { font-size: 15px; font-weight: 600; }
+    .card-body { padding: 20px; }
+
+    /* Table */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    th { font-weight: 600; font-size: 12px; text-transform: uppercase; color: var(--text-muted); letter-spacing: .05em; }
+    tr:hover td { background: #f1f5f9; }
+
+    /* Pagination */
+    .pagination { display: flex; align-items: center; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+    .pagination button { padding: 6px 14px; border: 1px solid var(--border); border-radius: 6px; background: #fff; font-size: 13px; }
+    .pagination button:hover:not(:disabled) { background: #f1f5f9; }
+    .pagination button:disabled { opacity: .4; cursor: not-allowed; }
+    .pagination span { font-size: 13px; color: var(--text-muted); }
+
+    /* Form */
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+    .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; outline: none; }
+    .form-group input:focus, .form-group textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(99,102,241,.15); }
+    .form-group textarea { resize: vertical; min-height: 80px; font-family: inherit; }
+
+    /* Modal */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px; }
+    .modal { background: #fff; border-radius: 12px; width: 100%; max-width: 520px; max-height: 80vh; overflow-y: auto; }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+    .modal-header h3 { font-size: 16px; font-weight: 600; }
+    .modal-close { background: none; border: none; font-size: 20px; color: var(--text-muted); }
+    .modal-body { padding: 20px; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 16px 20px; border-top: 1px solid var(--border); }
+    .btn { padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 500; border: none; transition: all .15s; }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-secondary { background: #f1f5f9; color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: #e2e8f0; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-sm { padding: 5px 12px; font-size: 12px; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* Badge */
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; }
+    .badge-green { background: #dcfce7; color: #166534; }
+    .badge-gray { background: #f1f5f9; color: #475569; }
+    .badge-blue { background: #dbeafe; color: #1e40af; }
+    .badge-red { background: #fef2f2; color: #991b1b; }
+    .badge-yellow { background: #fef9c3; color: #854d0e; }
+
+    /* Alert */
+    .alert { padding: 12px 16px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; }
+    .alert-error { background: #fef2f2; color: var(--danger); }
+
+    /* Loading */
+    .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin .6s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-wrap { text-align: center; padding: 48px 0; color: var(--text-muted); }
+    .empty-state { text-align: center; padding: 48px 0; color: var(--text-muted); font-size: 14px; }
+
+    /* Detail */
+    .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .detail-item { padding: 8px 0; }
+    .detail-item .label { font-size: 12px; color: var(--text-muted); margin-bottom: 2px; }
+    .detail-item .val { font-size: 14px; font-weight: 500; }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .sidebar { transform: translateX(-100%); }
+      .sidebar.open { transform: translateX(0); }
+      .sidebar-overlay.open { display: block; }
+      .menu-toggle { display: block; }
+      .main-area { margin-left: 0; }
+      .content { padding: 16px; }
+      .detail-grid { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+      .topbar { padding: 12px 16px; }
+      .login-card { padding: 24px; }
+    }
+    @media (max-width: 480px) {
+      .stats-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- Login Page -->
+    <div v-if="!token" class="login-page">
+      <div class="login-card">
+        <h1>XGame 管理后台</h1>
+        <p>3D 游戏服务端运营管理系统</p>
+        <div v-if="loginError" class="login-error">{{ loginError }}</div>
+        <div class="field">
+          <label>用户名</label>
+          <input v-model="loginForm.username" type="text" placeholder="输入管理员账号" @keyup.enter="login" :disabled="logging">
+        </div>
+        <div class="field">
+          <label>密码</label>
+          <input v-model="loginForm.password" type="password" placeholder="输入密码" @keyup.enter="login" :disabled="logging">
+        </div>
+        <button class="login-btn" @click="login" :disabled="logging || !loginForm.username || !loginForm.password">
+          <span v-if="logging">登录中...</span>
+          <span v-else>登 录</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Admin Layout -->
+    <div v-else class="app-layout">
+      <!-- Overlay -->
+      <div class="sidebar-overlay" :class="{ open: sidebarOpen }" @click="sidebarOpen = false"></div>
+
+      <!-- Sidebar -->
+      <aside class="sidebar" :class="{ open: sidebarOpen }">
+        <div class="sidebar-brand"><i class="ti ti-joystick"></i> XGame Admin</div>
+        <nav class="sidebar-nav">
+          <a v-for="item in navItems" :key="item.id" :href="'#'+item.id" :class="{ active: page === item.id }" @click="navTo(item.id)">
+            <i :class="item.icon"></i> {{ item.label }}
+          </a>
+        </nav>
+        <div class="sidebar-footer">
+          <span>{{ adminInfo?.username || '管理员' }}</span>
+          <button @click="logout"><i class="ti ti-logout"></i> 退出</button>
+        </div>
+      </aside>
+
+      <!-- Main -->
+      <div class="main-area">
+        <header class="topbar">
+          <div class="topbar-left">
+            <button class="menu-toggle" @click="sidebarOpen = !sidebarOpen"><i class="ti ti-menu-2"></i></button>
+            <h2>{{ currentPageTitle }}</h2>
+          </div>
+          <div class="topbar-right">
+            <span><i class="ti ti-database"></i> {{ serverInfo || 'Game Server' }}</span>
+          </div>
+        </header>
+
+        <div class="content">
+          <!-- Dashboard -->
+          <div v-show="page === 'dashboard'">
+            <div class="stats-grid">
+              <div class="stat-card"><div class="label">实时在线</div><div class="value green">{{ dashboard.online }}</div></div>
+              <div class="stat-card"><div class="label">今日注册</div><div class="value blue">{{ dashboard.todayRegister }}</div></div>
+              <div class="stat-card"><div class="label">服务器状态</div><div class="value orange">{{ dashboard.serverStatus }}</div></div>
+            </div>
+            <div class="card">
+              <div class="card-header"><h3>快速入口</h3></div>
+              <div class="card-body" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px">
+                <a v-for="item in quickLinks" :key="item.id" :href="'#'+item.id" @click="navTo(item.id)" style="display:flex;align-items:center;gap:10px;padding:14px;border:1px solid var(--border);border-radius:10px;font-size:14px;color:var(--text);text-decoration:none">
+                  <i :class="item.icon" style="font-size:22px;color:var(--primary)"></i> {{ item.label }}
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <!-- Players -->
+          <div v-show="page === 'players'">
+            <div class="card">
+              <div class="card-header"><h3>玩家列表</h3></div>
+              <div class="card-body">
+                <div class="table-wrap">
+                  <table>
+                    <thead><tr><th>ID</th><th>昵称</th><th>等级</th><th>经验</th><th>创建时间</th><th>操作</th></tr></thead>
+                    <tbody>
+                      <tr v-if="players.loading"><td colspan="6" style="text-align:center;padding:24px"><span class="spinner"></span> 加载中...</td></tr>
+                      <tr v-else-if="players.list.length === 0"><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted)">暂无数据</td></tr>
+                      <tr v-for="p in players.list" :key="p.id">
+                        <td>{{ p.id }}</td>
+                        <td>{{ p.nickname || p.name || '-' }}</td>
+                        <td>{{ p.level ?? '-' }}</td>
+                        <td>{{ p.exp ?? '-' }}</td>
+                        <td>{{ formatTime(p.createdAt) }}</td>
+                        <td><button class="btn btn-primary btn-sm" @click="viewPlayer(p.id)">查看</button></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="pagination">
+                  <button :disabled="players.page <= 1" @click="loadPlayers(players.page - 1)">上一页</button>
+                  <span>第 {{ players.page }} / {{ players.totalPages }} 页，共 {{ players.total }} 条</span>
+                  <button :disabled="players.page >= players.totalPages" @click="loadPlayers(players.page + 1)">下一页</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Player Detail -->
+          <div v-show="page === 'player-detail'">
+            <div class="card">
+              <div class="card-header">
+                <h3>玩家详情 #{{ playerDetail.id }}</h3>
+                <button class="btn btn-secondary btn-sm" @click="navTo('players')">← 返回</button>
+              </div>
+              <div class="card-body">
+                <div v-if="!playerDetail.data" class="loading-wrap"><span class="spinner"></span></div>
+                <div v-else class="detail-grid">
+                  <div class="detail-item"><div class="label">ID</div><div class="val">{{ playerDetail.data.id }}</div></div>
+                  <div class="detail-item"><div class="label">昵称</div><div class="val">{{ playerDetail.data.nickname || playerDetail.data.name }}</div></div>
+                  <div class="detail-item"><div class="label">等级</div><div class="val">{{ playerDetail.data.level }}</div></div>
+                  <div class="detail-item"><div class="label">经验</div><div class="val">{{ playerDetail.data.exp }}</div></div>
+                  <div class="detail-item"><div class="label">金币</div><div class="val">{{ playerDetail.data.gold ?? playerDetail.data.coin ?? 0 }}</div></div>
+                  <div class="detail-item"><div class="label">钻石</div><div class="val">{{ playerDetail.data.diamond ?? 0 }}</div></div>
+                  <div class="detail-item"><div class="label">VIP 等级</div><div class="val">{{ playerDetail.data.vipLevel ?? 0 }}</div></div>
+                  <div class="detail-item"><div class="label">创建时间</div><div class="val">{{ formatTime(playerDetail.data.createdAt) }}</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Items -->
+          <div v-show="page === 'items'">
+            <div class="card">
+              <div class="card-header">
+                <h3>道具模板</h3>
+                <button class="btn btn-primary btn-sm" @click="openItemForm()">+ 新建</button>
+              </div>
+              <div class="card-body">
+                <div class="table-wrap">
+                  <table>
+                    <thead><tr><th>ID</th><th>名称</th><th>类型</th><th>品质</th><th>堆叠</th><th>操作</th></tr></thead>
+                    <tbody>
+                      <tr v-if="items.loading"><td colspan="6" style="text-align:center;padding:24px"><span class="spinner"></span></td></tr>
+                      <tr v-else-if="items.list.length === 0"><td colspan="6" class="empty-state">暂无数据</td></tr>
+                      <tr v-for="item in items.list" :key="item.id">
+                        <td>{{ item.id }}</td>
+                        <td>{{ item.name }}</td>
+                        <td><span class="badge" :class="'badge-' + typeColor(item.type)">{{ item.type }}</span></td>
+                        <td>{{ item.rarity || item.quality || '-' }}</td>
+                        <td>{{ item.maxStack ?? 1 }}</td>
+                        <td>
+                          <button class="btn btn-secondary btn-sm" @click="openItemForm(item)">编辑</button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="pagination">
+                  <button :disabled="items.page <= 1" @click="loadItems(items.page - 1)">上一页</button>
+                  <span>第 {{ items.page }} / {{ items.totalPages }} 页，共 {{ items.total }} 条</span>
+                  <button :disabled="items.page >= items.totalPages" @click="loadItems(items.page + 1)">下一页</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- GM Logs -->
+          <div v-show="page === 'gm-logs'">
+            <div class="card">
+              <div class="card-header"><h3>GM 操作日志</h3></div>
+              <div class="card-body">
+                <div class="table-wrap">
+                  <table>
+                    <thead><tr><th>时间</th><th>管理员</th><th>操作</th><th>目标</th><th>变更前</th><th>变更后</th></tr></thead>
+                    <tbody>
+                      <tr v-if="gmLogs.loading"><td colspan="6" style="text-align:center;padding:24px"><span class="spinner"></span></td></tr>
+                      <tr v-else-if="gmLogs.list.length === 0"><td colspan="6" class="empty-state">暂无数据</td></tr>
+                      <tr v-for="log in gmLogs.list" :key="log.id">
+                        <td>{{ formatTime(log.createdAt) }}</td>
+                        <td>{{ log.adminId }}</td>
+                        <td>{{ log.operation }}</td>
+                        <td>{{ log.targetPlayerId || '-' }}</td>
+                        <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ stringify(log.changeBefore) }}</td>
+                        <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ stringify(log.changeAfter) }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="pagination">
+                  <button :disabled="gmLogs.page <= 1" @click="loadGmLogs(gmLogs.page - 1)">上一页</button>
+                  <span>第 {{ gmLogs.page }} / {{ gmLogs.totalPages }} 页，共 {{ gmLogs.total }} 条</span>
+                  <button :disabled="gmLogs.page >= gmLogs.totalPages" @click="loadGmLogs(gmLogs.page + 1)">下一页</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item Form Modal -->
+    <div v-if="showItemForm" class="modal-overlay" @click.self="showItemForm = false">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>{{ itemForm.id ? '编辑道具模板' : '新建道具模板' }}</h3>
+          <button class="modal-close" @click="showItemForm = false"><i class="ti ti-x"></i></button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>名称</label>
+            <input v-model="itemForm.name" placeholder="道具名称">
+          </div>
+          <div class="form-group">
+            <label>类型</label>
+            <input v-model="itemForm.type" placeholder="如 weapon, armor, consumable">
+          </div>
+          <div class="form-group">
+            <label>品质</label>
+            <input v-model="itemForm.rarity" placeholder="如 common, rare, epic">
+          </div>
+          <div class="form-group">
+            <label>最大堆叠</label>
+            <input v-model.number="itemForm.maxStack" type="number" min="1">
+          </div>
+          <div class="form-group">
+            <label>描述</label>
+            <textarea v-model="itemForm.description" placeholder="道具描述"></textarea>
+          </div>
+          <div v-if="itemError" class="alert alert-error">{{ itemError }}</div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" @click="showItemForm = false">取消</button>
+          <button class="btn btn-primary" @click="saveItem" :disabled="itemSaving">{{ itemSaving ? '保存中...' : '保存' }}</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { createApp, ref, reactive, computed, watch, onMounted } = Vue;
+    const BASE_URL = '/api/admin/v1';
+
+    const app = createApp({
+      setup() {
+        const token = ref(localStorage.getItem('xgame_token') || '');
+        const adminInfo = ref(JSON.parse(localStorage.getItem('xgame_admin') || 'null'));
+        const sidebarOpen = ref(false);
+        const page = ref(location.hash?.slice(1) || 'dashboard');
+        const serverInfo = ref('');
+
+        // Login
+        const loginForm = reactive({ username: '', password: '' });
+        const loginError = ref('');
+        const logging = ref(false);
+
+        async function login() {
+          loginError.value = '';
+          logging.value = true;
+          try {
+            const res = await fetch(`${BASE_URL}/login`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(loginForm)
+            });
+            if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || e.error || '登录失败'); }
+            const resData = await res.json();
+            const payload = resData.data || resData;
+            token.value = payload.accessToken || payload.token;
+            adminInfo.value = { username: loginForm.username, ...payload.admin, adminId: payload.adminId, role: payload.role };
+            localStorage.setItem('xgame_token', token.value);
+            localStorage.setItem('xgame_admin', JSON.stringify(adminInfo.value));
+            loginForm.username = ''; loginForm.password = '';
+          } catch (e) { loginError.value = e.message; }
+          finally { logging.value = false; }
+        }
+
+        function logout() {
+          token.value = ''; adminInfo.value = null;
+          localStorage.removeItem('xgame_token');
+          localStorage.removeItem('xgame_admin');
+        }
+
+        // Nav
+        const navItems = [
+          { id: 'dashboard', label: '仪表盘', icon: 'ti ti-dashboard' },
+          { id: 'players', label: '玩家管理', icon: 'ti ti-users' },
+          { id: 'items', label: '道具管理', icon: 'ti ti-backpack' },
+          { id: 'gm-logs', label: '操作日志', icon: 'ti ti-clipboard-list' },
+        ];
+
+        const quickLinks = [
+          { id: 'players', label: '玩家列表', icon: 'ti ti-users' },
+          { id: 'items', label: '道具模板', icon: 'ti ti-backpack' },
+          { id: 'gm-logs', label: '操作日志', icon: 'ti ti-clipboard-list' },
+        ];
+
+        function navTo(id) {
+          page.value = id;
+          sidebarOpen.value = false;
+          location.hash = id;
+        }
+
+        const currentPageTitle = computed(() => navItems.find(n => n.id === page.value)?.label || '加载中...');
+
+        // API helper
+        async function api(url, opts = {}) {
+          const res = await fetch(url, {
+            ...opts,
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token.value}`, ...opts.headers }
+          });
+          if (res.status === 401) { logout(); throw new Error('登录已过期'); }
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.message || data.error || `请求失败 ${res.status}`);
+          return data;
+        }
+
+        // Dashboard
+        const dashboard = reactive({ online: 0, todayRegister: 0, serverStatus: '未知' });
+        async function loadDashboard() {
+          try {
+            const [onlineRes, statusRes] = await Promise.allSettled([
+              api(`${BASE_URL}/ops/online`),
+              api(`${BASE_URL}/../server-status`).catch(() => null)
+            ]);
+            if (onlineRes.status === 'fulfilled') dashboard.online = onlineRes.value?.count ?? onlineRes.value?.online ?? 0;
+            if (statusRes.status === 'fulfilled' && statusRes.value) dashboard.serverStatus = statusRes.value?.status || '良好';
+            dashboard.serverStatus = '运行中';
+          } catch (e) { /* ignore */ }
+        }
+
+        // Players
+        const players = reactive({ list: [], page: 1, total: 0, totalPages: 1, loading: false });
+        async function loadPlayers(p = 1) {
+          players.loading = true;
+          players.page = p;
+          try {
+            const data = await api(`${BASE_URL}/player/list?page=${p}&limit=20`);
+            const d = data.data || data;
+            players.list = d.results || d.list || d.data || d.players || d;
+            players.total = d.total ?? d.count ?? players.list.length;
+            players.totalPages = Math.ceil(players.total / 20) || 1;
+          } catch (e) { players.list = []; }
+          finally { players.loading = false; }
+        }
+
+        // Player Detail
+        const playerDetail = reactive({ id: null, data: null });
+        async function viewPlayer(id) {
+          playerDetail.id = id; playerDetail.data = null;
+          page.value = 'player-detail';
+          try {
+            const data = await api(`${BASE_URL}/player/${id}/detail`);
+            playerDetail.data = data.data || data;
+          } catch (e) { playerDetail.data = { id, name: '加载失败', error: e.message }; }
+        }
+
+        // Items
+        const items = reactive({ list: [], page: 1, total: 0, totalPages: 1, loading: false });
+        async function loadItems(p = 1) {
+          items.loading = true; items.page = p;
+          try {
+            const data = await api(`${BASE_URL}/inventory/item-template?page=${p}&limit=20`);
+            const d = data.data || data;
+            items.list = d.results || d.list || d.data || d;
+            items.total = d.total ?? d.count ?? items.list.length;
+            items.totalPages = Math.ceil(items.total / 20) || 1;
+          } catch (e) { items.list = []; }
+          finally { items.loading = false; }
+        }
+
+        // Item Form
+        const showItemForm = ref(false);
+        const itemForm = reactive({ id: null, name: '', type: '', rarity: '', maxStack: 1, description: '' });
+        const itemSaving = ref(false);
+        const itemError = ref('');
+
+        function openItemForm(item = null) {
+          itemError.value = '';
+          if (item) {
+            itemForm.id = item.id;
+            itemForm.name = item.name || '';
+            itemForm.type = item.type || '';
+            itemForm.rarity = item.rarity || item.quality || '';
+            itemForm.maxStack = item.maxStack ?? 1;
+            itemForm.description = item.description || '';
+          } else {
+            itemForm.id = null;
+            itemForm.name = ''; itemForm.type = ''; itemForm.rarity = '';
+            itemForm.maxStack = 1; itemForm.description = '';
+          }
+          showItemForm.value = true;
+        }
+
+        async function saveItem() {
+          itemSaving.value = true; itemError.value = '';
+          try {
+            const body = { name: itemForm.name, type: itemForm.type, rarity: itemForm.rarity, maxStack: itemForm.maxStack, description: itemForm.description };
+            if (itemForm.id) {
+              await api(`${BASE_URL}/inventory/item-template/${itemForm.id}`, { method: 'PUT', body: JSON.stringify(body) });
+            } else {
+              await api(`${BASE_URL}/inventory/item-template`, { method: 'POST', body: JSON.stringify(body) });
+            }
+            showItemForm.value = false;
+            loadItems(items.page);
+          } catch (e) { itemError.value = e.message; }
+          finally { itemSaving.value = false; }
+        }
+
+        // GM Logs
+        const gmLogs = reactive({ list: [], page: 1, total: 0, totalPages: 1, loading: false });
+        async function loadGmLogs(p = 1) {
+          gmLogs.loading = true; gmLogs.page = p;
+          try {
+            const data = await api(`${BASE_URL}/ops/gm-log/list?page=${p}&limit=20`);
+            const d = data.data || data;
+            gmLogs.list = d.results || d.list || d.data || d.logs || d;
+            gmLogs.total = d.total ?? d.count ?? gmLogs.list.length;
+            gmLogs.totalPages = Math.ceil(gmLogs.total / 20) || 1;
+          } catch (e) { gmLogs.list = []; }
+          finally { gmLogs.loading = false; }
+        }
+
+        // Utils
+        function formatTime(t) { if (!t) return '-'; try { return new Date(t).toLocaleString('zh-CN'); } catch { return t; } }
+        function stringify(v) { if (!v) return '-'; try { return typeof v === 'string' ? v : JSON.stringify(v); } catch { return String(v); } }
+        function typeColor(t) { if (!t) return 'gray'; const m = { weapon: 'red', armor: 'blue', consumable: 'green', material: 'yellow', quest: 'blue' }; return m[t.toLowerCase()] || 'gray'; }
+
+        // Route
+        watch(page, (p) => {
+          if (p === 'dashboard') loadDashboard();
+          else if (p === 'players') loadPlayers();
+          else if (p === 'items') loadItems();
+          else if (p === 'gm-logs') loadGmLogs();
+        });
+
+        // Init
+        if (token.value) { loadDashboard(); }
+
+        return {
+          token, adminInfo, loginForm, loginError, logging, login, logout,
+          sidebarOpen, page, navItems, quickLinks, currentPageTitle, navTo, serverInfo,
+          dashboard, players, loadPlayers, playerDetail, viewPlayer,
+          items, loadItems, showItemForm, itemForm, itemSaving, itemError, openItemForm, saveItem,
+          gmLogs, loadGmLogs, formatTime, stringify, typeColor
+        };
+      }
+    });
+
+    app.mount('#app');
+  </script>
+</body>
+</html>

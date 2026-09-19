@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>财商沙盘 - 3D理财体验</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1a2e; }
+    #game-container {
+      width: 100%; height: 100%;
+      position: relative;
+    }
+    #loading-screen {
+      position: fixed; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      color: #fff; font-family: Arial, sans-serif;
+      z-index: 999;
+      transition: opacity 0.5s;
+    }
+    #loading-screen h1 {
+      font-size: 28px; margin-bottom: 8px;
+      background: linear-gradient(90deg, #00b894, #00cec9, #6c5ce7, #e17055);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    #loading-screen p {
+      font-size: 14px; opacity: 0.6; margin-bottom: 24px;
+    }
+    .loader {
+      width: 48px; height: 48px;
+      border: 3px solid rgba(255,255,255,0.1);
+      border-top-color: #00b894;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div id="loading-screen">
+    <h1>🏦 财商沙盘</h1>
+    <p>加载3D场景中...</p>
+    <div class="loader"></div>
+  </div>
+  <div id="game-container"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

@@ -31,6 +31,7 @@ import { AnalyticsModule } from '@modules/analytics/analytics.module';
 import { ConfigManageModule } from '@modules/config/config.module';
 import { PaymentModule } from '@modules/payment/payment.module';
 import { VipModule } from '@modules/vip/vip.module';
+import { SandboxModule } from '@modules/sandbox/sandbox.module';
 import { MatchmakingModule } from '@modules/matchmaking/matchmaking.module';
 import { OfflineModule } from '@modules/offline/offline.module';
 import { SchedulerModule } from '@scheduler/scheduler.module';
@@ -77,6 +78,7 @@ import { RateLimitGuard } from '@common/guards/rate-limit.guard';
     ConfigManageModule,
     PaymentModule,
     VipModule,
+    SandboxModule,
     MatchmakingModule,
     OfflineModule,
 

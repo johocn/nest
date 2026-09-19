@@ -1,0 +1,17 @@
+{
+  "name": "financial-sandbox",
+  "version": "1.0.0",
+  "description": "财商教育3D沙盘游戏",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0"
+  }
+}

@@ -36,5 +36,6 @@
       "@constants/*": ["src/constants/*"],
       "@logger/*": ["src/logger/*"]
     }
-  }
+  },
+  "exclude": ["sandbox", "node_modules", "dist", "test", "**/*spec.ts"]
 }

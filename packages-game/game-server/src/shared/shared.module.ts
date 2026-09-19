@@ -68,6 +68,13 @@ import gameConfig from '@config/game.config';
           port: config.get('redis.port'),
           password: config.get('redis.password') || undefined,
           db: config.get('redis.db'),
+          enableOfflineQueue: true,
+          connectTimeout: 5000,
+          maxRetriesPerRequest: null,
+          retryStrategy: (times: number) => {
+            if (times > 3) return null;
+            return Math.min(times * 500, 2000);
+          },
         },
       }),
     }),
