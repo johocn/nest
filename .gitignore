@@ -4,6 +4,9 @@ sample/**/package-lock.json
 # dependencies
 node_modules/
 
+# brainstorming skill runtime workspace
+.superpowers/
+
 # IDE
 /.idea
 /.awcache
