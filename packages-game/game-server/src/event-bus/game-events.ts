@@ -2,6 +2,13 @@ export const GameEvents = {
   // 战斗事件
   MONSTER_KILLED: 'combat.monster.killed',
   PLAYER_DIED: 'combat.player.died',
+  FORMATION_ACTIVATED: 'combat.formation.activated',
+  COMBO_TRIGGERED: 'combat.combo.triggered',
+  RESCUE_SUCCESS: 'combat.rescue.success',
+  LOOT_DISTRIBUTED: 'combat.loot.distributed',
+  BATTLE_REPORTED: 'combat.battle.reported',
+  ARBITRATION_SETTLED: 'combat.arbitration.settled',
+  GRUDGE_DECLARED: 'combat.grudge.declared',
 
   // 经济事件
   CURRENCY_CHANGED: 'economy.currency.changed',
@@ -20,6 +27,7 @@ export const GameEvents = {
   // 社交事件
   GUILD_JOINED: 'social.guild.joined',
   FRIEND_ADDED: 'social.friend.added',
+  GIFT_SENT: 'social.gift.sent',
   FAVOR_GAINED: 'economy.favor.gained',
   GUILD_CONTRIB_GAINED: 'economy.guild_contrib.gained',
   FACE_CHANGED: 'economy.face.changed',

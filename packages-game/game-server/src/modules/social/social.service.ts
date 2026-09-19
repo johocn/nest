@@ -238,6 +238,16 @@ export class SocialService {
     });
   }
 
+  /** 查询玩家所在公会与职位（无公会返回 null）。 */
+  async getMyGuildRole(
+    playerId: string,
+  ): Promise<{ guildId: string; role: GuildRole } | null> {
+    const member = await this.guildMemberRepo.findOne({
+      where: { playerId },
+    });
+    return member ? { guildId: member.guildId, role: member.role } : null;
+  }
+
   async donateToGuild(
     playerId: string,
     guildId: string,
@@ -885,6 +895,7 @@ export class SocialService {
       playerId,
       intelId: intel.id,
       grade: intel.grade,
+      sourceType: IntelSourceType.SPY,
     });
     return intel;
   }
@@ -928,6 +939,7 @@ export class SocialService {
       playerId,
       intelId: intel.id,
       grade: intel.grade,
+      sourceType: IntelSourceType.INQUIRE,
     });
     return intel;
   }
@@ -971,6 +983,7 @@ export class SocialService {
       playerId,
       intelId: intel.id,
       grade: intel.grade,
+      sourceType: IntelSourceType.EAVESDROP,
     });
     return intel;
   }
@@ -1185,6 +1198,11 @@ export class SocialService {
       '1',
       SocialService.GIFT_RECIPROCATE_TTL_SECONDS,
     );
+    this.eventBus.emit(GameEvents.GIFT_SENT, {
+      playerId,
+      targetId,
+      direction: 'send',
+    });
     return {
       giftWeight: result.giftWeight,
       favorability: result.relationship.favorability,
@@ -1205,6 +1223,11 @@ export class SocialService {
 
     const result = await this.deliverGift(playerId, targetId, itemId, 'gift_reciprocate');
     await this.cacheService.del(windowKey);
+    this.eventBus.emit(GameEvents.GIFT_SENT, {
+      playerId,
+      targetId,
+      direction: 'reciprocate',
+    });
     return {
       giftWeight: result.giftWeight,
       favorability: result.relationship.favorability,

@@ -1,11 +1,23 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { TradeService } from './trade.service';
-import { TradeOrder, AuctionItem } from './entities';
+import {
+  TradeOrder,
+  AuctionItem,
+  Negotiation,
+  EscrowAgreement,
+  Bounty,
+  CreditDebt,
+  BarterDeal,
+} from './entities';
 import { EventBusService } from '@event-bus/event-bus.service';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
 import { TradeStatus, AuctionStatus } from '@constants/enums';
+import { EconomyService } from '@modules/economy/economy.service';
+import { SocialService } from '@modules/social/social.service';
+import { CharacterService } from '@modules/character/character.service';
+import { CombatService } from '@modules/combat/combat.service';
 import type { Repository } from 'typeorm';
 
 describe('TradeService', () => {
@@ -43,8 +55,98 @@ describe('TradeService', () => {
           },
         },
         {
+          provide: getRepositoryToken(Negotiation),
+          useValue: {
+            findOne: jest.fn(),
+            find: jest.fn(),
+            findAndCount: jest.fn(),
+            create: jest.fn((data: any) => ({ ...data })),
+            save: jest
+              .fn()
+              .mockImplementation((data: any) => Promise.resolve(data)),
+          },
+        },
+        {
+          provide: getRepositoryToken(EscrowAgreement),
+          useValue: {
+            findOne: jest.fn(),
+            find: jest.fn(),
+            findAndCount: jest.fn(),
+            create: jest.fn((data: any) => ({ ...data })),
+            save: jest
+              .fn()
+              .mockImplementation((data: any) => Promise.resolve(data)),
+          },
+        },
+        {
+          provide: getRepositoryToken(Bounty),
+          useValue: {
+            findOne: jest.fn(),
+            find: jest.fn(),
+            findAndCount: jest.fn(),
+            create: jest.fn((data: any) => ({ ...data })),
+            save: jest
+              .fn()
+              .mockImplementation((data: any) => Promise.resolve(data)),
+          },
+        },
+        {
+          provide: getRepositoryToken(CreditDebt),
+          useValue: {
+            findOne: jest.fn(),
+            find: jest.fn(),
+            findAndCount: jest.fn(),
+            create: jest.fn((data: any) => ({ ...data })),
+            save: jest
+              .fn()
+              .mockImplementation((data: any) => Promise.resolve(data)),
+          },
+        },
+        {
+          provide: getRepositoryToken(BarterDeal),
+          useValue: {
+            findOne: jest.fn(),
+            find: jest.fn(),
+            findAndCount: jest.fn(),
+            create: jest.fn((data: any) => ({ ...data })),
+            save: jest
+              .fn()
+              .mockImplementation((data: any) => Promise.resolve(data)),
+          },
+        },
+        {
           provide: EventBusService,
           useValue: { emit: jest.fn() },
+        },
+        {
+          provide: EconomyService,
+          useValue: {
+            addCurrency: jest.fn().mockResolvedValue({ balanceAfter: '0' }),
+            deductCurrency: jest.fn().mockResolvedValue({ balanceAfter: '0' }),
+            getBalance: jest.fn().mockResolvedValue('0'),
+          },
+        },
+        {
+          provide: SocialService,
+          useValue: {
+            getFriendList: jest.fn().mockResolvedValue([]),
+            getMyGuildRole: jest.fn().mockResolvedValue(null),
+            getKinships: jest.fn().mockResolvedValue([]),
+            getIntelligences: jest.fn().mockResolvedValue([]),
+          },
+        },
+        {
+          provide: CharacterService,
+          useValue: {
+            getRelationshipLevel: jest.fn(),
+            increaseFavorability: jest.fn(),
+          },
+        },
+        {
+          provide: CombatService,
+          useValue: {
+            getCombatLogs: jest.fn().mockResolvedValue({ items: [], total: 0 }),
+          },
         },
       ],
     }).compile();

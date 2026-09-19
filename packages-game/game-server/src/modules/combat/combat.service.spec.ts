@@ -172,6 +172,61 @@ describe('CombatService', () => {
         }),
       );
     });
+
+    it('should boost damage by attack bonus percentage', async () => {
+      const result = await service.resolvePveCombat({
+        attackerId: 'c1',
+        defenderId: 'c2',
+        attackerStats: {
+          strength: 50,
+          speed: 20,
+          defense: 30,
+          intelligence: 10,
+          comprehension: 10,
+          loyalty: 50,
+        },
+        defenderHp: 100,
+        defenderDefense: 10,
+        skillId: '1',
+        attackerMp: 100,
+        sceneId: '1',
+        formationBonus: { attack: 20, defense: 0 },
+      });
+
+      // 100 * 1.2 - 10 = 110
+      expect(result.damageDealt).toBe(110);
+      expect(combatLogRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          damageJson: expect.objectContaining({
+            formationBonus: { attack: 20, defense: 0 },
+          }),
+        }),
+      );
+    });
+
+    it('should reduce defender defense by defense bonus percentage', async () => {
+      const result = await service.resolvePveCombat({
+        attackerId: 'c1',
+        defenderId: 'c2',
+        attackerStats: {
+          strength: 50,
+          speed: 20,
+          defense: 30,
+          intelligence: 10,
+          comprehension: 10,
+          loyalty: 50,
+        },
+        defenderHp: 100,
+        defenderDefense: 10,
+        skillId: '1',
+        attackerMp: 100,
+        sceneId: '1',
+        formationBonus: { attack: 0, defense: 10 },
+      });
+
+      // 100 - 10 * (1 - 10/100) = 91
+      expect(result.damageDealt).toBe(91);
+    });
   });
 
   describe('getCombatLogs', () => {

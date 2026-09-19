@@ -42,6 +42,15 @@ export class QuestTemplate {
   @Column({ name: 'prerequisite_ids', type: 'int', array: true, default: [] })
   prerequisiteIds: number[];
 
+  @Column({ name: 'target_type', type: 'varchar', length: 32, nullable: true })
+  targetType: string | null;
+
+  @Column({ name: 'prerequisite_social', type: 'jsonb', nullable: true })
+  prerequisiteSocial: Record<string, any> | null;
+
+  @Column({ name: 'reward_social', type: 'jsonb', nullable: true })
+  rewardSocial: Record<string, any> | null;
+
   @Column({ type: 'boolean', default: false })
   repeatable: boolean;
 

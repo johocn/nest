@@ -24,6 +24,7 @@ export interface PveCombatParams {
   skillId: string;
   attackerMp: number;
   sceneId: string;
+  formationBonus?: { attack: number; defense: number };
 }
 
 export interface CombatResultDto {
@@ -56,8 +57,15 @@ export class CombatService {
       params.attackerMp,
     );
 
-    // Calculate actual damage: skill damage - defender defense (min 1)
-    const damageDealt = Math.max(1, castResult.damage - params.defenderDefense);
+    // Formation bonus: attack upscales damage, defense reduces defender defense
+    const formationBonus = params.formationBonus ?? { attack: 0, defense: 0 };
+    const rawDamage = castResult.damage * (1 + formationBonus.attack / 100);
+    const effectiveDefense = Math.max(
+      0,
+      params.defenderDefense * (1 - formationBonus.defense / 100),
+    );
+    // Calculate actual damage: boosted damage - effective defense (min 1)
+    const damageDealt = Math.max(1, Math.round(rawDamage - effectiveDefense));
     const defenderRemainingHp = Math.max(0, params.defenderHp - damageDealt);
     const attackerMpRemaining = params.attackerMp - castResult.mpCost;
 
@@ -80,6 +88,7 @@ export class CombatService {
         defenseReduction: params.defenderDefense,
         finalDamage: damageDealt,
         buffApplied: castResult.buffApplied,
+        formationBonus,
       },
       rewardJson: {},
       durationMs: Date.now() - startTime,

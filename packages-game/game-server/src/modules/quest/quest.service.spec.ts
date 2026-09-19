@@ -1,19 +1,54 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { QuestService } from './quest.service';
-import { QuestTemplate, PlayerQuest } from './entities';
+import {
+  QuestTemplate,
+  PlayerQuest,
+  QuestHelpRequest,
+} from './entities';
 import { EventBusService } from '@event-bus/event-bus.service';
 import { GameException } from '@common/exceptions/game.exception';
-import { QuestType, QuestStatus } from '@constants/enums';
+import { ErrorCodes } from '@constants/error-codes';
+import {
+  QuestType,
+  QuestStatus,
+  QuestHelpStatus,
+  CurrencyType,
+  IntelligenceGrade,
+  RelationshipLevel,
+  GuildRole,
+} from '@constants/enums';
+import { CharacterService } from '@modules/character/character.service';
+import { SocialService } from '@modules/social/social.service';
+import { EconomyService } from '@modules/economy/economy.service';
 import type { Repository } from 'typeorm';
 
 describe('QuestService', () => {
   let service: QuestService;
   let questTemplateRepo: jest.Mocked<Repository<QuestTemplate>>;
   let playerQuestRepo: jest.Mocked<Repository<PlayerQuest>>;
+  let questHelpRepo: jest.Mocked<Repository<QuestHelpRequest>>;
   let eventBus: jest.Mocked<EventBusService>;
+  let characterService: jest.Mocked<CharacterService>;
+  let socialService: jest.Mocked<SocialService>;
+  let economyService: jest.Mocked<EconomyService>;
 
   beforeEach(async () => {
+    characterService = {
+      getRelationships: jest.fn().mockResolvedValue([]),
+      getRelationshipLevel: jest.fn(),
+    } as unknown as jest.Mocked<CharacterService>;
+    socialService = {
+      getIntelligences: jest.fn().mockResolvedValue([]),
+      getFriendList: jest.fn().mockResolvedValue([]),
+      getMyGuildRole: jest.fn().mockResolvedValue(null),
+    } as unknown as jest.Mocked<SocialService>;
+    economyService = {
+      addCurrency: jest
+        .fn()
+        .mockResolvedValue({ balanceAfter: '100' }),
+    } as unknown as jest.Mocked<EconomyService>;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         QuestService,
@@ -39,13 +74,28 @@ describe('QuestService', () => {
             findAndCount: jest.fn(),
           },
         },
+        {
+          provide: getRepositoryToken(QuestHelpRequest),
+          useValue: {
+            findOne: jest.fn(),
+            find: jest.fn(),
+            save: jest
+              .fn()
+              .mockImplementation((data: any) => Promise.resolve(data)),
+            create: jest.fn((data: any) => ({ ...data, id: '1' })),
+          },
+        },
         { provide: EventBusService, useValue: { emit: jest.fn() } },
+        { provide: CharacterService, useValue: characterService },
+        { provide: SocialService, useValue: socialService },
+        { provide: EconomyService, useValue: economyService },
       ],
     }).compile();
 
     service = module.get(QuestService);
     questTemplateRepo = module.get(getRepositoryToken(QuestTemplate));
     playerQuestRepo = module.get(getRepositoryToken(PlayerQuest));
+    questHelpRepo = module.get(getRepositoryToken(QuestHelpRequest));
     eventBus = module.get(EventBusService);
   });
 
@@ -62,6 +112,9 @@ describe('QuestService', () => {
       targetJson: { kill_count: 10 },
       rewardJson: { exp: 100, gold: 50 },
       prerequisiteIds: [],
+      targetType: null,
+      prerequisiteSocial: null,
+      rewardSocial: null,
       repeatable: false,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -82,6 +135,20 @@ describe('QuestService', () => {
       createdAt: new Date(),
       ...overrides,
     }) as PlayerQuest;
+
+  const makeHelpRequest = (
+    overrides: Partial<QuestHelpRequest> = {},
+  ): QuestHelpRequest =>
+    ({
+      id: '1',
+      playerId: 'p1',
+      questTemplateId: '1',
+      helperId: null,
+      status: QuestHelpStatus.OPEN,
+      helpedAt: null,
+      createdAt: new Date(),
+      ...overrides,
+    }) as QuestHelpRequest;
 
   describe('acceptQuest', () => {
     it('should create PlayerQuest when requirements met', async () => {
@@ -126,6 +193,149 @@ describe('QuestService', () => {
         GameException,
       );
     });
+
+    it('should reject when intelGrade prerequisite not met', async () => {
+      questTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({ prerequisiteSocial: { intelGrade: 'A' } }),
+      );
+      socialService.getIntelligences.mockResolvedValue([
+        { grade: IntelligenceGrade.C } as any,
+      ]);
+
+      await expect(service.acceptQuest('p1', '1', 5)).rejects.toMatchObject({
+        response: { code: ErrorCodes.QUEST_SOCIAL_PRE_REQ },
+      });
+    });
+
+    it('should accept when intelGrade prerequisite met', async () => {
+      questTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({ prerequisiteSocial: { intelGrade: 'B' } }),
+      );
+      socialService.getIntelligences.mockResolvedValue([
+        { grade: IntelligenceGrade.C } as any,
+        { grade: IntelligenceGrade.A } as any,
+      ]);
+      playerQuestRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.acceptQuest('p1', '1', 5);
+      expect(result.status).toBe(QuestStatus.IN_PROGRESS);
+    });
+
+    it('should reject when intelCount prerequisite not met', async () => {
+      questTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({ prerequisiteSocial: { intelCount: 3 } }),
+      );
+      socialService.getIntelligences.mockResolvedValue([
+        { grade: IntelligenceGrade.D } as any,
+      ]);
+
+      await expect(service.acceptQuest('p1', '1', 5)).rejects.toMatchObject({
+        response: { code: ErrorCodes.QUEST_SOCIAL_PRE_REQ },
+      });
+    });
+
+    it('should accept when intelCount prerequisite met', async () => {
+      questTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({ prerequisiteSocial: { intelCount: 2 } }),
+      );
+      socialService.getIntelligences.mockResolvedValue([
+        { grade: IntelligenceGrade.D } as any,
+        { grade: IntelligenceGrade.C } as any,
+      ]);
+      playerQuestRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.acceptQuest('p1', '1', 5);
+      expect(result.status).toBe(QuestStatus.IN_PROGRESS);
+    });
+
+    it('should reject when favorLevel prerequisite not met', async () => {
+      questTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({ prerequisiteSocial: { favorLevel: 'confidant' } }),
+      );
+      characterService.getRelationships.mockResolvedValue([
+        { level: RelationshipLevel.ACQUAINTANCE, favorability: 80 } as any,
+      ]);
+
+      await expect(service.acceptQuest('p1', '1', 5)).rejects.toMatchObject({
+        response: { code: ErrorCodes.QUEST_SOCIAL_PRE_REQ },
+      });
+    });
+
+    it('should accept when favorLevel met via level field', async () => {
+      questTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({ prerequisiteSocial: { favorLevel: 'friend' } }),
+      );
+      characterService.getRelationships.mockResolvedValue([
+        { level: RelationshipLevel.SWORN, favorability: 600 } as any,
+      ]);
+      playerQuestRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.acceptQuest('p1', '1', 5);
+      expect(result.status).toBe(QuestStatus.IN_PROGRESS);
+    });
+
+    it('should estimate favorLevel from favorability when level is null', async () => {
+      questTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({ prerequisiteSocial: { favorLevel: 'friend' } }),
+      );
+      characterService.getRelationships.mockResolvedValue([
+        { level: null, favorability: 400 } as any,
+      ]);
+      playerQuestRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.acceptQuest('p1', '1', 5);
+      expect(result.status).toBe(QuestStatus.IN_PROGRESS);
+    });
+
+    it('should reject when guildRole prerequisite not met', async () => {
+      questTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({ prerequisiteSocial: { guildRole: 'leader' } }),
+      );
+      socialService.getMyGuildRole.mockResolvedValue({
+        guildId: 'g1',
+        role: GuildRole.MEMBER,
+      });
+
+      await expect(service.acceptQuest('p1', '1', 5)).rejects.toMatchObject({
+        response: { code: ErrorCodes.QUEST_SOCIAL_PRE_REQ },
+      });
+    });
+
+    it('should accept when guildRole prerequisite met', async () => {
+      questTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({ prerequisiteSocial: { guildRole: 'vice_leader' } }),
+      );
+      socialService.getMyGuildRole.mockResolvedValue({
+        guildId: 'g1',
+        role: GuildRole.LEADER,
+      });
+      playerQuestRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.acceptQuest('p1', '1', 5);
+      expect(result.status).toBe(QuestStatus.IN_PROGRESS);
+    });
+
+    it('should reject when friendCount prerequisite not met', async () => {
+      questTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({ prerequisiteSocial: { friendCount: 3 } }),
+      );
+      socialService.getFriendList.mockResolvedValue([{}, {}] as any[]);
+
+      await expect(service.acceptQuest('p1', '1', 5)).rejects.toMatchObject({
+        response: { code: ErrorCodes.QUEST_SOCIAL_PRE_REQ },
+      });
+    });
+
+    it('should accept when friendCount prerequisite met', async () => {
+      questTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({ prerequisiteSocial: { friendCount: 2 } }),
+      );
+      socialService.getFriendList.mockResolvedValue([{}, {}] as any[]);
+      playerQuestRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.acceptQuest('p1', '1', 5);
+      expect(result.status).toBe(QuestStatus.IN_PROGRESS);
+    });
   });
 
   describe('submitQuest', () => {
@@ -160,6 +370,43 @@ describe('QuestService', () => {
       await expect(service.submitQuest('p1', '1')).rejects.toThrow(
         GameException,
       );
+    });
+
+    it('should grant social currency when rewardSocial present', async () => {
+      questTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({
+          rewardSocial: { currencyType: 'favor', amount: 10 },
+        }),
+      );
+      playerQuestRepo.findOne.mockResolvedValue(
+        makePlayerQuest({ progress: 10, status: QuestStatus.IN_PROGRESS }),
+      );
+
+      const result = await service.submitQuest('p1', '1');
+
+      expect(economyService.addCurrency).toHaveBeenCalledWith(
+        'p1',
+        CurrencyType.FAVOR,
+        10,
+        'quest_reward',
+        'quest.submitQuest',
+      );
+      expect(result.socialReward).toBeDefined();
+      expect(result.socialReward['favor']).toEqual({
+        amount: 10,
+        balanceAfter: '100',
+      });
+    });
+
+    it('should not grant social currency when rewardSocial absent', async () => {
+      questTemplateRepo.findOne.mockResolvedValue(makeTemplate());
+      playerQuestRepo.findOne.mockResolvedValue(
+        makePlayerQuest({ progress: 10, status: QuestStatus.IN_PROGRESS }),
+      );
+
+      await service.submitQuest('p1', '1');
+
+      expect(economyService.addCurrency).not.toHaveBeenCalled();
     });
   });
 
@@ -232,6 +479,161 @@ describe('QuestService', () => {
       await service.updateProgressByKill('p1', 'm1');
 
       expect(playerQuestRepo.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('advanceSocialTarget', () => {
+    it('should increment progress and complete quest when target reached', async () => {
+      playerQuestRepo.find.mockResolvedValue([
+        makePlayerQuest({
+          id: 'pq1',
+          questTemplateId: 'q1',
+          progress: 1,
+          status: QuestStatus.IN_PROGRESS,
+        }),
+      ]);
+      questTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({
+          id: 'q1',
+          targetType: 'send_gift',
+          targetJson: { count: 2 },
+        }),
+      );
+
+      await service.advanceSocialTarget('p1', 'send_gift' as any);
+
+      const saved = (playerQuestRepo.save as jest.Mock).mock.calls[0][0];
+      expect(saved.progress).toBe(2);
+      expect(saved.status).toBe(QuestStatus.COMPLETED);
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        'quest.completed',
+        expect.any(Object),
+      );
+    });
+
+    it('should do nothing silently when no matching quests', async () => {
+      playerQuestRepo.find.mockResolvedValue([
+        makePlayerQuest({
+          id: 'pq1',
+          questTemplateId: 'q1',
+          progress: 0,
+          status: QuestStatus.IN_PROGRESS,
+        }),
+      ]);
+      questTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({ id: 'q1', targetType: 'inquire' }),
+      );
+
+      await expect(
+        service.advanceSocialTarget('p1', 'spy' as any),
+      ).resolves.toBeUndefined();
+      expect(playerQuestRepo.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('quest help', () => {
+    it('should create open help request', async () => {
+      questHelpRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.requestHelp('p1', '1');
+
+      expect(result.status).toBe(QuestHelpStatus.OPEN);
+      expect(questHelpRepo.save).toHaveBeenCalled();
+    });
+
+    it('should reject duplicate open help request', async () => {
+      questHelpRepo.findOne.mockResolvedValue(makeHelpRequest());
+
+      await expect(service.requestHelp('p1', '1')).rejects.toMatchObject({
+        response: { code: ErrorCodes.QUEST_HELP_EXISTS },
+      });
+    });
+
+    it('should allow new request when previous is closed', async () => {
+      questHelpRepo.findOne.mockResolvedValue(
+        makeHelpRequest({ status: QuestHelpStatus.CLOSED }),
+      );
+
+      const result = await service.requestHelp('p1', '1');
+      expect(result.status).toBe(QuestHelpStatus.OPEN);
+    });
+
+    it('should list my requests and open requests excluding mine', async () => {
+      questHelpRepo.find
+        .mockResolvedValueOnce([
+          makeHelpRequest({ id: 'h1', playerId: 'p1' }),
+        ])
+        .mockResolvedValueOnce([
+          makeHelpRequest({ id: 'h2', playerId: 'p2' }),
+          makeHelpRequest({ id: 'h3', playerId: 'p1' }),
+        ]);
+
+      const result = await service.listHelpRequests('p1');
+
+      expect(result.mine).toHaveLength(1);
+      expect(result.open).toHaveLength(1);
+      expect(result.open[0].id).toBe('h2');
+    });
+
+    it('should reject respond when request not found or closed', async () => {
+      questHelpRepo.findOne.mockResolvedValue(null);
+
+      await expect(service.respondHelp('p2', '999')).rejects.toMatchObject({
+        response: { code: ErrorCodes.QUEST_HELP_NOT_FOUND },
+      });
+    });
+
+    it('should reject responding to own request', async () => {
+      questHelpRepo.findOne.mockResolvedValue(
+        makeHelpRequest({ playerId: 'p1' }),
+      );
+
+      await expect(service.respondHelp('p1', '1')).rejects.toMatchObject({
+        response: { code: ErrorCodes.QUEST_HELP_NOT_FOUND },
+      });
+    });
+
+    it('should mark helped and advance requester quest progress', async () => {
+      questHelpRepo.findOne.mockResolvedValue(
+        makeHelpRequest({ playerId: 'p1', questTemplateId: '1' }),
+      );
+      playerQuestRepo.findOne.mockResolvedValue(
+        makePlayerQuest({ progress: 1, status: QuestStatus.IN_PROGRESS }),
+      );
+      questTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({ targetJson: { count: 2 } }),
+      );
+
+      const result = await service.respondHelp('p2', '1');
+
+      expect(result.status).toBe(QuestHelpStatus.HELPED);
+      expect(result.helperId).toBe('p2');
+      expect(result.helpedAt).toBeInstanceOf(Date);
+      const saved = (playerQuestRepo.save as jest.Mock).mock.calls[0][0];
+      expect(saved.progress).toBe(2);
+      expect(saved.status).toBe(QuestStatus.COMPLETED);
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        'quest.completed',
+        expect.any(Object),
+      );
+    });
+
+    it('should grant helper guild contrib on respond', async () => {
+      questHelpRepo.findOne.mockResolvedValue(
+        makeHelpRequest({ playerId: 'p1', questTemplateId: '1' }),
+      );
+      playerQuestRepo.findOne.mockResolvedValue(null);
+      questTemplateRepo.findOne.mockResolvedValue(makeTemplate());
+
+      await service.respondHelp('p2', '1');
+
+      expect(economyService.addCurrency).toHaveBeenCalledWith(
+        'p2',
+        CurrencyType.GUILD_CONTRIB,
+        10,
+        'quest_help',
+        'quest.respondHelp',
+      );
     });
   });
 

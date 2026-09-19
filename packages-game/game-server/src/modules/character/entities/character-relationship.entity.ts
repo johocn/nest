@@ -2,11 +2,8 @@ import {
   Entity,
   PrimaryGeneratedColumn,
   Column,
-  ManyToOne,
-  JoinColumn,
   Index,
 } from 'typeorm';
-import { Character } from './character.entity';
 import { RelationshipLevel, RelationshipStatus } from '@constants/enums';
 
 @Entity('character_relationships')
@@ -17,10 +14,6 @@ export class CharacterRelationship {
 
   @Column({ name: 'character_id', type: 'bigint' })
   characterId: string;
-
-  @ManyToOne(() => Character)
-  @JoinColumn({ name: 'character_id' })
-  character: Character;
 
   @Column({ name: 'target_id', type: 'bigint' })
   targetId: string;

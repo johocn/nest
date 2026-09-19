@@ -44,6 +44,9 @@ export class InventoryService {
     if (quantity <= 0) {
       throw new GameException(ErrorCodes.PARAM_INVALID, '数量必须大于0');
     }
+    if (!/^\d+$/.test(itemTemplateId)) {
+      throw new GameException(ErrorCodes.ITEM_NOT_FOUND, '道具模板不存在');
+    }
 
     const template = await this.templateRepo.findOne({
       where: { id: itemTemplateId },
@@ -107,6 +110,9 @@ export class InventoryService {
     if (quantity <= 0) {
       throw new GameException(ErrorCodes.PARAM_INVALID, '数量必须大于0');
     }
+    if (!/^\d+$/.test(itemTemplateId)) {
+      throw new GameException(ErrorCodes.ITEM_NOT_FOUND, '道具模板不存在');
+    }
 
     const lockKey = `lock:item:${playerId}:${itemTemplateId}`;
     return this.cacheService.withLock(
@@ -156,6 +162,9 @@ export class InventoryService {
     playerId: string,
     itemTemplateId: string,
   ): Promise<{ effect: Record<string, any>; remaining: number }> {
+    if (!/^\d+$/.test(itemTemplateId)) {
+      throw new GameException(ErrorCodes.ITEM_NOT_FOUND, '道具模板不存在');
+    }
     const template = await this.templateRepo.findOne({
       where: { id: itemTemplateId },
     });

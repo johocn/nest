@@ -563,3 +563,87 @@ export enum MatchMode {
   CASUAL = 'casual',
   PRACTICE = 'practice',
 }
+
+// ===== 社交战斗枚举 =====
+
+export enum FormationType {
+  THREE_TALENTS = 'three_talents',
+  FIVE_ELEMENTS = 'five_elements',
+  BEIDOU = 'beidou',
+}
+
+export enum CombatMode {
+  POINTS_TO_STOP = 'points_to_stop',
+  DEATH_MATCH = 'death_match',
+}
+
+export enum LootDistributionMode {
+  CONTRIBUTION = 'contribution',
+  ROLL = 'roll',
+  CAPTAIN = 'captain',
+  EQUAL = 'equal',
+}
+
+export enum ArbitrationStatus {
+  PENDING = 'pending',
+  SUCCESS = 'success',
+  FAIL = 'fail',
+}
+
+// ===== 社交任务枚举 =====
+
+export enum SocialTargetType {
+  SPY = 'spy',
+  INQUIRE = 'inquire',
+  EAVESDROP = 'eavesdrop',
+  SEND_GIFT = 'send_gift',
+  RECIPROCATE_GIFT = 'reciprocate_gift',
+  ACCEPT_FRIEND = 'accept_friend',
+  FORM_KINSHIP = 'form_kinship',
+  DONATE_GUILD = 'donate_guild',
+  JOIN_GUILD = 'join_guild',
+  INTEL_BUY = 'intel_buy',
+}
+
+export enum QuestHelpStatus {
+  OPEN = 'open',
+  HELPED = 'helped',
+  CLOSED = 'closed',
+}
+
+// ===== 社交经济枚举 =====
+
+export enum NegotiationStatus {
+  PENDING = 'pending',
+  COMPLETED = 'completed',
+  EXPIRED = 'expired',
+  LOCKED = 'locked',
+}
+
+export enum EscrowStatus {
+  PENDING = 'pending',
+  RELEASED = 'released',
+  PENALIZED = 'penalized',
+  CANCELLED = 'cancelled',
+}
+
+export enum BountyStatus {
+  ACTIVE = 'active',
+  ACCEPTED = 'accepted',
+  COMPLETED = 'completed',
+  CANCELLED = 'cancelled',
+  FAILED = 'failed',
+}
+
+export enum CreditStatus {
+  ACTIVE = 'active',
+  SETTLED = 'settled',
+  DEFAULTED = 'defaulted',
+  OVERDUE = 'overdue',
+}
+
+export enum BarterStatus {
+  PENDING = 'pending',
+  COMPLETED = 'completed',
+  CANCELLED = 'cancelled',
+}
