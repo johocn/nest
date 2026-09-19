@@ -19,6 +19,8 @@ import {
   AmbassadorStatus,
   FeedbackCategory,
   FeedbackStatus,
+  ReportHandleAction,
+  ReportStatus,
 } from '@constants/enums';
 
 @ApiTags('Community')
@@ -129,5 +131,45 @@ export class CommunityController {
   @ApiOperation({ summary: '在任大使列表（客户端）' })
   async getActiveAmbassadors() {
     return this.communityService.getActiveAmbassadors();
+  }
+
+  // ===== 举报台账（阶段5批1） =====
+
+  @UseGuards(AdminGuard)
+  @Get('api/admin/v1/community/reports')
+  @ApiOperation({ summary: '举报台账（管理端，可按状态过滤）' })
+  async listReports(
+    @Query('status') status?: ReportStatus,
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
+  ) {
+    return this.communityService.listReports(
+      status,
+      Number(page),
+      Number(limit),
+    );
+  }
+
+  @UseGuards(AdminGuard)
+  @Post('api/admin/v1/community/reports/:id/handle')
+  @ApiOperation({ summary: '处置举报（忽略/警告/禁言/封禁）' })
+  async handleReport(
+    @CurrentAdmin() admin: AdminJwtPayload,
+    @Param('id') id: string,
+    @Body()
+    body: {
+      action: ReportHandleAction;
+      durationSeconds?: number;
+      remark?: string;
+    },
+  ) {
+    return this.communityService.handleReport(
+      admin.adminId,
+      admin.username,
+      id,
+      body.action,
+      body.remark,
+      body.durationSeconds,
+    );
   }
 }
