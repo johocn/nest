@@ -5,6 +5,7 @@ import {
   Param,
   Post,
   Delete,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
@@ -15,6 +16,10 @@ import {
   JoinGuildDto,
   DonateDto,
 } from './dto/create-guild.dto';
+import { IntelSpyDto } from './dto/intel-spy.dto';
+import { IntelInquireDto } from './dto/intel-inquire.dto';
+import { IntelListDto } from './dto/intel-list.dto';
+import { IntelBuyDto } from './dto/intel-buy.dto';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { CurrentPlayer } from '@common/decorators/current-player.decorator';
 import type { CurrentPlayerData } from '@common/decorators/current-player.decorator';
@@ -107,5 +112,74 @@ export class SocialController {
       dto.donateType as DonateType,
       dto.amount,
     );
+  }
+
+  // ===== Intelligence =====
+
+  @Post('intel/spy')
+  @ApiOperation({ summary: '刺探情报' })
+  async spyIntel(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Body() dto: IntelSpyDto,
+  ) {
+    return this.socialService.spyIntelligence(player.playerId, dto.targetId);
+  }
+
+  @Post('intel/inquire')
+  @ApiOperation({ summary: '打听情报' })
+  async inquireIntel(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Body() dto: IntelInquireDto,
+  ) {
+    return this.socialService.inquireIntelligence(player.playerId, dto.topic);
+  }
+
+  @Post('intel/eavesdrop')
+  @ApiOperation({ summary: '窃听情报' })
+  async eavesdropIntel(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Body() dto: IntelSpyDto,
+  ) {
+    return this.socialService.eavesdropIntelligence(
+      player.playerId,
+      dto.targetId,
+    );
+  }
+
+  @Get('intel/mine')
+  @ApiOperation({ summary: '我的情报' })
+  async myIntel(@CurrentPlayer() player: CurrentPlayerData) {
+    return this.socialService.getIntelligences(player.playerId);
+  }
+
+  @Post('intel/list')
+  @ApiOperation({ summary: '挂单出售情报' })
+  async listIntel(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Body() dto: IntelListDto,
+  ) {
+    return this.socialService.listIntelligence(
+      player.playerId,
+      dto.intelId,
+      dto.price,
+    );
+  }
+
+  @Get('intel/market')
+  @ApiOperation({ summary: '情报市场' })
+  async intelMarket(
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
+  ) {
+    return this.socialService.getIntelMarket(page, limit);
+  }
+
+  @Post('intel/buy')
+  @ApiOperation({ summary: '购买情报' })
+  async buyIntel(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Body() dto: IntelBuyDto,
+  ) {
+    return this.socialService.buyIntelligence(player.playerId, dto.intelId);
   }
 }
