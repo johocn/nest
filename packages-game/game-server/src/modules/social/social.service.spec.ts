@@ -161,6 +161,7 @@ describe('SocialService', () => {
           useValue: {
             increaseFavorability: jest.fn(),
             getRelationshipLevel: jest.fn(),
+            getRelationships: jest.fn(),
           },
         },
         {
@@ -1140,6 +1141,20 @@ describe('SocialService', () => {
         service.graduateApprentice('p2', 'k1'),
       ).rejects.toMatchObject({
         response: { code: ErrorCodes.KINSHIP_NOT_OWNER },
+      });
+    });
+  });
+
+  describe('getSocialSummary', () => {
+    it('combines friends, kinships and relationships', async () => {
+      friendRepo.find.mockResolvedValue([{ id: 'f1' }] as any);
+      kinshipRepo.find.mockResolvedValue([{ id: 'k1' }] as any);
+      characterService.getRelationships.mockResolvedValue([{ id: 'r1' }] as any);
+      const result = await service.getSocialSummary('p1');
+      expect(result).toEqual({
+        friends: [{ id: 'f1' }],
+        kinships: [{ id: 'k1' }],
+        relationships: [{ id: 'r1' }],
       });
     });
   });

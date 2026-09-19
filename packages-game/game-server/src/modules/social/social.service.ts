@@ -780,6 +780,20 @@ export class SocialService {
     });
   }
 
+  /** 关系总览：好友 + 亲缘 + 好感关系。 */
+  async getSocialSummary(playerId: string): Promise<{
+    friends: Friend[];
+    kinships: Kinship[];
+    relationships: CharacterRelationship[];
+  }> {
+    const [friends, kinships, relationships] = await Promise.all([
+      this.getFriendList(playerId),
+      this.getKinships(playerId),
+      this.characterService.getRelationships(playerId),
+    ]);
+    return { friends, kinships, relationships };
+  }
+
   async graduateApprentice(playerId: string, kinshipId: string): Promise<Kinship> {
     const kinship = await this.kinshipRepo.findOne({
       where: { id: kinshipId, status: KinshipStatus.ACTIVE },

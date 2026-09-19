@@ -25,6 +25,13 @@ describe('SocialController', () => {
     listIntelligence: jest.fn(),
     getIntelMarket: jest.fn(),
     buyIntelligence: jest.fn(),
+    sendGift: jest.fn(),
+    reciprocateGift: jest.fn(),
+    formKinship: jest.fn(),
+    breakKinship: jest.fn(),
+    graduateApprentice: jest.fn(),
+    getKinships: jest.fn(),
+    getSocialSummary: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -114,6 +121,82 @@ describe('SocialController', () => {
         '1000',
       );
       expect(result).toEqual({ newTotal: 100 });
+    });
+  });
+
+  describe('gift/kinship endpoints', () => {
+    it('sendGift passes playerId, targetId and itemId', async () => {
+      service.sendGift.mockResolvedValue({ giftWeight: 10 });
+      const result = await controller.sendGift(player, {
+        targetId: 't1',
+        itemId: 'g1',
+      });
+      expect(service.sendGift).toHaveBeenCalledWith('p1', 't1', 'g1');
+      expect(result).toEqual({ giftWeight: 10 });
+    });
+
+    it('reciprocateGift passes playerId, targetId and itemId', async () => {
+      service.reciprocateGift.mockResolvedValue({ giftWeight: 10 });
+      const result = await controller.reciprocateGift(player, {
+        targetId: 't1',
+        itemId: 'g1',
+      });
+      expect(service.reciprocateGift).toHaveBeenCalledWith('p1', 't1', 'g1');
+      expect(result).toEqual({ giftWeight: 10 });
+    });
+
+    it('formKinship passes type, memberIds and name', async () => {
+      service.formKinship.mockResolvedValue({ id: 'k1' });
+      const result = await controller.formKinship(player, {
+        type: 'sworn',
+        memberIds: ['p2', 'p3'],
+        name: '桃园三义',
+      } as any);
+      expect(service.formKinship).toHaveBeenCalledWith(
+        'p1',
+        'sworn',
+        ['p2', 'p3'],
+        '桃园三义',
+      );
+      expect(result).toEqual({ id: 'k1' });
+    });
+
+    it('breakKinship passes kinshipId', async () => {
+      service.breakKinship.mockResolvedValue({ id: 'k1', status: 'disbanded' });
+      const result = await controller.breakKinship(player, { kinshipId: 'k1' });
+      expect(service.breakKinship).toHaveBeenCalledWith('p1', 'k1');
+      expect(result).toEqual({ id: 'k1', status: 'disbanded' });
+    });
+
+    it('graduateApprentice passes kinshipId', async () => {
+      service.graduateApprentice.mockResolvedValue({ id: 'k1' });
+      const result = await controller.graduateApprentice(player, {
+        kinshipId: 'k1',
+      });
+      expect(service.graduateApprentice).toHaveBeenCalledWith('p1', 'k1');
+      expect(result).toEqual({ id: 'k1' });
+    });
+
+    it('getKinships passes playerId', async () => {
+      service.getKinships.mockResolvedValue([{ id: 'k1' }]);
+      const result = await controller.getKinships(player);
+      expect(service.getKinships).toHaveBeenCalledWith('p1');
+      expect(result).toEqual([{ id: 'k1' }]);
+    });
+
+    it('getRelationships returns social summary', async () => {
+      service.getSocialSummary.mockResolvedValue({
+        friends: [],
+        kinships: [],
+        relationships: [],
+      });
+      const result = await controller.getRelationships(player);
+      expect(service.getSocialSummary).toHaveBeenCalledWith('p1');
+      expect(result).toEqual({
+        friends: [],
+        kinships: [],
+        relationships: [],
+      });
     });
   });
 });

@@ -20,6 +20,9 @@ import { IntelSpyDto } from './dto/intel-spy.dto';
 import { IntelInquireDto } from './dto/intel-inquire.dto';
 import { IntelListDto } from './dto/intel-list.dto';
 import { IntelBuyDto } from './dto/intel-buy.dto';
+import { GiftDto } from './dto/gift.dto';
+import { KinshipFormDto } from './dto/kinship-form.dto';
+import { KinshipBreakDto } from './dto/kinship-break.dto';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { CurrentPlayer } from '@common/decorators/current-player.decorator';
 import type { CurrentPlayerData } from '@common/decorators/current-player.decorator';
@@ -181,5 +184,82 @@ export class SocialController {
     @Body() dto: IntelBuyDto,
   ) {
     return this.socialService.buyIntelligence(player.playerId, dto.intelId);
+  }
+
+  // ===== Gifts =====
+
+  @Post('gift/send')
+  @ApiOperation({ summary: '送礼' })
+  async sendGift(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Body() dto: GiftDto,
+  ) {
+    return this.socialService.sendGift(
+      player.playerId,
+      dto.targetId,
+      dto.itemId,
+    );
+  }
+
+  @Post('gift/reciprocate')
+  @ApiOperation({ summary: '回礼' })
+  async reciprocateGift(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Body() dto: GiftDto,
+  ) {
+    return this.socialService.reciprocateGift(
+      player.playerId,
+      dto.targetId,
+      dto.itemId,
+    );
+  }
+
+  // ===== Kinship =====
+
+  @Post('kinship/form')
+  @ApiOperation({ summary: '缔结亲缘（结义/师徒/侠侣）' })
+  async formKinship(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Body() dto: KinshipFormDto,
+  ) {
+    return this.socialService.formKinship(
+      player.playerId,
+      dto.type,
+      dto.memberIds,
+      dto.name,
+    );
+  }
+
+  @Post('kinship/break')
+  @ApiOperation({ summary: '解除亲缘' })
+  async breakKinship(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Body() dto: KinshipBreakDto,
+  ) {
+    return this.socialService.breakKinship(player.playerId, dto.kinshipId);
+  }
+
+  @Post('kinship/graduate')
+  @ApiOperation({ summary: '师徒出师' })
+  async graduateApprentice(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Body() dto: KinshipBreakDto,
+  ) {
+    return this.socialService.graduateApprentice(
+      player.playerId,
+      dto.kinshipId,
+    );
+  }
+
+  @Get('kinships')
+  @ApiOperation({ summary: '我的亲缘列表' })
+  async getKinships(@CurrentPlayer() player: CurrentPlayerData) {
+    return this.socialService.getKinships(player.playerId);
+  }
+
+  @Get('relationships')
+  @ApiOperation({ summary: '关系总览（好友+亲缘+好感）' })
+  async getRelationships(@CurrentPlayer() player: CurrentPlayerData) {
+    return this.socialService.getSocialSummary(player.playerId);
   }
 }
