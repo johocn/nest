@@ -5,6 +5,10 @@ import { RiskWashService } from './risk-wash.service';
 import { RiskWashFlow, RiskCase, RiskAccountScore, RiskWhitelist, RiskRecoverRecord } from './entities';
 import { ConfigManageService } from '@modules/config/config.service';
 import { TradeOrder } from '@modules/trade/entities/trade-order.entity';
+import { EconomyService } from '@modules/economy/economy.service';
+import { AuthService } from '@modules/auth/auth.service';
+import { PlayerService } from '@modules/player/player.service';
+import { AdminService } from '@modules/admin/admin.service';
 
 describe('RiskWashService', () => {
   let service: RiskWashService;
@@ -31,6 +35,22 @@ describe('RiskWashService', () => {
     getConfig: jest.fn().mockResolvedValue(null),
     setConfig: jest.fn().mockResolvedValue({}),
   };
+  const economyService = {
+    deductCurrency: jest.fn().mockResolvedValue({ balanceAfter: '0' }),
+    addCurrency: jest.fn().mockResolvedValue({ balanceAfter: '0' }),
+    getBalance: jest.fn().mockResolvedValue('100'),
+    getTxByOpTrace: jest.fn().mockResolvedValue(null),
+  };
+  const authService = {
+    applyPenalty: jest.fn().mockResolvedValue({ id: 'pen1', playerId: 'p1', level: 'ban', createdAt: new Date() }),
+  };
+  const playerService = {
+    getById: jest.fn().mockResolvedValue({ id: 'p1', accountId: 'acc1' }),
+    getByAccountId: jest.fn().mockResolvedValue({ id: 'p1', accountId: 'acc1' }),
+  };
+  const adminService = {
+    logOperation: jest.fn().mockResolvedValue({}),
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -44,6 +64,10 @@ describe('RiskWashService', () => {
         { provide: getRepositoryToken(RiskRecoverRecord), useValue: recoverRepo },
         { provide: getRepositoryToken(TradeOrder), useValue: tradeRepo },
         { provide: ConfigManageService, useValue: config },
+        { provide: EconomyService, useValue: economyService },
+        { provide: AuthService, useValue: authService },
+        { provide: PlayerService, useValue: playerService },
+        { provide: AdminService, useValue: adminService },
       ],
     }).compile();
     service = mod.get(RiskWashService);
@@ -146,5 +170,41 @@ describe('RiskWashService', () => {
   it('已回滚记录再次回滚报 RISK_RECOVER_STATE', async () => {
     recoverRepo.findOne.mockResolvedValue({ id: 'r1', status: 'rolled_back' });
     await expect(service.rollback('r1', 'op')).rejects.toMatchObject({ response: { code: 93204 } });
+  });
+
+  // ===== Plan1 风控回收闭环：真实扣款 + 封禁联动 =====
+
+  it('recover net>0 时调用 EconomyService 扣款并落台账 economy_ref_id', async () => {
+    caseRepo.findOne.mockResolvedValue({ id: 'c1', fromId: 'p1', toId: 'p2', detailJson: { a2b: 5000, b2a: 2000 }, status: 'open' });
+    (service as any).computeNetGap = jest.fn().mockResolvedValue('3000');
+    economyService.getTxByOpTrace.mockResolvedValue({ id: 'tx-900' });
+    economyService.getBalance.mockResolvedValue('5000');
+    const rec = await service.recover('c1', 'op', '超额');
+    expect(economyService.deductCurrency).toHaveBeenCalledWith(
+      'p2', 'gold', 3000, expect.any(String), expect.any(String), expect.any(String),
+    );
+    const saved = recoverRepo.save.mock.calls[0][0];
+    expect(saved.economyRefId).toBe('tx-900');
+    expect(saved.status).toBe('applied');
+    expect((rec as any).economyRefId).toBe('tx-900');
+  });
+
+  it('rollback 按 economy_ref_id 真实退回且状态 ROLLED_BACK', async () => {
+    recoverRepo.findOne.mockResolvedValue({ id: 'r1', fromId: 'p1', toId: 'p2', appliedAmount: '3000', assetKey: 'gold', status: 'applied', economyRefId: 'tx-900' });
+    const r = await service.rollback('r1', 'op', '误判');
+    expect(economyService.addCurrency).toHaveBeenCalledWith(
+      'p2', 'gold', 3000, expect.any(String), expect.any(String), expect.any(String),
+    );
+    expect(r.status).toBe('rolled_back');
+  });
+
+  it('lock 调用封禁能力并留 audit', async () => {
+    caseRepo.findOne.mockResolvedValue({ id: 'c1', fromId: 'p1', toId: 'p2', detailJson: {}, status: 'open' });
+    playerService.getById.mockImplementation(async (pid: string) => ({ id: pid, accountId: `acc-${pid}` }));
+    authService.applyPenalty.mockResolvedValue({ id: 'pen1', playerId: 'p1', level: 'ban', createdAt: new Date() });
+    const res = await (service as any).lock('c1', 'gm1', 'ban', '风控封禁');
+    expect(authService.applyPenalty).toHaveBeenCalled();
+    expect(res.applied.length).toBeGreaterThanOrEqual(1);
+    expect(adminService.logOperation).toHaveBeenCalled();
   });
 });
