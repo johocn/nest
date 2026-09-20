@@ -781,3 +781,27 @@ export enum GuideTaskStatus {
   DONE = 'done',
   REWARDED = 'rewarded',
 }
+
+// ===== 风控枚举 =====
+
+export enum RiskBizType {
+  TRADE_ORDER = 'trade_order',
+}
+
+export enum RiskCaseType {
+  ROUND_TRIP = 'round_trip',
+  ONE_WAY = 'one_way',
+  PRICE_DIVERGENCE = 'price_divergence',
+}
+
+export enum RiskCaseStatus {
+  OPEN = 'open',
+  FROZEN = 'frozen',
+  IGNORED = 'ignored',
+}
+
+export enum RiskLevel {
+  NORMAL = 'normal',
+  WATCH = 'watch',
+  HIGH = 'high',
+}

@@ -221,6 +221,9 @@ export const ErrorCodes = {
   GUIDE_REWARD_CLAIMED: 92702,
   // 专属拍卖室 92801-92899
   VIP_AUCTION_ROOM_FORBIDDEN: 92801,
+  // 风控 92901-92999
+  RISK_CASE_NOT_FOUND: 92901,
+  RISK_INVALID_ACTION: 92902,
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
