@@ -21,6 +21,9 @@ export class RiskRecoverRecord {
   @Column({ name: 'applied_amount', type: 'bigint', default: '0' })
   appliedAmount: string;
 
+  @Column({ name: 'economy_ref_id', type: 'varchar', length: 64, nullable: true })
+  economyRefId: string | null;
+
   @Column({ name: 'asset_key', type: 'varchar', length: 64 })
   assetKey: string;
 

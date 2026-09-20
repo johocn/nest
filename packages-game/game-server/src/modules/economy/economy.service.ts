@@ -253,4 +253,9 @@ export class EconomyService {
     });
     return { items };
   }
+
+  /** 按 opTrace 反查流水（风控真实扣款留 economy_ref_id 以备精确回滚） */
+  async getTxByOpTrace(opTrace: string): Promise<Transaction | null> {
+    return this.txRepo.findOne({ where: { opTrace } });
+  }
 }

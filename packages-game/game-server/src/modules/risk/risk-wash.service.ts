@@ -438,14 +438,36 @@ export class RiskWashService {
   }
 
   /**
-   * 半自动回收：落风险回收台账 + 切断涉案方线索（open→frozen），本期不真正扣玩家余额
-   * （真实扣款需接 EconomyService，跨模块接线，避免未验证前动玩家资金）。
+   * 半自动回收（闭环）：对净收款方（toId）真实扣除净差额 net(>0) GOLD，
+   * 流水号落 economy_ref_id 备精确回滚；台账 + 线索冻结一致落地。
+   * 真实扣款由 EconomyService 独立（per-account 锁），台账/线索在服务内存同一批完成。
    */
   async recover(caseId: string, operator: string, note?: string): Promise<RiskRecoverRecord> {
     const c = await this.caseRepo.findOne({ where: { id: caseId } });
     if (!c) throw new GameException(ErrorCodes.RISK_CASE_NOT_FOUND, '风控线索不存在');
     const net = Number(await this.computeNetGap(c.fromId, c.toId));
     if (net <= 0) throw new GameException(ErrorCodes.RISK_INVALID_ACTION, '无涉案净差额可回收');
+
+    // 1) 快照动账前 from/to 余额
+    const [fromBalance, toBalance] = await Promise.all([
+      this.economyService.getBalance(c.fromId, CurrencyType.GOLD),
+      this.economyService.getBalance(c.toId, CurrencyType.GOLD),
+    ]);
+
+    // 2) 真实扣款：净收款方 toId 扣 net -> 系统回收
+    const opTrace = `rr:${c.id}:${Date.now()}`;
+    await this.economyService.deductCurrency(
+      c.toId,
+      CurrencyType.GOLD,
+      net,
+      'risk_recover',
+      opTrace,
+      `risk:${c.id}`,
+    );
+    const tx = await this.economyService.getTxByOpTrace(opTrace);
+    const economyRefId = tx ? String(tx.id) : null;
+
+    // 3) 落台账（APPLIED + economy_ref_id + 快照）
     const record = this.recoverRepo.create({
       caseId,
       fromId: c.fromId,
@@ -453,12 +475,15 @@ export class RiskWashService {
       suggestedAmount: String(net),
       appliedAmount: String(net),
       assetKey: 'gold',
-      balanceSnapshotJson: { from: c.fromId, to: c.toId },
+      balanceSnapshotJson: { fromPlayer: c.fromId, toPlayer: c.toId, fromBalance, toBalance },
       handledBy: operator,
       rollbackReason: note ?? null,
       status: RiskRecoverStatus.APPLIED as any,
+      economyRefId,
     });
     const saved = await this.recoverRepo.save(record);
+
+    // 4) 切断线索 open→frozen
     if (c.status === RiskCaseStatus.OPEN) {
       c.status = RiskCaseStatus.FROZEN;
       c.handledBy = operator;
@@ -466,6 +491,7 @@ export class RiskWashService {
       await this.caseRepo.save(c);
       await this.updateScores();
     }
+    this.logger.log(`risk recover case=${caseId} net=${net} to=${c.toId} economyRef=${economyRefId} by=${operator}`);
     return saved;
   }
 
