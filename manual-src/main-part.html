@@ -132,8 +132,9 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
   <a class="nav-item" href="#ch15">15 新手引导与初始数值</a>
   <a class="nav-item" href="#ch16">16 生态联动</a>
   <a class="nav-item" href="#ch17">17 养成长线</a>
+  <a class="nav-item" href="#ch18">18 世界探索与奇遇</a>
   <div class="nav-group">附录</div>
-  <a class="nav-item" href="#chapter16">18 数据字典全集</a>
+  <a class="nav-item" href="#chapter16">19 数据字典全集</a>
   <a class="nav-item" href="#appendix-a">A 接口路径索引</a>
   <a class="nav-item" href="#appendix-b">B 枚举全集</a>
   <a class="nav-item" href="#appendix-c">C 部署与运维</a>
@@ -149,7 +150,7 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
     <div class="sub">GAME SERVER · 开发与玩法设计手册</div>
     <div class="meta">
       版本 <b>v1.1</b>　·　日期 <b>2026-09-19</b>　·　适用对象 <b>游戏策划 / 研发 / 运营</b><br>
-      数据字典 <b>64 表 / 603 字段</b>　·　接口 <b>159 条</b>　·　枚举 <b>58 个</b>
+      数据字典 <b>88 表 / 787 字段</b>　·　接口 <b>182 条</b>　·　枚举 <b>58 个</b>
     </div>
     <div class="tagline">
       「武者以力服人，智者以情动人。此界之中，<b>社交即核心玩法</b>——
@@ -2674,6 +2675,40 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
     <li>接入方式：既有玩法 / 任务 / 战斗结算在产出修为时调用 <code>RealmService.cultivate</code>，即可推进养成长线（本项目仅在接口层暴露，接入由后续玩法回调驱动）。</li>
   </ul>
 
+  </div>
+</section>
+
+<!-- ==================== 第18章 世界探索与奇遇 ==================== -->
+<section class="chapter" id="ch18">
+  <div class="chapter-inner">
+  <h2 class="ch-title">第 18 章 · 世界探索与奇遇</h2>
+  <p class="ch-desc">把场景/资源点做成「可探索的环境互动」：到访点亮足迹、随机触发奇遇、昼夜天气影响环境态。由 <code>explore</code> 模块（<code>src/modules/explore/</code>）承载，复用既有 economy/inventory/buff 发奖通道，不新造结算。</p>
+
+  <h3>18.1 总览</h3>
+  <table>
+    <thead><tr><th>子系统</th><th>表/载体</th><th>交互</th></tr></thead>
+    <tbody>
+      <tr><td>探索足迹</td><td><code>player_explorations</code>（uk：player_id+scene_id）</td><td>到访点亮点亮、times 递增、首探发里程碑奖</td></tr>
+      <tr><td>奇遇事件</td><td><code>encounter_templates</code> + Redis 会话</td><td>触发率/CD/一次性判定 → 选择 → 结算 effects</td></tr>
+      <tr><td>昼夜天气</td><td>SQL <code>now()</code> 分时</td><td>昼夜按小时，天气按日种子，影响奇遇率</td></tr>
+    </tbody>
+  </table>
+
+  <h3>18.2 探索足迹 discover</h3>
+  <p><code>discover(playerId, sceneId)</code>：校验场景 → 幂等 upsert（uk 防重复）→ 存在则 <code>times</code> 递增且不重复发奖；首探读取远程配置 <code>explore.milestone</code>（<code>{reward:{currency,items}}</code>）经既有 economy/inventory 通道结算里程碑奖励。并发下 uk 冲突回退为仅递增 <code>times</code>，保证奖励幂等。</p>
+
+  <h3>18.3 奇遇事件 encounter</h3>
+  <p><code>triggerEncounter(playerId, sceneId)</code>：取该场景匹配模板 → 触发率（雨天按 <code>explore.weather.rainyTriggerBonus</code> 加成）→ Redis 锁 CD → 一次性模板置位 → 命中则生成 <code>encounterId</code> 并把会话写入 Redis（CD 时长），返回当前选项列表。<code>resolveEncounter(playerId, encounterId, choice)</code>：以 res 锁保证单次结算（占用中视为已结算 94102），校验选项，将 <code>effects</code>（currency / item / buff / deductCurrency / removeItem）经既有发奖/消耗通道结算并写游玩事件。</p>
+
+  <h3>18.4 昼夜天气 worldState</h3>
+  <p><code>worldState()</code>：以 SQL <code>now()</code> 时区安全分时（不依赖服务器本地时区）。昼夜按小时（06:00-17:59 白天，其余夜晚）；天气按当日日期字符串固定种子伪随机（晴朗/阴雨），供客户端拉取并影响奇遇触发率与部分产出。前端 <code>GET /api/client/v1/explore/state</code> 拉取。</p>
+
+  <h3>18.5 接口与配置</h3>
+  <ul>
+    <li>客户端：<code>GET explore/state</code>、<code>POST explore/scene/:sceneId/discover</code>、<code>POST explore/scene/:sceneId/encounter</code>、<code>POST explore/encounter/:id/resolve</code>。</li>
+    <li>后台奇遇模板 CRUD：<code>GET/POST /api/admin/v1/explore/templates</code>、<code>PUT/DELETE /api/admin/v1/explore/templates/:id</code>。</li>
+    <li>远程配置：<code>explore.milestone</code>（首探里程碑奖励 JSON）、<code>explore.weather</code>（<code>rainyTriggerBonus</code> 雨天触发加成）。</li>
+  </ul>
   </div>
 </section>
 

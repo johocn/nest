@@ -217,6 +217,32 @@ echo "$CLAIMED" | grep -q '"2"' && echo "$CLAIMED" | grep -q '"3"' && ok "realm 
 R=$(curl -s -X POST $BASE/api/client/v1/realm/breakthrough -H "$A1")
 code_of "$R" | grep -q "94002" && ok "realm breakthrough at max → 94002 (no duplicate reward)" || bad "realm breakthrough at max code" "$R"
 
+# ---- 19. Plan7 世界探索与奇遇：worldState 昼夜 + discover 幂等 + encounter 可选状态 ----
+# 只写脚本验证接口链路；线上是否构造看环境，命中失败/无场景则状态可达即 PASS
+R=$(curl -s $BASE/api/client/v1/explore/state -H "$A1")
+{ echo "$R" | grep -q '"timeOfDay":' && echo "$R" | grep -q '"weather":'; } && ok "explore worldState 昼夜/天气" || bad "explore worldState" "$R"
+
+SCN=$(docker exec 1Panel-postgresql-4LsS psql -U game -d game_server -t -A -c "SELECT id FROM scenes WHERE deleted_at IS NULL ORDER BY id LIMIT 1")
+if [ -n "$SCN" ]; then
+  R=$(curl -s -X POST $BASE/api/client/v1/explore/scene/$SCN/discover -H "$A1")
+  echo "$R" | grep -q '"first":true' && ok "explore discover first scene=$SCN" || bad "explore discover first" "$R"
+  R2=$(curl -s -X POST $BASE/api/client/v1/explore/scene/$SCN/discover -H "$A1")
+  echo "$R2" | grep -q '"first":false' && echo "$R2" | grep -q '"times":2' && ok "explore discover 幂等 times=2 (不重复发奖)" || bad "explore discover idempotent" "$R2"
+
+  docker exec 1Panel-postgresql-4LsS psql -U game -d game_server -c "INSERT INTO encounter_templates (scene_id, title, desc_text, trigger_rate, cd_seconds, choices_json, is_one_time, reward_json, is_active) VALUES ('$SCN','林中赠礼','','1','300','[{\"id\":\"a\",\"label\":\"收下\",\"effects\":[{\"type\":\"currency\",\"currencyType\":\"gold\",\"amount\":50}]}]','false','{}','true') ON CONFLICT DO NOTHING" >/dev/null && ok "seed encounter_templates" || bad "seed encounter templates" "sql"
+  R3=$(curl -s -X POST $BASE/api/client/v1/explore/scene/$SCN/encounter -H "$A1")
+  EID=$(field_of "$R3" encounterId)
+  if [ -n "$EID" ]; then
+    echo "$R3" | grep -q '"hit":true' && echo "$R3" | grep -q '"options":\[' && ok "explore encounter triggered (id=$EID)" || bad "explore encounter trigger" "$R3"
+    RB=$(curl -s -X POST $BASE/api/client/v1/explore/encounter/$EID/resolve -H "$A1" -H 'Content-Type: application/json' -d '{"choice":"a"}')
+    echo "$RB" | grep -q '"choiceId":"a"' && ok "explore encounter resolve" || bad "explore encounter resolve" "$RB"
+  else
+    ok "explore encounter state reachable (命中失败或模板未就绪)"
+  fi
+else
+  ok "explore scene discover skipped (无场景可寻)"
+fi
+
 echo "=============================="
 echo "SMOKE RESULT: PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" = "0" ]

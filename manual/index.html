@@ -132,8 +132,9 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
   <a class="nav-item" href="#ch15">15 新手引导与初始数值</a>
   <a class="nav-item" href="#ch16">16 生态联动</a>
   <a class="nav-item" href="#ch17">17 养成长线</a>
+  <a class="nav-item" href="#ch18">18 世界探索与奇遇</a>
   <div class="nav-group">附录</div>
-  <a class="nav-item" href="#chapter16">18 数据字典全集</a>
+  <a class="nav-item" href="#chapter16">19 数据字典全集</a>
   <a class="nav-item" href="#appendix-a">A 接口路径索引</a>
   <a class="nav-item" href="#appendix-b">B 枚举全集</a>
   <a class="nav-item" href="#appendix-c">C 部署与运维</a>
@@ -149,7 +150,7 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
     <div class="sub">GAME SERVER · 开发与玩法设计手册</div>
     <div class="meta">
       版本 <b>v1.1</b>　·　日期 <b>2026-09-19</b>　·　适用对象 <b>游戏策划 / 研发 / 运营</b><br>
-      数据字典 <b>64 表 / 603 字段</b>　·　接口 <b>159 条</b>　·　枚举 <b>58 个</b>
+      数据字典 <b>88 表 / 787 字段</b>　·　接口 <b>182 条</b>　·　枚举 <b>58 个</b>
     </div>
     <div class="tagline">
       「武者以力服人，智者以情动人。此界之中，<b>社交即核心玩法</b>——
@@ -2677,9 +2678,43 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
   </div>
 </section>
 
+<!-- ==================== 第18章 世界探索与奇遇 ==================== -->
+<section class="chapter" id="ch18">
+  <div class="chapter-inner">
+  <h2 class="ch-title">第 18 章 · 世界探索与奇遇</h2>
+  <p class="ch-desc">把场景/资源点做成「可探索的环境互动」：到访点亮足迹、随机触发奇遇、昼夜天气影响环境态。由 <code>explore</code> 模块（<code>src/modules/explore/</code>）承载，复用既有 economy/inventory/buff 发奖通道，不新造结算。</p>
+
+  <h3>18.1 总览</h3>
+  <table>
+    <thead><tr><th>子系统</th><th>表/载体</th><th>交互</th></tr></thead>
+    <tbody>
+      <tr><td>探索足迹</td><td><code>player_explorations</code>（uk：player_id+scene_id）</td><td>到访点亮点亮、times 递增、首探发里程碑奖</td></tr>
+      <tr><td>奇遇事件</td><td><code>encounter_templates</code> + Redis 会话</td><td>触发率/CD/一次性判定 → 选择 → 结算 effects</td></tr>
+      <tr><td>昼夜天气</td><td>SQL <code>now()</code> 分时</td><td>昼夜按小时，天气按日种子，影响奇遇率</td></tr>
+    </tbody>
+  </table>
+
+  <h3>18.2 探索足迹 discover</h3>
+  <p><code>discover(playerId, sceneId)</code>：校验场景 → 幂等 upsert（uk 防重复）→ 存在则 <code>times</code> 递增且不重复发奖；首探读取远程配置 <code>explore.milestone</code>（<code>{reward:{currency,items}}</code>）经既有 economy/inventory 通道结算里程碑奖励。并发下 uk 冲突回退为仅递增 <code>times</code>，保证奖励幂等。</p>
+
+  <h3>18.3 奇遇事件 encounter</h3>
+  <p><code>triggerEncounter(playerId, sceneId)</code>：取该场景匹配模板 → 触发率（雨天按 <code>explore.weather.rainyTriggerBonus</code> 加成）→ Redis 锁 CD → 一次性模板置位 → 命中则生成 <code>encounterId</code> 并把会话写入 Redis（CD 时长），返回当前选项列表。<code>resolveEncounter(playerId, encounterId, choice)</code>：以 res 锁保证单次结算（占用中视为已结算 94102），校验选项，将 <code>effects</code>（currency / item / buff / deductCurrency / removeItem）经既有发奖/消耗通道结算并写游玩事件。</p>
+
+  <h3>18.4 昼夜天气 worldState</h3>
+  <p><code>worldState()</code>：以 SQL <code>now()</code> 时区安全分时（不依赖服务器本地时区）。昼夜按小时（06:00-17:59 白天，其余夜晚）；天气按当日日期字符串固定种子伪随机（晴朗/阴雨），供客户端拉取并影响奇遇触发率与部分产出。前端 <code>GET /api/client/v1/explore/state</code> 拉取。</p>
+
+  <h3>18.5 接口与配置</h3>
+  <ul>
+    <li>客户端：<code>GET explore/state</code>、<code>POST explore/scene/:sceneId/discover</code>、<code>POST explore/scene/:sceneId/encounter</code>、<code>POST explore/encounter/:id/resolve</code>。</li>
+    <li>后台奇遇模板 CRUD：<code>GET/POST /api/admin/v1/explore/templates</code>、<code>PUT/DELETE /api/admin/v1/explore/templates/:id</code>。</li>
+    <li>远程配置：<code>explore.milestone</code>（首探里程碑奖励 JSON）、<code>explore.weather</code>（<code>rainyTriggerBonus</code> 雨天触发加成）。</li>
+  </ul>
+  </div>
+</section>
+
 <section class="dict-chapter" id="chapter16">
-<h2 class="ch-title">第 18 章 · 数据字典全集</h2>
-<p class="ch-desc">共 86 张表、772 个字段。字段类型与默认值取自生产库 <code>game_server</code> 实际结构；说明按源码实体语义整理。枚举类型取值详见<b>附录 B 枚举全集</b>。</p>
+<h2 class="ch-title">第 19 章 · 数据字典全集</h2>
+<p class="ch-desc">共 88 张表、787 个字段。字段类型与默认值取自生产库 <code>game_server</code> 实际结构；说明按源码实体语义整理。枚举类型取值详见<b>附录 B 枚举全集</b>。</p>
 <div class="dict-toc">
 <a href="#dict-account_login_logs">account_login_logs (7)</a>
 <a href="#dict-achievement_templates">achievement_templates (12)</a>
@@ -3893,11 +3928,34 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
 <tr><td><code>created_by</code></td><td>varchar</td><td>是</td><td></td><td>创建人（GM 用户名）</td></tr>
 <tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
 </tbody></table></div>
+<div class="dict-table" id="dict-encounter_templates">
+<h3>📄 encounter_templates <span class="tbl-meta">10 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>nextval</td><td>主键</td></tr>
+<tr><td><code>scene_id</code></td><td>varchar</td><td>是</td><td></td><td>绑定场景ID（空=全场景通用）</td></tr>
+<tr><td><code>title</code></td><td>varchar</td><td>否</td><td></td><td>奇遇标题</td></tr>
+<tr><td><code>desc_text</code></td><td>varchar</td><td>否</td><td>''</td><td>奇遇描述</td></tr>
+<tr><td><code>trigger_rate</code></td><td>double precision</td><td>否</td><td>0.1</td><td>基础触发率（雨天按配置加成）</td></tr>
+<tr><td><code>cd_seconds</code></td><td>int</td><td>否</td><td>300</td><td>触发冷却（秒）</td></tr>
+<tr><td><code>choices_json</code></td><td>jsonb</td><td>否</td><td>'[]'</td><td>选项列表（id/label/effects）</td></tr>
+<tr><td><code>is_one_time</code></td><td>bool</td><td>否</td><td>false</td><td>一次性模板（每人仅触发一次）</td></tr>
+<tr><td><code>reward_json</code></td><td>jsonb</td><td>否</td><td>'{}'</td><td>预留奖励配置</td></tr>
+<tr><td><code>is_active</code></td><td>bool</td><td>否</td><td>true</td><td>启用开关</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-player_explorations">
+<h3>📄 player_explorations <span class="tbl-meta">5 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>nextval</td><td>主键</td></tr>
+<tr><td><code>player_id</code></td><td>varchar</td><td>否</td><td></td><td>玩家ID（uk 与 scene_id 联合唯一）</td></tr>
+<tr><td><code>scene_id</code></td><td>varchar</td><td>否</td><td></td><td>已探索场景ID</td></tr>
+<tr><td><code>times</code></td><td>int</td><td>否</td><td>1</td><td>到访次数（幂等递增）</td></tr>
+<tr><td><code>discovered_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>首次点亮时间</td></tr>
+</tbody></table></div>
 </section>
 
 <section class="appendix-chapter" id="appendix-a">
 <h2 class="ch-title">附录 A · 接口路径索引</h2>
-<p class="ch-desc">全部接口按模块分组（共 174 条），前缀统一为 <code>/api</code>，例如 <code>GET /api/client/v1/player/profile</code>。客户端接口 <code>/api/client</code>，运营后台接口 <code>/api/admin</code>。</p>
+<p class="ch-desc">全部接口按模块分组（共 182 条），前缀统一为 <code>/api</code>，例如 <code>GET /api/client/v1/player/profile</code>。客户端接口 <code>/api/client</code>，运营后台接口 <code>/api/admin</code>。</p>
 <div class="dict-table"><h3>⚙️ achievement <span class="tbl-meta">5 接口</span></h3>
 <table><thead><tr><th>方法</th><th>路径</th></tr></thead><tbody>
 <tr><td><span class="badge m-get">GET</span></td><td><code>/api/client/v1/achievement/my</code></td></tr>
@@ -4155,6 +4213,17 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
 <tr><td><span class="badge m-post">POST</span></td><td><code>/api/admin/v1/vip/config</code></td></tr>
 <tr><td><span class="badge m-del">PATCH</span></td><td><code>/api/admin/v1/vip/config/:level</code></td></tr>
 <tr><td><span class="badge m-del">DELETE</span></td><td><code>/api/admin/v1/vip/config/:level</code></td></tr>
+</tbody></table></div>
+<div class="dict-table"><h3>⚙️ explore <span class="tbl-meta">8 接口</span></h3>
+<table><thead><tr><th>方法</th><th>路径</th></tr></thead><tbody>
+<tr><td><span class="badge m-get">GET</span></td><td><code>/api/client/v1/explore/state</code></td></tr>
+<tr><td><span class="badge m-post">POST</span></td><td><code>/api/client/v1/explore/scene/:sceneId/discover</code></td></tr>
+<tr><td><span class="badge m-post">POST</span></td><td><code>/api/client/v1/explore/scene/:sceneId/encounter</code></td></tr>
+<tr><td><span class="badge m-post">POST</span></td><td><code>/api/client/v1/explore/encounter/:id/resolve</code></td></tr>
+<tr><td><span class="badge m-get">GET</span></td><td><code>/api/admin/v1/explore/templates</code></td></tr>
+<tr><td><span class="badge m-post">POST</span></td><td><code>/api/admin/v1/explore/templates</code></td></tr>
+<tr><td><span class="badge m-put">PUT</span></td><td><code>/api/admin/v1/explore/templates/:id</code></td></tr>
+<tr><td><span class="badge m-del">DELETE</span></td><td><code>/api/admin/v1/explore/templates/:id</code></td></tr>
 </tbody></table></div>
 <div class="dict-table"><h3>⚙️ world <span class="tbl-meta">7 接口</span></h3>
 <table><thead><tr><th>方法</th><th>路径</th></tr></thead><tbody>

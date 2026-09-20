@@ -1,6 +1,6 @@
 <section class="dict-chapter" id="chapter16">
-<h2 class="ch-title">第 18 章 · 数据字典全集</h2>
-<p class="ch-desc">共 86 张表、772 个字段。字段类型与默认值取自生产库 <code>game_server</code> 实际结构；说明按源码实体语义整理。枚举类型取值详见<b>附录 B 枚举全集</b>。</p>
+<h2 class="ch-title">第 19 章 · 数据字典全集</h2>
+<p class="ch-desc">共 88 张表、787 个字段。字段类型与默认值取自生产库 <code>game_server</code> 实际结构；说明按源码实体语义整理。枚举类型取值详见<b>附录 B 枚举全集</b>。</p>
 <div class="dict-toc">
 <a href="#dict-account_login_logs">account_login_logs (7)</a>
 <a href="#dict-achievement_templates">achievement_templates (12)</a>
@@ -1213,5 +1213,28 @@
 <tr><td><code>note</code></td><td>varchar</td><td>是</td><td></td><td>备注</td></tr>
 <tr><td><code>created_by</code></td><td>varchar</td><td>是</td><td></td><td>创建人（GM 用户名）</td></tr>
 <tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-encounter_templates">
+<h3>📄 encounter_templates <span class="tbl-meta">10 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>nextval</td><td>主键</td></tr>
+<tr><td><code>scene_id</code></td><td>varchar</td><td>是</td><td></td><td>绑定场景ID（空=全场景通用）</td></tr>
+<tr><td><code>title</code></td><td>varchar</td><td>否</td><td></td><td>奇遇标题</td></tr>
+<tr><td><code>desc_text</code></td><td>varchar</td><td>否</td><td>''</td><td>奇遇描述</td></tr>
+<tr><td><code>trigger_rate</code></td><td>double precision</td><td>否</td><td>0.1</td><td>基础触发率（雨天按配置加成）</td></tr>
+<tr><td><code>cd_seconds</code></td><td>int</td><td>否</td><td>300</td><td>触发冷却（秒）</td></tr>
+<tr><td><code>choices_json</code></td><td>jsonb</td><td>否</td><td>'[]'</td><td>选项列表（id/label/effects）</td></tr>
+<tr><td><code>is_one_time</code></td><td>bool</td><td>否</td><td>false</td><td>一次性模板（每人仅触发一次）</td></tr>
+<tr><td><code>reward_json</code></td><td>jsonb</td><td>否</td><td>'{}'</td><td>预留奖励配置</td></tr>
+<tr><td><code>is_active</code></td><td>bool</td><td>否</td><td>true</td><td>启用开关</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-player_explorations">
+<h3>📄 player_explorations <span class="tbl-meta">5 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>nextval</td><td>主键</td></tr>
+<tr><td><code>player_id</code></td><td>varchar</td><td>否</td><td></td><td>玩家ID（uk 与 scene_id 联合唯一）</td></tr>
+<tr><td><code>scene_id</code></td><td>varchar</td><td>否</td><td></td><td>已探索场景ID</td></tr>
+<tr><td><code>times</code></td><td>int</td><td>否</td><td>1</td><td>到访次数（幂等递增）</td></tr>
+<tr><td><code>discovered_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>首次点亮时间</td></tr>
 </tbody></table></div>
 </section>
