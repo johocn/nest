@@ -2227,6 +2227,9 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
   </ul>
   <h3>13.9 GM 经济宏观看板（economy/dashboard，只读）</h3>
   <p><b>玩法定位</b>：给 GM 一个只读「经济仪表盘」量化经济健康度——金总量、近 7 日产出-消耗（净通胀/净通缩）、账号资产分布（P50/P90/max/活跃数）、被 BAN/TRADE_LIMIT 惩罚账号持仓冻结量、风控累计回收额。<code>GET /api/admin/v1/economy/dashboard</code>，AdminGuard 保护、只读聚合、不触发任何处置动作；金额用 numeric 避免 float 误差（关联流水见 11.12、多币种审计见 4.4）。</p>
+
+  <h3>13.10 交易结算对账（reconcile，只标记不自动动账）</h3>
+  <p><b>玩法定位</b>：日终对账「成交（trade_orders）/ 拍卖（auction_items, status=sold）/ 托管（escrow_agreements, released_at）/ 悬赏（bounties, acceptor_id）」四类结算与资产流水（transactions）一致性，防<b>重复放款 / 凭空资产</b>——结算少写或多写流水都逃不过审计。系统每日 <code>@Cron</code> 自动跑（前一日，SQL <code>now()</code> 定位），GM 可手动触发 <code>POST /api/admin/v1/reconcile/run</code>、结果列表 <code>GET /api/admin/v1/reconcile/results</code>（AdminGuard，手动触发留 gm-log）。按业务 id 反查流水，检出 <code>MISSING_FLOW</code>（缺流水）/ <code>AMOUNT_MISMATCH</code>（金额不符）/ <code>DUPLICATE_REF</code>（同源流水重复）三类异常，写入审计表 <code>reconcile_results</code>（stat_date + reconcile_type 幂等覆盖）。<b>只标记、不自动回滚 / 补发</b>——处置属人工决策（见 13.5 GM 审计），金额比较用 numeric/BigInt（见 4.4）。</p>
   </div>
 </section>
 

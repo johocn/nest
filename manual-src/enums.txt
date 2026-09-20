@@ -56,3 +56,4 @@ StatPeriod|DAILY=daily,WEEKLY=weekly,MONTHLY=monthly
 ConfigType|STRING=string,NUMBER=number,BOOLEAN=boolean,JSON=json
 RechargeStatus|PENDING=pending,PAID=paid,FAILED=failed
 MatchMode|RANKED=ranked,CASUAL=casual,PRACTICE=practice
+ReconcileType|TRADE=TRADE,AUCTION=AUCTION,ESCROW=ESCROW,BOUNTY=BOUNTY

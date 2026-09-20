@@ -178,6 +178,14 @@ if [ -n "$AT" ]; then
   echo "$R" | grep -q '"currencyStats":{' && ok "economy dashboard has currencyStats" || bad "economy dashboard currencyStats" "$R"
   echo "$R" | grep -q '"totalGold":"' && ok "economy dashboard currencyStats.totalGold present" || bad "economy dashboard totalGold" "$R"
   echo "$R" | grep -q '"assetDistribution":{' && echo "$R" | grep -q '"frozenAmount":"' && echo "$R" | grep -q '"recoveryToDate":"' && ok "economy dashboard full snapshot structure" || bad "economy dashboard snapshot fields" "$R"
+
+  # ---- 17. Plan5 交易结算对账审计：手动触发 + 结果列表 ----
+  R=$(curl -s -X POST $BASE/api/admin/v1/reconcile/run -H "$AA")
+  check_code "reconcile run triggered" 0 "$R"
+  echo "$R" | grep -q '"results":\[' && echo "$R" | grep -q '"checked":' && ok "reconcile run returns results" || bad "reconcile run results" "$R"
+  R=$(curl -s $BASE/api/admin/v1/reconcile/results -H "$AA")
+  check_code "reconcile results list" 0 "$R"
+  echo "$R" | grep -q '"list":\[' && ok "reconcile results list non-empty structure" || bad "reconcile results list" "$R"
 else
   echo "SKIP: admin points section (admin login failed, body=$R)" >&2
   ok "admin points skipped (no admin creds)"
