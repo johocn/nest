@@ -111,6 +111,13 @@ export const GameEvents = {
   SUPPORT_TICKET_CREATED: 'support.ticket.created',
   VOICE_ROOM_JOINED: 'voice.room.joined',
   VOICE_ROOM_LEFT: 'voice.room.left',
+
+  // 社交经济事件（阶段5批2）
+  SOCIAL_POINT_CHANGED: 'social.point.changed',
+  CHEST_OPENED: 'social.chest.opened',
+  GUIDE_TASK_COMPLETED: 'guide.task.completed',
+  LADDER_MATCH_SETTLED: 'ladder.match.settled',
+  LADDER_SEASON_SETTLED: 'ladder.season.settled',
 } as const;
 
 export type GameEvent = (typeof GameEvents)[keyof typeof GameEvents];

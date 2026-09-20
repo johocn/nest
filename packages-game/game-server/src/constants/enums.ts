@@ -25,6 +25,7 @@ export enum CurrencyType {
   FAVOR = 'favor', // 人情值
   GUILD_CONTRIB = 'guild_contrib', // 帮贡
   FACE = 'face', // 颜面
+  INFAMY = 'infamy', // 恶名值（红名判定）
 }
 
 export enum TransactionType {
@@ -596,6 +597,9 @@ export enum RechargeStatus {
   PENDING = 'pending',
   PAID = 'paid',
   FAILED = 'failed',
+  DELIVERED = 'delivered',
+  CANCELLED = 'cancelled',
+  EXPIRED = 'expired',
 }
 
 // ===== 匹配模块枚举 =====
@@ -740,4 +744,40 @@ export enum ReportHandleAction {
   WARN = 'WARN',
   MUTE = 'MUTE',
   BAN = 'BAN',
+}
+
+// ===== 社交经济枚举（阶段5批2） =====
+
+export enum SocialPointType {
+  EARN = 'earn',
+  SPEND = 'spend',
+}
+
+export enum SocialPointReason {
+  FRIEND_ADDED = 'friend_added',
+  KINSHIP_FORMED = 'kinship_formed',
+  GIFT_SENT = 'gift_sent',
+  GUILD_CONTRIB = 'guild_contrib',
+  INTEL_GAINED = 'intel_gained',
+  CHAT_SIGN_IN = 'chat_sign_in',
+  GUIDE_TASK = 'guide_task',
+  CHEST_EXCHANGE = 'chest_exchange',
+  SIGN_IN_MAKEUP = 'sign_in_makeup',
+  ADMIN = 'admin',
+}
+
+export enum SocialChestType {
+  WEEKLY_ACTIVITY = 'weekly_activity',
+  POINT_EXCHANGE = 'point_exchange',
+}
+
+export enum SocialChestStatus {
+  PENDING = 'pending',
+  OPENED = 'opened',
+}
+
+export enum GuideTaskStatus {
+  TODO = 'todo',
+  DONE = 'done',
+  REWARDED = 'rewarded',
 }
