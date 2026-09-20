@@ -220,7 +220,7 @@ export class PlayerService {
   /** 注册至今的整日天数，基于 created_at（DB now() 写入），在 SQL 端同源计算避免时区偏移 */
   async getElapsedDays(playerId: string): Promise<number> {
     const rows = await this.playerRepo.query(
-      `SELECT FLOOR((now() - created_at) / interval '1 day')::int AS elapsed FROM players WHERE id = $1`,
+      `SELECT FLOOR(EXTRACT(EPOCH FROM (now() - created_at)) / 86400)::int AS elapsed FROM players WHERE id = $1`,
       [playerId],
     );
     return rows?.[0]?.elapsed ?? 1;
