@@ -11,6 +11,7 @@ import { AuthService } from '@modules/auth/auth.service';
 import { PlayerService } from '@modules/player/player.service';
 import { AdminService } from '@modules/admin/admin.service';
 import { RiskWashFlow, RiskCase, RiskAccountScore, RiskWhitelist, RiskRecoverRecord } from './entities';
+import { detectWindow, buildRiskThresholds, type RiskThresholds } from './risk-detect';
 
 @Injectable()
 export class RiskWashService {
@@ -253,52 +254,21 @@ export class RiskWashService {
     );
     const usable = flows.filter((f) => !pairIds.has(f.id));
 
-    const pairTotal = new Map<string, { a2b: number; b2a: number; a: string; b: string }>();
-    for (const f of usable) {
-      const v = Number(f.value);
-      if (facepair(f.fromId, f.toId)) { /* noop */ }
-      const key = [f.fromId, f.toId].sort().join('|');
-      const rec = pairTotal.get(key) ?? { a2b: 0, b2a: 0, a: '', b: '' };
-      if (!rec.a) rec.a = f.fromId;
-      if (!rec.b) rec.b = f.toId;
-      if (f.fromId === rec.a) rec.a2b += v; else rec.b2a += v;
-      pairTotal.set(key, rec);
-    }
-
-    const pairMin = await this.readNumber('risk.pair_min_amount', 0);
-    const roundTotal = await this.readNumber('risk.roundtrip_total_min', 1000);
-    const onewayBig = await this.readNumber('risk.oneway_big_amount', 3000);
-    const backflow = await this.readNumber('risk.oneway_backflow_ratio', 0);
-
-    for (const { a, b, a2b, b2a } of pairTotal.values()) {
-      const total = a2b + b2a;
-      const m = Math.max(a2b, b2a) || 1;
-      if (a2b >= pairMin && b2a >= pairMin && total >= roundTotal && Math.abs(a2b - b2a) / m <= 0.2) {
-        await this.openCase(RiskCaseType.ROUND_TRIP, 60, a, b, { a2b, b2a }, usable);
-      }
-      if (a2b >= onewayBig && b2a / (a2b || 1) <= backflow) {
-        await this.openCase(RiskCaseType.ONE_WAY, 40, a, b, { a2b, b2a }, usable);
-      }
-    }
-    // 价值异动：同 assetKey 短时对倒数≥freq 且价格偏离均值>ratio
-    const devRatio = await this.readNumber('risk.price_dev_ratio', 2);
-    const devFreq = await this.readNumber('risk.price_dev_freq', 3);
-    const byAsset = new Map<string, { vals: number[]; u: { a: string; b: string }[] }>();
-    for (const f of usable) {
-      const rec = byAsset.get(f.assetKey) ?? { vals: [], u: [] };
-      rec.vals.push(Number(f.value));
-      rec.u.push({ a: f.fromId, b: f.toId });
-      byAsset.set(f.assetKey, rec);
-    }
-    for (const [asset, { vals, u }] of byAsset.entries()) {
-      if (vals.length < devFreq) continue;
-      const mean = vals.reduce((s, n) => s + n, 0) / vals.length;
-      for (let i = 0; i < vals.length; i++) {
-        if (mean > 0 && vals[i] > mean * devRatio) {
-          await this.openCase(RiskCaseType.PRICE_DIVERGENCE, 30, u[i].a, u[i].b, { asset, value: vals[i], mean }, usable);
-          break;
-        }
-      }
+    // 检测口径统一走风险检测纯函数（与只读回放同源），阈值由 remote_configs 读入注入
+    const thresholds: RiskThresholds = buildRiskThresholds({
+      'risk.pair_min_amount': await this.readNumber('risk.pair_min_amount', 0),
+      'risk.roundtrip_total_min': await this.readNumber('risk.roundtrip_total_min', 1000),
+      'risk.oneway_big_amount': await this.readNumber('risk.oneway_big_amount', 3000),
+      'risk.oneway_backflow_ratio': await this.readNumber('risk.oneway_backflow_ratio', 0),
+      'risk.price_dev_ratio': await this.readNumber('risk.price_dev_ratio', 2),
+      'risk.price_dev_freq': await this.readNumber('risk.price_dev_freq', 3),
+      'risk.score_cap': await this.readNumber('risk.score_cap', 100),
+      'risk.watch_score': await this.readNumber('risk.watch_score', 40),
+      'risk.high_score': await this.readNumber('risk.high_score', 70),
+    });
+    const { signals } = detectWindow(usable, thresholds);
+    for (const s of signals) {
+      await this.openCase(s.caseType, s.score, s.fromId, s.toId, s.detail, usable);
     }
     return usable.length > 0 ? 1 : 0; // 本次产生的 case 数由 openCase 内部累计返回更精确，此处返回流量批数（取样用）
   }
@@ -562,8 +532,4 @@ export class RiskWashService {
     this.logger.log(`risk case lock case=${caseId} level=${level} by=${operator} applied=${applied.length}`);
     return { caseId, applied };
   }
-}
-
-function facepair(a: string, b: string): boolean {
-  return a === b;
 }
