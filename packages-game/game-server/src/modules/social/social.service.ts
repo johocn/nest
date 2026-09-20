@@ -52,6 +52,7 @@ import {
 import { CacheService } from '@cache/cache.service';
 import { EconomyService } from '@modules/economy/economy.service';
 import { VipService } from '@modules/vip/vip.service';
+import { RiskGateService } from '@modules/risk/risk-gate.service';
 
 export interface DonateResult {
   donation: GuildDonate;
@@ -114,6 +115,7 @@ export class SocialService {
     private readonly inventoryService: InventoryService,
     private readonly playerService: PlayerService,
     private readonly eventBus: EventBusService,
+    private readonly riskGateService: RiskGateService,
     @Optional() private readonly random: () => number = Math.random,
   ) {}
 
@@ -1484,6 +1486,8 @@ export class SocialService {
     if (!template) {
       throw new GameException(ErrorCodes.GIFT_NOT_FOUND, '礼物模板不存在');
     }
+
+    await this.riskGateService.assertTransfer(playerId, String(template.giftWeight), 'social_points');
 
     const capKey = `gift:send:${playerId}`;
     const sent = parseInt((await this.cacheService.get(capKey)) ?? '0', 10);

@@ -33,6 +33,7 @@ import { InventoryModule } from '@modules/inventory/inventory.module';
 import { PlayerModule } from '@modules/player/player.module';
 import { ConfigManageModule } from '@modules/config/config.module';
 import { VipModule } from '@modules/vip/vip.module';
+import { RiskModule } from '@modules/risk/risk.module';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { VipModule } from '@modules/vip/vip.module';
     PlayerModule,
     ConfigManageModule,
     VipModule,
+    RiskModule,
   ],
   controllers: [SocialController, SocialAdminController],
   providers: [

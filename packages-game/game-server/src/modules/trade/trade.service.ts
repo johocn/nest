@@ -31,6 +31,7 @@ import { SocialService } from '@modules/social/social.service';
 import { CharacterService } from '@modules/character/character.service';
 import { CombatService } from '@modules/combat/combat.service';
 import { VipService } from '@modules/vip/vip.service';
+import { RiskGateService } from '@modules/risk/risk-gate.service';
 
 export interface CreateTradeParams {
   sellerId: string;
@@ -74,6 +75,7 @@ export class TradeService {
     private readonly characterService: CharacterService,
     private readonly combatService: CombatService,
     private readonly vipService: VipService,
+    private readonly riskGateService: RiskGateService,
   ) {}
 
   // ===== Trade Order =====
@@ -152,6 +154,7 @@ export class TradeService {
   // ===== Auction =====
 
   async listAuction(params: ListAuctionParams): Promise<AuctionItem> {
+    await this.riskGateService.assertAuction(params.sellerId, params.startPrice);
     const exclusive = params.exclusive ?? false;
     if (exclusive) {
       const access = await this.vipService.getPrivilegeValue(

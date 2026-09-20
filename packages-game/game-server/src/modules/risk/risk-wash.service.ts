@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThan } from 'typeorm';
-import { TradeStatus, RiskBizType, RiskCaseType, RiskLevel, RiskCaseStatus, ConfigType } from '@constants/enums';
+import { TradeStatus, RiskBizType, RiskFlowClass, RiskCaseType, RiskLevel, RiskCaseStatus, ConfigType } from '@constants/enums';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
 import { ConfigManageService } from '@modules/config/config.service';
@@ -237,6 +237,32 @@ export class RiskWashService {
 
   async removeWhitelist(playerId: string): Promise<void> {
     await this.whitelistRepo.delete({ playerId });
+  }
+
+  async isWhitelisted(playerId: string): Promise<boolean> {
+    const w = await this.whitelistRepo.findOne({ where: { playerId } });
+    return !!w;
+  }
+
+  async readConfig(key: string): Promise<string | null> {
+    try {
+      const c = await this.configService.getConfig(key);
+      return c && c.value != null ? String(c.value) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async sumTodayValue(playerId: string, assetKey: string, flowClass: RiskFlowClass): Promise<number> {
+    const rows = await this.washRepo
+      .createQueryBuilder('w')
+      .select('COALESCE(SUM(CAST(w.value AS bigint)),0)', 'sum')
+      .where('w.from_id = :pid AND w.asset_key = :key AND w.flow_class = :cls', {
+        pid: playerId, key: assetKey, cls: flowClass,
+      })
+      .andWhere("w.created_at >= date_trunc('day', now())")
+      .getRawOne();
+    return Number(rows?.sum ?? 0);
   }
 }
 

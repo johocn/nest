@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { TradeOrder } from '@modules/trade/entities/trade-order.entity';
 import { ConfigManageModule } from '@modules/config/config.module';
 import { RiskWashService } from './risk-wash.service';
+import { RiskGateService } from './risk-gate.service';
 import { RiskAdminController } from './risk-admin.controller';
 import { RiskWashFlow, RiskCase, RiskAccountScore, RiskWhitelist, RiskRecoverRecord } from './entities';
 
@@ -19,7 +20,7 @@ import { RiskWashFlow, RiskCase, RiskAccountScore, RiskWhitelist, RiskRecoverRec
     ConfigManageModule,
   ],
   controllers: [RiskAdminController],
-  providers: [RiskWashService],
-  exports: [RiskWashService, RiskRecoverRecord],
+  providers: [RiskWashService, RiskGateService],
+  exports: [RiskWashService, RiskGateService, RiskRecoverRecord],
 })
 export class RiskModule {}

@@ -19,6 +19,7 @@ import { SocialService } from '@modules/social/social.service';
 import { CharacterService } from '@modules/character/character.service';
 import { CombatService } from '@modules/combat/combat.service';
 import { VipService } from '@modules/vip/vip.service';
+import { RiskGateService } from '@modules/risk/risk-gate.service';
 import { GameEvents } from '@event-bus/game-events';
 import type { Repository } from 'typeorm';
 
@@ -156,6 +157,10 @@ describe('TradeService', () => {
         { provide: CharacterService, useValue: characterService },
         { provide: CombatService, useValue: combatService },
         { provide: VipService, useValue: vipService },
+        {
+          provide: RiskGateService,
+          useValue: { assertAuction: jest.fn().mockResolvedValue(undefined), assertTransfer: jest.fn() },
+        },
       ],
     }).compile();
 

@@ -26,6 +26,7 @@ import { EventBusService } from '@event-bus/event-bus.service';
 import { CacheService } from '@cache/cache.service';
 import { EconomyService } from '@modules/economy/economy.service';
 import { VipService } from '@modules/vip/vip.service';
+import { RiskGateService } from '@modules/risk/risk-gate.service';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
 import { GameEvents } from '@event-bus/game-events';
@@ -252,6 +253,10 @@ describe('SocialService', () => {
         {
           provide: VipService,
           useValue: { getPrivilegeValue: jest.fn().mockResolvedValue(0) },
+        },
+        {
+          provide: RiskGateService,
+          useValue: { assertTransfer: jest.fn().mockResolvedValue(undefined) },
         },
         {
           provide: CharacterService,

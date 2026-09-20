@@ -17,6 +17,7 @@ import { SocialService } from '@modules/social/social.service';
 import { CharacterService } from '@modules/character/character.service';
 import { CombatService } from '@modules/combat/combat.service';
 import { VipService } from '@modules/vip/vip.service';
+import { RiskGateService } from '@modules/risk/risk-gate.service';
 import { ErrorCodes } from '@constants/error-codes';
 import { CurrencyType, BountyStatus, CombatResult } from '@constants/enums';
 import type { Repository } from 'typeorm';
@@ -77,6 +78,10 @@ describe('TradeService Bounty', () => {
         {
           provide: VipService,
           useValue: { getPrivilegeValue: jest.fn().mockResolvedValue(0) },
+        },
+        {
+          provide: RiskGateService,
+          useValue: { assertAuction: jest.fn().mockResolvedValue(undefined), assertTransfer: jest.fn() },
         },
       ],
     }).compile();
