@@ -654,12 +654,14 @@
 | P0-2 | 成就领奖不发奖（已修复） | achievement.service.ts:97-105 | 发奖丢失，状态不可回滚 |
 | P0-3 | 排行 score 恒 0（已修复） | ranking.service.ts:46-54,74-87 | 榜单与快照数据均无分值 |
 | P0-4 | 配置字段不生效（活动条件/人数上限、任务前置/限次/自动发奖、公告时间窗） | activity-template.entity.ts:45-49；quest-template.entity.ts:42-55；notice.entity.ts:22-48 | 配置了不生效，运营误判 |
-| P0-5 | GM token 无过期 | admin-auth.service.ts:57-59 | 泄露即永久可用 |
-| P0-6 | 无 logout/无会话管理/无改密 | auth 模块整体 | 无法主动失效凭证、无法踢下线 |
+| P0-5 | GM token 无过期（已修复） | admin-auth.service.ts:57-59 | 泄露即永久可用 |
+| P0-6 | 无 logout/无会话管理/无改密（已修复） | auth 模块整体 | 无法主动失效凭证、无法踢下线 |
 | P0-7 | 交易不校验绑定道具、无手续费/成交税 | trade.service.ts:156-188 | 绑定道具可流通 + 经济无回收泵 |
 | P0-8 | GM 后台缺关键面板（封禁处置/举报处置/风控回收/对账/经济看板/活动灰度） | admin/index.html:435-446 vs 60+ admin 路由 | 运营能力只能 curl |
 
 **修复进度（2026-09-21）**：P0-1（成就进度不推进）、P0-2（成就领奖不发奖）、P0-3（排行 score 恒 0）**已修复**。实施计划见 `docs/superpowers/plans/2026-09-20-achievement-ranking-fix.md`，提交 `6c1f6e7b3`/`518eed91a`/`eca559c8c`/`d1e1d3e53`/`573c43771`；回归 77 suites / 915 tests 全绿、`tsc --noEmit` 0 error、本地 `nest build` 通过。**尚未部署到生产**，冒烟未执行。P0-4 ~ P0-8 仍待修复。
+
+**修复进度（2026-09-21，第二批）**：P0-5（GM token 无过期）、P0-6（无 logout/无会话管理/无改密）**已修复**（代码层）。实施计划见 `docs/superpowers/plans/2026-09-21-account-security-fix.md`，提交 `48bc54ffc`/`6422151c1`/`aebcfe8be`/`a6b4de9fd`/`2f15e664f`/`457aedad4`/`4589895ef`/`bfcdb09c5`。落地要点：`AdminUser` 加 `token_version` 列 + 全局 `AdminSessionService`（`AdminGuard` 每请求校验存在/启用/版本一致）；GM token 固定 12h（`JWT_ADMIN_EXPIRES_IN`）；新增 GM 登出/改密、玩家登出/改密、GM 踢玩家下线共 5 条路由，失效统一为「tokenVersion +1」。回归 **80 suites / 939 tests 全绿**、`tsc --noEmit` 0 error。**尚未部署到生产**（Task 7 待办：生产库需先 `ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS token_version int NOT NULL DEFAULT 0;` 再加替换 dist 重启），冒烟脚本 `scripts/smoke-p0b-auth.sh` 未执行。注意：上线后存量 GM token 全部失效，GM 需重新登录一次（预期行为）。剩余 P0-4 / P0-7 / P0-8 待修复。
 
 ### P1 · 玩法骨架级（设计核心玩法，代码成片空白）
 
@@ -690,7 +692,7 @@
 
 风险集中在两点：
 
-1. **已上线的功能里有 8 处"看起来能用、实际不对"**（P0），其中成就与排行属对玩家可见的功能性缺陷。**进度（2026-09-21）**：其中 3 处（P0-1 成就进度不推进 / P0-2 成就领奖不发奖 / P0-3 排行 score 恒 0）已修复并回归通过，详见本节 P0 清单下方的修复进度说明；剩余 P0-4 ~ P0-8 待修复。
+1. **已上线的功能里有 8 处"看起来能用、实际不对"**（P0），其中成就与排行属对玩家可见的功能性缺陷。**进度（2026-09-21）**：其中 5 处已修复并回归通过——P0-1 成就进度不推进 / P0-2 成就领奖不发奖 / P0-3 排行 score 恒 0（第一批），P0-5 GM token 无过期 / P0-6 无 logout·会话管理·改密（第二批），均详见本节 P0 清单下方的修复进度说明；剩余 P0-4 / P0-7 / P0-8 待修复。
 2. **手册描绘的核心玩法（战斗数值、武学养成、场景社交、社交经济）成片未实现**，第 5/6/8 章合计 178 项的完备度最低——这决定产品能否成立，而非体验优劣。
 
 建议顺序：P0 修复（小而确定，直接恢复既有功能）→ P1 按玩法域分批立项（每批独立可上线，参考阶段 5 批 2 的交付节奏）→ P2 长尾随版本推进。
