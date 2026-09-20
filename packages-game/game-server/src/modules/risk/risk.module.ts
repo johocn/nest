@@ -21,6 +21,6 @@ import { RiskWashFlow, RiskCase, RiskAccountScore, RiskWhitelist, RiskRecoverRec
   ],
   controllers: [RiskAdminController],
   providers: [RiskWashService, RiskGateService],
-  exports: [RiskWashService, RiskGateService, RiskRecoverRecord],
+  exports: [RiskWashService, RiskGateService],
 })
 export class RiskModule {}
