@@ -5,7 +5,11 @@ import { AchievementTemplate, PlayerAchievement } from './entities';
 import { EventBusService } from '@event-bus/event-bus.service';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
-import { AchievementCategory, AchievementCondition } from '@constants/enums';
+import {
+  AchievementCategory,
+  AchievementCondition,
+  CurrencyType,
+} from '@constants/enums';
 import type { Repository } from 'typeorm';
 import { EconomyService } from '@modules/economy/economy.service';
 import { GameEvents } from '@event-bus/game-events';
@@ -285,6 +289,82 @@ describe('AchievementService', () => {
 
       await expect(service.claimReward('p1', 'a1')).rejects.toThrow(
         GameException,
+      );
+    });
+
+    it('should deliver currencies from flat rewardJson keys', async () => {
+      templateRepo.findOne.mockResolvedValue({
+        id: 'a1',
+        rewardJson: { gold: 500, diamond: 10, unknownKey: 1 },
+      } as any);
+      playerAchievementRepo.findOne.mockResolvedValue({
+        id: 'pa1',
+        playerId: 'p1',
+        achievementId: 'a1',
+        isUnlocked: true,
+        isRewardClaimed: false,
+      } as any);
+
+      const result = await service.claimReward('p1', 'a1');
+
+      expect(economyService.addCurrency).toHaveBeenCalledTimes(2);
+      expect(economyService.addCurrency).toHaveBeenCalledWith(
+        'p1',
+        CurrencyType.GOLD,
+        500,
+        'achievement_reward',
+        'achievement_reward:p1:a1',
+        'a1',
+      );
+      expect(economyService.addCurrency).toHaveBeenCalledWith(
+        'p1',
+        CurrencyType.DIAMOND,
+        10,
+        'achievement_reward',
+        'achievement_reward:p1:a1',
+        'a1',
+      );
+      expect(result.isRewardClaimed).toBe(true);
+    });
+
+    it('should reject when the atomic claim loses the race', async () => {
+      templateRepo.findOne.mockResolvedValue({
+        id: 'a1',
+        rewardJson: { gold: 1 },
+      } as any);
+      playerAchievementRepo.findOne.mockResolvedValue({
+        id: 'pa1',
+        playerId: 'p1',
+        achievementId: 'a1',
+        isUnlocked: true,
+        isRewardClaimed: false,
+      } as any);
+      playerAchievementRepo.update.mockResolvedValue({ affected: 0 } as any);
+
+      await expect(service.claimReward('p1', 'a1')).rejects.toThrow(
+        GameException,
+      );
+      expect(economyService.addCurrency).not.toHaveBeenCalled();
+    });
+
+    it('should roll back the claim flag when delivery fails', async () => {
+      templateRepo.findOne.mockResolvedValue({
+        id: 'a1',
+        rewardJson: { gold: 1 },
+      } as any);
+      playerAchievementRepo.findOne.mockResolvedValue({
+        id: 'pa1',
+        playerId: 'p1',
+        achievementId: 'a1',
+        isUnlocked: true,
+        isRewardClaimed: false,
+      } as any);
+      economyService.addCurrency.mockRejectedValue(new Error('db down'));
+
+      await expect(service.claimReward('p1', 'a1')).rejects.toThrow('db down');
+      expect(playerAchievementRepo.update).toHaveBeenLastCalledWith(
+        { id: 'pa1' },
+        { isRewardClaimed: false },
       );
     });
   });

@@ -175,10 +175,61 @@ export class AchievementService {
     });
     const reward = template?.rewardJson ?? {};
 
-    record.isRewardClaimed = true;
-    await this.playerAchievementRepo.save(record);
+    // 原子占位：并发/连点时只有一个请求能把标记从 false 改成 true
+    const claimed = await this.playerAchievementRepo.update(
+      { id: record.id, isRewardClaimed: false },
+      { isRewardClaimed: true },
+    );
+    if (!claimed.affected) {
+      throw new GameException(
+        ErrorCodes.ACHIEVEMENT_ALREADY_UNLOCKED,
+        '奖励已领取',
+      );
+    }
+
+    try {
+      await this.deliverReward(playerId, achievementId, reward);
+    } catch (err) {
+      await this.playerAchievementRepo.update(
+        { id: record.id },
+        { isRewardClaimed: false },
+      );
+      throw err;
+    }
 
     return { reward, isRewardClaimed: true };
+  }
+
+  /**
+   * 发放成就奖励。rewardJson 采用扁平货币键约定（如 { gold: 500, diamond: 10 }），
+   * 未识别的键记 warning，避免配置静默失效。
+   */
+  private async deliverReward(
+    playerId: string,
+    achievementId: string,
+    reward: Record<string, any>,
+  ): Promise<void> {
+    const supported = Object.values(CurrencyType) as string[];
+
+    for (const [key, raw] of Object.entries(reward ?? {})) {
+      if (!supported.includes(key)) {
+        this.logger.warn(
+          `Unsupported achievement reward key: ${key} (achievement=${achievementId})`,
+        );
+        continue;
+      }
+      const amount = Number(raw);
+      if (!Number.isFinite(amount) || amount <= 0) continue;
+
+      await this.economyService.addCurrency(
+        playerId,
+        key as CurrencyType,
+        amount,
+        'achievement_reward',
+        `achievement_reward:${playerId}:${achievementId}`,
+        achievementId,
+      );
+    }
   }
 
   async getPlayerAchievements(playerId: string): Promise<PlayerAchievement[]> {
