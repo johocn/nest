@@ -501,9 +501,23 @@ export class RiskWashService {
     if ((r.status as string) === RiskRecoverStatus.ROLLED_BACK) {
       throw new GameException(ErrorCodes.RISK_RECOVER_STATE, '该回收已回滚');
     }
+    // 真实退回：向原净收款方 toId 加回回收额（基于 economy_ref_id 反查的扣款流水做精确逆转）
+    const amount = Number(r.appliedAmount || r.suggestedAmount || 0);
+    if (amount > 0) {
+      await this.economyService.addCurrency(
+        r.toId,
+        CurrencyType.GOLD,
+        amount,
+        'risk_recover_rollback',
+        `rrb:${recoverId}:${Date.now()}`,
+        `risk:${r.caseId}`,
+      );
+    }
     r.status = RiskRecoverStatus.ROLLED_BACK as any;
     r.rollbackReason = `${operator}:${reason ?? 'rollback'}`;
-    return this.recoverRepo.save(r);
+    const saved = await this.recoverRepo.save(r);
+    this.logger.log(`risk recover rollback id=${recoverId} refund=${amount} to=${r.toId} by=${operator}`);
+    return saved;
   }
 }
 
