@@ -51,6 +51,14 @@ export class PaymentController {
     return this.paymentService.simulatePay(orderNo, player.playerId);
   }
 
+  @Post('order/:orderNo/cancel')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '取消待支付订单' })
+  cancelOrder(@CurrentPlayer() player: any, @Param('orderNo') orderNo: string) {
+    return this.paymentService.cancelOrder(orderNo, player.playerId);
+  }
+
   @Get('orders')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -86,6 +94,14 @@ export class PaymentController {
     @Query('limit') limit: number = 20,
   ) {
     return this.paymentService.getAdminOrderList(Number(page), Number(limit));
+  }
+
+  @Post('admin/orders/:id/deliver')
+  @UseGuards(AdminGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '[管理] 补单发货' })
+  adminDeliver(@Param('id') id: string) {
+    return this.paymentService.adminDeliver('system', id);
   }
 
   @Post('admin/products')

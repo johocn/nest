@@ -4,6 +4,8 @@ import { Repository } from 'typeorm';
 import { RechargeOrder, RechargeProduct } from './entities';
 import { EconomyService } from '@modules/economy/economy.service';
 import { PlayerService } from '@modules/player/player.service';
+import { VipService } from '@modules/vip/vip.service';
+import { ConfigManageService } from '@modules/config/config.service';
 import { EventBusService } from '@event-bus/event-bus.service';
 import { GameEvents } from '@event-bus/game-events';
 import { GameException } from '@common/exceptions/game.exception';
@@ -17,6 +19,8 @@ export class PaymentService {
   private readonly callbackSecret =
     process.env.PAYMENT_CALLBACK_SECRET || 'mock-secret';
 
+  private readonly ORDER_TTL_MS = 30 * 60 * 1000; // 30 分钟超时
+
   constructor(
     @InjectRepository(RechargeOrder)
     private readonly orderRepo: Repository<RechargeOrder>,
@@ -25,6 +29,8 @@ export class PaymentService {
     private readonly economyService: EconomyService,
     private readonly eventBus: EventBusService,
     private readonly playerService: PlayerService,
+    private readonly vipService: VipService,
+    private readonly configService: ConfigManageService,
   ) {}
 
   async createOrder(
@@ -62,7 +68,8 @@ export class PaymentService {
     if (order.playerId !== playerId) {
       throw new GameException(ErrorCodes.FORBIDDEN, '无权操作此订单');
     }
-    if (order.status === RechargeStatus.PAID) {
+    await this.assertOrderActive(order);
+    if (order.status !== RechargeStatus.PENDING) {
       throw new GameException(ErrorCodes.ORDER_ALREADY_PAID, '订单已支付');
     }
 
@@ -92,11 +99,81 @@ export class PaymentService {
       throw new GameException(ErrorCodes.PAYMENT_VERIFY_FAILED, '签名验证失败');
     }
 
-    if (order.status === RechargeStatus.PAID) {
+    await this.assertOrderActive(order);
+    if (order.status !== RechargeStatus.PENDING) {
       throw new GameException(ErrorCodes.ORDER_ALREADY_PAID, '订单已支付');
     }
 
-    // Deliver rewards
+    await this.deliverRewards(order);
+
+    order.status = RechargeStatus.DELIVERED;
+    order.callbackAt = new Date();
+    const saved = await this.orderRepo.save(order);
+
+    this.eventBus.emit(GameEvents.RECHARGE_SUCCESS, {
+      playerId: order.playerId,
+      orderNo: order.orderNo,
+      amount: order.amount,
+    });
+
+    return saved;
+  }
+
+  async cancelOrder(orderNo: string, playerId: string): Promise<RechargeOrder> {
+    const order = await this.orderRepo.findOne({ where: { orderNo } });
+    if (!order) {
+      throw new GameException(ErrorCodes.ORDER_NOT_FOUND, '订单不存在');
+    }
+    if (order.playerId !== playerId) {
+      throw new GameException(ErrorCodes.FORBIDDEN, '无权操作此订单');
+    }
+    await this.assertOrderActive(order);
+    if (order.status !== RechargeStatus.PENDING) {
+      throw new GameException(ErrorCodes.ORDER_CANCEL_INVALID, '仅待支付订单可取消');
+    }
+    order.status = RechargeStatus.CANCELLED;
+    return this.orderRepo.save(order);
+  }
+
+  async adminDeliver(adminId: string, orderId: string): Promise<RechargeOrder> {
+    const order = await this.orderRepo.findOne({ where: { id: orderId } });
+    if (!order) {
+      throw new GameException(ErrorCodes.ORDER_NOT_FOUND, '订单不存在');
+    }
+    if (order.status === RechargeStatus.DELIVERED) {
+      throw new GameException(ErrorCodes.ORDER_DELIVERED, '订单已发货');
+    }
+    await this.assertOrderActive(order);
+    await this.deliverRewards(order);
+    order.status = RechargeStatus.DELIVERED;
+    order.callbackAt = order.callbackAt ?? new Date();
+    const saved = await this.orderRepo.save(order);
+    this.eventBus.emit(GameEvents.RECHARGE_SUCCESS, {
+      playerId: order.playerId,
+      orderNo: order.orderNo,
+      amount: order.amount,
+    });
+    return saved;
+  }
+
+  private async assertOrderActive(order: RechargeOrder): Promise<void> {
+    if (order.status === RechargeStatus.EXPIRED) {
+      throw new GameException(ErrorCodes.ORDER_EXPIRED, '订单已超时');
+    }
+    if (order.status === RechargeStatus.CANCELLED) {
+      throw new GameException(ErrorCodes.ORDER_CANCEL_INVALID, '订单已取消');
+    }
+    if (
+      order.status === RechargeStatus.PENDING &&
+      Date.now() - order.createdAt.getTime() > this.ORDER_TTL_MS
+    ) {
+      order.status = RechargeStatus.EXPIRED;
+      await this.orderRepo.save(order);
+      throw new GameException(ErrorCodes.ORDER_EXPIRED, '订单已超时');
+    }
+  }
+
+  private async deliverRewards(order: RechargeOrder): Promise<void> {
     const product = await this.productRepo.findOne({
       where: { id: order.productId },
     });
@@ -120,21 +197,25 @@ export class PaymentService {
         order.id,
       );
     }
-
     await this.playerService.addRecharge(order.playerId, order.amount);
+    const vipExpPerCny = Number(
+      await this.readConfigNumber('payment.vip_exp_per_cny', 1),
+    );
+    if (vipExpPerCny > 0) {
+      await this.vipService.addVipExp(
+        order.playerId,
+        Math.floor(Number(order.amount) * vipExpPerCny),
+      );
+    }
+  }
 
-    order.status = RechargeStatus.PAID;
-    order.callbackAt = new Date();
-    const saved = await this.orderRepo.save(order);
-
-    this.eventBus.emit(GameEvents.RECHARGE_SUCCESS, {
-      playerId: order.playerId,
-      orderNo: order.orderNo,
-      amount: order.amount,
-      reward: product?.rewardJson,
-    });
-
-    return saved;
+  private async readConfigNumber(key: string, fallback: number): Promise<number> {
+    try {
+      const config = await this.configService.getConfig(key);
+      return Number(config.value) || fallback;
+    } catch {
+      return fallback;
+    }
   }
 
   private generateSignature(orderNo: string, amount: string): string {
