@@ -5,6 +5,7 @@ import { ActivityModule } from '@modules/activity/activity.module';
 import { RankingModule } from '@modules/ranking/ranking.module';
 import { ConnectionModule } from '@modules/gateway/connection.module';
 import { MatchmakingModule } from '@modules/matchmaking/matchmaking.module';
+import { RiskModule } from '@modules/risk/risk.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { MatchmakingModule } from '@modules/matchmaking/matchmaking.module';
     RankingModule,
     ConnectionModule,
     MatchmakingModule,
+    RiskModule,
   ],
   providers: [SchedulerService],
 })

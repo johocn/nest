@@ -6,6 +6,7 @@ import { ConnectionService } from '@modules/gateway/connection.service';
 import { MatchmakingService } from '@modules/matchmaking/matchmaking.service';
 import { RankingType } from '@constants/enums';
 import { MatchMode } from '@constants/enums';
+import { RiskWashService } from '@modules/risk/risk-wash.service';
 
 @Injectable()
 export class SchedulerService {
@@ -16,6 +17,7 @@ export class SchedulerService {
     private readonly activityService: ActivityService,
     private readonly connectionService: ConnectionService,
     private readonly matchmakingService: MatchmakingService,
+    private readonly riskWashService: RiskWashService,
   ) {}
 
   @Cron('0 0 * * *')
@@ -69,6 +71,18 @@ export class SchedulerService {
           (err as Error).message,
         );
       }
+    }
+  }
+
+  @Cron('*/10 * * * *')
+  async riskScan() {
+    try {
+      const r = await this.riskWashService.scan();
+      if (r.ingested || r.cases) {
+        this.logger.log(`Risk scan: ingested=${r.ingested} cases=${r.cases}`);
+      }
+    } catch (err) {
+      this.logger.error('Risk scan failed', (err as Error).message);
     }
   }
 }
