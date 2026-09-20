@@ -4,6 +4,8 @@ import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import { RiskAdminController } from './risk-admin.controller';
 import { RiskWashService } from './risk-wash.service';
+import { RiskReplayService } from './risk-replay.service';
+import { AdminService } from '@modules/admin/admin.service';
 
 describe('RiskAdminController', () => {
   let ctrl: RiskAdminController;
@@ -20,12 +22,20 @@ describe('RiskAdminController', () => {
     rollback: jest.fn(),
     lock: jest.fn(),
   };
+  const replayService = {
+    replay: jest.fn().mockResolvedValue({ iterated: 0, hitCount: 0, hitAccounts: [], scoreBuckets: { normal: 0, watch: 0, high: 0 } }),
+  };
+  const adminService = {
+    logOperation: jest.fn().mockResolvedValue({}),
+  };
 
   beforeAll(async () => {
     const mod = await Test.createTestingModule({
       controllers: [RiskAdminController],
       providers: [
         { provide: RiskWashService, useValue: svc },
+        { provide: RiskReplayService, useValue: replayService },
+        { provide: AdminService, useValue: adminService },
         { provide: JwtService, useValue: { verify: jest.fn() } },
         { provide: ConfigService, useValue: { get: jest.fn(() => 'secret') } },
         Reflector,
@@ -76,5 +86,30 @@ describe('RiskAdminController', () => {
     svc.lock.mockResolvedValue({ caseId: 'c1', applied: [{ playerId: 'p1', level: 'ban', appliedAt: new Date() }] });
     await ctrl.lock('c1', { level: 'ban', reason: '风控封禁' } as any, { username: 'GM1' } as any);
     expect(svc.lock).toHaveBeenCalledWith('c1', 'GM1', 'ban', '风控封禁');
+  });
+
+  it('replay 合法参数调用回放服务并留 gm-log', async () => {
+    replayService.replay.mockResolvedValue({
+      iterated: 5, hitCount: 1,
+      hitAccounts: [{ playerId: 'A', score: 60, level: 'watch', signals: [] }],
+      scoreBuckets: { normal: 0, watch: 1, high: 0 },
+    });
+    const res = await ctrl.replay(
+      { since: new Date('2026-01-01T00:00:00Z'), until: new Date('2026-01-02T00:00:00Z'), configOverrides: { 'risk.high_score': 50 } } as any,
+      { username: 'GM1' } as any,
+    );
+    expect(replayService.replay).toHaveBeenCalled();
+    expect(adminService.logOperation).toHaveBeenCalledWith(expect.objectContaining({ operation: 'risk.replay', adminId: 'GM1' }));
+    expect(res.hitCount).toBe(1);
+  });
+
+  it('replay 非法 override 键抛 92901 且不触达回放服务', async () => {
+    await expect(
+      ctrl.replay(
+        { since: new Date('2026-01-01T00:00:00Z'), until: new Date('2026-01-02T00:00:00Z'), configOverrides: { bogus: 1 } } as any,
+        { username: 'GM1' } as any,
+      ),
+    ).rejects.toMatchObject({ response: { code: 92901 } });
+    expect(replayService.replay).not.toHaveBeenCalled();
   });
 });

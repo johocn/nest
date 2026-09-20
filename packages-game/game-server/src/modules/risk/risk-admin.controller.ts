@@ -1,10 +1,13 @@
 import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { RiskWashService } from './risk-wash.service';
-import { RiskDisposeDto, RiskWhitelistDto, RiskRecoverDto, RiskRollbackDto, RiskRecoverProposalDto, RiskLockDto } from './dto/risk-admin.dto';
+import { RiskReplayService } from './risk-replay.service';
+import { RiskDisposeDto, RiskWhitelistDto, RiskRecoverDto, RiskRollbackDto, RiskRecoverProposalDto, RiskLockDto, RiskReplayDto } from './dto/risk-admin.dto';
+import { assertValidThresholdOverrides } from './risk-detect';
 import { AdminGuard } from '@common/guards/admin.guard';
 import { CurrentAdmin } from '@common/decorators/current-admin.decorator';
 import type { AdminJwtPayload } from '@common/guards/admin.guard';
+import { AdminService } from '@modules/admin/admin.service';
 import { RiskCaseStatus } from '@constants/enums';
 
 @ApiTags('Admin-Risk')
@@ -12,7 +15,11 @@ import { RiskCaseStatus } from '@constants/enums';
 @UseGuards(AdminGuard)
 @Controller('api/admin/v1/risk')
 export class RiskAdminController {
-  constructor(private readonly riskWashService: RiskWashService) {}
+  constructor(
+    private readonly riskWashService: RiskWashService,
+    private readonly riskReplayService: RiskReplayService,
+    private readonly adminService: AdminService,
+  ) {}
 
   @Get('cases')
   @ApiOperation({ summary: '风控线索列表' })
@@ -82,5 +89,24 @@ export class RiskAdminController {
   @ApiOperation({ summary: '高危线索封禁/交易封锁联动' })
   async lock(@Param('id') id: string, @Body() dto: RiskLockDto, @CurrentAdmin() admin: AdminJwtPayload) {
     return { result: await this.riskWashService.lock(id, admin.username, dto.level, dto.reason) };
+  }
+
+  @Post('replay')
+  @ApiOperation({ summary: '阈值只读回放校准（不落库/不处置）' })
+  async replay(@Body() dto: RiskReplayDto, @CurrentAdmin() admin: AdminJwtPayload) {
+    // 只读：仅回放检测，不写任何业务表、不触发处置；非法 override 键直接 92901
+    assertValidThresholdOverrides(dto.configOverrides);
+    const result = await this.riskReplayService.replay({
+      since: dto.since,
+      until: dto.until,
+      configOverrides: dto.configOverrides,
+    });
+    await this.adminService.logOperation({
+      adminId: admin.username,
+      operation: 'risk.replay',
+      changeBefore: { since: dto.since.toISOString(), until: dto.until.toISOString() },
+      changeAfter: { iterated: result.iterated, hitCount: result.hitCount, scoreBuckets: result.scoreBuckets },
+    });
+    return result;
   }
 }

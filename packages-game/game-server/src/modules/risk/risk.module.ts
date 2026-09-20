@@ -8,6 +8,7 @@ import { PlayerModule } from '@modules/player/player.module';
 import { AdminModule } from '@modules/admin/admin.module';
 import { RiskWashService } from './risk-wash.service';
 import { RiskGateService } from './risk-gate.service';
+import { RiskReplayService } from './risk-replay.service';
 import { RiskAdminController } from './risk-admin.controller';
 import { RiskWashFlow, RiskCase, RiskAccountScore, RiskWhitelist, RiskRecoverRecord } from './entities';
 
@@ -28,7 +29,7 @@ import { RiskWashFlow, RiskCase, RiskAccountScore, RiskWhitelist, RiskRecoverRec
     AdminModule,
   ],
   controllers: [RiskAdminController],
-  providers: [RiskWashService, RiskGateService],
-  exports: [RiskWashService, RiskGateService],
+  providers: [RiskWashService, RiskGateService, RiskReplayService],
+  exports: [RiskWashService, RiskGateService, RiskReplayService],
 })
 export class RiskModule {}
