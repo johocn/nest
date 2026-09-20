@@ -36,6 +36,7 @@ import { SandboxModule } from '@modules/sandbox/sandbox.module';
 import { MatchmakingModule } from '@modules/matchmaking/matchmaking.module';
 import { OfflineModule } from '@modules/offline/offline.module';
 import { EcoModule } from '@modules/eco/eco.module';
+import { LadderModule } from '@modules/ladder/ladder.module';
 import { SchedulerModule } from '@scheduler/scheduler.module';
 import { HealthModule } from '@health/health.module';
 import { RequestIdMiddleware } from '@common/middleware/request-id.middleware';
@@ -85,6 +86,7 @@ import { RateLimitGuard } from '@common/guards/rate-limit.guard';
     MatchmakingModule,
     OfflineModule,
     EcoModule,
+    LadderModule,
 
     // 定时任务
     SchedulerModule,
