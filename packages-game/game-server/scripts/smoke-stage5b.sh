@@ -155,6 +155,13 @@ if [ -n "$AT" ]; then
   fi
   LCK=$(curl -s -X POST $BASE/api/admin/v1/risk/cases/$CASE_ID/lock -H "$AA" -H 'Content-Type: application/json' -d '{"level":"trade_limit","reason":"smoke-plan1-lock"}')
   [ "$(code_of "$LCK")" = "0" ] && echo "$LCK" | grep -q '"applied"' && ok "risk case lock 封禁联动" || bad "risk case lock" "$LCK"
+
+  # ---- 14. Plan2 阈值只读回放 /replay：空窗口命中空 + 非法 override 92901 ----
+  R=$(curl -s -X POST $BASE/api/admin/v1/risk/replay -H "$AA" -H 'Content-Type: application/json' -d '{"since":"2020-01-01T00:00:00Z","until":"2020-01-01T00:01:00Z","configOverrides":{}}')
+  check_code "risk replay 空窗口可达" 0 "$R"
+  echo "$R" | grep -q '"hitAccounts":\[\]' && ok "risk replay 空窗口 hitAccounts=[]" || bad "risk replay 空窗口 hitAccounts" "$R"
+  R=$(curl -s -X POST $BASE/api/admin/v1/risk/replay -H "$AA" -H 'Content-Type: application/json' -d '{"since":"2020-01-01T00:00:00Z","until":"2020-01-01T00:01:00Z","configOverrides":{"bad_key":100}}')
+  check_code "risk replay 非法 override 拒绝" 92901 "$R"
 else
   echo "SKIP: admin points section (admin login failed, body=$R)" >&2
   ok "admin points skipped (no admin creds)"

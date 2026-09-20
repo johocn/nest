@@ -2594,6 +2594,7 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
     <li><b>账号评分</b>：<code>risk_account_scores</code> 累计 0–100，评级正常 / 关注（≥<code>watch_score</code>）/ 高危（≥<code>high_score</code>）；每 10 分钟定时批扫。</li>
     <li><b>实时拦截</b>：高危账号经 <code>RiskGateService</code> 实时限制——拍卖起拍价超 <code>auction_value_cap</code> 拒上架（93202）、单日送礼 / 转账累计超限拒执行（93201）。</li>
     <li><b>风控回收闭环</b>：GM 对线索出回收提案（净差额）→ 确认对净收款方真实扣款（EconomyService 扣 GOLD，流水号留 <code>economy_ref_id</code>，快照存动账前余额）并落 <code>risk_recover_records</code> 台账、切断线索（open→frozen）→ 可按流水号精确回滚；高危线索可联动既有惩罚封禁 / 交易封锁（<code>POST cases/:id/lock</code>，复用 PenaltyLevel）。</li>
+    <li><b>只读回放校准阈值</b>：支持 GM 按 <code>[since, until]</code> 时段 + <code>configOverrides</code>（仅 <code>risk.*</code> 检测阈值键，非法 92901）对 <code>risk_wash_flows</code> 历史重放三类检测，返回命中清单 <code>hitAccounts</code> 与分数档位分布 <code>scoreBuckets</code>，供运营量化「阈值配到某值会命中多少人」，读多线不落库不处置。</li>
   </ul>
   <p><b>配置键（remote_configs，未配走代码默认，见 13.2）</b>：</p>
   <table>
@@ -3971,7 +3972,7 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
 <tr><td><span class="badge m-post">POST</span></td><td><code>/api/admin/v1/ranking/:type/snapshot</code></td></tr>
 <tr><td><span class="badge m-get">GET</span></td><td><code>/api/admin/v1/ranking/snapshot/list</code></td></tr>
 </tbody></table></div>
-<div class="dict-table"><h3>⚙️ risk <span class="tbl-meta">10 接口</span></h3>
+<div class="dict-table"><h3>⚙️ risk <span class="tbl-meta">11 接口</span></h3>
 <table><thead><tr><th>方法</th><th>路径</th></tr></thead><tbody>
 <tr><td><span class="badge m-get">GET</span></td><td><code>/api/admin/v1/risk/cases</code></td></tr>
 <tr><td><span class="badge m-get">GET</span></td><td><code>/api/admin/v1/risk/players/:playerId</code></td></tr>
@@ -3983,6 +3984,7 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
 <tr><td><span class="badge m-post">POST</span></td><td><code>/api/admin/v1/risk/cases/:id/recover</code></td></tr>
 <tr><td><span class="badge m-post">POST</span></td><td><code>/api/admin/v1/risk/recover/:rid/rollback</code></td></tr>
 <tr><td><span class="badge m-post">POST</span></td><td><code>/api/admin/v1/risk/cases/:id/lock</code></td></tr>
+<tr><td><span class="badge m-post">POST</span></td><td><code>/api/admin/v1/risk/replay</code></td></tr>
 </tbody></table></div>
 <div class="dict-table"><h3>⚙️ sandbox <span class="tbl-meta">6 接口</span></h3>
 <table><thead><tr><th>方法</th><th>路径</th></tr></thead><tbody>
