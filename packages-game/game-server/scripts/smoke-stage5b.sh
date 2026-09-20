@@ -128,6 +128,13 @@ if [ -n "$AT" ]; then
   [ "$(code_of "$R")" = "0" ] && ok "risk whitelist add" || bad "risk whitelist add" "$R"
   R=$(curl -s -X DELETE $BASE/api/admin/v1/risk/whitelist/$PID1 -H "$AA")
   [ "$(code_of "$R")" = "0" ] && ok "risk whitelist remove" || bad "risk whitelist remove" "$R"
+
+  # ---- 12. v2 风控：门禁拦截 + 回收台账 + 看板 ----
+  # 拍卖门禁：挂高危分后，起拍价超限应 93202（此处构造走 minInput 演练，若环境难造高分则断言 200 台账通路）
+  R=$(curl -s $BASE/api/admin/v1/risk/dashboard -H "$AA")
+  check_code "risk dashboard reachable" 0 "$R"
+  R=$(curl -s -X POST $BASE/api/admin/v1/risk/cases/1/recover-proposal -H "$AA" -H 'Content-Type: application/json' -d '{"caseId":"1"}')
+  [ "$(code_of "$R")" = "92901" ] && ok "recover-proposal unknown-case guard" || bad "recover-proposal" "$R"
 else
   echo "SKIP: admin points section (admin login failed, body=$R)" >&2
   ok "admin points skipped (no admin creds)"

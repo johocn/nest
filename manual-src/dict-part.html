@@ -1,6 +1,6 @@
 <section class="dict-chapter" id="chapter16">
 <h2 class="ch-title">第 17 章 · 数据字典全集</h2>
-<p class="ch-desc">共 82 张表、742 个字段。字段类型与默认值取自生产库 <code>game_server</code> 实际结构；说明按源码实体语义整理。枚举类型取值详见<b>附录 B 枚举全集</b>。</p>
+<p class="ch-desc">共 83 张表、755 个字段。字段类型与默认值取自生产库 <code>game_server</code> 实际结构；说明按源码实体语义整理。枚举类型取值详见<b>附录 B 枚举全集</b>。</p>
 <div class="dict-toc">
 <a href="#dict-account_login_logs">account_login_logs (7)</a>
 <a href="#dict-achievement_templates">achievement_templates (12)</a>
@@ -69,7 +69,8 @@
 <a href="#dict-retention_stats">retention_stats (8)</a>
 <a href="#dict-risk_account_scores">risk_account_scores (4)</a>
 <a href="#dict-risk_cases">risk_cases (11)</a>
-<a href="#dict-risk_wash_flows">risk_wash_flows (8)</a>
+<a href="#dict-risk_recover_records">risk_recover_records (12)</a>
+<a href="#dict-risk_wash_flows">risk_wash_flows (9)</a>
 <a href="#dict-risk_whitelists">risk_whitelists (4)</a>
 <a href="#dict-scene_entity_spawns">scene_entity_spawns (13)</a>
 <a href="#dict-scene_triggers">scene_triggers (13)</a>
@@ -1114,14 +1115,15 @@
 <tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
 </tbody></table></div>
 <div class="dict-table" id="dict-risk_wash_flows">
-<h3>📄 risk_wash_flows <span class="tbl-meta">8 字段</span></h3>
+<h3>📄 risk_wash_flows <span class="tbl-meta">9 字段</span></h3>
 <table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
 <tr><td><code>from_id</code></td><td>varchar</td><td>否</td><td></td><td>转出方玩家ID（互刷检测关注点）</td></tr>
 <tr><td><code>to_id</code></td><td>varchar</td><td>否</td><td></td><td>转入方玩家ID</td></tr>
 <tr><td><code>asset_key</code></td><td>varchar</td><td>否</td><td></td><td>转移资产键（货币类型，如 gold）</td></tr>
 <tr><td><code>value</code></td><td>bigint</td><td>否</td><td></td><td>转移金额</td></tr>
-<tr><td><code>biz_type</code></td><td>varchar</td><td>否</td><td>trade_order</td><td>业务类型（RiskBizType 枚举，v1 仅 trade_order）</td></tr>
+<tr><td><code>flow_class</code></td><td>varchar</td><td>否</td><td>transfer</td><td>流转类型（RiskFlowClass：transfer直接转移/payout到账）</td></tr>
+<tr><td><code>biz_type</code></td><td>varchar</td><td>否</td><td>trade_order</td><td>业务类型（RiskBizType 枚举）</td></tr>
 <tr><td><code>ref_id</code></td><td>varchar</td><td>否</td><td></td><td>业务引用（trade:{id}，唯一用于幂等去重）</td></tr>
 <tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
 </tbody></table></div>
@@ -1138,6 +1140,22 @@
 <tr><td><code>wf_ids</code></td><td>jsonb</td><td>否</td><td>'[]'::jsonb</td><td>关联风险流ID数组</td></tr>
 <tr><td><code>handled_by</code></td><td>varchar</td><td>是</td><td></td><td>处置操作员（GM 用户名）</td></tr>
 <tr><td><code>handled_at</code></td><td>timestamptz</td><td>是</td><td></td><td>处置时间</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-risk_recover_records">
+<h3>📄 risk_recover_records <span class="tbl-meta">12 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>case_id</code></td><td>varchar</td><td>否</td><td></td><td>关联风控线索ID</td></tr>
+<tr><td><code>from_id</code></td><td>varchar</td><td>否</td><td></td><td>转出方玩家ID（净差额较大向）</td></tr>
+<tr><td><code>to_id</code></td><td>varchar</td><td>否</td><td></td><td>转入方玩家ID（净差额较小向）</td></tr>
+<tr><td><code>suggested_amount</code></td><td>bigint</td><td>否</td><td></td><td>建议回收额（净差额）</td></tr>
+<tr><td><code>applied_amount</code></td><td>bigint</td><td>否</td><td>0</td><td>实际回收额</td></tr>
+<tr><td><code>asset_key</code></td><td>varchar</td><td>否</td><td></td><td>回收资产键（如 gold）</td></tr>
+<tr><td><code>status</code></td><td>risk_recover_status 枚举</td><td>否</td><td>'applied'::risk_recover_records_status_enum</td><td>状态（RiskRecoverStatus：applied已回收/rolled_back已回滚）</td></tr>
+<tr><td><code>balance_snapshot_json</code></td><td>jsonb</td><td>否</td><td>'{}'::jsonb</td><td>动账前余额快照JSON</td></tr>
+<tr><td><code>handled_by</code></td><td>varchar</td><td>是</td><td></td><td>处置操作员（GM 用户名）</td></tr>
+<tr><td><code>rollback_reason</code></td><td>text</td><td>是</td><td></td><td>回滚原因备注</td></tr>
 <tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
 </tbody></table></div>
 <div class="dict-table" id="dict-risk_account_scores">
