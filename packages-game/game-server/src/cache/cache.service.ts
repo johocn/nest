@@ -106,6 +106,18 @@ export class CacheService implements OnModuleInit, OnModuleDestroy {
     return this.client.zRange(key, start, stop);
   }
 
+  async zRangeWithScores(
+    key: string,
+    start: number,
+    stop: number,
+    rev = false,
+  ): Promise<Array<{ value: string; score: number }>> {
+    if (rev) {
+      return this.client.zRangeWithScores(key, start, stop, { REV: true });
+    }
+    return this.client.zRangeWithScores(key, start, stop);
+  }
+
   async zRem(key: string, ...members: string[]): Promise<number> {
     return this.client.zRem(key, members);
   }

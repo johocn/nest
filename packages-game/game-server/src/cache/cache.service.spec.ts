@@ -21,6 +21,7 @@ const mockRedis = {
   sMembers: jest.fn(),
   zAdd: jest.fn(),
   zRange: jest.fn(),
+  zRangeWithScores: jest.fn(),
   ping: jest.fn().mockResolvedValue('PONG'),
 };
 
@@ -98,5 +99,37 @@ describe('CacheService', () => {
 
     expect(callback).toHaveBeenCalled();
     expect(result).toBe('result');
+  });
+
+  it('should return members with scores in reverse order', async () => {
+    mockRedis.zRangeWithScores.mockResolvedValue([
+      { value: '{"playerId":"p2"}', score: 900 },
+      { value: '{"playerId":"p1"}', score: 500 },
+    ]);
+
+    const result = await service.zRangeWithScores('ranking:power', 0, 9, true);
+
+    expect(mockRedis.zRangeWithScores).toHaveBeenCalledWith(
+      'ranking:power',
+      0,
+      9,
+      { REV: true },
+    );
+    expect(result).toEqual([
+      { value: '{"playerId":"p2"}', score: 900 },
+      { value: '{"playerId":"p1"}', score: 500 },
+    ]);
+  });
+
+  it('should query ascending when rev is false', async () => {
+    mockRedis.zRangeWithScores.mockResolvedValue([]);
+
+    await service.zRangeWithScores('ranking:power', 0, 9);
+
+    expect(mockRedis.zRangeWithScores).toHaveBeenCalledWith(
+      'ranking:power',
+      0,
+      9,
+    );
   });
 });
