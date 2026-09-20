@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>game-server · 2026-09-20 P1-P7 部署变更摘要</title>
+<style>
+  :root {
+    --bg: #f5f6fa;
+    --card: #ffffff;
+    --ink: #1a2332;
+    --muted: #6b7688;
+    --border: #e4e8ef;
+    --accent: #2f6fed;
+    --ok: #1a9c6b;
+    --warn: #d9772e;
+    --err: #d04848;
+    --code-bg: #f0f2f7;
+    --chip-bg: #eef2fb;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 20px;
+    font-family: "Segoe UI", "Microsoft YaHei", -apple-system, sans-serif;
+    background: var(--bg); color: var(--ink); line-height: 1.6;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 24px 28px; margin-bottom: 22px;
+    box-shadow: 0 1px 3px rgba(20,30,50,.04);
+  }
+  h1 { margin: 0 0 4px; font-size: 26px; }
+  h2 { font-size: 18px; margin: 0 0 14px; display: flex; align-items: center; gap: 8px; }
+  h2::before { content: ""; width: 4px; height: 18px; background: var(--accent); border-radius: 2px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+  .badge {
+    display: inline-block; padding: 2px 10px; border-radius: 20px;
+    font-size: 12px; font-weight: 600; margin-right: 6px;
+  }
+  .b-ok { background: #e7f7f0; color: var(--ok); }
+  .b-err { background: #fdeaea; color: var(--err); }
+  .b-info { background: var(--chip-bg); color: var(--accent); }
+  .pills { margin-top: 12px; }
+  .pill {
+    display: inline-block; padding: 3px 12px; margin: 3px 6px 3px 0;
+    background: var(--chip-bg); color: var(--accent); border-radius: 16px;
+    font-size: 12.5px; font-weight: 600;
+  }
+  table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: #f8f9fc; color: var(--muted); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  code {
+    font-family: "Cascadia Code", Consolas, monospace; font-size: 12.8px;
+    background: var(--code-bg); padding: 1px 6px; border-radius: 5px;
+  }
+  .codeblock {
+    display: block; background: #131a24; color: #d7e0ee;
+    padding: 14px 18px; border-radius: 10px; font-size: 12.8px;
+    font-family: "Cascadia Code", Consolas, monospace; overflow-x: auto;
+    margin: 8px 0; line-height: 1.55; white-space: pre;
+  }
+  .k { color: #7cc0ff; } .w { color: #d7e0ee; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(200px,1fr)); gap: 14px; }
+  .stat { text-align: center; padding: 14px; border: 1px solid var(--border); border-radius: 10px; background:#fbfcfe; }
+  .stat b { display: block; font-size: 26px; color: var(--accent); }
+  .stat span { font-size: 12.5px; color: var(--muted); }
+  ul { margin: 6px 0 6px 20px; padding: 0; }
+  li { margin-bottom: 6px; }
+  .note { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="card">
+    <h1>game-server · P1-P7 部署变更摘要</h1>
+    <div class="sub">
+      部署机 odoo（39.106.99.9）· /opt/game-server · systemd game-server · Postgres 容器 1Panel-postgresql-4LsS / game_server
+      <br>部署时间：2026-09-20 23:35（CST）· 代码基线 <code>a3d00adf2 → 92ef45849</code>
+    </div>
+    <div class="stat" style="margin-bottom:14px; text-align:left;">
+      本次上线共部署 <b style="display:inline; font-size:16px;">7 个连续计划</b>，命中 <b style="display:inline; font-size:16px;">2 项真实 Bug 修复</b>，新增 <b style="display:inline; font-size:16px;">5 张表 / 4 个新列</b>，冒烟全绿。
+    </div>
+    <div class="pills">
+      <span class="pill">P1 风控回收闭环</span>
+      <span class="pill">P2 风控阈值回放校准</span>
+      <span class="pill">P3 同人多账号识别</span>
+      <span class="pill">P4 GM 经济宏观看板</span>
+      <span class="pill">P5 交易结算对账审计</span>
+      <span class="pill">P6 养成长线闭环（境界突破）</span>
+      <span class="pill">P7 世界探索与奇遇</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>修复的 Bug</h2>
+    <table>
+      <tr><th style="width:22px">#</th><th>位置</th><th>症状</th><th>根因</th><th>修复</th></tr>
+      <tr>
+        <td>1</td>
+        <td><code>risk/risk-wash.service.ts</code> → <code>lock()</code></td>
+        <td><span class="badge b-err">500</span> <code>POST /risk/cases/:id/lock</code> 返回 <code>90004 Internal server error</code></td>
+        <td><code>QueryFailedError: invalid input syntax for type bigint: "admin"</code> —— lock 把 <code>admin.username</code>（"admin"）传给了 <code>logOperation.adminId</code>（bigint 列）。<code>applyPenalty</code> 需要 username 字符串、<code>gm_operate_logs.adminId</code> 需要数字，单一 <code>operator</code> 参数语义冲突。</td>
+        <td>lock 签名拆分为 <code>lock(caseId, adminId, operator, level, reason)</code>，控制器改传 <code>admin.adminId</code>；<code>applyPenalty</code> 仍用 username。与 P5 reconcile 同类的整改（<span class="badge b-err">高频共因</span>）</td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td>多处：`reconcile-admin.controller.ts` / `risk-admin.controller.ts`（上一提交冒烟期）</td>
+        <td><span class="badge b-err">500</span> 操作审计日志写入失败 <code>invalid input syntax for type bigint: "admin"</code></td>
+        <td><code>logOperation({ adminId: admin.username })</code> 类型不匹配（username 字符串 → bigint adminId）</td>
+        <td>改用数值字段 <code>admin.adminId</code> 写入 <code>gm_operate_logs.adminId</code></td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td>`realm/dto/cultivate.dto.ts` / `explore/dto/resolve-encounter.dto.ts`</td>
+        <td><span class="badge b-err">400</span> <code>property amount should not exist</code></td>
+        <td>入参 DTO 缺少校验装饰器，class-transformer 宽松反序列化导致校验失败</td>
+        <td>补 <code>@IsInt() @Min(1)</code> 校验</td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td>`explore/entities/encounter-template.entity.ts` / `realm/entities/realm-template.entity.ts`</td>
+        <td><span class="badge b-err">500</span> <code>syntax error at or near '['</code></td>
+        <td>JSONB 字段默认值写成 <code>default: []</code>，TypeORM 未序列化为合法 JSON</td>
+        <td>改为字符串 <code>default: '[]'</code> / <code>'{}'</code></td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td>冒烟脚本 `smoke-stage5b.sh` 角色名超长 / 缺角色创建</td>
+        <td>测试用例失败（非应用 bug）</td>
+        <td>自动生成名 >16 字符被拒；境界用例缺前置角色</td>
+        <td>截断名称（<code>tail -c 8</code>）、补角色创建步骤</td>
+      </tr>
+    </table>
+    <div class="note">Bug 1 为本次部署验证环节「上线后抓到的真实缺陷」，修复后重新构建部署，单测 10/10 通过。</div>
+  </div>
+
+  <div class="card">
+    <h2>新增 / 变更的表结构</h2>
+    <div class="note">生产 <code>DB_SYNCHRONIZE=true</code>，重启时 TypeORM 自动建表加列（增量、不破坏既有数据）。</div>
+    <table>
+      <tr><th>表 / 列</th><th>计划</th><th>用途</th><th>关键结构</th></tr>
+      <tr>
+        <td><span class="badge b-info">新表</span> <code>realm_templates</code></td><td>P6</td><td>境界档位配置（作者/数据驱动）</td>
+        <td><code>realm_level, realm_name, required_value, consume_items_json, stat_bonus_json, milestone_reward_json</code> · 唯一 <code>uq_realm_templates_level</code></td>
+      </tr>
+      <tr>
+        <td><span class="badge b-info">新表</span> <code>encounter_templates</code></td><td>P7</td><td>随机奇遇事件模板</td>
+        <td><code>scene_id, title, desc_text, trigger_rate, cd_seconds, choices_json, is_one_time, reward_json, is_active</code></td>
+      </tr>
+      <tr>
+        <td><span class="badge b-info">新表</span> <code>player_explorations</code></td><td>P7</td><td>玩家探索足迹（幂等）</td>
+        <td><code>player_id, scene_id, times, discovered_at</code> · 唯一 <code>uq_player_explorations(player_id, scene_id)</code></td>
+      </tr>
+      <tr>
+        <td><span class="badge b-info">新表</span> <code>risk_identity_links</code></td><td>P3</td><td>同人多账号关联（设备/IP/SSO）</td>
+        <td><code>player_id_a, player_id_b, link_type(enum same_ip/same_device/sso), confidence, evidence_json</code> · 唯一 <code>uq_risk_identity_links(a,b,type)</code></td>
+      </tr>
+      <tr>
+        <td><span class="badge b-info">新表</span> <code>reconcile_results</code></td><td>P5</td><td>交易对账结果（审计）</td>
+        <td><code>stat_date, reconcile_type(enum TRADE/AUCTION/ESCROW/BOUNTY), checked, mismatch, detail_json</code> · 唯一 <code>uq_reconcile_results(stat_date,type)</code></td>
+      </tr>
+      <tr>
+        <td><span class="badge b-info">新列</span> <code>characters.*</code></td><td>P6</td><td>境界状态承载</td>
+        <td><code>realm_level int DEFAULT 1, realm_value bigint DEFAULT 0, milestone_claimed_json jsonb DEFAULT '{}'</code></td>
+      </tr>
+      <tr>
+        <td><span class="badge b-info">新列</span> <code>risk_recover_records.economy_ref_id</code></td><td>P1</td><td>回收扣款的经济流关联（对账/回滚依据）</td>
+        <td><code>economy_ref_id varchar(64) NULL</code>，改造后 align P5 对账链路</td>
+      </tr>
+    </table>
+    <div class="note">P2（回放）与 P4（宏观面）为只读复用现有表（risk_wash_flows / transactions / player_currencies / auth_accounts），无 DDL。</div>
+  </div>
+
+  <div class="card">
+    <h2>种子数据</h2>
+    <table>
+      <tr><th>目标</th><th>内容</th><th>方式</th></tr>
+      <tr><td><code>realm_templates</code></td><td>level 1 凡体(0) / level 2 炼气(100) / level 3 筑基(300)</td><td>admin 接口 / SQL</td></tr>
+      <tr><td><code>encounter_templates</code></td><td>已预置奇遇模板 1 条</td><td>admin 接口 / SQL</td></tr>
+      <tr><td><code>player_explorations / risk_identity_links / reconcile_results</code></td><td>运行自增，无需种子</td><td>—</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>部署与验证结果</h2>
+    <div class="grid">
+      <div class="stat"><b>31/31</b><span>stage5b（P6/P7 + 社交经济）</span></div>
+      <div class="stat"><b>9/9</b><span>admin-P7（P1-P5 管理端）</span></div>
+      <div class="stat"><b>10/10</b><span>risk 控制器单测</span></div>
+      <div class="stat"><b>PASS</b><span>P1 lock 闭环（合成案件→封禁→frozen）</span></div>
+    </div>
+    <ul style="margin-top:14px;">
+      <li>服务 <code>game-server</code> <span class="badge b-ok">active</span>，端口 <code>:3000</code> 监听正常。</li>
+      <li>日志确认 <code>Nest application successfully started</code>，无 <code>QueryFailedError / UnknownExportException</code>。</li>
+      <li>Schema 核对：5 张新表 + 4 个新列均已同步；境界种子 lv1-3、奇遇模板就绪。</li>
+      <li>P2 回放空窗口 <code>iterated=14, hitAccounts=[]</code>；P4 宏观面 currencyStats 含金；P5 对账 run + results 均 200。</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>关键部署流程（可复用）</h2>
+<div class="codeblock"><span class="k"># 本地构建（不登 2G 机）</span>
+cd packages-game/game-server
+npm run build
+tar -czf dist-7plans-final.tar.gz -C dist .
+scp dist-7plans-final.tar.gz odoo:/tmp/
+
+<span class="k"># odoo：备份旧 → 替换 → 重启（脚本 scripts/deploy-7plans.sh）</span>
+ssh odoo "bash /tmp/deploy-7plans.sh"
+
+<span class="k"># 冒烟回归（脚本 scripts/smoke-stage5b.sh · smoke-admin-p7.sh · lock-verify.sh）</span>
+ssh odoo "bash /tmp/smoke-stage5b.sh"
+ssh odoo "bash /tmp/smoke-admin-p7.sh"
+ssh odoo "bash /tmp/lock-verify.sh"</div>
+    <div class="note">schema 变更在 <code>DB_SYNCHRONIZE=true</code> 下重启自动生效；若环境为 false，按 deploy-checklist 备用 DDL 补齐。</div>
+  </div>
+
+</div>
+</body>
+</html>
