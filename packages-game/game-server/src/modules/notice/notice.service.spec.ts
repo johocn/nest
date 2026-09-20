@@ -103,6 +103,32 @@ describe('NoticeService', () => {
     });
   });
 
+  describe('时间窗过滤（start_at / end_at）', () => {
+    it('getActiveNotices 按四个时间窗分支过滤且都要求 isActive', async () => {
+      noticeRepo.find.mockResolvedValue([]);
+
+      await service.getActiveNotices();
+
+      const where = noticeRepo.find.mock.calls[0][0].where as any[];
+      expect(Array.isArray(where)).toBe(true);
+      expect(where).toHaveLength(4);
+      expect(where.every((w) => w.isActive === true)).toBe(true);
+      expect(where.every((w) => 'startAt' in w && 'endAt' in w)).toBe(true);
+    });
+
+    it('getNoticesByType 同样应用时间窗与类型过滤', async () => {
+      noticeRepo.find.mockResolvedValue([]);
+
+      await service.getNoticesByType(NoticeType.LOGIN);
+
+      const where = noticeRepo.find.mock.calls[0][0].where as any[];
+      expect(where).toHaveLength(4);
+      expect(where.every((w) => w.noticeType === NoticeType.LOGIN)).toBe(true);
+      expect(where.every((w) => w.isActive === true)).toBe(true);
+      expect(where.every((w) => 'startAt' in w && 'endAt' in w)).toBe(true);
+    });
+  });
+
   describe('getLoginNotices', () => {
     it('should return login notices', async () => {
       noticeRepo.find.mockResolvedValue([

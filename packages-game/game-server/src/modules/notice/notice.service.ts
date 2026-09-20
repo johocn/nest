@@ -1,6 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import {
+  Repository,
+  LessThanOrEqual,
+  MoreThanOrEqual,
+  IsNull,
+  FindOptionsWhere,
+} from 'typeorm';
 import { Notice, NoticeReaction } from './entities';
 import { NoticeType, NoticeReactionType } from '@constants/enums';
 import { GameException } from '@common/exceptions/game.exception';
@@ -76,16 +82,29 @@ export class NoticeService {
     };
   }
 
+  /** 时间窗：未配 start_at 视为立即生效，未配 end_at 视为永久有效 */
+  private timeWindow(): FindOptionsWhere<Notice>[] {
+    const now = new Date();
+    return [
+      { startAt: IsNull(), endAt: IsNull() },
+      { startAt: IsNull(), endAt: MoreThanOrEqual(now) },
+      { startAt: LessThanOrEqual(now), endAt: IsNull() },
+      { startAt: LessThanOrEqual(now), endAt: MoreThanOrEqual(now) },
+    ];
+  }
+
   async getActiveNotices(): Promise<Notice[]> {
+    const base = this.timeWindow();
     return this.noticeRepo.find({
-      where: { isActive: true },
+      where: base.map((w) => ({ ...w, isActive: true })),
       order: { sortOrder: 'ASC', createdAt: 'DESC' },
     });
   }
 
   async getNoticesByType(type: NoticeType): Promise<Notice[]> {
+    const base = this.timeWindow();
     return this.noticeRepo.find({
-      where: { noticeType: type, isActive: true },
+      where: base.map((w) => ({ ...w, noticeType: type, isActive: true })),
       order: { sortOrder: 'ASC', createdAt: 'DESC' },
     });
   }
