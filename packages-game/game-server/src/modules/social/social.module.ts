@@ -17,6 +17,9 @@ import {
   Kinship,
   PlayerReport,
   PlayerBlock,
+  SocialPointRecord,
+  SocialChest,
+  GuideProgress,
 } from './entities';
 import { Player } from '@modules/player/entities/player.entity';
 import { CharacterEspionage } from '@modules/character/entities';
@@ -43,6 +46,9 @@ import { PlayerModule } from '@modules/player/player.module';
       CharacterEspionage,
       PlayerReport,
       PlayerBlock,
+      SocialPointRecord,
+      SocialChest,
+      GuideProgress,
       Player,
     ]),
     EconomyModule,

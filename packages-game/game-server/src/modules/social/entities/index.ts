@@ -12,3 +12,6 @@ export { GiftTemplate } from './gift-template.entity';
 export { Kinship } from './kinship.entity';
 export { PlayerReport } from './player-report.entity';
 export { PlayerBlock } from './player-block.entity';
+export { SocialPointRecord } from './social-point-record.entity';
+export { SocialChest } from './social-chest.entity';
+export { GuideProgress } from './guide-progress.entity';
