@@ -448,6 +448,58 @@ export class AuthService {
     await this.accountRepo.update({ id: accountId }, { antiAddictionOn: on });
   }
 
+  async logout(accountId: string): Promise<{ ok: true }> {
+    if (!/^\d+$/.test(accountId)) {
+      throw new GameException(ErrorCodes.ACCOUNT_NOT_FOUND, '账号不存在');
+    }
+    const account = await this.accountRepo.findOne({
+      where: { id: accountId },
+    });
+    if (!account) {
+      throw new GameException(ErrorCodes.ACCOUNT_NOT_FOUND, '账号不存在');
+    }
+    await this.accountRepo.update(
+      { id: account.id },
+      { tokenVersion: account.tokenVersion + 1 },
+    );
+    return { ok: true };
+  }
+
+  async changePassword(
+    accountId: string,
+    oldPassword: string,
+    newPassword: string,
+  ): Promise<{ ok: true }> {
+    if (!/^\d+$/.test(accountId)) {
+      throw new GameException(ErrorCodes.ACCOUNT_NOT_FOUND, '账号不存在');
+    }
+    const account = await this.accountRepo.findOne({
+      where: { id: accountId },
+    });
+    if (!account) {
+      throw new GameException(ErrorCodes.ACCOUNT_NOT_FOUND, '账号不存在');
+    }
+    if (account.accountType === AccountType.SSO) {
+      throw new GameException(
+        ErrorCodes.PASSWORD_CHANGE_NOT_ALLOWED,
+        'SSO 账号无本地密码，不支持修改',
+      );
+    }
+    const isOldValid = await this.comparePassword(
+      oldPassword,
+      account.passwordHash,
+    );
+    if (!isOldValid) {
+      throw new GameException(ErrorCodes.ACCOUNT_PASSWORD_WRONG, '原密码错误');
+    }
+    const passwordHash = await this.hashPassword(newPassword);
+    await this.accountRepo.update(
+      { id: account.id },
+      { passwordHash, tokenVersion: account.tokenVersion + 1 },
+    );
+    return { ok: true };
+  }
+
   private generateToken(
     accountId: string,
     playerId: string,

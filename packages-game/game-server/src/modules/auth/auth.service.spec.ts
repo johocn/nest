@@ -515,4 +515,74 @@ describe('SSO 登录', () => {
       response: { code: ErrorCodes.SSO_AUTH_FAILED },
     });
   });
+
+  it('should bump tokenVersion on logout', async () => {
+    mockAccountRepo.findOne.mockResolvedValue({ id: '2', tokenVersion: 1 });
+
+    await expect(service.logout('2')).resolves.toEqual({ ok: true });
+    expect(mockAccountRepo.update).toHaveBeenCalledWith(
+      { id: '2' },
+      { tokenVersion: 2 },
+    );
+  });
+
+  it('should throw on logout when account not found', async () => {
+    mockAccountRepo.findOne.mockResolvedValue(null);
+    await expect(service.logout('2')).rejects.toThrow(GameException);
+  });
+
+  it('should throw on logout when accountId is not numeric', async () => {
+    await expect(service.logout('abc')).rejects.toThrow(GameException);
+    expect(mockAccountRepo.findOne).not.toHaveBeenCalled();
+  });
+
+  it('should reject password change for SSO accounts', async () => {
+    mockAccountRepo.findOne.mockResolvedValue({
+      id: '2',
+      accountType: AccountType.SSO,
+      passwordHash: 'hash',
+      tokenVersion: 0,
+    });
+
+    await expect(
+      service.changePassword('2', 'oldpass123', 'newpass123'),
+    ).rejects.toThrow(GameException);
+    expect(mockAccountRepo.update).not.toHaveBeenCalled();
+  });
+
+  it('should throw when old password is wrong on changePassword', async () => {
+    mockAccountRepo.findOne.mockResolvedValue({
+      id: '2',
+      accountType: AccountType.NORMAL,
+      passwordHash: 'hash',
+      tokenVersion: 0,
+    });
+    jest.spyOn(service as any, 'comparePassword').mockResolvedValue(false);
+
+    await expect(
+      service.changePassword('2', 'wrong', 'newpass123'),
+    ).rejects.toThrow(GameException);
+    expect(mockAccountRepo.update).not.toHaveBeenCalled();
+  });
+
+  it('should update password hash and bump tokenVersion on changePassword', async () => {
+    mockAccountRepo.findOne.mockResolvedValue({
+      id: '2',
+      accountType: AccountType.NORMAL,
+      passwordHash: 'hash',
+      tokenVersion: 3,
+    });
+    jest.spyOn(service as any, 'comparePassword').mockResolvedValue(true);
+
+    await expect(
+      service.changePassword('2', 'oldpass123', 'newpass123'),
+    ).resolves.toEqual({ ok: true });
+
+    expect(mockAccountRepo.update).toHaveBeenCalledTimes(1);
+    const [criteria, patch] = mockAccountRepo.update.mock.calls[0];
+    expect(criteria).toEqual({ id: '2' });
+    expect(patch.tokenVersion).toBe(4);
+    expect(typeof patch.passwordHash).toBe('string');
+    expect(patch.passwordHash).not.toBe('hash');
+  });
 });

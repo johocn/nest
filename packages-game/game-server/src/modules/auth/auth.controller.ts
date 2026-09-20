@@ -14,6 +14,7 @@ import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RealNameDto, VerifyDto, AntiAddictionDto } from './dto/realname.dto';
+import { ChangePasswordDto } from './dto/password.dto';
 import { Public } from '@common/decorators/public.decorator';
 import { RateLimit } from '@common/decorators/rate-limit.decorator';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
@@ -115,5 +116,26 @@ export class AuthController {
   ) {
     await this.authService.setAntiAddiction(player.accountId, dto.on);
     return { ok: true };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('logout')
+  @ApiOperation({ summary: '登出（使该账号全部端 token 失效）' })
+  async logout(@CurrentPlayer() player: CurrentPlayerData) {
+    return this.authService.logout(player.accountId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('password')
+  @ApiOperation({ summary: '修改密码（改后需重新登录）' })
+  async changePassword(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Body() dto: ChangePasswordDto,
+  ) {
+    return this.authService.changePassword(
+      player.accountId,
+      dto.oldPassword,
+      dto.newPassword,
+    );
   }
 }
