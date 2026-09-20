@@ -18,6 +18,7 @@ import { EconomyService } from '@modules/economy/economy.service';
 import { SocialService } from '@modules/social/social.service';
 import { CharacterService } from '@modules/character/character.service';
 import { CombatService } from '@modules/combat/combat.service';
+import { VipService } from '@modules/vip/vip.service';
 import { GameEvents } from '@event-bus/game-events';
 import type { Repository } from 'typeorm';
 
@@ -34,6 +35,7 @@ describe('TradeService', () => {
   let socialService: jest.Mocked<SocialService>;
   let characterService: jest.Mocked<CharacterService>;
   let combatService: jest.Mocked<CombatService>;
+  let vipService: jest.Mocked<VipService>;
   let eventBus: jest.Mocked<EventBusService>;
 
   beforeEach(async () => {
@@ -55,6 +57,9 @@ describe('TradeService', () => {
     combatService = {
       getCombatLogs: jest.fn().mockResolvedValue({ items: [], total: 0 }),
     } as unknown as jest.Mocked<CombatService>;
+    vipService = {
+      getPrivilegeValue: jest.fn().mockResolvedValue(0),
+    } as unknown as jest.Mocked<VipService>;
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TradeService,
@@ -150,6 +155,7 @@ describe('TradeService', () => {
         { provide: SocialService, useValue: socialService },
         { provide: CharacterService, useValue: characterService },
         { provide: CombatService, useValue: combatService },
+        { provide: VipService, useValue: vipService },
       ],
     }).compile();
 
@@ -287,7 +293,48 @@ describe('TradeService', () => {
       expect(result.sellerId).toBe('p1');
       expect(result.status).toBe(AuctionStatus.LISTED);
       expect(result.currentPrice).toBe('500');
+      expect(result.isExclusive).toBe(false);
       expect(eventBus.emit).toHaveBeenCalled();
+    });
+
+    it('should reject exclusive auction when VIP privilege absent', async () => {
+      vipService.getPrivilegeValue.mockResolvedValue(0);
+
+      await expect(
+        service.listAuction({
+          sellerId: 'p1',
+          itemTemplateId: 'i1',
+          itemName: '神兵',
+          quantity: 1,
+          startPrice: '500',
+          expireAt: new Date(Date.now() + 86400000),
+          exclusive: true,
+        }),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.VIP_AUCTION_ROOM_FORBIDDEN },
+      });
+      expect(auctionRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('should allow exclusive auction when VIP privilege granted', async () => {
+      vipService.getPrivilegeValue.mockResolvedValue(1);
+
+      const result = await service.listAuction({
+        sellerId: 'p1',
+        itemTemplateId: 'i1',
+        itemName: '神兵',
+        quantity: 1,
+        startPrice: '500',
+        expireAt: new Date(Date.now() + 86400000),
+        exclusive: true,
+      });
+
+      expect(vipService.getPrivilegeValue).toHaveBeenCalledWith(
+        'p1',
+        'exclusiveAuctionRoom',
+        0,
+      );
+      expect(result.isExclusive).toBe(true);
     });
   });
 
@@ -393,6 +440,23 @@ describe('TradeService', () => {
       const result = await service.getAuctionList(1, 20);
 
       expect(result.total).toBe(0);
+      expect(auctionRepo.findAndCount).toHaveBeenCalledWith(
+        expect.not.objectContaining({
+          where: [expect.objectContaining({ isExclusive: true })],
+        }),
+      );
+    });
+
+    it('should filter exclusive auctions when exclusive=true', async () => {
+      auctionRepo.findAndCount.mockResolvedValue([[], 0]);
+
+      await service.getAuctionList(1, 20, true);
+
+      const arg = (auctionRepo.findAndCount as jest.Mock).mock.calls[0][0];
+      expect(arg.where).toEqual([
+        { status: AuctionStatus.LISTED, isExclusive: true },
+        { status: AuctionStatus.BID, isExclusive: true },
+      ]);
     });
   });
 

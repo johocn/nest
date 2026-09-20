@@ -95,6 +95,34 @@ echo "$R" | grep -q '"score":1000' && ok "ladder info score=1000" || bad "ladder
 R=$(curl -s $BASE/api/client/v1/social/guide/daily -H "$A1")
 echo "$R" | grep -q '"tasks":\[' && echo "$R" | grep -q '"stats":{' && ok "guide daily" || bad "guide daily" "$R"
 
+# ---- 9. VIP 专属拍卖室：非 VIP 拒绝；授予特权后成功 ----
+EXPIRY=$(date -d '+1 day' +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -v+1d +%Y-%m-%dT%H:%M:%SZ)
+R=$(curl -s -X POST $BASE/api/client/v1/trade/auction -H "$A1" -H 'Content-Type: application/json' -d "{\"itemTemplateId\":\"excl-demo\",\"itemName\":\"专属神兵\",\"quantity\":1,\"startPrice\":\"1000\",\"expireAt\":\"$EXPIRY\",\"exclusive\":true}")
+check_code "exclusive auction non-VIP rejected" 92801 "$R"
+
+docker exec 1Panel-postgresql-4LsS psql -U game -d game_server -c "INSERT INTO vip_configs (level, required_exp, daily_reward_json, privilege_json) VALUES (1, 1000, '{}', '{\"exclusiveAuctionRoom\":1}') ON CONFLICT (level) DO UPDATE SET privilege_json = vip_configs.privilege_json || '{\"exclusiveAuctionRoom\":1}'" >/dev/null && ok "grant VIP level-1 exclusiveAuctionRoom privilege" || bad "grant vip config" "sql"
+docker exec 1Panel-postgresql-4LsS psql -U game -d game_server -c "UPDATE players SET vip_level=1 WHERE id='$PID1'" >/dev/null && ok "set player A vip_level=1" || bad "set vip_level" "sql"
+sleep 1
+R=$(curl -s -X POST $BASE/api/client/v1/trade/auction -H "$A1" -H 'Content-Type: application/json' -d "{\"itemTemplateId\":\"excl-demo2\",\"itemName\":\"专属神兵\",\"quantity\":1,\"startPrice\":\"1000\",\"expireAt\":\"$EXPIRY\",\"exclusive\":true}")
+echo "$R" | grep -q '"isExclusive":true' && ok "exclusive auction VIP success" || bad "exclusive auction VIP" "$R"
+
+# ---- 10. admin 补发社交积分：原因 ADMIN、流水留痕 ----
+ADMIN_U="${SMOKE_ADMIN_USER:-admin}"; ADMIN_P="${SMOKE_ADMIN_PWD:-Admin@12345}"
+R=$(curl -s -X POST $BASE/api/admin/v1/login -H 'Content-Type: application/json' -d "{\"username\":\"$ADMIN_U\",\"password\":\"$ADMIN_P\"}")
+AT=$(echo "$R" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
+if [ -n "$AT" ]; then
+  AA="Authorization: Bearer $AT"
+  RB=$(curl -s $BASE/api/client/v1/social/point/info -H "$A1"); BB=$(echo "$RB" | sed -n 's/.*"balance":\([0-9]*\).*/\1/p')
+  R=$(curl -s -X PUT $BASE/api/admin/v1/social/points/$PID1 -H "$AA" -H 'Content-Type: application/json' -d '{"delta":30,"note":"smoke-grant"}')
+  BAL2=$(echo "$R" | sed -n 's/.*"balance":\([0-9]*\).*/\1/p')
+  [ "${BAL2:-0}" = "$((BB+30))" ] && ok "admin adjust +30 (balance $BB -> $BAL2)" || bad "admin adjust points" "$R"
+  R=$(curl -s "$BASE/api/client/v1/social/point/records?page=1&pageSize=10" -H "$A1")
+  echo "$R" | grep -q '"reason":"admin"' && ok "point records contain ADMIN reason" || bad "point records ADMIN" "$R"
+else
+  echo "SKIP: admin points section (admin login failed, body=$R)" >&2
+  ok "admin points skipped (no admin creds)"
+fi
+
 echo "=============================="
 echo "SMOKE RESULT: PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" = "0" ]

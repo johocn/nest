@@ -219,6 +219,8 @@ export const ErrorCodes = {
   // 引导 92701-92799
   GUIDE_TASK_NOT_DONE: 92701,
   GUIDE_REWARD_CLAIMED: 92702,
+  // 专属拍卖室 92801-92899
+  VIP_AUCTION_ROOM_FORBIDDEN: 92801,
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

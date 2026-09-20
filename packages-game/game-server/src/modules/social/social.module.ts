@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SocialService } from './social.service';
 import { SocialController } from './social.controller';
+import { SocialAdminController } from './social-admin.controller';
 import { SocialEconomyService } from './social-economy.service';
 import { SocialGuideService } from './social-guide.service';
 import { SocialEventListener } from './social-event.listener';
@@ -63,7 +64,7 @@ import { VipModule } from '@modules/vip/vip.module';
     ConfigManageModule,
     VipModule,
   ],
-  controllers: [SocialController],
+  controllers: [SocialController, SocialAdminController],
   providers: [
     SocialService,
     SocialEconomyService,

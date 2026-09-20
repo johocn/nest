@@ -132,6 +132,39 @@ export class SocialEconomyService {
     return record.balanceAfter;
   }
 
+  /** admin 运营补发/回收社交积分：原因为 ADMIN，不受日上限限制，流水留痕 */
+  async adminAdjustPoints(
+    playerId: string,
+    delta: number,
+    operatorId: string,
+    note?: string,
+  ): Promise<number> {
+    if (!delta) {
+      throw new GameException(ErrorCodes.PARAM_INVALID, '调整数量不能为 0');
+    }
+    const balance = await this.getBalance(playerId);
+    const next = balance + delta;
+    if (next < 0) {
+      throw new GameException(ErrorCodes.POINT_NOT_ENOUGH, '回收后积分不可为负');
+    }
+    const type = delta > 0 ? SocialPointType.EARN : SocialPointType.SPEND;
+    const record = await this.pointRepo.save(
+      this.pointRepo.create({
+        playerId,
+        type,
+        amount: Math.abs(delta),
+        balanceAfter: next,
+        reason: SocialPointReason.ADMIN,
+        refId: `admin:${operatorId}:${note ?? 'adjust'}:${Date.now()}`,
+      }),
+    );
+    this.eventBus.emit(GameEvents.SOCIAL_POINT_CHANGED, {
+      playerId,
+      balance: record.balanceAfter,
+    });
+    return record.balanceAfter;
+  }
+
   async getPointInfo(playerId: string): Promise<{
     balance: number;
     todayEarned: number;

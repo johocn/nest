@@ -15,6 +15,7 @@ import { EconomyService } from '@modules/economy/economy.service';
 import { SocialService } from '@modules/social/social.service';
 import { CharacterService } from '@modules/character/character.service';
 import { CombatService } from '@modules/combat/combat.service';
+import { VipService } from '@modules/vip/vip.service';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
 import {
@@ -77,6 +78,10 @@ describe('TradeService Negotiation', () => {
         {
           provide: CombatService,
           useValue: { getCombatLogs: jest.fn().mockResolvedValue({ items: [], total: 0 }) },
+        },
+        {
+          provide: VipService,
+          useValue: { getPrivilegeValue: jest.fn().mockResolvedValue(0) },
         },
       ],
     }).compile();

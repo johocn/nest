@@ -44,6 +44,10 @@ export class AuctionItem {
   @Column({ name: 'expire_at', type: 'timestamp' })
   expireAt: Date;
 
+  // 专属拍卖室标记：仅 VIP 特权（exclusiveAuctionRoom）达标的卖家可上架
+  @Column({ name: 'is_exclusive', type: 'boolean', default: false })
+  isExclusive: boolean;
+
   @Column({ type: 'enum', enum: AuctionStatus, default: AuctionStatus.LISTED })
   status: AuctionStatus;
 

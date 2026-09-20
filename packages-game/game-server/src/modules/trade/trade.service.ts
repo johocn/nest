@@ -30,6 +30,7 @@ import { EconomyService } from '@modules/economy/economy.service';
 import { SocialService } from '@modules/social/social.service';
 import { CharacterService } from '@modules/character/character.service';
 import { CombatService } from '@modules/combat/combat.service';
+import { VipService } from '@modules/vip/vip.service';
 
 export interface CreateTradeParams {
   sellerId: string;
@@ -47,6 +48,7 @@ export interface ListAuctionParams {
   quantity: number;
   startPrice: string;
   expireAt: Date;
+  exclusive?: boolean;
 }
 
 @Injectable()
@@ -71,6 +73,7 @@ export class TradeService {
     private readonly socialService: SocialService,
     private readonly characterService: CharacterService,
     private readonly combatService: CombatService,
+    private readonly vipService: VipService,
   ) {}
 
   // ===== Trade Order =====
@@ -149,8 +152,23 @@ export class TradeService {
   // ===== Auction =====
 
   async listAuction(params: ListAuctionParams): Promise<AuctionItem> {
+    const exclusive = params.exclusive ?? false;
+    if (exclusive) {
+      const access = await this.vipService.getPrivilegeValue(
+        params.sellerId,
+        'exclusiveAuctionRoom',
+        0,
+      );
+      if (!Number(access)) {
+        throw new GameException(
+          ErrorCodes.VIP_AUCTION_ROOM_FORBIDDEN,
+          '专属拍卖室需 VIP 特权',
+        );
+      }
+    }
     const item = this.auctionRepo.create({
       ...params,
+      isExclusive: exclusive,
       currentPrice: params.startPrice,
       currentBidderId: null,
       status: AuctionStatus.LISTED,
@@ -235,9 +253,17 @@ export class TradeService {
   async getAuctionList(
     page: number,
     limit: number,
+    exclusive?: boolean,
   ): Promise<{ items: AuctionItem[]; total: number }> {
+    const where: Record<string, any>[] = [
+      { status: AuctionStatus.LISTED },
+      { status: AuctionStatus.BID },
+    ];
+    if (exclusive !== undefined) {
+      where.forEach((w) => (w.isExclusive = exclusive));
+    }
     const [items, total] = await this.auctionRepo.findAndCount({
-      where: [{ status: AuctionStatus.LISTED }, { status: AuctionStatus.BID }],
+      where,
       skip: (page - 1) * limit,
       take: limit,
       order: { expireAt: 'ASC' },

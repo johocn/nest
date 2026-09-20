@@ -1,4 +1,4 @@
-import { IsString, IsInt, IsOptional, Min } from 'class-validator';
+import { IsString, IsInt, IsOptional, Min, IsBoolean } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateTradeDto {
@@ -38,6 +38,10 @@ export class ListAuctionDto {
 
   @IsString()
   expireAt: string;
+
+  @IsOptional()
+  @IsBoolean()
+  exclusive?: boolean;
 }
 
 export class PlaceBidDto {

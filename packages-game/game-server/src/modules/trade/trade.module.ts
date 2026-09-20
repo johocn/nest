@@ -15,6 +15,7 @@ import { EconomyModule } from '@modules/economy/economy.module';
 import { SocialModule } from '@modules/social/social.module';
 import { CharacterModule } from '@modules/character/character.module';
 import { CombatModule } from '@modules/combat/combat.module';
+import { VipModule } from '@modules/vip/vip.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { CombatModule } from '@modules/combat/combat.module';
     SocialModule,
     CharacterModule,
     CombatModule,
+    VipModule,
   ],
   controllers: [TradeController],
   providers: [TradeService],

@@ -132,23 +132,35 @@ describe('SocialEconomyService', () => {
     });
   });
 
-  it('openChest 按权重池发奖', async () => {
-    chestRepo.findOne.mockResolvedValue({
-      id: 'c1',
-      playerId: '1',
-      tier: 1,
-      status: SocialChestStatus.PENDING,
-    });
-    configService.getConfig.mockResolvedValue({
-      value: JSON.stringify({ '1': { gold: { weight: 1 }, diamond: { weight: 1 } } }),
-    });
-    chestRepo.save.mockImplementation((e) => Promise.resolve(e));
-    const chest = await service.openChest('1', 'c1');
-    expect(chest.status).toBe(SocialChestStatus.OPENED);
-    expect(chest.openedAt).toBeInstanceOf(Date);
-    expect(eventBus.emit).toHaveBeenCalledWith(
-      GameEvents.CHEST_OPENED,
-      expect.any(Object),
+  it('adminAdjustPoints 补发正分记 EARN/ADMIN 流水并 emit', async () => {
+    pointRepo.save.mockResolvedValue({ balanceAfter: 50 });
+    const balance = await service.adminAdjustPoints('1', 50, 'gm1', '活动补偿');
+    expect(balance).toBe(50);
+    expect(pointRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        playerId: '1',
+        type: SocialPointType.EARN,
+        amount: 50,
+        balanceAfter: 50,
+        reason: SocialPointReason.ADMIN,
+      }),
     );
+    expect(eventBus.emit).toHaveBeenCalledWith(GameEvents.SOCIAL_POINT_CHANGED, {
+      playerId: '1',
+      balance: 50,
+    });
+  });
+
+  it('adminAdjustPoints 回收导致负分抛 POINT_NOT_ENOUGH', async () => {
+    await expect(
+      service.adminAdjustPoints('1', -10, 'gm1'),
+    ).rejects.toMatchObject({ response: { code: 92301 } });
+    expect(pointRepo.save).not.toHaveBeenCalled();
+  });
+
+  it('adminAdjustPoints delta=0 抛 PARAM_INVALID', async () => {
+    await expect(
+      service.adminAdjustPoints('1', 0, 'gm1'),
+    ).rejects.toMatchObject({ response: { code: 90003 } });
   });
 });

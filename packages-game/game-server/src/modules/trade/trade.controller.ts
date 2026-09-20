@@ -105,6 +105,7 @@ export class TradeController {
       quantity: dto.quantity,
       startPrice: dto.startPrice,
       expireAt: new Date(dto.expireAt),
+      exclusive: dto.exclusive,
     });
   }
 
@@ -123,9 +124,17 @@ export class TradeController {
   }
 
   @Get('api/client/v1/trade/auction/list')
-  @ApiOperation({ summary: '拍卖列表' })
-  async getAuctionList(@Query('page') page = 1, @Query('limit') limit = 20) {
-    return this.tradeService.getAuctionList(Number(page), Number(limit));
+  @ApiOperation({ summary: '拍卖列表（可选 exclusive=true 只看专属拍卖室）' })
+  async getAuctionList(
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
+    @Query('exclusive') exclusive?: string,
+  ) {
+    return this.tradeService.getAuctionList(
+      Number(page),
+      Number(limit),
+      exclusive === undefined ? undefined : exclusive === 'true',
+    );
   }
 
   // ===== Negotiation =====

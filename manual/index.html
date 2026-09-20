@@ -2596,7 +2596,7 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
 <a href="#dict-achievement_templates">achievement_templates (12)</a>
 <a href="#dict-activity_templates">activity_templates (17)</a>
 <a href="#dict-admin_users">admin_users (8)</a>
-<a href="#dict-auction_items">auction_items (12)</a>
+<a href="#dict-auction_items">auction_items (13)</a>
 <a href="#dict-auth_accounts">auth_accounts (14)</a>
 <a href="#dict-buff_templates">buff_templates (11)</a>
 <a href="#dict-character_attributes">character_attributes (10)</a>
@@ -2732,7 +2732,7 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
 <tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
 </tbody></table></div>
 <div class="dict-table" id="dict-auction_items">
-<h3>📄 auction_items <span class="tbl-meta">12 字段</span></h3>
+<h3>📄 auction_items <span class="tbl-meta">13 字段</span></h3>
 <table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
 <tr><td><code>seller_id</code></td><td>varchar</td><td>否</td><td></td><td>卖家玩家ID</td></tr>
@@ -2743,6 +2743,7 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
 <tr><td><code>current_price</code></td><td>bigint</td><td>否</td><td></td><td>当前出价</td></tr>
 <tr><td><code>current_bidder_id</code></td><td>varchar</td><td>是</td><td></td><td>当前最高出价人</td></tr>
 <tr><td><code>expire_at</code></td><td>timestamp</td><td>否</td><td></td><td>拍卖到期时间</td></tr>
+<tr><td><code>is_exclusive</code></td><td>boolean</td><td>否</td><td>false</td><td>专属拍卖室标记（仅 VIP exclusiveAuctionRoom 特权达标卖家可上架）</td></tr>
 <tr><td><code>status</code></td><td>items_status 枚举</td><td>否</td><td>listed'::auction_items_status_enum</td><td>状态（listed在售/bid竞价中/sold已售/expired流拍/cancelled取消）</td></tr>
 <tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
 <tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
@@ -3702,7 +3703,7 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
 
 <section class="appendix-chapter" id="appendix-a">
 <h2 class="ch-title">附录 A · 接口路径索引</h2>
-<p class="ch-desc">全部接口按模块分组（共 158 条），前缀统一为 <code>/api</code>，例如 <code>GET /api/client/v1/player/profile</code>。客户端接口 <code>/api/client</code>，运营后台接口 <code>/api/admin</code>。</p>
+<p class="ch-desc">全部接口按模块分组（共 159 条），前缀统一为 <code>/api</code>，例如 <code>GET /api/client/v1/player/profile</code>。客户端接口 <code>/api/client</code>，运营后台接口 <code>/api/admin</code>。</p>
 <div class="dict-table"><h3>⚙️ achievement <span class="tbl-meta">5 接口</span></h3>
 <table><thead><tr><th>方法</th><th>路径</th></tr></thead><tbody>
 <tr><td><span class="badge m-get">GET</span></td><td><code>/api/client/v1/achievement/my</code></td></tr>
@@ -3909,6 +3910,7 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
 <tr><td><span class="badge m-get">GET</span></td><td><code>guild/:guildId</code></td></tr>
 <tr><td><span class="badge m-get">GET</span></td><td><code>guild/:guildId/members</code></td></tr>
 <tr><td><span class="badge m-post">POST</span></td><td><code>guild/donate</code></td></tr>
+<tr><td><span class="badge m-put">PUT</span></td><td><code>/api/admin/v1/social/points/:playerId</code></td></tr>
 </tbody></table></div>
 <div class="dict-table"><h3>⚙️ trade <span class="tbl-meta">7 接口</span></h3>
 <table><thead><tr><th>方法</th><th>路径</th></tr></thead><tbody>
