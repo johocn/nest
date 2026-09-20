@@ -9,8 +9,9 @@ import { ConfigManageService } from '@modules/config/config.service';
 
 describe('RiskIdentityService', () => {
   let service: RiskIdentityService;
+  const sink: any[] = [];
   const linkRepo = {
-    find: jest.fn().mockResolvedValue([]),
+    find: jest.fn(),
     save: jest.fn((x: any) => x),
     create: jest.fn((x: any) => x),
     upsert: jest.fn().mockResolvedValue({}),
@@ -22,6 +23,10 @@ describe('RiskIdentityService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    sink.length = 0;
+    // 模拟真实表：find 返回已保存的行，save 落表 → 幂等去重可被观测
+    linkRepo.find.mockImplementation(() => Promise.resolve([...sink]));
+    linkRepo.save.mockImplementation((x: any) => { sink.push(x); return x; });
     const mod = await Test.createTestingModule({
       providers: [
         RiskIdentityService,
