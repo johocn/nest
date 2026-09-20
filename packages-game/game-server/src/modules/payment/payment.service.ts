@@ -165,12 +165,22 @@ export class PaymentService {
     }
     if (
       order.status === RechargeStatus.PENDING &&
-      Date.now() - order.createdAt.getTime() > this.ORDER_TTL_MS
+      (await this.isOrderExpired(order.orderNo))
     ) {
       order.status = RechargeStatus.EXPIRED;
       await this.orderRepo.save(order);
       throw new GameException(ErrorCodes.ORDER_EXPIRED, '订单已超时');
     }
+  }
+
+  // created_at 由数据库 now()（UTC）写入，应用层 Date 解析会带本地时区偏移，
+  // 超时判断在 SQL 端与 now() 比较，保证同源同基准
+  private async isOrderExpired(orderNo: string): Promise<boolean> {
+    const rows: Array<{ expired: boolean }> = await this.orderRepo.query(
+      `SELECT (now() - created_at) > ($1 * interval '1 millisecond') AS expired FROM recharge_orders WHERE order_no = $2`,
+      [this.ORDER_TTL_MS, orderNo],
+    );
+    return rows?.[0]?.expired ?? false;
   }
 
   private async deliverRewards(order: RechargeOrder): Promise<void> {

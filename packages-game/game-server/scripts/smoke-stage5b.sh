@@ -45,12 +45,17 @@ R=$(curl -s -X POST $BASE/api/client/v1/social/friend/apply -H "$A1" -H 'Content
 FR_ID=$(id_of "$R" id)
 [ -n "$FR_ID" ] && ok "friend apply A->B (id=$FR_ID)" || bad "friend apply A->B" "$R"
 
-R=$(curl -s -X POST $BASE/api/client/v1/social/friend/accept/$FR_ID -H "$A2")
+R=$(curl -s -X POST $BASE/api/client/v1/social/friend/accept/$PID1 -H "$A2")
 check_code "friend accept B" 0 "$R"
+# 积分由 FRIEND_ADDED 事件异步写入，等待落库后再断言
+sleep 2
 
 R=$(curl -s $BASE/api/client/v1/social/point/info -H "$A1")
 BAL=$(echo "$R" | sed -n 's/.*"balance":\([0-9]*\).*/\1/p')
 if [ "${BAL:-0}" -ge 10 ]; then ok "A social point balance >= 10 (balance=$BAL)"; else bad "A social point balance" "$R"; fi
+
+# ---- 2.5 预置积分：兑换/补签链路前置，SQL 直插（余额聚合链路已在 2 验证，非本段被测目标） ----
+docker exec 1Panel-postgresql-4LsS psql -U game -d game_server -c "INSERT INTO social_point_records (player_id, type, amount, balance_after, reason, ref_id) VALUES ('$PID1', 'earn', 90, 100, 'admin', 'smoke:preset')" >/dev/null && ok "preset 90 points for A" || bad "preset points" "sql"
 
 # ---- 3. 宝箱：积分兑换 + 开启 ----
 R=$(curl -s -X POST $BASE/api/client/v1/social/point/exchange -H "$A1" -H 'Content-Type: application/json' -d '{"tier":1}')
@@ -66,15 +71,16 @@ R=$(curl -s -X POST $BASE/api/client/v1/chat/sign-in/makeup -H "$A1" -H 'Content
 echo "$R" | grep -q '"makeup":true' && ok "sign-in makeup $YDAY" || bad "sign-in makeup" "$R"
 
 # ---- 5. 充值状态机：取首个商品创建订单 → 取消 ----
-R=$(curl -s $BASE/api/payment/products -H "$A1")
+# payment 控制器路由无 /api 前缀（@Controller('payment')），完整路径 /payment/*
+R=$(curl -s $BASE/payment/products -H "$A1")
 PROD_ID=$(echo "$R" | sed -n 's/.*"id":"\([0-9]*\)".*/\1/p' | head -1)
 [ -n "$PROD_ID" ] && ok "payment products (id=$PROD_ID)" || bad "payment products" "$R"
 
-R=$(curl -s -X POST $BASE/api/payment/order/$PROD_ID -H "$A1")
+R=$(curl -s -X POST $BASE/payment/order/$PROD_ID -H "$A1")
 ORDER_NO=$(field_of "$R" orderNo)
 [ -n "$ORDER_NO" ] && ok "create order (orderNo=$ORDER_NO)" || bad "create order" "$R"
 
-R=$(curl -s -X POST $BASE/api/payment/order/$ORDER_NO/cancel -H "$A1")
+R=$(curl -s -X POST $BASE/payment/order/$ORDER_NO/cancel -H "$A1")
 echo "$R" | grep -q '"status":"cancelled"' && ok "cancel order" || bad "cancel order" "$R"
 
 # ---- 6. 新手保护：新注册玩家 protected=true ----

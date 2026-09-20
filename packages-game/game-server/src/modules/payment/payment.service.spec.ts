@@ -33,6 +33,7 @@ describe('PaymentService', () => {
             findOne: jest.fn(),
             find: jest.fn(),
             findAndCount: jest.fn(),
+            query: jest.fn(),
             create: jest.fn((data: any) => ({ ...data })),
             save: jest
               .fn()
@@ -197,6 +198,7 @@ describe('PaymentService', () => {
         status: RechargeStatus.PENDING,
         createdAt: new Date(Date.now() - 40 * 60000),
       } as any);
+      orderRepo.query.mockResolvedValue([{ expired: true }]);
 
       const err: any = await service.cancelOrder('o1', '1').catch((e) => e);
 
