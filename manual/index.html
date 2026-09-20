@@ -131,8 +131,9 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
   <a class="nav-item" href="#ch14">14 实时通信</a>
   <a class="nav-item" href="#ch15">15 新手引导与初始数值</a>
   <a class="nav-item" href="#ch16">16 生态联动</a>
+  <a class="nav-item" href="#ch17">17 养成长线</a>
   <div class="nav-group">附录</div>
-  <a class="nav-item" href="#chapter16">17 数据字典全集</a>
+  <a class="nav-item" href="#chapter16">18 数据字典全集</a>
   <a class="nav-item" href="#appendix-a">A 接口路径索引</a>
   <a class="nav-item" href="#appendix-b">B 枚举全集</a>
   <a class="nav-item" href="#appendix-c">C 部署与运维</a>
@@ -2626,9 +2627,59 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
   </div>
 </section>
 
+<section class="chapter" id="ch17">
+  <div class="chapter-inner">
+  <h2 class="ch-title">第 17 章 · 养成长线（境界突破 / 里程碑）</h2>
+  <p class="ch-desc">给玩家长期养成的「境界突破 + 成长里程碑」闭环：<b>cultivate 累加修为 → 达标后 breakThrough 消耗养成道具并突破境界（叠加属性加成）→ 到达关键境界首次触发里程碑发奖</b>，形成长线正反馈；奖励复用既有发奖通道（inventory / economy / mail），不新造系统。实现见 <code>packages-game/game-server/src/modules/realm</code>。</p>
+
+  <h3>17.1 养成长线总览</h3>
+  <ul>
+    <li><b>修为（realm_value）</b>：玩家角色的养成数值，由日常玩法（任务 / 战斗等产出渠道）回调 <code>cultivate</code> 累加。</li>
+    <li><b>境界（realm_level）</b>：玩家表 <code>characters.realm_level</code>，默认 1（凡体）；突破后提升并扣除对应达标修为。</li>
+    <li><b>属性加成</b>：以「覆盖式叠加」落到 <code>character_attributes</code>（delta = 新境界加成 − 旧境界加成），避免旧境界加成残留，且不干扰既有 buff / 战斗结算。</li>
+    <li><b>里程碑奖励</b>：首次到达某境界即发奖（<code>milestone_claimed_json</code> 按 realm_level 幂等去重，防重复领）。</li>
+  </ul>
+
+  <h3>17.2 数据结构</h3>
+  <table>
+    <thead><tr><th>表 / 字段</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td><code>realm_templates</code></td><td>境界档位模板：<code>realm_level</code>（唯一）、<code>realm_name</code>、<code>required_value</code>（达标修为）、<code>consume_items_json</code>（突破消耗）、<code>stat_bonus_json</code>（属性加成）、<code>milestone_reward_json</code>（里程碑奖励）。</td></tr>
+      <tr><td><code>characters.realm_level</code></td><td>当前境界等级（默认 1）。</td></tr>
+      <tr><td><code>characters.realm_value</code></td><td>修为累计值（突破达标后扣除）。</td></tr>
+      <tr><td><code>characters.milestone_claimed_json</code></td><td>已领取里程碑的境界等级数组（幂等去重）。</td></tr>
+    </tbody>
+  </table>
+
+  <h3>17.3 境界突破流程</h3>
+  <ol>
+    <li><code>cultivate(playerId, amount)</code>：修为累加，落库并广播 <code>realm.value.gained</code> 事件。</li>
+    <li><code>breakThrough(playerId)</code>：校验 <code>realm_value ≥ required_value</code>，未达标抛 <code>REALM_VALUE_NOT_ENOUGH (94001)</code>；已达最高境界抛 <code>REALM_ALREADY_MAX (94002)</code>。</li>
+    <li>达标后先经 <code>inventory.removeItem</code> 消耗 <code>consume_items_json</code> 的养成道具（不足时抛既有 <code>ITEM_NOT_ENOUGH</code>）。</li>
+    <li>境界 +1、扣减达标修为，属性加成覆盖叠加到 <code>character_attributes</code>。</li>
+    <li>广播 <code>realm.breakthrough</code> 事件并返回 <code>bonus / rewardDelivered</code>。</li>
+  </ol>
+
+  <h3>17.4 里程碑奖励（幂等）</h3>
+  <ul>
+    <li><code>milestone_reward_json</code> 支持 <code>currency</code>（economy 发币）、<code>items</code>（inventory 发道具）、<code>mail</code>（mail 发件）三类奖励。</li>
+    <li>仅当 <code>milestone_claimed_json</code> 未包含目标境界时才发奖，发放后写入该境界等级，保证「每人每境界仅发一次」。</li>
+    <li>【回归约束】属性加成与里程碑奖励均复用既有通道与字段，不改动战斗结算核心、不新增发奖系统。</li>
+  </ul>
+
+  <h3>17.5 接口与接入</h3>
+  <ul>
+    <li>客户端 <code>GET /api/client/v1/realm/my</code>（境界 / 修为 / 下一档模板）、<code>POST /api/client/v1/realm/cultivate</code>、<code>POST /api/client/v1/realm/breakthrough</code>。</li>
+    <li>后台境界模板 CRUD：<code>GET/POST /api/admin/v1/realm/templates</code>、<code>PUT/DELETE /api/admin/v1/realm/templates/:id</code>。</li>
+    <li>接入方式：既有玩法 / 任务 / 战斗结算在产出修为时调用 <code>RealmService.cultivate</code>，即可推进养成长线（本项目仅在接口层暴露，接入由后续玩法回调驱动）。</li>
+  </ul>
+
+  </div>
+</section>
+
 <section class="dict-chapter" id="chapter16">
-<h2 class="ch-title">第 17 章 · 数据字典全集</h2>
-<p class="ch-desc">共 85 张表、769 个字段。字段类型与默认值取自生产库 <code>game_server</code> 实际结构；说明按源码实体语义整理。枚举类型取值详见<b>附录 B 枚举全集</b>。</p>
+<h2 class="ch-title">第 18 章 · 数据字典全集</h2>
+<p class="ch-desc">共 86 张表、772 个字段。字段类型与默认值取自生产库 <code>game_server</code> 实际结构；说明按源码实体语义整理。枚举类型取值详见<b>附录 B 枚举全集</b>。</p>
 <div class="dict-toc">
 <a href="#dict-account_login_logs">account_login_logs (7)</a>
 <a href="#dict-achievement_templates">achievement_templates (12)</a>
@@ -2691,6 +2742,7 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
 <a href="#dict-player_blocks">player_blocks (4)</a>
 <a href="#dict-quest_templates">quest_templates (13)</a>
 <a href="#dict-ranking_records">ranking_records (7)</a>
+<a href="#dict-realm_templates">realm_templates (7)</a>
 <a href="#dict-recharge_orders">recharge_orders (11)</a>
 <a href="#dict-recharge_products">recharge_products (9)</a>
 <a href="#dict-reconcile_results">reconcile_results (7)</a>
@@ -3043,7 +3095,7 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
 <tr><td><code>family</code></td><td>jsonb</td><td>否</td><td>[]'::jsonb</td><td>家族成员JSON（传承/复仇）</td></tr>
 </tbody></table></div>
 <div class="dict-table" id="dict-characters">
-<h3>📄 characters <span class="tbl-meta">12 字段</span></h3>
+<h3>📄 characters <span class="tbl-meta">15 字段</span></h3>
 <table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
 <tr><td><code>player_id</code></td><td>bigint</td><td>是</td><td></td><td>所属玩家ID（NPC为空）</td></tr>
@@ -3054,6 +3106,9 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
 <tr><td><code>age</code></td><td>int</td><td>否</td><td></td><td>年龄（随赛季成长）</td></tr>
 <tr><td><code>birthday</code></td><td>varchar</td><td>是</td><td></td><td>生日（农历字符串）</td></tr>
 <tr><td><code>is_npc</code></td><td>bool</td><td>否</td><td>false</td><td>是否NPC</td></tr>
+<tr><td><code>realm_level</code></td><td>int</td><td>否</td><td>1</td><td>境界等级（默认1凡体）</td></tr>
+<tr><td><code>realm_value</code></td><td>bigint</td><td>否</td><td>0</td><td>修为累计值</td></tr>
+<tr><td><code>milestone_claimed_json</code></td><td>jsonb</td><td>否</td><td>[]</td><td>已领取里程碑的境界等级（幂等去重）</td></tr>
 <tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
 <tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
 <tr><td><code>deleted_at</code></td><td>timestamp</td><td>是</td><td></td><td>软删除时间</td></tr>
@@ -3389,6 +3444,17 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
 <tr><td><code>rank_value</code></td><td>bigint</td><td>否</td><td></td><td>排行数值</td></tr>
 <tr><td><code>rank_order</code></td><td>int</td><td>否</td><td></td><td>名次</td></tr>
 <tr><td><code>snapshot_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>快照时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-realm_templates">
+<h3>📄 realm_templates <span class="tbl-meta">7 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>realm_level</code></td><td>int</td><td>否</td><td></td><td>境界等级（唯一，突破目标）</td></tr>
+<tr><td><code>realm_name</code></td><td>varchar</td><td>否</td><td></td><td>境界名称（凡体/炼气/筑基…）</td></tr>
+<tr><td><code>required_value</code></td><td>bigint</td><td>否</td><td>0</td><td>突破所需修为值（realm_value）</td></tr>
+<tr><td><code>consume_items_json</code></td><td>jsonb</td><td>否</td><td>[]</td><td>突破消耗的养成道具[{itemTemplateId,quantity}]</td></tr>
+<tr><td><code>stat_bonus_json</code></td><td>jsonb</td><td>否</td><td>{}</td><td>境界属性加成（覆盖式叠加，如 strength/combatPower）</td></tr>
+<tr><td><code>milestone_reward_json</code></td><td>jsonb</td><td>否</td><td>{}</td><td>首次到达该境界的奖励{currency/items/mail}</td></tr>
 </tbody></table></div>
 <div class="dict-table" id="dict-recharge_orders">
 <h3>📄 recharge_orders <span class="tbl-meta">11 字段</span></h3>
@@ -3831,7 +3897,7 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
 
 <section class="appendix-chapter" id="appendix-a">
 <h2 class="ch-title">附录 A · 接口路径索引</h2>
-<p class="ch-desc">全部接口按模块分组（共 167 条），前缀统一为 <code>/api</code>，例如 <code>GET /api/client/v1/player/profile</code>。客户端接口 <code>/api/client</code>，运营后台接口 <code>/api/admin</code>。</p>
+<p class="ch-desc">全部接口按模块分组（共 174 条），前缀统一为 <code>/api</code>，例如 <code>GET /api/client/v1/player/profile</code>。客户端接口 <code>/api/client</code>，运营后台接口 <code>/api/admin</code>。</p>
 <div class="dict-table"><h3>⚙️ achievement <span class="tbl-meta">5 接口</span></h3>
 <table><thead><tr><th>方法</th><th>路径</th></tr></thead><tbody>
 <tr><td><span class="badge m-get">GET</span></td><td><code>/api/client/v1/achievement/my</code></td></tr>
@@ -4002,6 +4068,16 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
 <tr><td><span class="badge m-get">GET</span></td><td><code>/api/client/v1/ranking/:type/:playerId</code></td></tr>
 <tr><td><span class="badge m-post">POST</span></td><td><code>/api/admin/v1/ranking/:type/snapshot</code></td></tr>
 <tr><td><span class="badge m-get">GET</span></td><td><code>/api/admin/v1/ranking/snapshot/list</code></td></tr>
+</tbody></table></div>
+<div class="dict-table"><h3>⚙️ realm <span class="tbl-meta">7 接口</span></h3>
+<table><thead><tr><th>方法</th><th>路径</th></tr></thead><tbody>
+<tr><td><span class="badge m-get">GET</span></td><td><code>/api/client/v1/realm/my</code></td></tr>
+<tr><td><span class="badge m-post">POST</span></td><td><code>/api/client/v1/realm/cultivate</code></td></tr>
+<tr><td><span class="badge m-post">POST</span></td><td><code>/api/client/v1/realm/breakthrough</code></td></tr>
+<tr><td><span class="badge m-get">GET</span></td><td><code>/api/admin/v1/realm/templates</code></td></tr>
+<tr><td><span class="badge m-post">POST</span></td><td><code>/api/admin/v1/realm/templates</code></td></tr>
+<tr><td><span class="badge m-put">PUT</span></td><td><code>/api/admin/v1/realm/templates/:id</code></td></tr>
+<tr><td><span class="badge m-del">DELETE</span></td><td><code>/api/admin/v1/realm/templates/:id</code></td></tr>
 </tbody></table></div>
 <div class="dict-table"><h3>⚙️ reconcile <span class="tbl-meta">2 接口</span></h3>
 <table><thead><tr><th>方法</th><th>路径</th></tr></thead><tbody>

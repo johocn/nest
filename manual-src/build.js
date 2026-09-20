@@ -39,7 +39,7 @@ function fdef(r) {
 const tables = [...rows.keys()].sort();
 let dict = [];
 dict.push('<section class="dict-chapter" id="chapter16">');
-dict.push('<h2 class="ch-title">第 16 章 · 数据字典全集</h2>');
+dict.push('<h2 class="ch-title">第 18 章 · 数据字典全集</h2>');
 dict.push('<p class="ch-desc">共 ' + tables.length + ' 张表、' + [...rows.values()].reduce((s, a) => s + a.length, 0) + ' 个字段。字段类型与默认值取自生产库 <code>game_server</code> 实际结构；说明按源码实体语义整理。枚举类型取值详见<b>附录 B 枚举全集</b>。</p>');
 dict.push('<div class="dict-toc">');
 for (const t of tables) dict.push(`<a href="#dict-${t}">${t} (${rows.get(t).length})</a>`);

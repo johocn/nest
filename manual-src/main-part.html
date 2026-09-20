@@ -131,8 +131,9 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
   <a class="nav-item" href="#ch14">14 实时通信</a>
   <a class="nav-item" href="#ch15">15 新手引导与初始数值</a>
   <a class="nav-item" href="#ch16">16 生态联动</a>
+  <a class="nav-item" href="#ch17">17 养成长线</a>
   <div class="nav-group">附录</div>
-  <a class="nav-item" href="#chapter16">17 数据字典全集</a>
+  <a class="nav-item" href="#chapter16">18 数据字典全集</a>
   <a class="nav-item" href="#appendix-a">A 接口路径索引</a>
   <a class="nav-item" href="#appendix-b">B 枚举全集</a>
   <a class="nav-item" href="#appendix-c">C 部署与运维</a>
@@ -2623,6 +2624,56 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
       <tr><td><code>risk.ingest_*_id</code></td><td>0</td><td>各源摄入高水位（trade/gift/auction/escrow/bounty，系统自动推进，勿手改）</td></tr>
     </tbody>
   </table>
+  </div>
+</section>
+
+<section class="chapter" id="ch17">
+  <div class="chapter-inner">
+  <h2 class="ch-title">第 17 章 · 养成长线（境界突破 / 里程碑）</h2>
+  <p class="ch-desc">给玩家长期养成的「境界突破 + 成长里程碑」闭环：<b>cultivate 累加修为 → 达标后 breakThrough 消耗养成道具并突破境界（叠加属性加成）→ 到达关键境界首次触发里程碑发奖</b>，形成长线正反馈；奖励复用既有发奖通道（inventory / economy / mail），不新造系统。实现见 <code>packages-game/game-server/src/modules/realm</code>。</p>
+
+  <h3>17.1 养成长线总览</h3>
+  <ul>
+    <li><b>修为（realm_value）</b>：玩家角色的养成数值，由日常玩法（任务 / 战斗等产出渠道）回调 <code>cultivate</code> 累加。</li>
+    <li><b>境界（realm_level）</b>：玩家表 <code>characters.realm_level</code>，默认 1（凡体）；突破后提升并扣除对应达标修为。</li>
+    <li><b>属性加成</b>：以「覆盖式叠加」落到 <code>character_attributes</code>（delta = 新境界加成 − 旧境界加成），避免旧境界加成残留，且不干扰既有 buff / 战斗结算。</li>
+    <li><b>里程碑奖励</b>：首次到达某境界即发奖（<code>milestone_claimed_json</code> 按 realm_level 幂等去重，防重复领）。</li>
+  </ul>
+
+  <h3>17.2 数据结构</h3>
+  <table>
+    <thead><tr><th>表 / 字段</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td><code>realm_templates</code></td><td>境界档位模板：<code>realm_level</code>（唯一）、<code>realm_name</code>、<code>required_value</code>（达标修为）、<code>consume_items_json</code>（突破消耗）、<code>stat_bonus_json</code>（属性加成）、<code>milestone_reward_json</code>（里程碑奖励）。</td></tr>
+      <tr><td><code>characters.realm_level</code></td><td>当前境界等级（默认 1）。</td></tr>
+      <tr><td><code>characters.realm_value</code></td><td>修为累计值（突破达标后扣除）。</td></tr>
+      <tr><td><code>characters.milestone_claimed_json</code></td><td>已领取里程碑的境界等级数组（幂等去重）。</td></tr>
+    </tbody>
+  </table>
+
+  <h3>17.3 境界突破流程</h3>
+  <ol>
+    <li><code>cultivate(playerId, amount)</code>：修为累加，落库并广播 <code>realm.value.gained</code> 事件。</li>
+    <li><code>breakThrough(playerId)</code>：校验 <code>realm_value ≥ required_value</code>，未达标抛 <code>REALM_VALUE_NOT_ENOUGH (94001)</code>；已达最高境界抛 <code>REALM_ALREADY_MAX (94002)</code>。</li>
+    <li>达标后先经 <code>inventory.removeItem</code> 消耗 <code>consume_items_json</code> 的养成道具（不足时抛既有 <code>ITEM_NOT_ENOUGH</code>）。</li>
+    <li>境界 +1、扣减达标修为，属性加成覆盖叠加到 <code>character_attributes</code>。</li>
+    <li>广播 <code>realm.breakthrough</code> 事件并返回 <code>bonus / rewardDelivered</code>。</li>
+  </ol>
+
+  <h3>17.4 里程碑奖励（幂等）</h3>
+  <ul>
+    <li><code>milestone_reward_json</code> 支持 <code>currency</code>（economy 发币）、<code>items</code>（inventory 发道具）、<code>mail</code>（mail 发件）三类奖励。</li>
+    <li>仅当 <code>milestone_claimed_json</code> 未包含目标境界时才发奖，发放后写入该境界等级，保证「每人每境界仅发一次」。</li>
+    <li>【回归约束】属性加成与里程碑奖励均复用既有通道与字段，不改动战斗结算核心、不新增发奖系统。</li>
+  </ul>
+
+  <h3>17.5 接口与接入</h3>
+  <ul>
+    <li>客户端 <code>GET /api/client/v1/realm/my</code>（境界 / 修为 / 下一档模板）、<code>POST /api/client/v1/realm/cultivate</code>、<code>POST /api/client/v1/realm/breakthrough</code>。</li>
+    <li>后台境界模板 CRUD：<code>GET/POST /api/admin/v1/realm/templates</code>、<code>PUT/DELETE /api/admin/v1/realm/templates/:id</code>。</li>
+    <li>接入方式：既有玩法 / 任务 / 战斗结算在产出修为时调用 <code>RealmService.cultivate</code>，即可推进养成长线（本项目仅在接口层暴露，接入由后续玩法回调驱动）。</li>
+  </ul>
+
   </div>
 </section>
 

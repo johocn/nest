@@ -191,6 +191,32 @@ else
   ok "admin points skipped (no admin creds)"
 fi
 
+# ---- 18. Plan6 养成长线：境界突破 + 里程碑（cultivate + breakthrough 到档位2，奖励幂等不重复）----
+# 预置境界模板 lv1 凡体/lv2 炼气/lv3 筑基（本段只做养成长线闭环与幂等性验证，不连线上结算）
+docker exec 1Panel-postgresql-4LsS psql -U game -d game_server -c "INSERT INTO realm_templates (realm_level, realm_name, required_value, consume_items_json, stat_bonus_json, milestone_reward_json) VALUES (1,'凡体','0','[]','{\"strength\":0}','{}'),(2,'炼气','100','[]','{\"strength\":50}','{\"currency\":[{\"currencyType\":\"gold\",\"amount\":1000}]}'),(3,'筑基','200','[]','{\"strength\":120}','{\"currency\":[{\"currencyType\":\"gold\",\"amount\":3000}]}') ON CONFLICT (realm_level) DO NOTHING" >/dev/null && ok "seed realm_templates lv1-3" || bad "seed realm templates" "sql"
+
+R=$(curl -s -X POST $BASE/api/client/v1/realm/cultivate -H "$A1" -H 'Content-Type: application/json' -d '{"amount":500}')
+echo "$R" | grep -q '"realmValue":"500"' && ok "realm cultivate A realmValue=500" || bad "realm cultivate A" "$R"
+
+R=$(curl -s $BASE/api/client/v1/realm/my -H "$A1")
+echo "$R" | grep -q '"realmLevel":1' && echo "$R" | grep -q '"realmName":"凡体"' && ok "realm my lv1/lv1name before breakthrough" || bad "realm my lv1" "$R"
+
+R=$(curl -s -X POST $BASE/api/client/v1/realm/breakthrough -H "$A1")
+echo "$R" | grep -q '"realmLevel":2' && echo "$R" | grep -q '"realmName":"炼气"' && echo "$R" | grep -q '"rewardDelivered":\["currency:gold:1000"\]' && ok "realm breakthrough lv1->lv2 + milestone gold 1000" || bad "realm breakthrough lv1->lv2" "$R"
+
+R=$(curl -s $BASE/api/client/v1/realm/my -H "$A1")
+echo "$R" | grep -q '"realmLevel":2' && echo "$R" | grep -q '"realmValue":"400"' && ok "realm my lv2 realmValue=400 (100 deducted)" || bad "realm my lv2" "$R"
+
+R=$(curl -s -X POST $BASE/api/client/v1/realm/breakthrough -H "$A1")
+echo "$R" | grep -q '"realmLevel":3' && echo "$R" | grep -q '"rewardDelivered":\["currency:gold:3000"\]' && ok "realm breakthrough lv2->lv3 + milestone gold 3000" || bad "realm breakthrough lv2->lv3" "$R"
+
+# 幂等：里程碑按 realm_level 去重，claimed 仅含 [2,3] 不重复；满级后再突破应 94002 且不发新奖
+CLAIMED=$(docker exec 1Panel-postgresql-4LsS psql -U game -d game_server -t -A -c "SELECT milestone_claimed_json FROM characters WHERE player_id='$PID1'")
+echo "$CLAIMED" | grep -q '"2"' && echo "$CLAIMED" | grep -q '"3"' && ok "realm milestone claimed [2,3] (idempotent, no duplicate)" || bad "realm milestone claimed json" "$CLAIMED"
+
+R=$(curl -s -X POST $BASE/api/client/v1/realm/breakthrough -H "$A1")
+code_of "$R" | grep -q "94002" && ok "realm breakthrough at max → 94002 (no duplicate reward)" || bad "realm breakthrough at max code" "$R"
+
 echo "=============================="
 echo "SMOKE RESULT: PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" = "0" ]
