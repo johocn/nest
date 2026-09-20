@@ -6,6 +6,7 @@ import { CacheModule } from '@cache/cache.module';
 import { EventBusModule } from '@event-bus/event-bus.module';
 import { EventListenersModule } from '@event-bus/event-listeners.module';
 import { AuthModule } from '@modules/auth/auth.module';
+import { AdminSessionModule } from '@modules/auth/admin-session.module';
 import { PlayerModule } from '@modules/player/player.module';
 import { EconomyModule } from '@modules/economy/economy.module';
 import { CharacterModule } from '@modules/character/character.module';
@@ -57,6 +58,7 @@ import { RateLimitGuard } from '@common/guards/rate-limit.guard';
     CacheModule,
     EventBusModule,
     EventListenersModule,
+    AdminSessionModule,
 
     // 第三层：功能模块（后续阶段逐步添加）
     AuthModule,

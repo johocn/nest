@@ -26,6 +26,9 @@ export class AdminUser {
   @Column({ name: 'is_active', type: 'boolean', default: true })
   isActive: boolean;
 
+  @Column({ name: 'token_version', type: 'int', default: 0 })
+  tokenVersion: number;
+
   @Column({ name: 'last_login_at', type: 'timestamp', nullable: true })
   lastLoginAt: Date | null;
 
