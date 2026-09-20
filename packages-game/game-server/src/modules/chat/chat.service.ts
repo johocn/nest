@@ -24,6 +24,8 @@ import { ConfigManageService } from '@modules/config/config.service';
 import { AdminService } from '@modules/admin/admin.service';
 import { AuthService } from '@modules/auth/auth.service';
 import { SocialService } from '@modules/social/social.service';
+import { SocialEconomyService } from '@modules/social/social-economy.service';
+import { SocialPointReason } from '@constants/enums';
 import { Player } from '@modules/player/entities/player.entity';
 import { Friend } from '@modules/social/entities/friend.entity';
 import { GuildMember } from '@modules/social/entities/guild-member.entity';
@@ -81,6 +83,7 @@ export class ChatService {
     private readonly eventBus: EventBusService,
     private readonly authService: AuthService,
     private readonly socialService: SocialService,
+    private readonly socialEconomyService: SocialEconomyService,
   ) {
     this.filter = new SensitiveWordFilter();
   }
@@ -353,6 +356,53 @@ export class ChatService {
       where: { playerId, signInDate: today },
     });
     return { signedIn: Boolean(existing), today };
+  }
+
+  async makeupSignIn(
+    playerId: string,
+    date: string,
+  ): Promise<ChatSignIn> {
+    const today = new Date().toISOString().slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date >= today) {
+      throw new GameException(ErrorCodes.MAKEUP_INVALID_DATE, '仅可补签过去的日期');
+    }
+    const existing = await this.signInRepo.findOne({
+      where: { playerId, signInDate: date },
+    });
+    if (existing) {
+      throw new GameException(ErrorCodes.CHAT_SIGN_IN_DONE, '该日已签到');
+    }
+    const monthKey = date.slice(0, 7);
+    const limit = await this.readConfigNumber('chat.makeup_monthly_limit', 3);
+    const countKey = `chat:makeup:${playerId}:${monthKey}`;
+    const used = Number((await this.cacheService.get(countKey)) ?? '0');
+    if (used >= limit) {
+      throw new GameException(ErrorCodes.MAKEUP_LIMIT_EXCEEDED, '本月补签次数已达上限');
+    }
+    const cost = await this.readConfigNumber('chat.makeup_cost', 50);
+    await this.socialEconomyService.spendPoints(
+      playerId,
+      cost,
+      SocialPointReason.SIGN_IN_MAKEUP,
+      `signin:${date}`,
+    );
+    await this.cacheService.set(countKey, String(used + 1), 31 * 86400);
+
+    const reward = await this.readConfigJson('chat.sign_in_reward', { favor: 1 });
+    const record = await this.signInRepo.save(
+      this.signInRepo.create({
+        playerId,
+        signInDate: date,
+        rewardJson: { ...reward, makeup: true },
+      }),
+    );
+    this.eventBus.emit(GameEvents.CHAT_SIGN_IN, {
+      playerId,
+      signInDate: date,
+      reward,
+      makeup: true,
+    });
+    return record;
   }
 
   async getMyChatStats(playerId: string): Promise<ChatPlayerStat[]> {

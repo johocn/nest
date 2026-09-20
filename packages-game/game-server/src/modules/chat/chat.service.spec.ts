@@ -14,6 +14,7 @@ import { ConfigManageService } from '@modules/config/config.service';
 import { AdminService } from '@modules/admin/admin.service';
 import { AuthService } from '@modules/auth/auth.service';
 import { SocialService } from '@modules/social/social.service';
+import { SocialEconomyService } from '@modules/social/social-economy.service';
 import { Player } from '@modules/player/entities/player.entity';
 import { Friend } from '@modules/social/entities/friend.entity';
 import { GuildMember } from '@modules/social/entities/guild-member.entity';
@@ -24,6 +25,7 @@ import {
   SupportTicketStatus,
   VoiceRoomType,
   FriendStatus,
+  SocialPointReason,
 } from '@constants/enums';
 import type { Repository } from 'typeorm';
 
@@ -43,6 +45,7 @@ describe('ChatService', () => {
   let eventBus: jest.Mocked<EventBusService>;
   let authService: any;
   let socialService: any;
+  let socialEconomyService: any;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -151,6 +154,12 @@ describe('ChatService', () => {
             isBlocked: jest.fn(),
           },
         },
+        {
+          provide: SocialEconomyService,
+          useValue: {
+            spendPoints: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -169,6 +178,7 @@ describe('ChatService', () => {
     eventBus = module.get(EventBusService);
     authService = module.get(AuthService);
     socialService = module.get(SocialService);
+    socialEconomyService = module.get(SocialEconomyService);
     // 默认无禁言/无拉黑，避免既有 sendChannelMessage 用例受新校验影响
     authService.getAccountRestrictions.mockResolvedValue({
       mutedUntil: null,
@@ -531,6 +541,42 @@ describe('ChatService', () => {
           recipientId: '200',
         }),
       ).rejects.toMatchObject({ response: { code: ErrorCodes.TARGET_BLOCKED_YOU } });
+    });
+  });
+
+  describe('makeupSignIn', () => {
+    it('补签过去日期成功并扣积分', async () => {
+      signInRepo.findOne.mockResolvedValue(null);
+      cacheService.get.mockResolvedValue('0');
+      configService.getConfig.mockResolvedValue({ value: '50' }); // makeup_cost
+      socialEconomyService.spendPoints.mockResolvedValue(50);
+      const record = await service.makeupSignIn('1', '2026-09-18');
+      expect(record.rewardJson.makeup).toBe(true);
+      expect(socialEconomyService.spendPoints).toHaveBeenCalledWith(
+        '1',
+        50,
+        SocialPointReason.SIGN_IN_MAKEUP,
+        'signin:2026-09-18',
+      );
+    });
+
+    it('补签今日拒绝', async () => {
+      await expect(service.makeupSignIn('1', '2099-01-01')).rejects.toMatchObject(
+        {
+          response: { code: ErrorCodes.MAKEUP_INVALID_DATE },
+        },
+      );
+    });
+
+    it('补签超月度上限拒绝', async () => {
+      signInRepo.findOne.mockResolvedValue(null);
+      cacheService.get.mockResolvedValue('3');
+      configService.getConfig.mockResolvedValue({ value: '3' });
+      await expect(
+        service.makeupSignIn('1', '2026-09-18'),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.MAKEUP_LIMIT_EXCEEDED },
+      });
     });
   });
 });

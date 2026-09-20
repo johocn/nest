@@ -45,6 +45,17 @@ export class ChatController {
 
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
+  @Post('api/client/v1/chat/sign-in/makeup')
+  @ApiOperation({ summary: '签到补签（消耗社交积分）' })
+  async makeupSignIn(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Body() dto: { date: string },
+  ) {
+    return this.chatService.makeupSignIn(player.playerId, dto.date);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
   @Get('api/client/v1/chat/my-stats')
   @ApiOperation({ summary: '我的频道发言统计与等级' })
   async myStats(@CurrentPlayer() player: CurrentPlayerData) {
