@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { SocialService } from './social.service';
 import { SocialController } from './social.controller';
 import { SocialEconomyService } from './social-economy.service';
+import { SocialGuideService } from './social-guide.service';
 import { SocialEventListener } from './social-event.listener';
 import {
   Friend,
@@ -63,7 +64,12 @@ import { VipModule } from '@modules/vip/vip.module';
     VipModule,
   ],
   controllers: [SocialController],
-  providers: [SocialService, SocialEconomyService, SocialEventListener],
-  exports: [SocialService, SocialEconomyService],
+  providers: [
+    SocialService,
+    SocialEconomyService,
+    SocialGuideService,
+    SocialEventListener,
+  ],
+  exports: [SocialService, SocialEconomyService, SocialGuideService],
 })
 export class SocialModule {}

@@ -1779,6 +1779,27 @@ export class SocialService {
     return { day, ...guide[day]!, stats };
   }
 
+  /** 引导任务统计：好友/亲缘/情报/帮派（供 guide/daily 合并输出）。 */
+  async getDailyGuideStats(playerId: string): Promise<{
+    friends: number;
+    kinships: number;
+    intel: number;
+    inGuild: boolean;
+  }> {
+    const [friends, kinships, intelligences, guildMember] = await Promise.all([
+      this.getFriendList(playerId),
+      this.getKinships(playerId),
+      this.getIntelligences(playerId),
+      this.guildMemberRepo.findOne({ where: { playerId } }),
+    ]);
+    return {
+      friends: friends.length,
+      kinships: kinships.length,
+      intel: intelligences.length,
+      inGuild: !!guildMember,
+    };
+  }
+
   async graduateApprentice(playerId: string, kinshipId: string): Promise<Kinship> {
     const kinship = await this.kinshipRepo.findOne({
       where: { id: kinshipId, status: KinshipStatus.ACTIVE },

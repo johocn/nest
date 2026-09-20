@@ -1,6 +1,8 @@
 import { Test } from '@nestjs/testing';
 import { SocialController } from './social.controller';
 import { SocialService } from './social.service';
+import { SocialEconomyService } from './social-economy.service';
+import { SocialGuideService } from './social-guide.service';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { DonateType, ReportReason, ReportTargetType } from '@constants/enums';
 
@@ -53,13 +55,24 @@ describe('SocialController', () => {
     unblockPlayer: jest.fn(),
     listBlocks: jest.fn(),
     recommendFriends: jest.fn(),
+    getDailyGuideStats: jest.fn(),
   };
 
   beforeEach(async () => {
     jest.clearAllMocks();
     const moduleRef = await Test.createTestingModule({
       controllers: [SocialController],
-      providers: [{ provide: SocialService, useValue: service }],
+      providers: [
+        { provide: SocialService, useValue: service },
+        { provide: SocialEconomyService, useValue: { getPointInfo: jest.fn() } },
+        {
+          provide: SocialGuideService,
+          useValue: {
+            getDailyGuide: jest.fn(),
+            claimTaskReward: jest.fn(),
+          },
+        },
+      ],
     }).compile();
     controller = moduleRef.get<SocialController>(SocialController);
   });
@@ -71,6 +84,44 @@ describe('SocialController', () => {
   it('should require JwtAuthGuard at class level', () => {
     const guards = Reflect.getMetadata('__guards__', SocialController);
     expect(guards).toEqual([JwtAuthGuard]);
+  });
+
+  describe('guide endpoints', () => {
+    it('getDailyGuide merges guide progress with stats', async () => {
+      (controller as any).guideService.getDailyGuide.mockResolvedValue({
+        day: 2,
+        title: '以武会友',
+        tasks: [{ id: 'friend', desc: '添加 1 位好友', done: true, rewarded: false }],
+        rewardReady: true,
+      });
+      service.getDailyGuideStats.mockResolvedValue({
+        friends: 1,
+        kinships: 0,
+        intel: 0,
+        inGuild: false,
+      });
+      const result = await controller.getDailyGuide(player);
+      expect(result).toMatchObject({
+        day: 2,
+        title: '以武会友',
+        rewardReady: true,
+        stats: { friends: 1, inGuild: false },
+      });
+    });
+
+    it('claimGuideReward delegates to guideService', async () => {
+      (controller as any).guideService.claimTaskReward.mockResolvedValue({
+        taskId: 'friend',
+        points: 20,
+        gold: 50,
+      });
+      const result = await controller.claimGuideReward(player, 'friend');
+      expect(controller['guideService'].claimTaskReward).toHaveBeenCalledWith(
+        'p1',
+        'friend',
+      );
+      expect(result.points).toBe(20);
+    });
   });
 
   describe('intel endpoints', () => {

@@ -35,6 +35,7 @@ import { CurrentPlayer } from '@common/decorators/current-player.decorator';
 import type { CurrentPlayerData } from '@common/decorators/current-player.decorator';
 import { DonateType, ReportReason, ReportTargetType } from '@constants/enums';
 import { SocialEconomyService } from './social-economy.service';
+import { SocialGuideService } from './social-guide.service';
 
 @ApiTags('Social')
 @ApiBearerAuth()
@@ -44,6 +45,7 @@ export class SocialController {
   constructor(
     private readonly socialService: SocialService,
     private readonly economyService: SocialEconomyService,
+    private readonly guideService: SocialGuideService,
   ) {}
 
   // ===== Friends =====
@@ -438,9 +440,22 @@ export class SocialController {
   }
 
   @Get('guide/daily')
-  @ApiOperation({ summary: '七日社交引导（注册第 N 天任务）' })
+  @ApiOperation({ summary: '七日引导（含进度与奖励）' })
   async getDailyGuide(@CurrentPlayer() player: CurrentPlayerData) {
-    return this.socialService.getDailyGuide(player.playerId);
+    const [guide, stats] = await Promise.all([
+      this.guideService.getDailyGuide(player.playerId),
+      this.socialService.getDailyGuideStats(player.playerId),
+    ]);
+    return { ...guide, stats };
+  }
+
+  @Post('guide/tasks/:taskId/claim')
+  @ApiOperation({ summary: '领取引导任务奖励' })
+  async claimGuideReward(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Param('taskId') taskId: string,
+  ) {
+    return this.guideService.claimTaskReward(player.playerId, taskId);
   }
 
   // ===== 举报与拉黑（阶段5批1） =====
