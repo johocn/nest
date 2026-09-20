@@ -70,6 +70,42 @@ export class AdminAuthService {
     };
   }
 
+  async logout(adminId: string): Promise<{ ok: true }> {
+    const admin = await this.adminRepo.findOne({ where: { id: adminId } });
+    if (!admin) {
+      throw new GameException(ErrorCodes.ADMIN_NOT_FOUND, '管理员不存在');
+    }
+    await this.adminRepo.update(
+      { id: admin.id },
+      { tokenVersion: admin.tokenVersion + 1 },
+    );
+    return { ok: true };
+  }
+
+  async changePassword(
+    adminId: string,
+    oldPassword: string,
+    newPassword: string,
+  ): Promise<{ ok: true }> {
+    const admin = await this.adminRepo.findOne({ where: { id: adminId } });
+    if (!admin) {
+      throw new GameException(ErrorCodes.ADMIN_NOT_FOUND, '管理员不存在');
+    }
+    const isOldValid = await this.comparePassword(
+      oldPassword,
+      admin.passwordHash,
+    );
+    if (!isOldValid) {
+      throw new GameException(ErrorCodes.ADMIN_PASSWORD_WRONG, '原密码错误');
+    }
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await this.adminRepo.update(
+      { id: admin.id },
+      { passwordHash, tokenVersion: admin.tokenVersion + 1 },
+    );
+    return { ok: true };
+  }
+
   private async comparePassword(
     password: string,
     hash: string,

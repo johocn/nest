@@ -106,4 +106,53 @@ describe('AdminAuthService', () => {
       GameException,
     );
   });
+
+  it('should bump tokenVersion on logout', async () => {
+    mockAdminRepo.findOne.mockResolvedValue({ id: '1', tokenVersion: 4 });
+
+    await expect(service.logout('1')).resolves.toEqual({ ok: true });
+    expect(mockAdminRepo.update).toHaveBeenCalledWith(
+      { id: '1' },
+      { tokenVersion: 5 },
+    );
+  });
+
+  it('should throw on logout when admin not found', async () => {
+    mockAdminRepo.findOne.mockResolvedValue(null);
+    await expect(service.logout('9')).rejects.toThrow(GameException);
+  });
+
+  it('should throw when old password is wrong on changePassword', async () => {
+    mockAdminRepo.findOne.mockResolvedValue({
+      id: '1',
+      passwordHash: 'hash',
+      tokenVersion: 0,
+    });
+    jest.spyOn(service as any, 'comparePassword').mockResolvedValue(false);
+
+    await expect(
+      service.changePassword('1', 'wrong', 'newpass123'),
+    ).rejects.toThrow(GameException);
+    expect(mockAdminRepo.update).not.toHaveBeenCalled();
+  });
+
+  it('should update password hash and bump tokenVersion on changePassword', async () => {
+    mockAdminRepo.findOne.mockResolvedValue({
+      id: '1',
+      passwordHash: 'hash',
+      tokenVersion: 2,
+    });
+    jest.spyOn(service as any, 'comparePassword').mockResolvedValue(true);
+
+    await expect(
+      service.changePassword('1', 'oldpass123', 'newpass123'),
+    ).resolves.toEqual({ ok: true });
+
+    expect(mockAdminRepo.update).toHaveBeenCalledTimes(1);
+    const [criteria, patch] = mockAdminRepo.update.mock.calls[0];
+    expect(criteria).toEqual({ id: '1' });
+    expect(patch.tokenVersion).toBe(3);
+    expect(typeof patch.passwordHash).toBe('string');
+    expect(patch.passwordHash).not.toBe('hash');
+  });
 });
