@@ -1,6 +1,6 @@
 <section class="dict-chapter" id="chapter16">
 <h2 class="ch-title">第 17 章 · 数据字典全集</h2>
-<p class="ch-desc">共 74 张表、680 个字段。字段类型与默认值取自生产库 <code>game_server</code> 实际结构；说明按源码实体语义整理。枚举类型取值详见<b>附录 B 枚举全集</b>。</p>
+<p class="ch-desc">共 78 张表、715 个字段。字段类型与默认值取自生产库 <code>game_server</code> 实际结构；说明按源码实体语义整理。枚举类型取值详见<b>附录 B 枚举全集</b>。</p>
 <div class="dict-toc">
 <a href="#dict-account_login_logs">account_login_logs (7)</a>
 <a href="#dict-achievement_templates">achievement_templates (12)</a>
@@ -41,8 +41,10 @@
 <a href="#dict-guild_donates">guild_donates (7)</a>
 <a href="#dict-guild_members">guild_members (6)</a>
 <a href="#dict-guilds">guilds (10)</a>
+<a href="#dict-guide_progresses">guide_progresses (8)</a>
 <a href="#dict-inventory_items">inventory_items (11)</a>
 <a href="#dict-item_templates">item_templates (14)</a>
+<a href="#dict-ladder_records">ladder_records (9)</a>
 <a href="#dict-mails">mails (13)</a>
 <a href="#dict-monster_templates">monster_templates (14)</a>
 <a href="#dict-notice_reactions">notice_reactions (5)</a>
@@ -71,6 +73,8 @@
 <a href="#dict-server_statuses">server_statuses (9)</a>
 <a href="#dict-sign_in_records">sign_in_records (8)</a>
 <a href="#dict-skill_templates">skill_templates (13)</a>
+<a href="#dict-social_chests">social_chests (10)</a>
+<a href="#dict-social_point_records">social_point_records (8)</a>
 <a href="#dict-trade_orders">trade_orders (11)</a>
 <a href="#dict-transactions">transactions (11)</a>
 <a href="#dict-support_tickets">support_tickets (11)</a>
@@ -759,7 +763,7 @@
 <tr><td><code>product_id</code></td><td>varchar</td><td>否</td><td></td><td>充值商品ID</td></tr>
 <tr><td><code>amount</code></td><td>bigint</td><td>否</td><td></td><td>充值金额</td></tr>
 <tr><td><code>currency</code></td><td>varchar</td><td>否</td><td>CNY'::character varying</td><td>币种（默认CNY）</td></tr>
-<tr><td><code>status</code></td><td>orders_status 枚举</td><td>否</td><td>pending'::recharge_orders_status_enum</td><td>状态（pending待支付/paid已支付/failed失败/delivered已发货）</td></tr>
+<tr><td><code>status</code></td><td>orders_status 枚举</td><td>否</td><td>pending'::recharge_orders_status_enum</td><td>状态（pending待支付/paid已支付/failed失败/delivered已发货/cancelled已取消/expired超时）</td></tr>
 <tr><td><code>platform</code></td><td>varchar</td><td>否</td><td>mock'::character varying</td><td>支付平台（默认mock模拟）</td></tr>
 <tr><td><code>callback_at</code></td><td>timestamp</td><td>是</td><td></td><td>支付回调时间</td></tr>
 <tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
@@ -1052,5 +1056,56 @@
 <tr><td><code>members</code></td><td>jsonb</td><td>否</td><td>'[]'::jsonb</td><td>成员玩家ID数组（音频走客户端P2P）</td></tr>
 <tr><td><code>max_members</code></td><td>int</td><td>否</td><td>8</td><td>最大成员数</td></tr>
 <tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-social_point_records">
+<h3>📄 social_point_records <span class="tbl-meta">8 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>player_id</code></td><td>bigint</td><td>否</td><td></td><td>玩家ID</td></tr>
+<tr><td><code>type</code></td><td>points_type 枚举</td><td>否</td><td></td><td>积分变动类型（earn获得/spend消费）</td></tr>
+<tr><td><code>amount</code></td><td>int</td><td>否</td><td></td><td>变动数量（正数获得/负数消费）</td></tr>
+<tr><td><code>balance_after</code></td><td>int</td><td>否</td><td></td><td>变动后余额</td></tr>
+<tr><td><code>reason</code></td><td>points_reason 枚举</td><td>否</td><td></td><td>变动原因（friend_added交友/kinship_formed结亲/gift_sent送礼/guild_contrib帮贡/intel_gained情报/chat_sign_in聊天签到/guide_task引导/chest_exchange兑宝箱/sign_in_makeup补签/admin后台）</td></tr>
+<tr><td><code>ref_id</code></td><td>varchar</td><td>是</td><td></td><td>关联业务ID（关系对/任务ID，用于去重）</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-social_chests">
+<h3>📄 social_chests <span class="tbl-meta">10 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>player_id</code></td><td>bigint</td><td>否</td><td></td><td>玩家ID</td></tr>
+<tr><td><code>chest_type</code></td><td>chests_chest_type 枚举</td><td>否</td><td></td><td>宝箱类型（weekly_activity周常活跃/point_exchange积分兑换）</td></tr>
+<tr><td><code>tier</code></td><td>int</td><td>否</td><td></td><td>宝箱档位（1-3，档位越高奖励越好）</td></tr>
+<tr><td><code>cost</code></td><td>int</td><td>否</td><td>0</td><td>兑换消耗社交积分</td></tr>
+<tr><td><code>status</code></td><td>chests_status 枚举</td><td>否</td><td>pending'::social_chests_status_enum</td><td>状态（pending未开启/opened已开启）</td></tr>
+<tr><td><code>reward_json</code></td><td>jsonb</td><td>否</td><td>{}'::jsonb</td><td>开箱奖励内容JSON（金币/钻石/道具）</td></tr>
+<tr><td><code>source_week</code></td><td>varchar</td><td>是</td><td></td><td>来源周（YYYY-Www，周常宝箱归属）</td></tr>
+<tr><td><code>opened_at</code></td><td>timestamp</td><td>是</td><td></td><td>开启时间</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-guide_progresses">
+<h3>📄 guide_progresses <span class="tbl-meta">8 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>player_id</code></td><td>bigint</td><td>否</td><td></td><td>玩家ID</td></tr>
+<tr><td><code>day</code></td><td>int</td><td>否</td><td></td><td>注册天数（第 N 天的引导）</td></tr>
+<tr><td><code>task_id</code></td><td>varchar</td><td>否</td><td></td><td>引导任务ID（friend/kinship/guild/trade 等，玩家+任务唯一）</td></tr>
+<tr><td><code>status</code></td><td>progresses_status 枚举</td><td>否</td><td>done'::guide_progresses_status_enum</td><td>状态（todo未完成/done已完成/rewarded已领奖）</td></tr>
+<tr><td><code>completed_at</code></td><td>timestamp</td><td>是</td><td></td><td>完成时间</td></tr>
+<tr><td><code>claimed_at</code></td><td>timestamp</td><td>是</td><td></td><td>奖励领取时间</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+</tbody></table></div>
+<div class="dict-table" id="dict-ladder_records">
+<h3>📄 ladder_records <span class="tbl-meta">9 字段</span></h3>
+<table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
+<tr><td><code>player_id</code></td><td>bigint</td><td>否</td><td></td><td>玩家ID</td></tr>
+<tr><td><code>season</code></td><td>varchar</td><td>否</td><td></td><td>赛季标识（如 2026S1，玩家+赛季唯一）</td></tr>
+<tr><td><code>score</code></td><td>int</td><td>否</td><td>1000</td><td>段位分（初始1000，胜+20~50/负-15，下限100）</td></tr>
+<tr><td><code>wins</code></td><td>int</td><td>否</td><td>0</td><td>胜场数</td></tr>
+<tr><td><code>losses</code></td><td>int</td><td>否</td><td>0</td><td>败场数</td></tr>
+<tr><td><code>streak</code></td><td>int</td><td>否</td><td>0</td><td>当前连胜场次（落败清零）</td></tr>
+<tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
+<tr><td><code>updated_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>更新时间</td></tr>
 </tbody></table></div>
 </section>

@@ -1,6 +1,6 @@
 <section class="appendix-chapter" id="appendix-b">
 <h2 class="ch-title">附录 B · 枚举全集</h2>
-<p class="ch-desc">共 58 个枚举，取值即数据库枚举列可写入的值（代码枚举名=库值）。</p>
+<p class="ch-desc">共 63 个枚举，取值即数据库枚举列可写入的值（代码枚举名=库值）。</p>
 <div class="dict-table"><h3>🔖 ﻿AccountType <span class="tbl-meta">4 取值</span></h3>
 <table><thead><tr><th>代码枚举名</th><th>数据库值</th></tr></thead><tbody>
 <tr><td><code>NORMAL</code></td><td>normal</td></tr>
@@ -392,16 +392,53 @@
 <tr><td><code>BOOLEAN</code></td><td>boolean</td></tr>
 <tr><td><code>JSON</code></td><td>json</td></tr>
 </tbody></table></div>
-<div class="dict-table"><h3>🔖 RechargeStatus <span class="tbl-meta">3 取值</span></h3>
+<div class="dict-table"><h3>🔖 RechargeStatus <span class="tbl-meta">6 取值</span></h3>
 <table><thead><tr><th>代码枚举名</th><th>数据库值</th></tr></thead><tbody>
 <tr><td><code>PENDING</code></td><td>pending</td></tr>
 <tr><td><code>PAID</code></td><td>paid</td></tr>
 <tr><td><code>FAILED</code></td><td>failed</td></tr>
+<tr><td><code>DELIVERED</code></td><td>delivered</td></tr>
+<tr><td><code>CANCELLED</code></td><td>cancelled</td></tr>
+<tr><td><code>EXPIRED</code></td><td>expired</td></tr>
 </tbody></table></div>
 <div class="dict-table"><h3>🔖 MatchMode <span class="tbl-meta">3 取值</span></h3>
 <table><thead><tr><th>代码枚举名</th><th>数据库值</th></tr></thead><tbody>
 <tr><td><code>RANKED</code></td><td>ranked</td></tr>
 <tr><td><code>CASUAL</code></td><td>casual</td></tr>
 <tr><td><code>PRACTICE</code></td><td>practice</td></tr>
+</tbody></table></div>
+<div class="dict-table"><h3>🔖 SocialPointType <span class="tbl-meta">2 取值</span></h3>
+<table><thead><tr><th>代码枚举名</th><th>数据库值</th></tr></thead><tbody>
+<tr><td><code>EARN</code></td><td>earn</td></tr>
+<tr><td><code>SPEND</code></td><td>spend</td></tr>
+</tbody></table></div>
+<div class="dict-table"><h3>🔖 SocialPointReason <span class="tbl-meta">10 取值</span></h3>
+<table><thead><tr><th>代码枚举名</th><th>数据库值</th></tr></thead><tbody>
+<tr><td><code>FRIEND_ADDED</code></td><td>friend_added</td></tr>
+<tr><td><code>KINSHIP_FORMED</code></td><td>kinship_formed</td></tr>
+<tr><td><code>GIFT_SENT</code></td><td>gift_sent</td></tr>
+<tr><td><code>GUILD_CONTRIB</code></td><td>guild_contrib</td></tr>
+<tr><td><code>INTEL_GAINED</code></td><td>intel_gained</td></tr>
+<tr><td><code>CHAT_SIGN_IN</code></td><td>chat_sign_in</td></tr>
+<tr><td><code>GUIDE_TASK</code></td><td>guide_task</td></tr>
+<tr><td><code>CHEST_EXCHANGE</code></td><td>chest_exchange</td></tr>
+<tr><td><code>SIGN_IN_MAKEUP</code></td><td>sign_in_makeup</td></tr>
+<tr><td><code>ADMIN</code></td><td>admin</td></tr>
+</tbody></table></div>
+<div class="dict-table"><h3>🔖 SocialChestType <span class="tbl-meta">2 取值</span></h3>
+<table><thead><tr><th>代码枚举名</th><th>数据库值</th></tr></thead><tbody>
+<tr><td><code>WEEKLY_ACTIVITY</code></td><td>weekly_activity</td></tr>
+<tr><td><code>POINT_EXCHANGE</code></td><td>point_exchange</td></tr>
+</tbody></table></div>
+<div class="dict-table"><h3>🔖 SocialChestStatus <span class="tbl-meta">2 取值</span></h3>
+<table><thead><tr><th>代码枚举名</th><th>数据库值</th></tr></thead><tbody>
+<tr><td><code>PENDING</code></td><td>pending</td></tr>
+<tr><td><code>OPENED</code></td><td>opened</td></tr>
+</tbody></table></div>
+<div class="dict-table"><h3>🔖 GuideTaskStatus <span class="tbl-meta">3 取值</span></h3>
+<table><thead><tr><th>代码枚举名</th><th>数据库值</th></tr></thead><tbody>
+<tr><td><code>TODO</code></td><td>todo</td></tr>
+<tr><td><code>DONE</code></td><td>done</td></tr>
+<tr><td><code>REWARDED</code></td><td>rewarded</td></tr>
 </tbody></table></div>
 </section>

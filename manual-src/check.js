@@ -76,9 +76,11 @@ if (navs.length !== secs.length - 1) warn('导航', `导航 ${navs.length} 项 v
 console.log(`  导航 ${navs.length} 项 / section ${secs.length} 个（cover 封面无导航）`);
 
 // ---------- 5. 占位符 / 残留检查 ----------
+// 枚举值（如 GuideTaskStatus.TODO）会以 <code>TODO</code> 形式出现，属合法内容，剔除 <code> 块后计数
 console.log('\n=== 占位符检查 ===');
+const textNoCode = html.replace(/<code>[\s\S]*?<\/code>/g, '');
 ['TODO', 'TBD', 'XXX', 'FIXME', '占位符', '待补充', '此处待', 'Lorem', '<!--DICT_PART-->', '<!--API_PART-->', '<!--ENUM_PART-->']
-  .forEach(k => { const c = html.split(k).length - 1; if (c > 0) warn('占位符', `"${k}" 出现 ${c} 次`); });
+  .forEach(k => { const c = textNoCode.split(k).length - 1; if (c > 0) warn('占位符', `"${k}" 出现 ${c} 次`); });
 if (!issues.some(i => i.startsWith('[占位符]'))) console.log('  无占位符残留');
 
 // ---------- 6. 空链接 / 外链检查 ----------
