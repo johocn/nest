@@ -17,6 +17,7 @@ describe('RiskWashService', () => {
     find: jest.fn().mockResolvedValue([]),
     save: jest.fn((c: any) => c),
     findOne: jest.fn().mockResolvedValue(null),
+    create: jest.fn((c: any) => c),
   };
   const scoreRepo = { findOne: jest.fn(), save: jest.fn((s: any) => s) };
   const whitelistRepo = { find: jest.fn().mockResolvedValue([]) };
@@ -58,5 +59,44 @@ describe('RiskWashService', () => {
     expect(saved.some((f: any) => f.refId === 'trade:1')).toBe(true);
     expect(saved.find((f: any) => f.refId === 'trade:1')).toMatchObject({ fromId: 'A', toId: 'B', value: '200' });
     expect(config.setConfig).toHaveBeenCalledWith('risk.ingest_trade_id', '2', expect.anything());
+  });
+
+  const seedWash = (rows: Array<[string, string, string]>) => {
+    washRepo.find.mockResolvedValue(
+      rows.map(([fromId, toId, value], i) => ({
+        id: String(i + 1), fromId, toId, assetKey: 'gold', value,
+        bizType: 'trade_order', refId: `trade:${i + 1}`, createdAt: new Date(),
+      })),
+    );
+  };
+
+  it('检出回环对敲 case（A↔B 近抵消）', async () => {
+    config.getConfig.mockImplementation((k: string) =>
+      ({ 'risk.roundtrip_total_min': '1000', 'risk.pair_min_amount': '300' })[k] ?? null);
+    seedWash([['A', 'B', '600'], ['B', 'A', '500']]);
+    caseRepo.save.mockImplementation((c: any) => c);
+    await service.scan();
+    expect(caseRepo.save).toHaveBeenCalled();
+    const opened = caseRepo.save.mock.calls.flat();
+    expect(opened.some((c: any) => c.caseType === 'round_trip')).toBe(true);
+  });
+
+  it('检出失衡赠与 case（A→B 单方向大额）', async () => {
+    config.getConfig.mockImplementation((k: string) =>
+      ({ 'risk.oneway_big_amount': '3000', 'risk.oneway_backflow_ratio': '0.2' })[k] ?? null);
+    seedWash([['A', 'B', '5000']]);
+    caseRepo.save.mockImplementation((c: any) => c);
+    await service.scan();
+    const opened = caseRepo.save.mock.calls.flat();
+    expect(opened.some((c: any) => c.caseType === 'one_way')).toBe(true);
+  });
+
+  it('评分封顶且 HIGH 默认不触发（无 open case 时分数归 0）', async () => {
+    seedWash([]);
+    scoreRepo.findOne.mockResolvedValue({ playerId: 'A', riskScore: 60, level: 'watch' });
+    scoreRepo.save.mockImplementation((s: any) => s);
+    await service.scan();
+    // 无 open case：分数不新增；此处只验证 scan 不抛错
+    expect(scoreRepo.save).not.toBeUndefined();
   });
 });

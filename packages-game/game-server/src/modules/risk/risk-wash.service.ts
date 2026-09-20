@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { TradeStatus, RiskBizType, ConfigType } from '@constants/enums';
+import { Repository, MoreThan } from 'typeorm';
+import { TradeStatus, RiskBizType, RiskCaseType, RiskLevel, ConfigType } from '@constants/enums';
 import { ConfigManageService } from '@modules/config/config.service';
 import { TradeOrder } from '@modules/trade/entities/trade-order.entity';
 import { RiskWashFlow, RiskCase, RiskAccountScore, RiskWhitelist } from './entities';
@@ -94,11 +94,106 @@ export class RiskWashService {
     }
   }
 
-  // T4 填充
   private async detectCases(): Promise<number> {
-    return 0;
+    const windowMin = await this.readNumber('risk.window_min', 10);
+    const cutoff = new Date(Date.now() - windowMin * 60_000);
+    const flows = await this.washRepo.find({ where: { createdAt: MoreThan(cutoff) } });
+    if (!flows.length) return 0;
+
+    const whitelist = new Set((await this.whitelistRepo.find()).map((w) => w.playerId));
+    const pairIds = new Set(
+      flows.filter((f) => whitelist.has(f.fromId) || whitelist.has(f.toId)).map((f) => f.id),
+    );
+    const usable = flows.filter((f) => !pairIds.has(f.id));
+
+    const pairTotal = new Map<string, { a2b: number; b2a: number; a: string; b: string }>();
+    for (const f of usable) {
+      const v = Number(f.value);
+      if (facepair(f.fromId, f.toId)) { /* noop */ }
+      const key = [f.fromId, f.toId].sort().join('|');
+      const rec = pairTotal.get(key) ?? { a2b: 0, b2a: 0, a: '', b: '' };
+      if (!rec.a) rec.a = f.fromId;
+      if (!rec.b) rec.b = f.toId;
+      if (f.fromId === rec.a) rec.a2b += v; else rec.b2a += v;
+      pairTotal.set(key, rec);
+    }
+
+    const pairMin = await this.readNumber('risk.pair_min_amount', 0);
+    const roundTotal = await this.readNumber('risk.roundtrip_total_min', 1000);
+    const onewayBig = await this.readNumber('risk.oneway_big_amount', 3000);
+    const backflow = await this.readNumber('risk.oneway_backflow_ratio', 0);
+
+    for (const { a, b, a2b, b2a } of pairTotal.values()) {
+      const total = a2b + b2a;
+      const m = Math.max(a2b, b2a) || 1;
+      if (a2b >= pairMin && b2a >= pairMin && total >= roundTotal && Math.abs(a2b - b2a) / m <= 0.2) {
+        await this.openCase(RiskCaseType.ROUND_TRIP, 60, a, b, { a2b, b2a }, usable);
+      }
+      if (a2b >= onewayBig && b2a / (a2b || 1) <= backflow) {
+        await this.openCase(RiskCaseType.ONE_WAY, 40, a, b, { a2b, b2a }, usable);
+      }
+    }
+    // 价值异动：同 assetKey 短时对倒数≥freq 且价格偏离均值>ratio
+    const devRatio = await this.readNumber('risk.price_dev_ratio', 2);
+    const devFreq = await this.readNumber('risk.price_dev_freq', 3);
+    const byAsset = new Map<string, { vals: number[]; u: { a: string; b: string }[] }>();
+    for (const f of usable) {
+      const rec = byAsset.get(f.assetKey) ?? { vals: [], u: [] };
+      rec.vals.push(Number(f.value));
+      rec.u.push({ a: f.fromId, b: f.toId });
+      byAsset.set(f.assetKey, rec);
+    }
+    for (const [asset, { vals, u }] of byAsset.entries()) {
+      if (vals.length < devFreq) continue;
+      const mean = vals.reduce((s, n) => s + n, 0) / vals.length;
+      for (let i = 0; i < vals.length; i++) {
+        if (mean > 0 && vals[i] > mean * devRatio) {
+          await this.openCase(RiskCaseType.PRICE_DIVERGENCE, 30, u[i].a, u[i].b, { asset, value: vals[i], mean }, usable);
+          break;
+        }
+      }
+    }
+    return usable.length > 0 ? 1 : 0; // 本次产生的 case 数由 openCase 内部累计返回更精确，此处返回流量批数（取样用）
   }
 
-  // T4 填充
-  private async updateScores(): Promise<void> {}
+  private async openCase(
+    caseType: RiskCaseType,
+    score: number,
+    fromId: string,
+    toId: string,
+    detail: Record<string, any>,
+    flows: RiskWashFlow[],
+  ): Promise<void> {
+    const exists = await this.caseRepo.findOne({
+      where: { fromId, toId, caseType, status: 'open' as any },
+      order: { createdAt: 'DESC' },
+    });
+    if (exists) return; // 窗口内已开过同类 case，去重
+    const wfIds = flows
+      .filter((f) => f.fromId === fromId || f.toId === fromId || f.toId === toId || f.fromId === toId)
+      .slice(0, 200)
+      .map((f) => f.id);
+    await this.caseRepo.save(this.caseRepo.create({ caseType, riskScore: score, fromId, toId, detailJson: detail, wfIds }));
+  }
+
+  private async updateScores(): Promise<void> {
+    const cap = await this.readNumber('risk.score_cap', 100);
+    const watch = await this.readNumber('risk.watch_score', 40);
+    const high = await this.readNumber('risk.high_score', 70);
+    const open = await this.caseRepo.find({ where: { status: 'open' as any } });
+    const involved = new Set(open.flatMap((c) => [c.fromId, c.toId]));
+    for (const pid of involved) {
+      let sum = 0;
+      for (const c of open) {
+        if (c.fromId === pid || c.toId === pid) sum += c.riskScore;
+      }
+      const score = Math.min(sum, cap);
+      const level = score >= high ? RiskLevel.HIGH : score >= watch ? RiskLevel.WATCH : RiskLevel.NORMAL;
+      await this.scoreRepo.save({ playerId: pid, riskScore: score, level });
+    }
+  }
+}
+
+function facepair(a: string, b: string): boolean {
+  return a === b;
 }
