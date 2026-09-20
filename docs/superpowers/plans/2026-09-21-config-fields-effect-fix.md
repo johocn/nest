@@ -1265,4 +1265,4 @@ git commit -m "chore(quest): P0-4 配置字段生效冒烟脚本"
 
 - 生产部署（用户选择「先做代码，部署后议」）：需先跑存量配置排查 SQL，再替换 dist 重启。
 - 冒烟脚本 `scripts/smoke-p0d-config.sh` 未执行。
-- 同源缺陷未修：`QuestService.checkPrerequisiteSocial` 的好感分支（`quest.service.ts:202-217`）同样把 `playerId` 传给按 `characterId` 查的 `getRelationships`，不在本计划清单内，未擅自修改。
+- 同源缺陷已追加修复：`QuestService.checkPrerequisiteSocial` 的好感分支（`quest.service.ts:177-186`）原把 `playerId` 传给按 `characterId` 查的 `getRelationships`，已改为 `getByPlayerId` 换算 + 无角色按空关系处理，并补 1 例单测（无角色 → `40001`/`QUEST_SOCIAL_PRE_REQ`）。

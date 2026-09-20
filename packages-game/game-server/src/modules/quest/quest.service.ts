@@ -174,13 +174,16 @@ export class QuestService {
     playerId: string,
     prerequisiteSocial: Record<string, any>,
   ): Promise<void> {
-    const [intelligences, relationships, myGuildRole, friends] =
-      await Promise.all([
-        this.socialService.getIntelligences(playerId),
-        this.characterService.getRelationships(playerId),
-        this.socialService.getMyGuildRole(playerId),
-        this.socialService.getFriendList(playerId),
-      ]);
+    const [intelligences, character, myGuildRole, friends] = await Promise.all([
+      this.socialService.getIntelligences(playerId),
+      this.characterService.getByPlayerId(playerId),
+      this.socialService.getMyGuildRole(playerId),
+      this.socialService.getFriendList(playerId),
+    ]);
+    // 关系表按 character_id 存储，须先由 playerId 换算出角色 id
+    const relationships = character
+      ? await this.characterService.getRelationships(character.id)
+      : [];
 
     if (prerequisiteSocial.intelGrade !== undefined) {
       const required = INTEL_GRADE_RANKS[prerequisiteSocial.intelGrade] ?? 0;

@@ -39,6 +39,7 @@ describe('QuestService', () => {
 
   beforeEach(async () => {
     characterService = {
+      getByPlayerId: jest.fn().mockResolvedValue({ id: 'c1' } as any),
       getRelationships: jest.fn().mockResolvedValue([]),
       getRelationshipLevel: jest.fn(),
     } as unknown as jest.Mocked<CharacterService>;
@@ -304,6 +305,18 @@ describe('QuestService', () => {
 
       const result = await service.acceptQuest('p1', '1');
       expect(result.status).toBe(QuestStatus.IN_PROGRESS);
+    });
+
+    it('should reject favorLevel prerequisite when player has no character', async () => {
+      questTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({ prerequisiteSocial: { favorLevel: 'acquaintance' } }),
+      );
+      characterService.getByPlayerId.mockResolvedValue(null);
+
+      await expect(service.acceptQuest('p1', '1')).rejects.toMatchObject({
+        response: { code: ErrorCodes.QUEST_SOCIAL_PRE_REQ },
+      });
+      expect(characterService.getRelationships).not.toHaveBeenCalled();
     });
 
     it('should reject when guildRole prerequisite not met', async () => {
