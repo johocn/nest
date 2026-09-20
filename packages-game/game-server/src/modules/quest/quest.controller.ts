@@ -63,6 +63,19 @@ export class QuestController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Post('api/client/v1/quest/claim')
+  @ApiOperation({ summary: '领取任务奖励（auto_reward=false 的任务）' })
+  async claimQuestReward(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Body() dto: AcceptQuestDto,
+  ) {
+    return this.questService.claimQuestReward(
+      player.playerId,
+      dto.questTemplateId,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Post('api/client/v1/quest/help/request')
   @ApiOperation({ summary: '发起卡关求助' })
   async requestHelp(

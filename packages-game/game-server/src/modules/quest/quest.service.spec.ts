@@ -486,6 +486,92 @@ describe('QuestService', () => {
     });
   });
 
+  describe('任务奖励发放', () => {
+    it('autoReward=true 提交即发奖并置 CLAIMED', async () => {
+      questTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({ autoReward: true, rewardJson: { gold: 50, exp: 100 } }),
+      );
+      playerQuestRepo.findOne.mockResolvedValue(
+        makePlayerQuest({ progress: 10, status: QuestStatus.IN_PROGRESS }),
+      );
+
+      const result = await service.submitQuest('p1', '1');
+
+      expect(economyService.addCurrency).toHaveBeenCalledWith(
+        'p1',
+        CurrencyType.GOLD,
+        50,
+        'quest_reward',
+        expect.any(String),
+        '1',
+      );
+      expect(playerService.addExp).toHaveBeenCalledWith('p1', 100);
+      expect(result.status).toBe(QuestStatus.CLAIMED);
+    });
+
+    it('autoReward=false 提交仅置 COMPLETED 不发奖', async () => {
+      questTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({ autoReward: false, rewardJson: { gold: 50 } }),
+      );
+      playerQuestRepo.findOne.mockResolvedValue(
+        makePlayerQuest({ progress: 10, status: QuestStatus.IN_PROGRESS }),
+      );
+
+      const result = await service.submitQuest('p1', '1');
+
+      expect(economyService.addCurrency).not.toHaveBeenCalled();
+      expect(result.status).toBe(QuestStatus.COMPLETED);
+    });
+
+    it('claimQuestReward 对 COMPLETED 任务发奖并置 CLAIMED', async () => {
+      questTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({ rewardJson: { gold: 50 } }),
+      );
+      playerQuestRepo.findOne.mockResolvedValue(
+        makePlayerQuest({ status: QuestStatus.COMPLETED }),
+      );
+      playerQuestRepo.update.mockResolvedValue({ affected: 1 });
+
+      const result = await service.claimQuestReward('p1', '1');
+
+      expect(playerQuestRepo.update).toHaveBeenCalledWith(
+        { id: '1', status: QuestStatus.COMPLETED },
+        expect.objectContaining({ status: QuestStatus.CLAIMED }),
+      );
+      expect(economyService.addCurrency).toHaveBeenCalled();
+      expect(result.reward).toEqual({ gold: 50 });
+    });
+
+    it('claimQuestReward 重复领取（affected=0）拒绝', async () => {
+      questTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({ rewardJson: { gold: 50 } }),
+      );
+      playerQuestRepo.findOne.mockResolvedValue(
+        makePlayerQuest({ status: QuestStatus.COMPLETED }),
+      );
+      playerQuestRepo.update.mockResolvedValue({ affected: 0 });
+
+      await expect(service.claimQuestReward('p1', '1')).rejects.toThrow(
+        GameException,
+      );
+      expect(economyService.addCurrency).not.toHaveBeenCalled();
+    });
+
+    it('未识别的奖励键记 warning 且不影响已识别键发放', async () => {
+      questTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({ rewardJson: { gold: 50, mysteryItem: 1 } }),
+      );
+      playerQuestRepo.findOne.mockResolvedValue(
+        makePlayerQuest({ status: QuestStatus.COMPLETED }),
+      );
+      playerQuestRepo.update.mockResolvedValue({ affected: 1 });
+
+      await service.claimQuestReward('p1', '1');
+
+      expect(economyService.addCurrency).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('listPlayerQuests', () => {
     it('should return player quests with template info', async () => {
       playerQuestRepo.find.mockResolvedValue([makePlayerQuest()]);

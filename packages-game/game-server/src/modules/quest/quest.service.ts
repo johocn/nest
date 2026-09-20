@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { QuestTemplate, PlayerQuest, QuestHelpRequest } from './entities';
@@ -38,6 +38,8 @@ export interface SubmitQuestResult {
 
 @Injectable()
 export class QuestService {
+  private readonly logger = new Logger(QuestService.name);
+
   private static readonly SOCIAL_CURRENCIES = [
     CurrencyType.FAVOR,
     CurrencyType.GUILD_CONTRIB,
@@ -238,11 +240,7 @@ export class QuestService {
     const playerQuest = await this.playerQuestRepo.findOne({
       where: { playerId, questTemplateId },
     });
-    if (
-      !playerQuest ||
-      (playerQuest.status !== QuestStatus.IN_PROGRESS &&
-        playerQuest.status !== QuestStatus.COMPLETED)
-    ) {
+    if (!playerQuest || playerQuest.status !== QuestStatus.IN_PROGRESS) {
       throw new GameException(
         ErrorCodes.QUEST_NOT_ACCEPTED,
         '任务未接取或已领取',
@@ -265,11 +263,6 @@ export class QuestService {
         '任务目标未达成',
       );
     }
-
-    playerQuest.status = QuestStatus.CLAIMED;
-    playerQuest.completedAt = new Date();
-    playerQuest.completeTimes += 1;
-    await this.playerQuestRepo.save(playerQuest);
 
     this.eventBus.emit(GameEvents.QUEST_COMPLETED, {
       playerId,
@@ -296,12 +289,120 @@ export class QuestService {
       };
     }
 
+    // autoReward=true：提交即发主奖励并直接置 CLAIMED；否则置 COMPLETED 待手动领取
+    if (template.autoReward) {
+      playerQuest.status = QuestStatus.CLAIMED;
+      playerQuest.completedAt = new Date();
+      playerQuest.completeTimes += 1;
+      await this.playerQuestRepo.save(playerQuest);
+      await this.deliverReward(playerId, template, playerQuest);
+    } else {
+      playerQuest.status = QuestStatus.COMPLETED;
+      playerQuest.completedAt = new Date();
+      await this.playerQuestRepo.save(playerQuest);
+    }
+
     return {
       questId: playerQuest.id,
       reward: template.rewardJson,
       socialReward,
+      status: playerQuest.status,
+    };
+  }
+
+  /** 手动领取（autoReward=false 的任务）：状态原子占位防并发重复领取 */
+  async claimQuestReward(
+    playerId: string,
+    questTemplateId: string,
+  ): Promise<SubmitQuestResult> {
+    const playerQuest = await this.playerQuestRepo.findOne({
+      where: { playerId, questTemplateId },
+    });
+    if (!playerQuest || playerQuest.status !== QuestStatus.COMPLETED) {
+      throw new GameException(
+        ErrorCodes.QUEST_NOT_ACCEPTED,
+        '任务未完成或已领奖',
+      );
+    }
+
+    const template = await this.templateRepo.findOne({
+      where: { id: questTemplateId },
+    });
+    if (!template) {
+      throw new GameException(ErrorCodes.QUEST_NOT_ACCEPTED, '任务模板不存在');
+    }
+
+    const claimed = await this.playerQuestRepo.update(
+      { id: playerQuest.id, status: QuestStatus.COMPLETED },
+      {
+        status: QuestStatus.CLAIMED,
+        completeTimes: playerQuest.completeTimes + 1,
+      },
+    );
+    if (!claimed.affected) {
+      throw new GameException(
+        ErrorCodes.QUEST_ALREADY_COMPLETED,
+        '奖励已领取',
+      );
+    }
+
+    try {
+      await this.deliverReward(playerId, template, {
+        ...playerQuest,
+        completeTimes: playerQuest.completeTimes + 1,
+      } as PlayerQuest);
+    } catch (err) {
+      await this.playerQuestRepo.update(
+        { id: playerQuest.id },
+        { status: QuestStatus.COMPLETED },
+      );
+      throw err;
+    }
+
+    return {
+      questId: playerQuest.id,
+      reward: template.rewardJson,
+      socialReward: {},
       status: QuestStatus.CLAIMED,
     };
+  }
+
+  /**
+   * 发放任务主奖励。rewardJson 采用扁平键约定：命中 CurrencyType 走经济模块，
+   * exp 走玩家经验，未识别键记 warning，避免配置静默失效。
+   */
+  private async deliverReward(
+    playerId: string,
+    template: QuestTemplate,
+    playerQuest: PlayerQuest,
+  ): Promise<void> {
+    const reward = template.rewardJson ?? {};
+    const supported = Object.values(CurrencyType) as string[];
+    const idempotencyKey = `quest_reward:${playerId}:${template.id}:${playerQuest.completeTimes}`;
+
+    for (const [key, raw] of Object.entries(reward)) {
+      const amount = Number(raw);
+      if (!Number.isFinite(amount) || amount <= 0) continue;
+
+      if (key === 'exp') {
+        await this.playerService.addExp(playerId, amount);
+        continue;
+      }
+      if (supported.includes(key)) {
+        await this.economyService.addCurrency(
+          playerId,
+          key as CurrencyType,
+          amount,
+          'quest_reward',
+          idempotencyKey,
+          template.id,
+        );
+        continue;
+      }
+      this.logger.warn(
+        `Unsupported quest reward key: ${key} (quest=${template.id})`,
+      );
+    }
   }
 
   async listPlayerQuests(playerId: string): Promise<QuestWithTemplate[]> {
