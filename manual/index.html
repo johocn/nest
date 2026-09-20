@@ -148,7 +148,7 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
     <div class="sub">GAME SERVER · 开发与玩法设计手册</div>
     <div class="meta">
       版本 <b>v1.1</b>　·　日期 <b>2026-09-19</b>　·　适用对象 <b>游戏策划 / 研发 / 运营</b><br>
-      数据字典 <b>64 表 / 602 字段</b>　·　接口 <b>158 条</b>　·　枚举 <b>58 个</b>
+      数据字典 <b>64 表 / 603 字段</b>　·　接口 <b>159 条</b>　·　枚举 <b>58 个</b>
     </div>
     <div class="tagline">
       「武者以力服人，智者以情动人。此界之中，<b>社交即核心玩法</b>——
@@ -2593,7 +2593,7 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
     <li><b>三类信号</b>：回环对敲（双向净额近乎抵消但总量大）、失衡赠与（单向大额无回流）、价值异动（同资产对倒 / 价格偏离近期成交基准 &gt;n× 或频次暴涨）。</li>
     <li><b>账号评分</b>：<code>risk_account_scores</code> 累计 0–100，评级正常 / 关注（≥<code>watch_score</code>）/ 高危（≥<code>high_score</code>）；每 10 分钟定时批扫。</li>
     <li><b>实时拦截</b>：高危账号经 <code>RiskGateService</code> 实时限制——拍卖起拍价超 <code>auction_value_cap</code> 拒上架（93202）、单日送礼 / 转账累计超限拒执行（93201）。</li>
-    <li><b>半自动回收</b>：GM 对线索出回收提案（净差额）→ 确认生成 <code>risk_recover_records</code> 台账并切断线索（open→frozen）→ 可回滚；本期只落台账，不直接扣玩家余额。</li>
+    <li><b>风控回收闭环</b>：GM 对线索出回收提案（净差额）→ 确认对净收款方真实扣款（EconomyService 扣 GOLD，流水号留 <code>economy_ref_id</code>，快照存动账前余额）并落 <code>risk_recover_records</code> 台账、切断线索（open→frozen）→ 可按流水号精确回滚；高危线索可联动既有惩罚封禁 / 交易封锁（<code>POST cases/:id/lock</code>，复用 PenaltyLevel）。</li>
   </ul>
   <p><b>配置键（remote_configs，未配走代码默认，见 13.2）</b>：</p>
   <table>
@@ -3764,7 +3764,7 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
 <tr><td><code>created_at</code></td><td>timestamp</td><td>否</td><td>now()</td><td>创建时间</td></tr>
 </tbody></table></div>
 <div class="dict-table" id="dict-risk_recover_records">
-<h3>📄 risk_recover_records <span class="tbl-meta">12 字段</span></h3>
+<h3>📄 risk_recover_records <span class="tbl-meta">13 字段</span></h3>
 <table><thead><tr><th>列名</th><th>类型</th><th>可空</th><th>默认值</th><th>说明</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>bigint</td><td>否</td><td>自增</td><td>主键</td></tr>
 <tr><td><code>case_id</code></td><td>varchar</td><td>否</td><td></td><td>关联风控线索ID</td></tr>
@@ -3772,6 +3772,7 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
 <tr><td><code>to_id</code></td><td>varchar</td><td>否</td><td></td><td>转入方玩家ID（净差额较小向）</td></tr>
 <tr><td><code>suggested_amount</code></td><td>bigint</td><td>否</td><td></td><td>建议回收额（净差额）</td></tr>
 <tr><td><code>applied_amount</code></td><td>bigint</td><td>否</td><td>0</td><td>实际回收额</td></tr>
+<tr><td><code>economy_ref_id</code></td><td>varchar</td><td>是</td><td></td><td>真实扣款流水号（economy transactions.id，备精确回滚）</td></tr>
 <tr><td><code>asset_key</code></td><td>varchar</td><td>否</td><td></td><td>回收资产键（如 gold）</td></tr>
 <tr><td><code>status</code></td><td>risk_recover_status 枚举</td><td>否</td><td>'applied'::risk_recover_records_status_enum</td><td>状态（RiskRecoverStatus：applied已回收/rolled_back已回滚）</td></tr>
 <tr><td><code>balance_snapshot_json</code></td><td>jsonb</td><td>否</td><td>'{}'::jsonb</td><td>动账前余额快照JSON</td></tr>
@@ -3970,7 +3971,7 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
 <tr><td><span class="badge m-post">POST</span></td><td><code>/api/admin/v1/ranking/:type/snapshot</code></td></tr>
 <tr><td><span class="badge m-get">GET</span></td><td><code>/api/admin/v1/ranking/snapshot/list</code></td></tr>
 </tbody></table></div>
-<div class="dict-table"><h3>⚙️ risk <span class="tbl-meta">9 接口</span></h3>
+<div class="dict-table"><h3>⚙️ risk <span class="tbl-meta">10 接口</span></h3>
 <table><thead><tr><th>方法</th><th>路径</th></tr></thead><tbody>
 <tr><td><span class="badge m-get">GET</span></td><td><code>/api/admin/v1/risk/cases</code></td></tr>
 <tr><td><span class="badge m-get">GET</span></td><td><code>/api/admin/v1/risk/players/:playerId</code></td></tr>
@@ -3981,6 +3982,7 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
 <tr><td><span class="badge m-post">POST</span></td><td><code>/api/admin/v1/risk/cases/:id/recover-proposal</code></td></tr>
 <tr><td><span class="badge m-post">POST</span></td><td><code>/api/admin/v1/risk/cases/:id/recover</code></td></tr>
 <tr><td><span class="badge m-post">POST</span></td><td><code>/api/admin/v1/risk/recover/:rid/rollback</code></td></tr>
+<tr><td><span class="badge m-post">POST</span></td><td><code>/api/admin/v1/risk/cases/:id/lock</code></td></tr>
 </tbody></table></div>
 <div class="dict-table"><h3>⚙️ sandbox <span class="tbl-meta">6 接口</span></h3>
 <table><thead><tr><th>方法</th><th>路径</th></tr></thead><tbody>

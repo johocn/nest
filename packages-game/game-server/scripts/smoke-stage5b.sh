@@ -135,6 +135,26 @@ if [ -n "$AT" ]; then
   check_code "risk dashboard reachable" 0 "$R"
   R=$(curl -s -X POST $BASE/api/admin/v1/risk/cases/1/recover-proposal -H "$AA" -H 'Content-Type: application/json' -d '{"caseId":"1"}')
   [ "$(code_of "$R")" = "92901" ] && ok "recover-proposal unknown-case guard" || bad "recover-proposal" "$R"
+
+  # ---- 13. Plan1 风控回收闭环：真实扣款 / 回滚 / 封禁联动 ----
+  # 线上不构造净差数据：按现有 case 走。若存在 net>0 线索则断言真实扣款 economyRefId 非空，
+  # 否则走到守卫 92901（接口可达即 PASS）。回滚基于一条 APPLIED 记录反推退回；lock 复用既有惩罚。
+  CASE_ID=$(field_of "$(curl -s $BASE/api/admin/v1/risk/cases -H "$AA")" id)
+  [ -n "$CASE_ID" ] || CASE_ID=1
+  REC=$(curl -s -X POST $BASE/api/admin/v1/risk/cases/$CASE_ID/recover -H "$AA" -H 'Content-Type: application/json' -d '{"note":"smoke-plan1-recover"}')
+  RC=$(code_of "$REC")
+  if [ "$RC" = "92901" ]; then
+    ok "recover 未知线索守卫成立（真实扣款未触发）"
+  else
+    echo "$REC" | grep -q '"economyRefId":"' && ok "recover 真实扣款 economyRefId 非空" || bad "recover economyRefId 缺失" "$REC"
+    RID=$(id_of "$REC" id)
+    if [ -n "$RID" ]; then
+      RR=$(curl -s -X POST $BASE/api/admin/v1/risk/recover/$RID/rollback -H "$AA" -H 'Content-Type: application/json' -d '{"reason":"smoke-rollback"}')
+      echo "$RR" | grep -q '"status":"rolled_back"' && ok "recover rollback 回滚成功" || bad "recover rollback" "$RR"
+    fi
+  fi
+  LCK=$(curl -s -X POST $BASE/api/admin/v1/risk/cases/$CASE_ID/lock -H "$AA" -H 'Content-Type: application/json' -d '{"level":"trade_limit","reason":"smoke-plan1-lock"}')
+  [ "$(code_of "$LCK")" = "0" ] && echo "$LCK" | grep -q '"applied"' && ok "risk case lock 封禁联动" || bad "risk case lock" "$LCK"
 else
   echo "SKIP: admin points section (admin login failed, body=$R)" >&2
   ok "admin points skipped (no admin creds)"

@@ -148,7 +148,7 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
     <div class="sub">GAME SERVER · 开发与玩法设计手册</div>
     <div class="meta">
       版本 <b>v1.1</b>　·　日期 <b>2026-09-19</b>　·　适用对象 <b>游戏策划 / 研发 / 运营</b><br>
-      数据字典 <b>64 表 / 602 字段</b>　·　接口 <b>158 条</b>　·　枚举 <b>58 个</b>
+      数据字典 <b>64 表 / 603 字段</b>　·　接口 <b>159 条</b>　·　枚举 <b>58 个</b>
     </div>
     <div class="tagline">
       「武者以力服人，智者以情动人。此界之中，<b>社交即核心玩法</b>——
@@ -2593,7 +2593,7 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
     <li><b>三类信号</b>：回环对敲（双向净额近乎抵消但总量大）、失衡赠与（单向大额无回流）、价值异动（同资产对倒 / 价格偏离近期成交基准 &gt;n× 或频次暴涨）。</li>
     <li><b>账号评分</b>：<code>risk_account_scores</code> 累计 0–100，评级正常 / 关注（≥<code>watch_score</code>）/ 高危（≥<code>high_score</code>）；每 10 分钟定时批扫。</li>
     <li><b>实时拦截</b>：高危账号经 <code>RiskGateService</code> 实时限制——拍卖起拍价超 <code>auction_value_cap</code> 拒上架（93202）、单日送礼 / 转账累计超限拒执行（93201）。</li>
-    <li><b>半自动回收</b>：GM 对线索出回收提案（净差额）→ 确认生成 <code>risk_recover_records</code> 台账并切断线索（open→frozen）→ 可回滚；本期只落台账，不直接扣玩家余额。</li>
+    <li><b>风控回收闭环</b>：GM 对线索出回收提案（净差额）→ 确认对净收款方真实扣款（EconomyService 扣 GOLD，流水号留 <code>economy_ref_id</code>，快照存动账前余额）并落 <code>risk_recover_records</code> 台账、切断线索（open→frozen）→ 可按流水号精确回滚；高危线索可联动既有惩罚封禁 / 交易封锁（<code>POST cases/:id/lock</code>，复用 PenaltyLevel）。</li>
   </ul>
   <p><b>配置键（remote_configs，未配走代码默认，见 13.2）</b>：</p>
   <table>
