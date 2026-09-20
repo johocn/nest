@@ -41,6 +41,15 @@ export class Character {
   @Column({ name: 'is_npc', type: 'boolean', default: false })
   isNpc: boolean;
 
+  @Column({ name: 'realm_level', type: 'int', default: 1 })
+  realmLevel: number;
+
+  @Column({ name: 'realm_value', type: 'bigint', default: '0' })
+  realmValue: string;
+
+  @Column({ name: 'milestone_claimed_json', type: 'jsonb', default: [] })
+  milestoneClaimedJson: any;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

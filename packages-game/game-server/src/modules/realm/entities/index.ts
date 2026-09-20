@@ -1,0 +1,1 @@
+export { RealmTemplate } from './realm-template.entity';

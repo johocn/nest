@@ -118,6 +118,10 @@ export const GameEvents = {
   GUIDE_TASK_COMPLETED: 'guide.task.completed',
   LADDER_MATCH_SETTLED: 'ladder.match.settled',
   LADDER_SEASON_SETTLED: 'ladder.season.settled',
+
+  // 境界系统事件（Plan6）
+  REALM_VALUE_GAINED: 'realm.value.gained',
+  REALM_BREAKTHROUGH: 'realm.breakthrough',
 } as const;
 
 export type GameEvent = (typeof GameEvents)[keyof typeof GameEvents];
