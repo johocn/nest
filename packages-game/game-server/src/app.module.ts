@@ -37,6 +37,7 @@ import { MatchmakingModule } from '@modules/matchmaking/matchmaking.module';
 import { OfflineModule } from '@modules/offline/offline.module';
 import { EcoModule } from '@modules/eco/eco.module';
 import { LadderModule } from '@modules/ladder/ladder.module';
+import { RiskModule } from '@modules/risk/risk.module';
 import { SchedulerModule } from '@scheduler/scheduler.module';
 import { HealthModule } from '@health/health.module';
 import { RequestIdMiddleware } from '@common/middleware/request-id.middleware';
@@ -87,6 +88,7 @@ import { RateLimitGuard } from '@common/guards/rate-limit.guard';
     OfflineModule,
     EcoModule,
     LadderModule,
+    RiskModule,
 
     // 定时任务
     SchedulerModule,
