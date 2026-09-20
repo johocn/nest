@@ -118,6 +118,16 @@ if [ -n "$AT" ]; then
   [ "${BAL2:-0}" = "$((BB+30))" ] && ok "admin adjust +30 (balance $BB -> $BAL2)" || bad "admin adjust points" "$R"
   R=$(curl -s "$BASE/api/client/v1/social/point/records?page=1&pageSize=10" -H "$A1")
   echo "$R" | grep -q '"reason":"admin"' && ok "point records contain ADMIN reason" || bad "point records ADMIN" "$R"
+
+  # ---- 11. 风控 GM 接口：线索/分数/白名单 ----
+  R=$(curl -s $BASE/api/admin/v1/risk/cases -H "$AA")
+  code_of "$R" >/dev/null; [ "$(code_of "$R")" = "0" ] && ok "risk cases list" || bad "risk cases list" "$R"
+  R=$(curl -s $BASE/api/admin/v1/risk/players/$PID1 -H "$AA")
+  [ "$(code_of "$R")" = "0" ] && ok "risk player score" || bad "risk player score" "$R"
+  R=$(curl -s -X POST $BASE/api/admin/v1/risk/whitelist -H "$AA" -H 'Content-Type: application/json' -d '{"playerId":"'$PID1'","note":"smoke-whitelist"}')
+  [ "$(code_of "$R")" = "0" ] && ok "risk whitelist add" || bad "risk whitelist add" "$R"
+  R=$(curl -s -X DELETE $BASE/api/admin/v1/risk/whitelist/$PID1 -H "$AA")
+  [ "$(code_of "$R")" = "0" ] && ok "risk whitelist remove" || bad "risk whitelist remove" "$R"
 else
   echo "SKIP: admin points section (admin login failed, body=$R)" >&2
   ok "admin points skipped (no admin creds)"
