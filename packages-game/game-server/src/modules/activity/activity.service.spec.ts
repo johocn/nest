@@ -6,10 +6,20 @@ import { CacheService } from '@cache/cache.service';
 import { EventBusService } from '@event-bus/event-bus.service';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
-import { ActivityType, ActivityStatus, SignInCycle } from '@constants/enums';
+import {
+  ActivityType,
+  ActivityStatus,
+  SignInCycle,
+  QuestStatus,
+  RelationshipLevel,
+  GuildRole,
+} from '@constants/enums';
 import { AdminService } from '@modules/admin/admin.service';
 import { Player } from '@modules/player/entities/player.entity';
 import { PlayerBehaviorLog } from '@modules/analytics/entities/player-behavior-log.entity';
+import { CharacterService } from '@modules/character/character.service';
+import { SocialService } from '@modules/social/social.service';
+import { PlayerQuest } from '@modules/quest/entities';
 import type { Repository } from 'typeorm';
 
 describe('ActivityService', () => {
@@ -17,6 +27,10 @@ describe('ActivityService', () => {
   let templateRepo: jest.Mocked<Repository<ActivityTemplate>>;
   let playerActivityRepo: jest.Mocked<Repository<PlayerActivity>>;
   let signInRepo: jest.Mocked<Repository<SignInRecord>>;
+  let playerRepo: jest.Mocked<Repository<Player>>;
+  let playerQuestRepo: jest.Mocked<Repository<PlayerQuest>>;
+  let characterService: jest.Mocked<CharacterService>;
+  let socialService: jest.Mocked<SocialService>;
   let cacheService: jest.Mocked<CacheService>;
   let eventBus: jest.Mocked<EventBusService>;
   let adminService: jest.Mocked<AdminService>;
@@ -66,6 +80,7 @@ describe('ActivityService', () => {
           provide: getRepositoryToken(Player),
           useValue: {
             find: jest.fn(),
+            findOne: jest.fn(),
           },
         },
         {
@@ -73,6 +88,20 @@ describe('ActivityService', () => {
           useValue: {
             find: jest.fn(),
           },
+        },
+        {
+          provide: getRepositoryToken(PlayerQuest),
+          useValue: {
+            count: jest.fn().mockResolvedValue(0),
+          },
+        },
+        {
+          provide: CharacterService,
+          useValue: { getRelationships: jest.fn().mockResolvedValue([]) },
+        },
+        {
+          provide: SocialService,
+          useValue: { getMyGuildRole: jest.fn().mockResolvedValue(null) },
         },
         {
           provide: AdminService,
@@ -102,10 +131,28 @@ describe('ActivityService', () => {
     templateRepo = module.get(getRepositoryToken(ActivityTemplate));
     playerActivityRepo = module.get(getRepositoryToken(PlayerActivity));
     signInRepo = module.get(getRepositoryToken(SignInRecord));
+    playerRepo = module.get(getRepositoryToken(Player));
+    playerQuestRepo = module.get(getRepositoryToken(PlayerQuest));
+    characterService = module.get(CharacterService);
+    socialService = module.get(SocialService);
     cacheService = module.get(CacheService);
     eventBus = module.get(EventBusService);
     adminService = module.get(AdminService);
   });
+
+  /** 构造处于有效期内的活动模板，供参与条件/人数上限用例覆写字段 */
+  const makeTemplate = (overrides: Record<string, any> = {}) =>
+    ({
+      id: '1',
+      name: '限时活动',
+      status: ActivityStatus.ACTIVE,
+      activityType: ActivityType.LIMITED_TIME,
+      startAt: new Date(Date.now() - 3600000),
+      endAt: new Date(Date.now() + 3600000),
+      conditionJson: {},
+      maxParticipants: 0,
+      ...overrides,
+    }) as any;
 
   describe('getActiveActivities', () => {
     it('should return active activities within time range', async () => {
@@ -488,6 +535,77 @@ describe('ActivityService', () => {
         GameException,
       );
       await expect(service.joinActivity('p1', 'g1')).resolves.toBeTruthy();
+    });
+  });
+
+  describe('参与条件（condition_json）', () => {
+    it('等级不足拒绝报名', async () => {
+      templateRepo.findOne.mockResolvedValue(
+        makeTemplate({ conditionJson: { level: 10 } }),
+      );
+      playerRepo.findOne.mockResolvedValue({ id: 'p1', level: 3 } as any);
+
+      await expect(service.joinActivity('p1', '1')).rejects.toMatchObject({
+        response: { code: ErrorCodes.ACTIVITY_CONDITION_NOT_MET },
+      });
+    });
+
+    it('前置任务未全部完成拒绝报名', async () => {
+      templateRepo.findOne.mockResolvedValue(
+        makeTemplate({ conditionJson: { questIds: [11, 12] } }),
+      );
+      playerRepo.findOne.mockResolvedValue({ id: 'p1', level: 99 } as any);
+      playerQuestRepo.count.mockResolvedValue(1);
+
+      await expect(service.joinActivity('p1', '1')).rejects.toMatchObject({
+        response: { code: ErrorCodes.ACTIVITY_CONDITION_NOT_MET },
+      });
+      expect(playerQuestRepo.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ status: QuestStatus.CLAIMED }),
+        }),
+      );
+    });
+
+    it('好感档位不足拒绝报名', async () => {
+      templateRepo.findOne.mockResolvedValue(
+        makeTemplate({
+          conditionJson: { favorLevel: RelationshipLevel.CONFIDANT },
+        }),
+      );
+      playerRepo.findOne.mockResolvedValue({ id: 'p1', level: 99 } as any);
+      characterService.getRelationships.mockResolvedValue([
+        { level: RelationshipLevel.ACQUAINTANCE, favorability: 100 },
+      ] as any);
+
+      await expect(service.joinActivity('p1', '1')).rejects.toMatchObject({
+        response: { code: ErrorCodes.ACTIVITY_CONDITION_NOT_MET },
+      });
+    });
+
+    it('帮派职位不足拒绝报名', async () => {
+      templateRepo.findOne.mockResolvedValue(
+        makeTemplate({ conditionJson: { guildRole: GuildRole.HALL_MASTER } }),
+      );
+      playerRepo.findOne.mockResolvedValue({ id: 'p1', level: 99 } as any);
+      socialService.getMyGuildRole.mockResolvedValue({
+        role: GuildRole.MEMBER,
+      } as any);
+
+      await expect(service.joinActivity('p1', '1')).rejects.toMatchObject({
+        response: { code: ErrorCodes.ACTIVITY_CONDITION_NOT_MET },
+      });
+    });
+
+    it('空 condition_json 不限制', async () => {
+      templateRepo.findOne.mockResolvedValue(
+        makeTemplate({ conditionJson: {} }),
+      );
+      playerRepo.findOne.mockResolvedValue({ id: 'p1', level: 1 } as any);
+      playerActivityRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.joinActivity('p1', '1');
+      expect(result.progress).toBe(0);
     });
   });
 });

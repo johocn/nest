@@ -13,8 +13,17 @@ import { EventBusService } from '@event-bus/event-bus.service';
 import { GameEvents } from '@event-bus/game-events';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
-import { ActivityType, ActivityStatus, SignInCycle } from '@constants/enums';
+import {
+  ActivityType,
+  ActivityStatus,
+  SignInCycle,
+  QuestStatus,
+} from '@constants/enums';
+import { FAVOR_RANKS, GUILD_ROLE_RANKS, favorRankOf } from '@constants/ranks';
 import { AdminService } from '@modules/admin/admin.service';
+import { CharacterService } from '@modules/character/character.service';
+import { SocialService } from '@modules/social/social.service';
+import { PlayerQuest } from '@modules/quest/entities';
 import { Player } from '@modules/player/entities/player.entity';
 import { PlayerBehaviorLog } from '@modules/analytics/entities/player-behavior-log.entity';
 import { BehaviorType } from '@constants/enums';
@@ -51,9 +60,13 @@ export class ActivityService {
     private readonly playerRepo: Repository<Player>,
     @InjectRepository(PlayerBehaviorLog)
     private readonly behaviorLogRepo: Repository<PlayerBehaviorLog>,
+    @InjectRepository(PlayerQuest)
+    private readonly playerQuestRepo: Repository<PlayerQuest>,
     private readonly cacheService: CacheService,
     private readonly eventBus: EventBusService,
     private readonly adminService: AdminService,
+    private readonly characterService: CharacterService,
+    private readonly socialService: SocialService,
   ) {}
 
   async getActiveActivities(playerId?: string): Promise<ActivityTemplate[]> {
@@ -128,6 +141,75 @@ export class ActivityService {
     }
   }
 
+  /** 参与条件（condition_json）：level / questIds / favorLevel / guildRole，缺失即不限制 */
+  private async assertConditions(
+    template: ActivityTemplate,
+    playerId: string,
+  ): Promise<void> {
+    const cond = template.conditionJson ?? {};
+
+    if (cond.level !== undefined) {
+      const player = await this.playerRepo.findOne({
+        where: { id: playerId },
+      });
+      if (!player) {
+        throw new GameException(ErrorCodes.PLAYER_NOT_FOUND, '玩家不存在');
+      }
+      if (player.level < Number(cond.level)) {
+        throw new GameException(
+          ErrorCodes.ACTIVITY_CONDITION_NOT_MET,
+          '等级不足，无法参与',
+        );
+      }
+    }
+
+    if (Array.isArray(cond.questIds) && cond.questIds.length > 0) {
+      const done = await this.playerQuestRepo.count({
+        where: {
+          playerId,
+          questTemplateId: In(cond.questIds.map(String)),
+          status: QuestStatus.CLAIMED,
+        },
+      });
+      if (done < cond.questIds.length) {
+        throw new GameException(
+          ErrorCodes.ACTIVITY_CONDITION_NOT_MET,
+          '前置任务未完成',
+        );
+      }
+    }
+
+    if (cond.favorLevel !== undefined) {
+      const relationships =
+        await this.characterService.getRelationships(playerId);
+      const required = FAVOR_RANKS[cond.favorLevel] ?? 0;
+      const maxRank = relationships.reduce((max, rel) => {
+        const rank = rel.level
+          ? FAVOR_RANKS[rel.level] ?? 0
+          : favorRankOf(rel.favorability);
+        return Math.max(max, rank);
+      }, 0);
+      if (maxRank < required) {
+        throw new GameException(
+          ErrorCodes.ACTIVITY_CONDITION_NOT_MET,
+          '好感档位不足',
+        );
+      }
+    }
+
+    if (cond.guildRole !== undefined) {
+      const myRole = await this.socialService.getMyGuildRole(playerId);
+      const required = GUILD_ROLE_RANKS[cond.guildRole] ?? 0;
+      const rank = myRole ? GUILD_ROLE_RANKS[myRole.role] ?? 0 : 0;
+      if (rank < required) {
+        throw new GameException(
+          ErrorCodes.ACTIVITY_CONDITION_NOT_MET,
+          '帮派职位不足',
+        );
+      }
+    }
+  }
+
   async joinActivity(
     playerId: string,
     activityId: string,
@@ -147,6 +229,7 @@ export class ActivityService {
         '活动不在有效期内',
       );
     }
+    await this.assertConditions(template, playerId);
 
     const existing = await this.playerActivityRepo.findOne({
       where: { playerId, activityId },
@@ -182,6 +265,7 @@ export class ActivityService {
     if (now < template.startAt || now > template.endAt) {
       throw new GameException(ErrorCodes.ACTIVITY_NOT_ACTIVE, '活动未开放');
     }
+    await this.assertConditions(template, playerId);
 
     const today = now.toISOString().slice(0, 10);
     const yesterday = new Date(now.getTime() - 86400000)
