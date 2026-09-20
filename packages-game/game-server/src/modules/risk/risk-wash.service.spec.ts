@@ -99,4 +99,23 @@ describe('RiskWashService', () => {
     // 无 open case：分数不新增；此处只验证 scan 不抛错
     expect(scoreRepo.save).not.toBeUndefined();
   });
+
+  it('v2 扩源摄入：gift TRANSFER + auction/escrow/bounty PAYOUT', async () => {
+    tradeRepo.query.mockReset();
+    tradeRepo.query
+      .mockResolvedValueOnce([{ id: '11', playerId: 'p1', amount: 5, refId: 'g:p2' }]) // gift
+      .mockResolvedValueOnce([{ id: '21', sellerId: 's', currentPrice: '100', bidder: 'b' }]) // auction
+      .mockResolvedValueOnce([{ id: '31', buyerId: 'bu', sellerId: 'se', amount: '50' }]) // escrow
+      .mockResolvedValueOnce([{ id: '41', publisherId: 'pu', acceptorId: 'ac', goldReward: '30' }]); // bounty
+    washRepo.save.mockImplementation((f: any) => f);
+    const n = await service.ingestAdditionalFlows();
+    expect(n).toBeGreaterThan(0);
+    const saved = washRepo.save.mock.calls.flat();
+    expect(saved.some((f: any) => f.bizType === 'gift' && f.flowClass === 'transfer')).toBe(true);
+    expect(saved.find((f: any) => f.refId === 'gift:11')).toMatchObject({ fromId: 'p1', toId: 'p2', value: '5', assetKey: 'social_points' });
+    expect(saved.find((f: any) => f.refId === 'auction:21')).toMatchObject({ fromId: 'b', toId: 's', value: '100', flowClass: 'payout' });
+    expect(saved.find((f: any) => f.refId === 'escrow:31')).toMatchObject({ fromId: 'bu', toId: 'se', flowClass: 'payout' });
+    expect(saved.find((f: any) => f.refId === 'bounty:41')).toMatchObject({ fromId: 'pu', toId: 'ac', flowClass: 'payout' });
+    expect(config.setConfig).toHaveBeenCalledWith('risk.ingest_auction_id', '21', expect.anything());
+  });
 });

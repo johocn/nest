@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThan } from 'typeorm';
-import { TradeStatus, RiskBizType, RiskFlowClass, RiskCaseType, RiskLevel, RiskCaseStatus, ConfigType } from '@constants/enums';
+import { TradeStatus, AuctionStatus, RiskBizType, RiskFlowClass, RiskCaseType, RiskLevel, RiskCaseStatus, ConfigType } from '@constants/enums';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
 import { ConfigManageService } from '@modules/config/config.service';
@@ -30,7 +30,7 @@ export class RiskWashService {
     if (!(await this.readNumber('risk.enable', 1))) {
       return { ingested: 0, cases: 0 };
     }
-    const ingested = await this.ingestTradeFlows();
+    const ingested = (await this.ingestTradeFlows()) + (await this.ingestAdditionalFlows());
     const cases = await this.detectCases();
     await this.updateScores();
     return { ingested, cases };
@@ -75,6 +75,141 @@ export class RiskWashService {
     const maxId = rows[rows.length - 1].id;
     await this.configService.setConfig('risk.ingest_trade_id', maxId, ConfigType.STRING);
     return saved;
+  }
+
+  /** v2 扩源摄入：gift 直接转移(TRANSFER) + auction/escrow/bounty 到账(PAYOUT)。column 名以实体为准。 */
+  async ingestAdditionalFlows(): Promise<number> {
+    const fs = [
+      ...(await this.buildGiftFlows()),
+      ...(await this.buildAuctionFlows()),
+      ...(await this.buildEscrowFlows()),
+      ...(await this.buildBountyFlows()),
+    ];
+    return this.insertFlows(fs);
+  }
+
+  private async insertFlows(
+    fs: Array<{ refId: string; fromId: string; toId: string; assetKey: string; value: string; bizType: RiskBizType; flowClass: RiskFlowClass }>,
+  ): Promise<number> {
+    let saved = 0;
+    for (const f of fs) {
+      if (Number(f.value) <= 0) continue;
+      try {
+        await this.washRepo.save(this.washRepo.create(f));
+        saved++;
+      } catch {
+        // uk_risk_wash_ref 冲突幂等跳过
+      }
+    }
+    return saved;
+  }
+
+  /**
+   * gift：社交积分流水 `social_point_records`，送礼落为 sender 的 EARN 流水（reason='gift_sent'，
+   * ref_id=`g:${targetId}`）。表含单调递增主键 id，沿用高水位 risk.ingest_gift_id + refId 唯一幂等。
+   * 实况：理想为双向积分转移（sender→receiver），但现网仅 sender 单边 EARN，receiver 由 ref_id 反解。
+   */
+  private async buildGiftFlows(): Promise<Array<{ refId: string; fromId: string; toId: string; assetKey: string; value: string; bizType: RiskBizType; flowClass: RiskFlowClass }>> {
+    const lastId = await this.readString('risk.ingest_gift_id', '0');
+    const rows = (await this.tradeRepo.query(
+      `SELECT id, player_id AS "playerId", amount, ref_id AS "refId"
+         FROM social_point_records
+        WHERE reason = 'gift_sent' AND id::bigint > $1
+        ORDER BY id ASC`,
+      [lastId],
+    )) as Array<{ id: string; playerId: string; amount: number; refId: string | null }>;
+    if (!rows.length) return [];
+
+    const fs: Array<{ refId: string; fromId: string; toId: string; assetKey: string; value: string; bizType: RiskBizType; flowClass: RiskFlowClass }> = [];
+    for (const r of rows) {
+      const targetId = r.refId?.startsWith('g:') ? r.refId.slice(2) : null;
+      if (!targetId) continue;
+      fs.push({
+        refId: `gift:${r.id}`,
+        fromId: String(r.playerId),
+        toId: String(targetId),
+        assetKey: 'social_points',
+        value: String(r.amount),
+        bizType: RiskBizType.GIFT,
+        flowClass: RiskFlowClass.TRANSFER,
+      });
+    }
+    await this.configService.setConfig('risk.ingest_gift_id', String(rows[rows.length - 1].id), ConfigType.STRING);
+    return fs;
+  }
+
+  private async buildAuctionFlows(): Promise<Array<{ refId: string; fromId: string; toId: string; assetKey: string; value: string; bizType: RiskBizType; flowClass: RiskFlowClass }>> {
+    const lastId = await this.readString('risk.ingest_auction_id', '0');
+    const rows = (await this.tradeRepo.query(
+      `SELECT id, seller_id AS "sellerId", current_price AS "currentPrice", current_bidder_id AS "bidder"
+         FROM auction_items
+        WHERE status = '${AuctionStatus.SOLD}' AND current_bidder_id IS NOT NULL AND id::bigint > $1
+        ORDER BY id ASC`,
+      [lastId],
+    )) as Array<{ id: string; sellerId: string; currentPrice: string; bidder: string | null }>;
+    if (!rows.length) return [];
+
+    const fs = rows
+      .filter((r) => r.bidder != null)
+      .map((r) => ({
+        refId: `auction:${r.id}`,
+        fromId: String(r.bidder!),
+        toId: String(r.sellerId),
+        assetKey: 'gold',
+        value: String(r.currentPrice),
+        bizType: RiskBizType.AUCTION,
+        flowClass: RiskFlowClass.PAYOUT,
+      }));
+    await this.configService.setConfig('risk.ingest_auction_id', String(rows[rows.length - 1].id), ConfigType.STRING);
+    return fs;
+  }
+
+  private async buildEscrowFlows(): Promise<Array<{ refId: string; fromId: string; toId: string; assetKey: string; value: string; bizType: RiskBizType; flowClass: RiskFlowClass }>> {
+    const lastId = await this.readString('risk.ingest_escrow_id', '0');
+    const rows = (await this.tradeRepo.query(
+      `SELECT id, buyer_id AS "buyerId", seller_id AS "sellerId", amount
+         FROM escrow_agreements
+        WHERE released_at IS NOT NULL AND id::bigint > $1
+        ORDER BY id ASC`,
+      [lastId],
+    )) as Array<{ id: string; buyerId: string; sellerId: string; amount: string }>;
+    if (!rows.length) return [];
+
+    const fs = rows.map((r) => ({
+      refId: `escrow:${r.id}`,
+      fromId: String(r.buyerId),
+      toId: String(r.sellerId),
+      assetKey: 'gold',
+      value: String(r.amount),
+      bizType: RiskBizType.ESCROW,
+      flowClass: RiskFlowClass.PAYOUT,
+    }));
+    await this.configService.setConfig('risk.ingest_escrow_id', String(rows[rows.length - 1].id), ConfigType.STRING);
+    return fs;
+  }
+
+  private async buildBountyFlows(): Promise<Array<{ refId: string; fromId: string; toId: string; assetKey: string; value: string; bizType: RiskBizType; flowClass: RiskFlowClass }>> {
+    const lastId = await this.readString('risk.ingest_bounty_id', '0');
+    const rows = (await this.tradeRepo.query(
+      `SELECT id, publisher_id AS "publisherId", acceptor_id AS "acceptorId", gold_reward AS "goldReward"
+         FROM bounties
+        WHERE acceptor_id IS NOT NULL AND id::bigint > $1
+        ORDER BY id ASC`,
+      [lastId],
+    )) as Array<{ id: string; publisherId: string; acceptorId: string; goldReward: string }>;
+    if (!rows.length) return [];
+
+    const fs = rows.map((r) => ({
+      refId: `bounty:${r.id}`,
+      fromId: String(r.publisherId),
+      toId: String(r.acceptorId),
+      assetKey: 'gold',
+      value: String(r.goldReward),
+      bizType: RiskBizType.BOUNTY,
+      flowClass: RiskFlowClass.PAYOUT,
+    }));
+    await this.configService.setConfig('risk.ingest_bounty_id', String(rows[rows.length - 1].id), ConfigType.STRING);
+    return fs;
   }
 
   private async readNumber(key: string, fallback: number): Promise<number> {
