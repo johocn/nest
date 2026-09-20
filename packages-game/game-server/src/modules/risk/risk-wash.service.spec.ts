@@ -2,7 +2,7 @@ import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { TradeStatus } from '@constants/enums';
 import { RiskWashService } from './risk-wash.service';
-import { RiskWashFlow, RiskCase, RiskAccountScore, RiskWhitelist } from './entities';
+import { RiskWashFlow, RiskCase, RiskAccountScore, RiskWhitelist, RiskRecoverRecord } from './entities';
 import { ConfigManageService } from '@modules/config/config.service';
 import { TradeOrder } from '@modules/trade/entities/trade-order.entity';
 
@@ -21,6 +21,11 @@ describe('RiskWashService', () => {
   };
   const scoreRepo = { findOne: jest.fn(), save: jest.fn((s: any) => s) };
   const whitelistRepo = { find: jest.fn().mockResolvedValue([]) };
+  const recoverRepo = {
+    findOne: jest.fn().mockResolvedValue(null),
+    save: jest.fn((x: any) => ({ ...x, id: '9' })),
+    create: jest.fn((x: any) => x),
+  };
   const tradeRepo = { query: jest.fn() };
   const config = {
     getConfig: jest.fn().mockResolvedValue(null),
@@ -36,6 +41,7 @@ describe('RiskWashService', () => {
         { provide: getRepositoryToken(RiskCase), useValue: caseRepo },
         { provide: getRepositoryToken(RiskAccountScore), useValue: scoreRepo },
         { provide: getRepositoryToken(RiskWhitelist), useValue: whitelistRepo },
+        { provide: getRepositoryToken(RiskRecoverRecord), useValue: recoverRepo },
         { provide: getRepositoryToken(TradeOrder), useValue: tradeRepo },
         { provide: ConfigManageService, useValue: config },
       ],
@@ -117,5 +123,28 @@ describe('RiskWashService', () => {
     expect(saved.find((f: any) => f.refId === 'escrow:31')).toMatchObject({ fromId: 'bu', toId: 'se', flowClass: 'payout' });
     expect(saved.find((f: any) => f.refId === 'bounty:41')).toMatchObject({ fromId: 'pu', toId: 'ac', flowClass: 'payout' });
     expect(config.setConfig).toHaveBeenCalledWith('risk.ingest_auction_id', '21', expect.anything());
+  });
+
+  it('recover-proposal 计算建议回收额 = 净差额', async () => {
+    caseRepo.findOne.mockResolvedValue({ id: 'c1', fromId: 'p1', toId: 'p2', detailJson: { a2b: 5000, b2a: 2000 }, status: 'open' });
+    (service as any).computeNetGap = jest.fn().mockResolvedValue('1500');
+    const p = await service.recoverProposal('c1');
+    expect(p.suggestedAmount).toBe('1500');
+  });
+
+  it('recover 落库并生成 APPLIED 记录、可回滚', async () => {
+    const caseRow = { id: 'c1', fromId: 'p1', toId: 'p2', detailJson: { a2b: 5000, b2a: 2000 }, status: 'open' };
+    caseRepo.findOne.mockResolvedValue(caseRow);
+    (service as any).computeNetGap = jest.fn().mockResolvedValue('3000');
+    const rec = await service.recover('c1', 'operator', '洗分超额');
+    expect(recoverRepo.save).toHaveBeenCalled();
+    expect(rec.status).toBe('applied');
+    expect(caseRepo.save).toHaveBeenCalled();
+    expect(caseRow.status).toBe('frozen');
+  });
+
+  it('已回滚记录再次回滚报 RISK_RECOVER_STATE', async () => {
+    recoverRepo.findOne.mockResolvedValue({ id: 'r1', status: 'rolled_back' });
+    await expect(service.rollback('r1', 'op')).rejects.toMatchObject({ response: { code: 93204 } });
   });
 });

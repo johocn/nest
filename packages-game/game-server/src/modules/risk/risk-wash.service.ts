@@ -1,12 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThan } from 'typeorm';
-import { TradeStatus, AuctionStatus, RiskBizType, RiskFlowClass, RiskCaseType, RiskLevel, RiskCaseStatus, ConfigType } from '@constants/enums';
+import { TradeStatus, AuctionStatus, RiskBizType, RiskFlowClass, RiskCaseType, RiskLevel, RiskCaseStatus, RiskRecoverStatus, ConfigType } from '@constants/enums';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
 import { ConfigManageService } from '@modules/config/config.service';
 import { TradeOrder } from '@modules/trade/entities/trade-order.entity';
-import { RiskWashFlow, RiskCase, RiskAccountScore, RiskWhitelist } from './entities';
+import { RiskWashFlow, RiskCase, RiskAccountScore, RiskWhitelist, RiskRecoverRecord } from './entities';
 
 @Injectable()
 export class RiskWashService {
@@ -23,6 +23,8 @@ export class RiskWashService {
     private readonly whitelistRepo: Repository<RiskWhitelist>,
     @InjectRepository(TradeOrder)
     private readonly tradeRepo: Repository<TradeOrder>,
+    @InjectRepository(RiskRecoverRecord)
+    private readonly recoverRepo: Repository<RiskRecoverRecord>,
     private readonly configService: ConfigManageService,
   ) {}
 
@@ -398,6 +400,69 @@ export class RiskWashService {
       .andWhere("w.created_at >= date_trunc('day', now())")
       .getRawOne();
     return Number(rows?.sum ?? 0);
+  }
+
+  /** 建议回收额 = 净差额（较大向 - 较小向） */
+  async recoverProposal(caseId: string): Promise<{ suggestedAmount: string }> {
+    const c = await this.caseRepo.findOne({ where: { id: caseId } });
+    if (!c) throw new GameException(ErrorCodes.RISK_CASE_NOT_FOUND, '风控线索不存在');
+    const net = await this.computeNetGap(c.fromId, c.toId);
+    return { suggestedAmount: net };
+  }
+
+  private async computeNetGap(a: string, b: string): Promise<string> {
+    const rows: any[] = await this.washRepo.query(
+      `SELECT COALESCE(SUM((CASE WHEN from_id = $1 THEN CAST(value AS bigint) ELSE 0 END) -
+                         (CASE WHEN from_id = $2 THEN CAST(value AS bigint) ELSE 0 END)),0) AS net
+         FROM risk_wash_flows
+        WHERE flow_class = 'transfer' AND ((from_id=$1 AND to_id=$2) OR (from_id=$2 AND to_id=$1))`,
+      [a, b],
+    );
+    const net = Number(rows?.[0]?.net ?? 0);
+    return String(net < 0 ? -net : net);
+  }
+
+  /**
+   * 半自动回收：落风险回收台账 + 切断涉案方线索（open→frozen），本期不真正扣玩家余额
+   * （真实扣款需接 EconomyService，跨模块接线，避免未验证前动玩家资金）。
+   */
+  async recover(caseId: string, operator: string, note?: string): Promise<RiskRecoverRecord> {
+    const c = await this.caseRepo.findOne({ where: { id: caseId } });
+    if (!c) throw new GameException(ErrorCodes.RISK_CASE_NOT_FOUND, '风控线索不存在');
+    const net = Number(await this.computeNetGap(c.fromId, c.toId));
+    if (net <= 0) throw new GameException(ErrorCodes.RISK_INVALID_ACTION, '无涉案净差额可回收');
+    const record = this.recoverRepo.create({
+      caseId,
+      fromId: c.fromId,
+      toId: c.toId,
+      suggestedAmount: String(net),
+      appliedAmount: String(net),
+      assetKey: 'gold',
+      balanceSnapshotJson: { from: c.fromId, to: c.toId },
+      handledBy: operator,
+      rollbackReason: note ?? null,
+      status: RiskRecoverStatus.APPLIED as any,
+    });
+    const saved = await this.recoverRepo.save(record);
+    if (c.status === RiskCaseStatus.OPEN) {
+      c.status = RiskCaseStatus.FROZEN;
+      c.handledBy = operator;
+      c.handledAt = new Date();
+      await this.caseRepo.save(c);
+      await this.updateScores();
+    }
+    return saved;
+  }
+
+  async rollback(recoverId: string, operator: string, reason?: string): Promise<RiskRecoverRecord> {
+    const r = await this.recoverRepo.findOne({ where: { id: recoverId } });
+    if (!r) throw new GameException(ErrorCodes.RISK_RECOVER_NOT_FOUND, '回收记录不存在');
+    if ((r.status as string) === RiskRecoverStatus.ROLLED_BACK) {
+      throw new GameException(ErrorCodes.RISK_RECOVER_STATE, '该回收已回滚');
+    }
+    r.status = RiskRecoverStatus.ROLLED_BACK as any;
+    r.rollbackReason = `${operator}:${reason ?? 'rollback'}`;
+    return this.recoverRepo.save(r);
   }
 }
 
