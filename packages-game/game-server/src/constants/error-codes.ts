@@ -224,6 +224,12 @@ export const ErrorCodes = {
   // 风控 92901-92999
   RISK_CASE_NOT_FOUND: 92901,
   RISK_INVALID_ACTION: 92902,
+  // 风控接入 93201-93299
+  RISK_BLOCKED_TRANSFER: 93201, // 高危被限制转账/礼物（超限）
+  RISK_BLOCKED_AUCTION: 93202, // 高危被限制拍卖上架（起拍价超限）
+  RISK_RECOVER_NOT_FOUND: 93203,
+  RISK_RECOVER_STATE: 93204,
+  RISK_PAYOUT_DENIED: 93205,
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

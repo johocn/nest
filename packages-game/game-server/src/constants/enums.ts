@@ -786,6 +786,21 @@ export enum GuideTaskStatus {
 
 export enum RiskBizType {
   TRADE_ORDER = 'trade_order',
+  GIFT = 'gift',
+  AUCTION = 'auction',
+  BARTER = 'barter',
+  BOUNTY = 'bounty',
+  ESCROW = 'escrow',
+}
+
+export enum RiskFlowClass {
+  TRANSFER = 'transfer',
+  PAYOUT = 'payout',
+}
+
+export enum RiskRecoverStatus {
+  APPLIED = 'applied',
+  ROLLED_BACK = 'rolled_back',
 }
 
 export enum RiskCaseType {
