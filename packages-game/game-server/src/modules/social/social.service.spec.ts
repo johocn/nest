@@ -78,8 +78,21 @@ describe('SocialService', () => {
   let playerService: jest.Mocked<PlayerService>;
   let eventBus: jest.Mocked<EventBusService>;
   let random: jest.Mock<number>;
+  let playerQb: any;
+  let reportQb: any;
+
+  const makeQb = () => ({
+    select: jest.fn().mockReturnThis(),
+    addSelect: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    getOne: jest.fn().mockResolvedValue(null),
+    getRawMany: jest.fn().mockResolvedValue([]),
+  });
 
   beforeEach(async () => {
+    playerQb = makeQb();
+    reportQb = makeQb();
     random = jest.fn(() => 0);
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -254,7 +267,7 @@ describe('SocialService', () => {
         },
         {
           provide: PlayerService,
-          useValue: { getById: jest.fn() },
+          useValue: { getById: jest.fn(), getElapsedDays: jest.fn() },
         },
         {
           provide: getRepositoryToken(PlayerReport),
@@ -265,7 +278,7 @@ describe('SocialService', () => {
             save: jest.fn(),
             count: jest.fn(),
             delete: jest.fn(),
-            createQueryBuilder: jest.fn(),
+            createQueryBuilder: jest.fn(() => reportQb),
           },
         },
         {
@@ -284,6 +297,7 @@ describe('SocialService', () => {
           useValue: {
             findOne: jest.fn(),
             find: jest.fn(),
+            createQueryBuilder: jest.fn(() => playerQb),
           },
         },
         { provide: Function, useValue: random },
@@ -1369,6 +1383,7 @@ describe('SocialService', () => {
       playerService.getById.mockResolvedValue({
         createdAt: new Date(Date.now() - 2 * 3600 * 1000),
       } as any);
+      playerService.getElapsedDays.mockResolvedValue(0);
       friendRepo.find.mockResolvedValue([]);
       kinshipRepo.find.mockResolvedValue([]);
       intelligenceRepo.find.mockResolvedValue([]);
@@ -1386,6 +1401,7 @@ describe('SocialService', () => {
       playerService.getById.mockResolvedValue({
         createdAt: new Date(Date.now() - 3 * 24 * 3600 * 1000),
       } as any);
+      playerService.getElapsedDays.mockResolvedValue(3);
       friendRepo.find.mockResolvedValue([]);
       kinshipRepo.find.mockResolvedValue([]);
       intelligenceRepo.find.mockResolvedValue([]);
@@ -1402,6 +1418,7 @@ describe('SocialService', () => {
       playerService.getById.mockResolvedValue({
         createdAt: new Date(Date.now() - 30 * 24 * 3600 * 1000),
       } as any);
+      playerService.getElapsedDays.mockResolvedValue(7);
       friendRepo.find.mockResolvedValue([]);
       kinshipRepo.find.mockResolvedValue([]);
       intelligenceRepo.find.mockResolvedValue([]);
@@ -1482,6 +1499,7 @@ describe('SocialService', () => {
       playerService.getById.mockResolvedValue({
         lastActivityAt: new Date(Date.now() - 3600 * 1000),
       } as any);
+      playerQb.getOne.mockResolvedValue({ id: 'l1' } as any);
       await expect(service.initiateImpeachment('p1', '1')).rejects.toMatchObject({
         response: { code: ErrorCodes.GUILD_IMPEACHMENT_NOT_READY },
       });
@@ -1926,6 +1944,7 @@ describe('SocialService', () => {
           ? { lastActivityAt: new Date(Date.now() - 10 * 24 * 3600 * 1000) }
           : { lastActivityAt: new Date(Date.now() - 3600 * 1000) },
       );
+      playerQb.getRawMany.mockResolvedValue([{ id: 'op' }, { id: 'v1' }]);
       economyService.addCurrency.mockResolvedValue({ balanceAfter: '0' });
       fundLogRepo.save.mockImplementation((d: any) => Promise.resolve(d));
 
@@ -1963,6 +1982,7 @@ describe('SocialService', () => {
       playerService.getById.mockResolvedValue({
         lastActivityAt: new Date(Date.now() - 3600 * 1000),
       } as any);
+      playerQb.getRawMany.mockResolvedValue([{ id: 'op' }]);
 
       await expect(service.paySalaries('op', '1')).rejects.toMatchObject({
         response: { code: ErrorCodes.GUILD_FUND_NOT_ENOUGH },
@@ -2018,7 +2038,7 @@ describe('SocialService', () => {
     });
 
     it('24h 内重复举报同一目标被拒', async () => {
-      reportRepo.findOne.mockResolvedValueOnce({ id: '1' }); // 命中重复
+      reportQb.getOne.mockResolvedValue({ id: '1' }); // 命中重复
       await expect(
         service.submitReport('100', ReportTargetType.PLAYER, '200', ReportReason.AD),
       ).rejects.toMatchObject({ response: { code: ErrorCodes.REPORT_COOLDOWN } });

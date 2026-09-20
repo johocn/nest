@@ -19,6 +19,7 @@ describe('PlayerService', () => {
     find: jest.fn(),
     findAndCount: jest.fn(),
     update: jest.fn(),
+    query: jest.fn(),
   };
 
   const mockCurrencyRepo = {
@@ -228,6 +229,7 @@ describe('PlayerService', () => {
         id: '1',
         createdAt: new Date(Date.now() - 3 * 86400000),
       });
+      mockPlayerRepo.query.mockResolvedValue([{ elapsed: 3 }]);
       mockConfigManageService.getConfig.mockResolvedValue({ value: '7' });
       const r = await service.isNewbie('1');
       expect(r).toEqual({ protected: true, daysLeft: 4 });
@@ -238,6 +240,7 @@ describe('PlayerService', () => {
         id: '1',
         createdAt: new Date(Date.now() - 10 * 86400000),
       });
+      mockPlayerRepo.query.mockResolvedValue([{ elapsed: 10 }]);
       mockConfigManageService.getConfig.mockResolvedValue({ value: '7' });
       const r = await service.isNewbie('1');
       expect(r).toEqual({ protected: false, daysLeft: 0 });
@@ -248,6 +251,7 @@ describe('PlayerService', () => {
         id: '1',
         createdAt: new Date(Date.now() - 2 * 86400000),
       });
+      mockPlayerRepo.query.mockResolvedValue([{ elapsed: 2 }]);
       mockConfigManageService.getConfig.mockRejectedValue(new Error('no'));
       const r = await service.isNewbie('1');
       expect(r.protected).toBe(true);

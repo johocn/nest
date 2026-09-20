@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, MoreThan, Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { PlayerBehaviorLog, RetentionStat } from './entities';
 import { EventBusService } from '@event-bus/event-bus.service';
 import { GameEvents } from '@event-bus/game-events';
@@ -113,6 +113,22 @@ export class AnalyticsService {
     return saved;
   }
 
+  async getBehaviorStatsFrom(days: number): Promise<BehaviorStat[]> {
+    const qb = this.logRepo
+      .createQueryBuilder('log')
+      .select('log.behaviorType', 'behavior_type')
+      .addSelect('COUNT(*)', 'count')
+      .where(`log.createdAt >= now() - (:days * interval '1 day')`, { days })
+      .groupBy('log.behaviorType')
+      .orderBy('count', 'DESC');
+
+    const raw = await qb.getRawMany();
+    return raw.map((r: any) => ({
+      behaviorType: r.behavior_type,
+      count: parseInt(r.count, 10),
+    }));
+  }
+
   async getBehaviorStats(
     startDate: Date,
     endDate: Date,
@@ -208,8 +224,7 @@ export class AnalyticsService {
     const today = new Date().toISOString().slice(0, 10);
     const dau = await this.getDailyActiveUsers(today);
 
-    const weekAgo = new Date(Date.now() - 7 * 86400000);
-    const behaviorStats = await this.getBehaviorStats(weekAgo, new Date());
+    const behaviorStats = await this.getBehaviorStatsFrom(7);
 
     return {
       dau,
@@ -223,11 +238,11 @@ export class AnalyticsService {
   async getSocialGraph(
     limit = 50,
   ): Promise<{ nodes: SocialGraphNode[]; edges: SocialGraphEdge[] }> {
-    const day30 = new Date(Date.now() - 30 * 86400000);
+    const day30 = `now() - interval '30 days'`;
     const activeRows = await this.logRepo
       .createQueryBuilder('log')
       .select('DISTINCT log.playerId', 'playerId')
-      .where('log.createdAt >= :d', { d: day30 })
+      .where(`log.createdAt >= ${day30}`)
       .getRawMany<{ playerId: string }>();
     const activeIds = activeRows
       .map((r) => r.playerId)
@@ -388,10 +403,10 @@ export class AnalyticsService {
   }
 
   async getSocialFunnel(days = 7): Promise<SocialFunnel> {
-    const dayStart = new Date(Date.now() - days * 86400000);
-    const newPlayers = await this.playerRepo.find({
-      where: { createdAt: MoreThan(dayStart) },
-    });
+    const newPlayers = await this.playerRepo
+      .createQueryBuilder('p')
+      .where("p.createdAt >= now() - (:days * interval '1 day')", { days })
+      .getMany();
     const ids = newPlayers.map((p) => p.id);
     if (!ids.length) {
       return {

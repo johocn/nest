@@ -25,15 +25,31 @@ describe('BalanceAuditService', () => {
   let playerRepo: jest.Mocked<Repository<Player>>;
   let currencyRepo: jest.Mocked<Repository<PlayerCurrency>>;
   let combatLogRepo: jest.Mocked<Repository<CombatLog>>;
+  let playerQb: any;
+  let txQb: any;
+
+  const makeQb = () => ({
+    select: jest.fn().mockReturnThis(),
+    addSelect: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    getMany: jest.fn().mockResolvedValue([]),
+    getRawMany: jest.fn().mockResolvedValue([]),
+  });
 
   beforeEach(async () => {
+    playerQb = makeQb();
+    txQb = makeQb();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BalanceAuditService,
-        { provide: getRepositoryToken(Transaction), useValue: { find: jest.fn(), createQueryBuilder: jest.fn() } },
+        { provide: getRepositoryToken(Transaction), useValue: { find: jest.fn(), createQueryBuilder: jest.fn(() => txQb) } },
         { provide: getRepositoryToken(Friend), useValue: { find: jest.fn() } },
         { provide: getRepositoryToken(Kinship), useValue: { find: jest.fn() } },
-        { provide: getRepositoryToken(Player), useValue: { find: jest.fn() } },
+        { provide: getRepositoryToken(Player), useValue: {
+          find: jest.fn(),
+          createQueryBuilder: jest.fn(() => playerQb),
+        } },
         { provide: getRepositoryToken(PlayerCurrency), useValue: { find: jest.fn() } },
         { provide: getRepositoryToken(CombatLog), useValue: { find: jest.fn() } },
       ],
@@ -50,20 +66,17 @@ describe('BalanceAuditService', () => {
 
   describe('audit', () => {
     it('should report relation rate when new players have friends', async () => {
-      playerRepo.find.mockResolvedValue([
+      const newPlayers = [
         { id: '2', createdAt: new Date(), level: 1 } as Player,
         { id: '3', createdAt: new Date(), level: 2 } as Player,
-      ]);
+      ];
+      playerRepo.find.mockResolvedValue(newPlayers);
+      playerQb.getMany.mockResolvedValue(newPlayers);
       friendRepo.find.mockResolvedValue([
         { playerId: '2', friendId: '1', status: FriendStatus.ACCEPTED } as Friend,
       ]);
       kinshipRepo.find.mockResolvedValue([]);
-      txRepo.find.mockResolvedValue([]);
-      txRepo.createQueryBuilder.mockReturnValue({
-        select: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        getRawMany: jest.fn().mockResolvedValue([]),
-      } as any);
+      txQb.getMany.mockResolvedValue([]);
       currencyRepo.find.mockResolvedValue([]);
       combatLogRepo.find.mockResolvedValue([]);
 
@@ -79,28 +92,21 @@ describe('BalanceAuditService', () => {
     });
 
     it('should be healthy when relation rate >= 60 and PVP win rate in 40-60', async () => {
-      playerRepo.find.mockResolvedValue([
+      const players = [
         { id: '2', createdAt: new Date(), level: 1 } as Player,
-      ]);
+      ];
+      playerRepo.find.mockResolvedValue(players);
+      playerQb.getMany.mockResolvedValue(players);
       friendRepo.find.mockResolvedValue([
         { playerId: '2', friendId: '1', status: FriendStatus.ACCEPTED } as Friend,
       ]);
       kinshipRepo.find.mockResolvedValue([]);
-      txRepo.find.mockResolvedValue([
+      txQb.getMany.mockResolvedValue([
         { currencyType: CurrencyType.FAVOR, amount: '10' } as Transaction,
         { currencyType: CurrencyType.FACE, amount: '-5' } as Transaction,
       ]);
-      txRepo.createQueryBuilder.mockReturnValue({
-        select: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        getRawMany: jest.fn().mockResolvedValue([{ playerId: '2' }]),
-      } as any);
       currencyRepo.find.mockResolvedValue([
         { currencyType: CurrencyType.GOLD, amount: '10000' } as PlayerCurrency,
-      ]);
-      txRepo.find.mockResolvedValue([
-        { currencyType: CurrencyType.FAVOR, amount: '10' } as Transaction,
-        { currencyType: CurrencyType.FACE, amount: '-5' } as Transaction,
       ]);
       combatLogRepo.find.mockResolvedValue([
         { result: CombatResult.WIN } as CombatLog,
@@ -124,9 +130,10 @@ describe('BalanceAuditService', () => {
 
     it('should compute gold inflation rate', async () => {
       playerRepo.find.mockResolvedValue([]);
+      playerQb.getMany.mockResolvedValue([]);
       friendRepo.find.mockResolvedValue([]);
       kinshipRepo.find.mockResolvedValue([]);
-      txRepo.find.mockResolvedValue([
+      txQb.getMany.mockResolvedValue([
         {
           currencyType: CurrencyType.GOLD,
           txType: TransactionType.EARN,
@@ -134,11 +141,6 @@ describe('BalanceAuditService', () => {
           createdAt: new Date(),
         } as Transaction,
       ]);
-      txRepo.createQueryBuilder.mockReturnValue({
-        select: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        getRawMany: jest.fn().mockResolvedValue([]),
-      } as any);
       currencyRepo.find.mockResolvedValue([
         { currencyType: CurrencyType.GOLD, amount: '10000' } as PlayerCurrency,
       ]);
@@ -153,18 +155,19 @@ describe('BalanceAuditService', () => {
 
     it('should build level distribution and avg hours per level', async () => {
       const createdAt = new Date(Date.now() - 48 * 3600 * 1000);
-      playerRepo.find.mockResolvedValue([
+      const players = [
         { id: '2', level: 2, createdAt } as Player,
-        { id: '3', level: 5, createdAt } as Player,
+        { id: '5', level: 5, createdAt } as Player,
+      ];
+      playerRepo.find.mockResolvedValue(players);
+      playerQb.getMany.mockResolvedValue(players);
+      playerQb.getRawMany.mockResolvedValue([
+        { level: 2, seconds: '172800' },
+        { level: 5, seconds: '172800' },
       ]);
       friendRepo.find.mockResolvedValue([]);
       kinshipRepo.find.mockResolvedValue([]);
-      txRepo.find.mockResolvedValue([]);
-      txRepo.createQueryBuilder.mockReturnValue({
-        select: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        getRawMany: jest.fn().mockResolvedValue([]),
-      } as any);
+      txQb.getMany.mockResolvedValue([]);
       currencyRepo.find.mockResolvedValue([]);
       combatLogRepo.find.mockResolvedValue([]);
 
@@ -177,9 +180,9 @@ describe('BalanceAuditService', () => {
     });
 
     it('should treat kinship as relation for new players', async () => {
-      playerRepo.find.mockResolvedValue([
-        { id: '9', createdAt: new Date() } as Player,
-      ]);
+      const players = [{ id: '9', createdAt: new Date() } as Player];
+      playerRepo.find.mockResolvedValue(players);
+      playerQb.getMany.mockResolvedValue(players);
       friendRepo.find.mockResolvedValue([]);
       kinshipRepo.find.mockResolvedValue([
         {
@@ -187,12 +190,7 @@ describe('BalanceAuditService', () => {
           members: ['9', '1'],
         } as Kinship,
       ]);
-      txRepo.find.mockResolvedValue([]);
-      txRepo.createQueryBuilder.mockReturnValue({
-        select: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        getRawMany: jest.fn().mockResolvedValue([]),
-      } as any);
+      txQb.getMany.mockResolvedValue([]);
       currencyRepo.find.mockResolvedValue([]);
       combatLogRepo.find.mockResolvedValue([]);
 

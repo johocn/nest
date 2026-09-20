@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThan, In } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Transaction } from '@modules/economy/entities/transaction.entity';
 import { Friend } from '@modules/social/entities/friend.entity';
 import { Kinship } from '@modules/social/entities/kinship.entity';
@@ -70,13 +70,10 @@ export class BalanceAuditService {
 
   async audit(): Promise<BalanceAuditReport> {
     const now = new Date();
-    const day7 = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
-    const day30 = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
-
     const [social, combat, economy, growth] = await Promise.all([
-      this.auditSocial(day7),
+      this.auditSocial(7),
       this.auditCombat(),
-      this.auditEconomy(day30),
+      this.auditEconomy(30),
       this.auditGrowth(),
     ]);
 
@@ -95,10 +92,12 @@ export class BalanceAuditService {
     };
   }
 
-  private async auditSocial(day7: Date) {
-    const newPlayers = await this.playerRepo.find({
-      where: { createdAt: MoreThan(day7) },
-    });
+  private async auditSocial(days: number) {
+    const since = `now() - (${days} * interval '1 day')`;
+    const newPlayers = await this.playerRepo
+      .createQueryBuilder('p')
+      .where(`p.created_at >= ${since}`)
+      .getMany();
     const ids = newPlayers.map((p) => p.id);
 
     let relatedCount = 0;
@@ -123,16 +122,17 @@ export class BalanceAuditService {
       }).length;
     }
 
-    const flowTx = await this.txRepo.find({
-      where: {
-        currencyType: In([
+    const flowTx = await this.txRepo
+      .createQueryBuilder('t')
+      .where('t.currency_type IN (:...types)', {
+        types: [
           CurrencyType.FAVOR,
           CurrencyType.GUILD_CONTRIB,
           CurrencyType.FACE,
-        ]),
-        createdAt: MoreThan(day7),
-      },
-    });
+        ],
+      })
+      .andWhere(`t.created_at >= ${since}`)
+      .getMany();
     const byCurrency: Record<string, string> = {
       [CurrencyType.FAVOR]: '0',
       [CurrencyType.GUILD_CONTRIB]: '0',
@@ -151,7 +151,7 @@ export class BalanceAuditService {
     const activeRows = await this.txRepo
       .createQueryBuilder('t')
       .select('DISTINCT t.player_id', 'playerId')
-      .where('t.created_at >= :d', { d: day7 })
+      .where(`t.created_at >= ${since}`)
       .getRawMany<{ playerId: string }>();
 
     const rate =
@@ -194,16 +194,16 @@ export class BalanceAuditService {
     return { pvpBattles: logs.length, pvpWinRate: winRate, distribution, healthy };
   }
 
-  private async auditEconomy(day30: Date) {
+  private async auditEconomy(days: number) {
+    const since = `now() - (${days} * interval '1 day')`;
     const [goldRows, inflowTx] = await Promise.all([
       this.currencyRepo.find({ where: { currencyType: CurrencyType.GOLD } }),
-      this.txRepo.find({
-        where: {
-          currencyType: CurrencyType.GOLD,
-          txType: TransactionType.EARN,
-          createdAt: MoreThan(day30),
-        },
-      }),
+      this.txRepo
+        .createQueryBuilder('t')
+        .where('t.currency_type = :ct', { ct: CurrencyType.GOLD })
+        .andWhere('t.tx_type = :tt', { tt: TransactionType.EARN })
+        .andWhere(`t.created_at >= ${since}`)
+        .getMany(),
     ]);
 
     let goldStock = BigInt(0);
@@ -233,17 +233,27 @@ export class BalanceAuditService {
   private async auditGrowth() {
     const players = await this.playerRepo.find();
     const levelDistribution: Record<string, number> = {};
-    const now = Date.now();
-    let totalHours = 0;
-    let totalLevels = 0;
+
+    // 注册时长在 SQL 端用 now() 与 created_at 同源计算（秒），避免应用层时区偏移
+    const levelWeights: Array<{ level: number; seconds: string }> =
+      await this.playerRepo
+        .createQueryBuilder('p')
+        .select('p.level', 'level')
+        .addSelect('EXTRACT(EPOCH FROM (now() - p.created_at))', 'seconds')
+        .getRawMany<{ level: number; seconds: string }>();
 
     for (const p of players) {
       levelDistribution[String(p.level)] =
         (levelDistribution[String(p.level)] ?? 0) + 1;
-      const hours = (now - p.createdAt.getTime()) / 3600 / 1000;
-      if (p.level > 0 && hours > 0) {
+    }
+
+    let totalHours = 0;
+    let totalLevels = 0;
+    for (const row of levelWeights) {
+      const hours = Number(row.seconds) / 3600;
+      if (row.level > 0 && hours > 0) {
         totalHours += hours;
-        totalLevels += p.level;
+        totalLevels += row.level;
       }
     }
 

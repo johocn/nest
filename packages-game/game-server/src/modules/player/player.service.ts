@@ -212,11 +212,18 @@ export class PlayerService {
       throw new GameException(ErrorCodes.PLAYER_NOT_FOUND, '玩家不存在');
     }
     const days = await this.readConfigNumber('pvp.newbie_protect_days', 7);
-    const elapsedDays = Math.floor(
-      (Date.now() - player.createdAt.getTime()) / 86400000,
-    );
+    const elapsedDays = await this.getElapsedDays(playerId);
     const daysLeft = Math.max(0, days - elapsedDays);
     return { protected: elapsedDays < days, daysLeft };
+  }
+
+  /** 注册至今的整日天数，基于 created_at（DB now() 写入），在 SQL 端同源计算避免时区偏移 */
+  async getElapsedDays(playerId: string): Promise<number> {
+    const rows = await this.playerRepo.query(
+      `SELECT FLOOR((now() - created_at) / interval '1 day')::int AS elapsed FROM players WHERE id = $1`,
+      [playerId],
+    );
+    return rows?.[0]?.elapsed ?? 1;
   }
 
   private async readConfigNumber(key: string, fallback: number): Promise<number> {

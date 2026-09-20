@@ -1,6 +1,6 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Raw, MoreThan } from 'typeorm';
+import { Repository, Raw } from 'typeorm';
 import {
   Friend,
   Guild,
@@ -220,10 +220,15 @@ export class SocialService {
         throw new GameException(ErrorCodes.REPORT_INVALID_TARGET, '举报目标不存在');
       }
     }
-    const since = new Date(Date.now() - 24 * 3600 * 1000);
-    const dup = await this.reportRepo.findOne({
-      where: { reporterId: playerId, targetType, targetId, createdAt: MoreThan(since) },
-    });
+    const dup = await this.reportRepo
+      .createQueryBuilder('r')
+      .where('r.reporterId = :reporterId', { reporterId: playerId })
+      .andWhere('r.targetType = :targetType', { targetType })
+      .andWhere('r.targetId = :targetId', { targetId })
+      .andWhere(
+        `r.createdAt >= now() - interval '1 day'`,
+      )
+      .getOne();
     if (dup) {
       throw new GameException(ErrorCodes.REPORT_COOLDOWN, '24小时内已举报该目标');
     }
@@ -715,8 +720,15 @@ export class SocialService {
     }
 
     const leader = await this.playerService.getById(guild.leaderId);
-    const lastActive = leader?.lastActivityAt;
-    if (lastActive && lastActive.getTime() > Date.now() - 7 * 24 * 3600 * 1000) {
+    // lastActivityAt 由 DB（UTC）写入，近期在线判断在 SQL 端与 now() 同源比较
+    const active = await this.playerRepo
+      .createQueryBuilder('p')
+      .where('p.id = :id', { id: guild.leaderId })
+      .andWhere(
+        `p.lastActivityAt >= now() - interval '7 days'`,
+      )
+      .getOne();
+    if (active) {
       throw new GameException(ErrorCodes.GUILD_IMPEACHMENT_NOT_READY, '帮主近期在线不可弹劾');
     }
 
@@ -1079,10 +1091,19 @@ export class SocialService {
     const members = await this.guildMemberRepo.find({ where: { guildId } });
 
     const paid: Array<{ playerId: string; amount: number }> = [];
+    // lastActivityAt 由 DB（UTC）写入，活跃判断在 SQL 端与 now() 同源比较
+    const memberIds = members.map((m) => m.playerId);
+    const activeRows = memberIds.length
+      ? await this.playerRepo
+          .createQueryBuilder('p')
+          .select('p.id', 'id')
+          .where('p.id IN (:...ids)', { ids: memberIds })
+          .andWhere(`p.lastActivityAt >= now() - interval '7 days'`)
+          .getRawMany<{ id: string }>()
+      : [];
+    const activeSet = new Set(activeRows.map((r) => r.id));
     for (const member of members) {
-      const player = await this.playerService.getById(member.playerId);
-      const lastActive = player?.lastActivityAt;
-      if (!lastActive || lastActive.getTime() <= Date.now() - 7 * 24 * 3600 * 1000) {
+      if (!activeSet.has(member.playerId)) {
         continue;
       }
       const salary = SocialService.SALARY_BY_ROLE[member.role] ?? 500;
@@ -1703,11 +1724,12 @@ export class SocialService {
     stats: { friends: number; kinships: number; intel: number; inGuild: boolean };
   }> {
     const player = await this.playerService.getById(playerId);
-    const createdAt = player?.createdAt ?? new Date();
-    const day = Math.min(
-      Math.floor((Date.now() - createdAt.getTime()) / (24 * 3600 * 1000)) + 1,
-      8,
-    );
+    if (!player) {
+      throw new GameException(ErrorCodes.PLAYER_NOT_FOUND, '玩家不存在');
+    }
+    // 注册第 N 天基于 created_at（DB now() 写入），SQL 端同源计算避免时区偏移
+    const elapsedDays = await this.playerService.getElapsedDays(playerId);
+    const day = Math.min(elapsedDays + 1, 8);
 
     const [friends, kinships, intelligences, guildMember] = await Promise.all([
       this.getFriendList(playerId),

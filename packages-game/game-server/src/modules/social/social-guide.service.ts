@@ -44,11 +44,10 @@ export class SocialGuideService {
 
   private async registerDay(playerId: string): Promise<number> {
     const player = await this.playerService.getById(playerId);
-    const createdAt = player?.createdAt ?? new Date();
-    return Math.min(
-      Math.floor((Date.now() - createdAt.getTime()) / (24 * 3600 * 1000)) + 1,
-      8,
-    );
+    // 注册第 N 天基于 created_at（DB now() 写入），SQL 端同源计算避免时区偏移
+    if (!player) return 1;
+    const elapsedDays = await this.playerService.getElapsedDays(playerId);
+    return Math.min(elapsedDays + 1, 8);
   }
 
   async completeTask(playerId: string, taskId: string): Promise<void> {

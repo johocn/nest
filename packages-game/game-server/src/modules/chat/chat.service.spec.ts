@@ -61,6 +61,16 @@ describe('ChatService', () => {
               .mockImplementation((data: any) => Promise.resolve(data)),
             create: jest.fn((data: any) => ({ ...data, id: '1' })),
             findAndCount: jest.fn(),
+            createQueryBuilder: jest.fn(function (this: any) {
+              const qb: any = {
+                where: jest.fn().mockReturnThis(),
+                andWhere: jest.fn().mockReturnThis(),
+                orderBy: jest.fn().mockReturnThis(),
+                take: jest.fn().mockReturnThis(),
+                getMany: () => this.find(),
+              };
+              return qb;
+            }),
           },
         },
         {

@@ -474,16 +474,15 @@ export class ActivityService {
         Math.round((returned.size / ids.length) * 10000) / 100;
     }
 
-    const startDate = new Date(
-      Date.now() - (days - 1) * 24 * 3600 * 1000,
-    );
-    startDate.setHours(0, 0, 0, 0);
+    // joined_at 由 DB now()（UTC）写入，趋势窗口在 SQL 端与 now() 同源同基准比较
     const trendRows = await this.playerActivityRepo
       .createQueryBuilder('pa')
       .select("to_char(pa.joined_at, 'YYYY-MM-DD')", 'date')
       .addSelect('COUNT(*)', 'count')
       .where('pa.activity_id = :activityId', { activityId })
-      .andWhere('pa.joined_at >= :start', { start: startDate })
+      .andWhere("pa.joined_at >= now() - (:ago * interval '1 day')", {
+        ago: days - 1,
+      })
       .groupBy('date')
       .orderBy('date', 'ASC')
       .getRawMany();

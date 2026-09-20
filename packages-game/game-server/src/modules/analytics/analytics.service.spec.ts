@@ -19,6 +19,8 @@ const makeQb = () => ({
   andWhere: jest.fn().mockReturnThis(),
   groupBy: jest.fn().mockReturnThis(),
   orderBy: jest.fn().mockReturnThis(),
+  take: jest.fn().mockReturnThis(),
+  getMany: jest.fn().mockResolvedValue([]),
   getRawMany: jest.fn().mockResolvedValue([]),
   getRawOne: jest.fn().mockResolvedValue({ count: '0' }),
 });
@@ -39,6 +41,7 @@ describe('AnalyticsService', () => {
   let friendQb: ReturnType<typeof makeQb>;
   let txQb: ReturnType<typeof makeQb>;
   let chatQb: ReturnType<typeof makeQb>;
+  let playerQb: ReturnType<typeof makeQb>;
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -46,6 +49,7 @@ describe('AnalyticsService', () => {
     friendQb = makeQb();
     txQb = makeQb();
     chatQb = makeQb();
+    playerQb = makeQb();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -88,7 +92,10 @@ describe('AnalyticsService', () => {
         },
         {
           provide: getRepositoryToken(Player),
-          useValue: { find: jest.fn() },
+          useValue: {
+            find: jest.fn(),
+            createQueryBuilder: jest.fn(() => playerQb),
+          },
         },
         {
           provide: getRepositoryToken(ChatMessage),
@@ -318,7 +325,7 @@ describe('AnalyticsService', () => {
 
   describe('getSocialFunnel', () => {
     it('好友/入帮/亲缘任一即算建立关系', async () => {
-      playerRepo.find.mockResolvedValue([
+      playerQb.getMany.mockResolvedValue([
         { id: '1' },
         { id: '2' },
         { id: '3' },
@@ -345,7 +352,7 @@ describe('AnalyticsService', () => {
     });
 
     it('无新玩家返回零值', async () => {
-      playerRepo.find.mockResolvedValue([]);
+      playerQb.getMany.mockResolvedValue([]);
       const result = await service.getSocialFunnel(7);
       expect(result.newPlayerCount).toBe(0);
       expect(result.healthy).toBe(false);

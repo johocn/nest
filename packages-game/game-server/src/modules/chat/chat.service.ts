@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { MoreThan, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import {
   ChatMessage,
   ChatPlayerStat,
@@ -422,12 +422,14 @@ export class ChatService {
     const cached = await this.cacheService.get(cacheKey);
     if (cached) return JSON.parse(cached);
 
-    const start = new Date(Date.now() - days * 86400000);
-    const messages = await this.chatRepo.find({
-      where: { channel: ChatChannel.WORLD, createdAt: MoreThan(start) },
-      order: { createdAt: 'DESC' },
-      take: 2000,
-    });
+    const start = `now() - (${days} * interval '1 day')`;
+    const messages = await this.chatRepo
+      .createQueryBuilder('m')
+      .where('m.channel = :channel', { channel: ChatChannel.WORLD })
+      .andWhere(`m.created_at >= ${start}`)
+      .orderBy('m.created_at', 'DESC')
+      .take(2000)
+      .getMany();
 
     const topicCount = new Map<string, number>();
     const mentionCount = new Map<string, number>();
@@ -465,11 +467,13 @@ export class ChatService {
     count = 3,
     days = 1,
   ): Promise<{ players: string[]; reward: Record<string, any> }> {
-    const start = new Date(Date.now() - days * 86400000);
-    const messages = await this.chatRepo.find({
-      where: { channel: ChatChannel.WORLD, createdAt: MoreThan(start) },
-      order: { createdAt: 'DESC' },
-    });
+    const start = `now() - (${days} * interval '1 day')`;
+    const messages = await this.chatRepo
+      .createQueryBuilder('m')
+      .where('m.channel = :channel', { channel: ChatChannel.WORLD })
+      .andWhere(`m.created_at >= ${start}`)
+      .orderBy('m.created_at', 'DESC')
+      .getMany();
     const valid = messages.filter((m) => m.content.length >= 8);
     const playerIds = Array.from(new Set(valid.map((m) => m.senderId)));
     if (!playerIds.length) {

@@ -19,7 +19,7 @@ describe('SocialGuideService', () => {
     create: jest.fn((e) => e),
   };
   const economyService = { earnPoints: jest.fn() };
-  const playerService = { getById: jest.fn() };
+  const playerService = { getById: jest.fn(), getElapsedDays: jest.fn() };
   const configService = { getConfig: jest.fn() };
   const eventBus = { emit: jest.fn() };
   const currencyService = { addCurrency: jest.fn() };
@@ -30,6 +30,7 @@ describe('SocialGuideService', () => {
       id: '1',
       createdAt: new Date(Date.now() - 2 * 86400000),
     });
+    playerService.getElapsedDays.mockResolvedValue(2);
     const module = await Test.createTestingModule({
       providers: [
         SocialGuideService,
