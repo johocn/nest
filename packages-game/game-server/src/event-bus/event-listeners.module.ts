@@ -6,6 +6,7 @@ import { RankingModule } from '@modules/ranking/ranking.module';
 import { CharacterModule } from '@modules/character/character.module';
 import { WorldModule } from '@modules/world/world.module';
 import { ItemDropModule } from '@modules/item-drop/item-drop.module';
+import { AchievementModule } from '@modules/achievement/achievement.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { ItemDropModule } from '@modules/item-drop/item-drop.module';
     CharacterModule,
     WorldModule,
     ItemDropModule,
+    AchievementModule,
   ],
   providers: [GameEventListeners],
 })

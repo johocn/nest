@@ -8,6 +8,8 @@ import { WorldService } from '@modules/world/world.service';
 import { DropService } from '@modules/item-drop/drop.service';
 import { GameEvents } from './game-events';
 import { RankingType } from '@constants/enums';
+import { AchievementService } from '@modules/achievement/achievement.service';
+import { AchievementCondition } from '@constants/enums';
 
 @Injectable()
 export class GameEventListeners {
@@ -20,6 +22,7 @@ export class GameEventListeners {
     private readonly characterService: CharacterService,
     private readonly worldService: WorldService,
     private readonly dropService: DropService,
+    private readonly achievementService: AchievementService,
   ) {}
 
   @OnEvent(GameEvents.MONSTER_KILLED)
@@ -76,6 +79,25 @@ export class GameEventListeners {
       } catch (err) {
         this.logger.error('Exp add failed', (err as Error).message);
       }
+
+      // 成就进度：PvE 击杀同时计入杀敌数与胜场
+      try {
+        await this.achievementService.advanceByCondition(
+          playerId,
+          AchievementCondition.KILL_COUNT,
+          1,
+        );
+        await this.achievementService.advanceByCondition(
+          playerId,
+          AchievementCondition.WIN_COMBAT,
+          1,
+        );
+      } catch (err) {
+        this.logger.error(
+          'Achievement progress failed',
+          (err as Error).message,
+        );
+      }
     } catch (err) {
       this.logger.error(
         'Monster killed handler failed',
@@ -98,6 +120,12 @@ export class GameEventListeners {
         playerName,
         payload.newLevel,
       );
+      await this.achievementService.advanceByCondition(
+        payload.playerId,
+        AchievementCondition.REACH_LEVEL,
+        payload.newLevel,
+        'set',
+      );
     } catch (err) {
       this.logger.error('Ranking update failed', (err as Error).message);
     }
@@ -113,7 +141,22 @@ export class GameEventListeners {
     this.logger.debug(
       `Currency changed: ${payload.playerId} ${payload.currencyType} ${payload.change} source=${payload.source}`,
     );
-    // Achievement progress update would go here — needs achievementId mapping
+
+    const amount = Number(payload.change);
+    if (!Number.isFinite(amount) || amount <= 0) return;
+
+    try {
+      await this.achievementService.advanceByCondition(
+        payload.playerId,
+        AchievementCondition.EARN_CURRENCY,
+        amount,
+      );
+    } catch (err) {
+      this.logger.error(
+        'Achievement progress failed',
+        (err as Error).message,
+      );
+    }
   }
 
   @OnEvent(GameEvents.ITEM_ACQUIRED)
@@ -121,7 +164,55 @@ export class GameEventListeners {
     this.logger.debug(
       `Item acquired: ${payload.playerId} item=${payload.itemTemplateId}`,
     );
-    // Achievement progress update would go here
+    // AchievementCondition 暂无道具类条件，接入需先新增枚举值与玩法口径（见盘点报告 P1）
+  }
+
+  @OnEvent(GameEvents.QUEST_COMPLETED)
+  async onQuestCompleted(payload: { playerId: string }) {
+    try {
+      await this.achievementService.advanceByCondition(
+        payload.playerId,
+        AchievementCondition.COMPLETE_QUEST,
+        1,
+      );
+    } catch (err) {
+      this.logger.error(
+        'Achievement progress failed',
+        (err as Error).message,
+      );
+    }
+  }
+
+  @OnEvent(GameEvents.GUILD_JOINED)
+  async onGuildJoined(payload: { guildId: string; playerId: string }) {
+    try {
+      await this.achievementService.advanceByCondition(
+        payload.playerId,
+        AchievementCondition.JOIN_GUILD,
+        1,
+      );
+    } catch (err) {
+      this.logger.error(
+        'Achievement progress failed',
+        (err as Error).message,
+      );
+    }
+  }
+
+  @OnEvent(GameEvents.FRIEND_ADDED)
+  async onFriendAdded(payload: { playerId: string; friendId: string }) {
+    try {
+      await this.achievementService.advanceByCondition(
+        payload.playerId,
+        AchievementCondition.ADD_FRIEND,
+        1,
+      );
+    } catch (err) {
+      this.logger.error(
+        'Achievement progress failed',
+        (err as Error).message,
+      );
+    }
   }
 
   @OnEvent(GameEvents.RECHARGE_SUCCESS)
