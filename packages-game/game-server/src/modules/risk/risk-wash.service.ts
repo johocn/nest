@@ -402,6 +402,13 @@ export class RiskWashService {
     return Number(rows?.sum ?? 0);
   }
 
+  /** 风控看板：高危 TOP20 + 待处置线索数 */
+  async dashboard(): Promise<{ top: Array<{ playerId: string; riskScore: number; level: RiskLevel }>; pending: number }> {
+    const top = await this.scoreRepo.find({ order: { riskScore: 'DESC' }, take: 20 });
+    const pending = await this.caseRepo.count({ where: { status: 'open' as any } });
+    return { top: top.map((s) => ({ playerId: s.playerId, riskScore: s.riskScore, level: s.level })), pending };
+  }
+
   /** 建议回收额 = 净差额（较大向 - 较小向） */
   async recoverProposal(caseId: string): Promise<{ suggestedAmount: string }> {
     const c = await this.caseRepo.findOne({ where: { id: caseId } });

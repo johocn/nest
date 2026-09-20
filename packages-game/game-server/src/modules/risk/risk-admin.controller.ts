@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { RiskWashService } from './risk-wash.service';
-import { RiskDisposeDto, RiskWhitelistDto } from './dto/risk-admin.dto';
+import { RiskDisposeDto, RiskWhitelistDto, RiskRecoverDto, RiskRollbackDto, RiskRecoverProposalDto } from './dto/risk-admin.dto';
 import { AdminGuard } from '@common/guards/admin.guard';
 import { CurrentAdmin } from '@common/decorators/current-admin.decorator';
 import type { AdminJwtPayload } from '@common/guards/admin.guard';
@@ -52,5 +52,29 @@ export class RiskAdminController {
   async removeWhitelist(@Param('playerId') playerId: string) {
     await this.riskWashService.removeWhitelist(playerId);
     return { success: true };
+  }
+
+  @Get('dashboard')
+  @ApiOperation({ summary: '风控看板：高危TOP/待处置队列' })
+  async dashboard() {
+    return await this.riskWashService.dashboard();
+  }
+
+  @Post('cases/:id/recover-proposal')
+  @ApiOperation({ summary: '计算污染建议回收额' })
+  async recoverProposal(@Param('id') id: string) {
+    return await this.riskWashService.recoverProposal(id);
+  }
+
+  @Post('cases/:id/recover')
+  @ApiOperation({ summary: 'GM确认回收涉案超额（半自动）' })
+  async recover(@Param('id') id: string, @Body() dto: RiskRecoverDto, @CurrentAdmin() admin: AdminJwtPayload) {
+    return { record: await this.riskWashService.recover(id, admin.username, dto.note) };
+  }
+
+  @Post('recover/:rid/rollback')
+  @ApiOperation({ summary: '回滚回收记录' })
+  async rollback(@Param('rid') rid: string, @Body() dto: RiskRollbackDto, @CurrentAdmin() admin: AdminJwtPayload) {
+    return { record: await this.riskWashService.rollback(rid, admin.username, dto.reason) };
   }
 }

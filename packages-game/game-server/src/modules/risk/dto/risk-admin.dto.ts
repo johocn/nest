@@ -18,3 +18,20 @@ export class RiskWhitelistDto {
   @IsString()
   note?: string;
 }
+
+export class RiskRecoverProposalDto {
+  @IsString()
+  caseId!: string;
+}
+
+export class RiskRecoverDto {
+  @IsString()
+  @IsOptional()
+  note?: string;
+}
+
+export class RiskRollbackDto {
+  @IsString()
+  @IsOptional()
+  reason?: string;
+}
