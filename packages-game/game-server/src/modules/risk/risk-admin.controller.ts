@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from '@n
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { RiskWashService } from './risk-wash.service';
 import { RiskReplayService } from './risk-replay.service';
+import { RiskIdentityService } from './risk-identity.service';
 import { RiskDisposeDto, RiskWhitelistDto, RiskRecoverDto, RiskRollbackDto, RiskRecoverProposalDto, RiskLockDto, RiskReplayDto } from './dto/risk-admin.dto';
 import { assertValidThresholdOverrides } from './risk-detect';
 import { AdminGuard } from '@common/guards/admin.guard';
@@ -19,6 +20,7 @@ export class RiskAdminController {
     private readonly riskWashService: RiskWashService,
     private readonly riskReplayService: RiskReplayService,
     private readonly adminService: AdminService,
+    private readonly riskIdentityService: RiskIdentityService,
   ) {}
 
   @Get('cases')
@@ -36,6 +38,12 @@ export class RiskAdminController {
       this.riskWashService.listOpenCasesByPlayer(playerId),
     ]);
     return { score, cases };
+  }
+
+  @Get('identity/player/:playerId')
+  @ApiOperation({ summary: '身份聚类图谱：一人多号关联（只读）' })
+  async identityGraph(@Param('playerId') playerId: string) {
+    return this.riskIdentityService.graphOf(playerId);
   }
 
   @Post('cases/:id/dispose')

@@ -5,6 +5,7 @@ import { Reflector } from '@nestjs/core';
 import { RiskAdminController } from './risk-admin.controller';
 import { RiskWashService } from './risk-wash.service';
 import { RiskReplayService } from './risk-replay.service';
+import { RiskIdentityService } from './risk-identity.service';
 import { AdminService } from '@modules/admin/admin.service';
 
 describe('RiskAdminController', () => {
@@ -28,6 +29,9 @@ describe('RiskAdminController', () => {
   const adminService = {
     logOperation: jest.fn().mockResolvedValue({}),
   };
+  const identityService = {
+    graphOf: jest.fn(),
+  };
 
   beforeAll(async () => {
     const mod = await Test.createTestingModule({
@@ -36,6 +40,7 @@ describe('RiskAdminController', () => {
         { provide: RiskWashService, useValue: svc },
         { provide: RiskReplayService, useValue: replayService },
         { provide: AdminService, useValue: adminService },
+        { provide: RiskIdentityService, useValue: identityService },
         { provide: JwtService, useValue: { verify: jest.fn() } },
         { provide: ConfigService, useValue: { get: jest.fn(() => 'secret') } },
         Reflector,
@@ -111,5 +116,20 @@ describe('RiskAdminController', () => {
       ),
     ).rejects.toMatchObject({ response: { code: 92901 } });
     expect(replayService.replay).not.toHaveBeenCalled();
+  });
+
+  it('identity/player/:playerId 返回身份图谱（只读）', async () => {
+    identityService.graphOf.mockResolvedValue({
+      playerId: 'P1',
+      clusterSize: 2,
+      links: [{ peerId: 'P2', linkType: 'same_device', confidence: 0.95 }],
+    });
+    const res = await ctrl.identityGraph('P1');
+    expect(identityService.graphOf).toHaveBeenCalledWith('P1');
+    expect(res).toEqual({
+      playerId: 'P1',
+      clusterSize: 2,
+      links: [{ peerId: 'P2', linkType: 'same_device', confidence: 0.95 }],
+    });
   });
 });
