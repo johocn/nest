@@ -826,3 +826,10 @@ export enum RiskLinkType {
   SAME_DEVICE = 'same_device',
   SSO = 'sso',
 }
+
+export enum ReconcileType {
+  TRADE = 'TRADE',
+  AUCTION = 'AUCTION',
+  ESCROW = 'ESCROW',
+  BOUNTY = 'BOUNTY',
+}
