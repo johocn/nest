@@ -19,6 +19,7 @@ export interface AdminAuthResult {
 @Injectable()
 export class AdminAuthService {
   private readonly jwtSecret: string;
+  private readonly jwtAdminExpiresIn: string;
 
   constructor(
     @InjectRepository(AdminUser)
@@ -26,8 +27,9 @@ export class AdminAuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
   ) {
-    this.jwtSecret =
-      this.configService.get<string>('jwt.secret') ?? 'default-secret';
+    const jwtConfig = this.configService.get('jwt');
+    this.jwtSecret = jwtConfig?.secret ?? 'default-secret';
+    this.jwtAdminExpiresIn = jwtConfig?.adminExpiresIn ?? '12h';
   }
 
   async login(username: string, password: string): Promise<AdminAuthResult> {
@@ -57,6 +59,7 @@ export class AdminAuthService {
     };
     const token = this.jwtService.sign(payload, {
       secret: this.jwtSecret,
+      expiresIn: this.jwtAdminExpiresIn,
     } as JwtSignOptions);
 
     return {

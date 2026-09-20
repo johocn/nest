@@ -21,7 +21,12 @@ describe('AdminAuthService', () => {
 
   const mockConfigService = {
     get: jest.fn((key: string) => {
-      if (key === 'jwt') return { secret: 'test-secret', expiresIn: '7d' };
+      if (key === 'jwt')
+        return {
+          secret: 'test-secret',
+          expiresIn: '7d',
+          adminExpiresIn: '12h',
+        };
       return undefined;
     }),
   };
@@ -50,6 +55,7 @@ describe('AdminAuthService', () => {
       passwordHash: '$2b$10$mockhash',
       role: AdminRole.SUPER_ADMIN,
       isActive: true,
+      tokenVersion: 0,
     };
     mockAdminRepo.findOne.mockResolvedValue(mockAdmin);
     jest.spyOn(service as any, 'comparePassword').mockResolvedValue(true);
@@ -58,6 +64,16 @@ describe('AdminAuthService', () => {
     expect(result.token).toBe('admin-jwt-token');
     expect(result.adminId).toBe('1');
     expect(result.role).toBe(AdminRole.SUPER_ADMIN);
+    expect(mockJwtService.sign).toHaveBeenCalledWith(
+      {
+        adminId: '1',
+        username: 'admin',
+        role: AdminRole.SUPER_ADMIN,
+        type: 'admin',
+        tokenVersion: 0,
+      },
+      { secret: 'test-secret', expiresIn: '12h' },
+    );
   });
 
   it('should throw if admin not found', async () => {
