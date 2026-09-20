@@ -7,6 +7,7 @@ import { MatchmakingService } from '@modules/matchmaking/matchmaking.service';
 import { RankingType } from '@constants/enums';
 import { MatchMode } from '@constants/enums';
 import { RiskWashService } from '@modules/risk/risk-wash.service';
+import { ReconcileService } from '@modules/reconcile/reconcile.service';
 
 @Injectable()
 export class SchedulerService {
@@ -18,6 +19,7 @@ export class SchedulerService {
     private readonly connectionService: ConnectionService,
     private readonly matchmakingService: MatchmakingService,
     private readonly riskWashService: RiskWashService,
+    private readonly reconcileService: ReconcileService,
   ) {}
 
   @Cron('0 0 * * *')
@@ -42,6 +44,26 @@ export class SchedulerService {
       this.logger.debug(`Active activities: ${activities.length}`);
     } catch (err) {
       this.logger.error('Hourly activity check failed', (err as Error).message);
+    }
+  }
+
+  @Cron('0 5 * * *')
+  async dailyReconcile() {
+    this.logger.log('Running daily reconcile...');
+    try {
+      const results = await this.reconcileService.reconcileDaily();
+      const mismatches = results.reduce(
+        (sum, r) => sum + Number(r.mismatch),
+        0,
+      );
+      this.logger.log(
+        `Daily reconcile done: statDate=${results[0]?.statDate} mismatches=${mismatches}`,
+      );
+    } catch (err) {
+      this.logger.error(
+        'Daily reconcile failed',
+        (err as Error).message,
+      );
     }
   }
 
