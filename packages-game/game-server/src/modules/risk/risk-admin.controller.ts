@@ -96,7 +96,7 @@ export class RiskAdminController {
   @Post('cases/:id/lock')
   @ApiOperation({ summary: '高危线索封禁/交易封锁联动' })
   async lock(@Param('id') id: string, @Body() dto: RiskLockDto, @CurrentAdmin() admin: AdminJwtPayload) {
-    return { result: await this.riskWashService.lock(id, admin.username, dto.level, dto.reason) };
+    return { result: await this.riskWashService.lock(id, admin.adminId, admin.username, dto.level, dto.reason) };
   }
 
   @Post('replay')

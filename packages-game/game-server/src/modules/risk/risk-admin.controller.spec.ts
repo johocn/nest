@@ -89,8 +89,8 @@ describe('RiskAdminController', () => {
 
   it('lock 携带管理员、惩罚等级与原因', async () => {
     svc.lock.mockResolvedValue({ caseId: 'c1', applied: [{ playerId: 'p1', level: 'ban', appliedAt: new Date() }] });
-    await ctrl.lock('c1', { level: 'ban', reason: '风控封禁' } as any, { username: 'GM1' } as any);
-    expect(svc.lock).toHaveBeenCalledWith('c1', 'GM1', 'ban', '风控封禁');
+    await ctrl.lock('c1', { level: 'ban', reason: '风控封禁' } as any, { username: 'GM1', adminId: 100 } as any);
+    expect(svc.lock).toHaveBeenCalledWith('c1', 100, 'GM1', 'ban', '风控封禁');
   });
 
   it('replay 合法参数调用回放服务并留 gm-log', async () => {

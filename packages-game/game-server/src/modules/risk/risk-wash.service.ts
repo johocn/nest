@@ -499,6 +499,7 @@ export class RiskWashService {
   /** 封禁/交易封锁联动：对涉事账号落既有惩罚（PenaltyLevel），写 audit，线索置 FROZEN 保留 recover 关联 */
   async lock(
     caseId: string,
+    adminId: string,
     operator: string,
     level: PenaltyLevel,
     reason?: string,
@@ -523,7 +524,7 @@ export class RiskWashService {
       throw new GameException(ErrorCodes.RISK_CASE_NOT_FOUND, '涉事账号不可用，未执行封锁');
     }
     await this.adminService.logOperation({
-      adminId: operator,
+      adminId,
       targetPlayerId: c.toId,
       operation: 'risk.case.lock',
       changeBefore: { status: c.status },
