@@ -10,6 +10,7 @@ import { BuffService } from '@modules/buff/buff.service';
 import { ConfigManageService } from '@modules/config/config.service';
 import { CacheService } from '@cache/cache.service';
 import { EventBusService } from '@event-bus/event-bus.service';
+import { GameEvents } from '@event-bus/game-events';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
 import { CurrencyType } from '@constants/enums';
@@ -47,6 +48,11 @@ export interface ResolveResult {
   delivered: string[];
 }
 
+interface RewardItem {
+  currency?: Array<{ currencyType: CurrencyType; amount: number }>;
+  items?: Array<{ itemTemplateId: string; quantity: number }>;
+}
+
 interface EncounterEffect {
   type: 'currency' | 'item' | 'buff' | 'deductCurrency' | 'removeItem';
   currencyType?: CurrencyType;
@@ -76,12 +82,99 @@ export class ExploreService {
 
   /** 昼夜 / 天气：以 SQL now() 为准，不依赖服务器本地时区 */
   async worldState(): Promise<WorldState> {
-    throw new Error('not-implemented');
+    let rows: Array<{ now: unknown; hour: string; day: string }> = [];
+    try {
+      rows = await this.encRepo.manager.query(
+        "SELECT NOW() AS now, to_char(NOW(), 'HH24') AS hour, to_char(NOW(), 'YYYY-MM-DD') AS day",
+      );
+    } catch {
+      rows = [];
+    }
+    const row = rows?.[0];
+    const hour = String(row?.hour ?? '0');
+    const h = parseInt(hour, 10) || 0;
+    const timeOfDay: 'day' | 'night' =
+      h >= 6 && h < 18 ? 'day' : 'night';
+    const weather = this.weatherOf(String(row?.day ?? ''));
+    return { timeOfDay, weather, hour };
+  }
+
+  private weatherOf(day: string): 'sunny' | 'rainy' {
+    let hash = 0;
+    for (let i = 0; i < day.length; i++) {
+      hash = (hash * 31 + day.charCodeAt(i)) & 0x7fffffff;
+    }
+    return hash % 2 === 0 ? 'sunny' : 'rainy';
   }
 
   /** 探索足迹：幂等 upsert + times 递增，首探经既有效益通道发里程碑奖 */
   async discover(playerId: string, sceneId: string): Promise<DiscoverResult> {
-    throw new Error('not-implemented');
+    const scene = await this.sceneRepo.findOne({ where: { id: sceneId } });
+    if (!scene) {
+      throw new GameException(ErrorCodes.PARAM_INVALID, '场景不存在');
+    }
+    const existing = await this.explRepo.findOne({
+      where: { playerId, sceneId },
+    });
+    if (existing) {
+      existing.times = (existing.times ?? 1) + 1;
+      await this.explRepo.save(existing);
+      return { sceneId, times: existing.times, first: false, delivered: [] };
+    }
+
+    // 首探：读取足迹里程碑配置并结算（走既有 economy/inventory 发奖通道）
+    let reward: RewardItem = {};
+    try {
+      const cfg = await this.configService.getTypedValue<any>(
+        'explore.milestone',
+      );
+      reward = cfg?.reward ?? {};
+    } catch {
+      reward = {};
+    }
+    const delivered = await this.deliverMilestone(playerId, reward);
+    const rec = this.explRepo.create({ playerId, sceneId, times: 1 });
+    try {
+      await this.explRepo.save(rec);
+    } catch {
+      // uk(player_id, scene_id) 并发兜底：重复时只递增 times，不重复发奖
+      const dup = await this.explRepo.findOne({
+        where: { playerId, sceneId },
+      });
+      if (dup) {
+        dup.times = (dup.times ?? 0) + 1;
+        await this.explRepo.save(dup);
+        return { sceneId, times: dup.times, first: false, delivered: [] };
+      }
+      throw new GameException(ErrorCodes.DATABASE_ERROR, '探索足迹写入失败');
+    }
+    this.eventBus.emit(GameEvents.EXPLORE_SCENE_DISCOVERED, {
+      playerId,
+      sceneId,
+    });
+    return { sceneId, times: 1, first: true, delivered };
+  }
+
+  private async deliverMilestone(
+    playerId: string,
+    reward: RewardItem,
+  ): Promise<string[]> {
+    const effects: EncounterEffect[] = [];
+    for (const c of reward.currency ?? []) {
+      effects.push({
+        type: 'currency',
+        currencyType: c.currencyType,
+        amount: c.amount,
+      });
+    }
+    for (const it of reward.items ?? []) {
+      effects.push({
+        type: 'item',
+        itemTemplateId: it.itemTemplateId,
+        quantity: it.quantity,
+      });
+    }
+    return this.deliverEffects(playerId, effects, 'explore_milestone');
   }
 
   /** 奇遇触发：触发率 / CD / 一次性判定，命中返回当前选项 */

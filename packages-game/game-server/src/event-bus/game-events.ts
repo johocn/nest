@@ -122,6 +122,11 @@ export const GameEvents = {
   // 境界系统事件（Plan6）
   REALM_VALUE_GAINED: 'realm.value.gained',
   REALM_BREAKTHROUGH: 'realm.breakthrough',
+
+  // 世界探索与奇遇事件（Plan7）
+  EXPLORE_SCENE_DISCOVERED: 'explore.scene.discovered',
+  ENCOUNTER_TRIGGERED: 'explore.encounter.triggered',
+  ENCOUNTER_RESOLVED: 'explore.encounter.resolved',
 } as const;
 
 export type GameEvent = (typeof GameEvents)[keyof typeof GameEvents];

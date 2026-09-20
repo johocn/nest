@@ -140,7 +140,6 @@ describe('ExploreService', () => {
         100,
         expect.any(String),
         expect.any(String),
-        expect.anything(),
       );
       expect(explRepo.save).toHaveBeenCalledWith(
         expect.objectContaining({ playerId: 'p1', sceneId: 's1', times: 1 }),
@@ -230,7 +229,6 @@ describe('ExploreService', () => {
         100,
         expect.any(String),
         expect.any(String),
-        expect.anything(),
       );
       expect(res.delivered).toContain('currency:gold:100');
     });
