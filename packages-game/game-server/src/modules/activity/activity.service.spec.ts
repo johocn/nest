@@ -608,4 +608,31 @@ describe('ActivityService', () => {
       expect(result.progress).toBe(0);
     });
   });
+
+  describe('参与人数上限（max_participants）', () => {
+    it('报名人数达上限拒绝（max_participants > 0）', async () => {
+      templateRepo.findOne.mockResolvedValue(
+        makeTemplate({ maxParticipants: 2 }),
+      );
+      playerRepo.findOne.mockResolvedValue({ id: 'p1', level: 99 } as any);
+      playerActivityRepo.count.mockResolvedValue(2);
+
+      await expect(service.joinActivity('p1', '1')).rejects.toMatchObject({
+        response: { code: ErrorCodes.ACTIVITY_FULL },
+      });
+      expect(playerActivityRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('max_participants=0 视为不限人数', async () => {
+      templateRepo.findOne.mockResolvedValue(
+        makeTemplate({ maxParticipants: 0 }),
+      );
+      playerRepo.findOne.mockResolvedValue({ id: 'p1', level: 99 } as any);
+      playerActivityRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.joinActivity('p1', '1');
+      expect(result.progress).toBe(0);
+      expect(playerActivityRepo.count).not.toHaveBeenCalled();
+    });
+  });
 });

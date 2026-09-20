@@ -241,6 +241,16 @@ export class ActivityService {
       );
     }
 
+    // 人数上限：maxParticipants > 0 时按报名口径计数（简单 count，不加锁）
+    if (template.maxParticipants > 0) {
+      const joined = await this.playerActivityRepo.count({
+        where: { activityId },
+      });
+      if (joined >= template.maxParticipants) {
+        throw new GameException(ErrorCodes.ACTIVITY_FULL, '活动参与人数已满');
+      }
+    }
+
     const playerActivity = this.playerActivityRepo.create({
       playerId,
       activityId,
