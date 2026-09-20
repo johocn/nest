@@ -1,11 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThan } from 'typeorm';
-import { TradeStatus, AuctionStatus, RiskBizType, RiskFlowClass, RiskCaseType, RiskLevel, RiskCaseStatus, RiskRecoverStatus, ConfigType } from '@constants/enums';
+import { TradeStatus, AuctionStatus, RiskBizType, RiskFlowClass, RiskCaseType, RiskLevel, RiskCaseStatus, RiskRecoverStatus, ConfigType, CurrencyType, PenaltyLevel } from '@constants/enums';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
 import { ConfigManageService } from '@modules/config/config.service';
 import { TradeOrder } from '@modules/trade/entities/trade-order.entity';
+import { EconomyService } from '@modules/economy/economy.service';
+import { AuthService } from '@modules/auth/auth.service';
+import { PlayerService } from '@modules/player/player.service';
+import { AdminService } from '@modules/admin/admin.service';
 import { RiskWashFlow, RiskCase, RiskAccountScore, RiskWhitelist, RiskRecoverRecord } from './entities';
 
 @Injectable()
@@ -26,6 +30,10 @@ export class RiskWashService {
     @InjectRepository(RiskRecoverRecord)
     private readonly recoverRepo: Repository<RiskRecoverRecord>,
     private readonly configService: ConfigManageService,
+    private readonly economyService: EconomyService,
+    private readonly authService: AuthService,
+    private readonly playerService: PlayerService,
+    private readonly adminService: AdminService,
   ) {}
 
   async scan(): Promise<{ ingested: number; cases: number }> {
