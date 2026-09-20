@@ -11,10 +11,13 @@ import {
   SocialTargetType,
   QuestHelpStatus,
   CurrencyType,
-  GuildRole,
-  IntelligenceGrade,
-  RelationshipLevel,
 } from '@constants/enums';
+import {
+  FAVOR_RANKS,
+  GUILD_ROLE_RANKS,
+  INTEL_GRADE_RANKS,
+  favorRankOf,
+} from '@constants/ranks';
 import { CharacterService } from '@modules/character/character.service';
 import { SocialService } from '@modules/social/social.service';
 import { EconomyService } from '@modules/economy/economy.service';
@@ -34,32 +37,6 @@ export interface SubmitQuestResult {
 
 @Injectable()
 export class QuestService {
-  private static readonly INTEL_GRADE_RANKS: Record<string, number> = {
-    [IntelligenceGrade.E]: 0,
-    [IntelligenceGrade.D]: 1,
-    [IntelligenceGrade.C]: 2,
-    [IntelligenceGrade.B]: 3,
-    [IntelligenceGrade.A]: 4,
-  };
-
-  private static readonly FAVOR_RANKS: Record<string, number> = {
-    [RelationshipLevel.STRANGER]: 0,
-    [RelationshipLevel.ACQUAINTANCE]: 1,
-    [RelationshipLevel.FRIEND]: 2,
-    [RelationshipLevel.CONFIDANT]: 3,
-    [RelationshipLevel.SWORN]: 4,
-  };
-
-  private static readonly GUILD_ROLE_RANKS: Record<string, number> = {
-    [GuildRole.MEMBER]: 0,
-    [GuildRole.OFFICER]: 0,
-    [GuildRole.ELITE]: 0,
-    [GuildRole.INCENSE_MASTER]: 1,
-    [GuildRole.HALL_MASTER]: 2,
-    [GuildRole.VICE_LEADER]: 3,
-    [GuildRole.LEADER]: 4,
-  };
-
   private static readonly SOCIAL_CURRENCIES = [
     CurrencyType.FAVOR,
     CurrencyType.GUILD_CONTRIB,
@@ -155,11 +132,9 @@ export class QuestService {
       ]);
 
     if (prerequisiteSocial.intelGrade !== undefined) {
-      const required =
-        QuestService.INTEL_GRADE_RANKS[prerequisiteSocial.intelGrade] ?? 0;
+      const required = INTEL_GRADE_RANKS[prerequisiteSocial.intelGrade] ?? 0;
       const maxRank = intelligences.reduce(
-        (max, it) =>
-          Math.max(max, QuestService.INTEL_GRADE_RANKS[it.grade] ?? 0),
+        (max, it) => Math.max(max, INTEL_GRADE_RANKS[it.grade] ?? 0),
         0,
       );
       if (maxRank < required) {
@@ -174,16 +149,14 @@ export class QuestService {
     }
 
     if (prerequisiteSocial.favorLevel !== undefined) {
-      const required =
-        QuestService.FAVOR_RANKS[prerequisiteSocial.favorLevel] ?? 0;
+      const required = FAVOR_RANKS[prerequisiteSocial.favorLevel] ?? 0;
       let maxRank = 0;
       for (const rel of relationships) {
         let rank: number;
         if (rel.level) {
-          rank = QuestService.FAVOR_RANKS[rel.level] ?? 0;
+          rank = FAVOR_RANKS[rel.level] ?? 0;
         } else {
-          const f = rel.favorability;
-          rank = f >= 500 ? 4 : f >= 300 ? 3 : f >= 150 ? 2 : f >= 50 ? 1 : 0;
+          rank = favorRankOf(rel.favorability);
         }
         maxRank = Math.max(maxRank, rank);
       }
@@ -193,10 +166,9 @@ export class QuestService {
     }
 
     if (prerequisiteSocial.guildRole !== undefined) {
-      const required =
-        QuestService.GUILD_ROLE_RANKS[prerequisiteSocial.guildRole] ?? 0;
+      const required = GUILD_ROLE_RANKS[prerequisiteSocial.guildRole] ?? 0;
       const roleRank = myGuildRole
-        ? QuestService.GUILD_ROLE_RANKS[myGuildRole.role] ?? 0
+        ? GUILD_ROLE_RANKS[myGuildRole.role] ?? 0
         : 0;
       if (roleRank < required) {
         throw new GameException(ErrorCodes.QUEST_SOCIAL_PRE_REQ, '公会职位不足');
