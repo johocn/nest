@@ -36,4 +36,10 @@ export class AuthAdminController {
   async getPenalties(@Param('playerId') playerId: string) {
     return this.authService.getPenalties(playerId);
   }
+
+  @Post('players/:accountId/logout')
+  @ApiOperation({ summary: 'GM 踢玩家下线（使该账号全部端 token 失效）' })
+  async kickPlayer(@Param('accountId') accountId: string) {
+    return this.authService.logout(accountId);
+  }
 }
