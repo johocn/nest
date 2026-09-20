@@ -234,6 +234,11 @@ export const ErrorCodes = {
   REALM_VALUE_NOT_ENOUGH: 94001, // 修为不足，未达突破阈值
   REALM_ALREADY_MAX: 94002, // 已达最高境界
   REALM_TEMPLATE_NOT_FOUND: 94003, // 境界模板不存在
+  // 世界探索与奇遇 94101-94199
+  ENCOUNTER_NOT_FOUND: 94101, // 奇遇不存在/已过期
+  ENCOUNTER_ALREADY_RESOLVED: 94102, // 奇遇已结算（幂等防重复）
+  ENCOUNTER_CHOICE_INVALID: 94103, // 不合法的选项
+  ENCOUNTER_TEMPLATE_NOT_FOUND: 94104, // 奇遇模板不存在
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
