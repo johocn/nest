@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { RiskWashService } from './risk-wash.service';
-import { RiskDisposeDto, RiskWhitelistDto, RiskRecoverDto, RiskRollbackDto, RiskRecoverProposalDto } from './dto/risk-admin.dto';
+import { RiskDisposeDto, RiskWhitelistDto, RiskRecoverDto, RiskRollbackDto, RiskRecoverProposalDto, RiskLockDto } from './dto/risk-admin.dto';
 import { AdminGuard } from '@common/guards/admin.guard';
 import { CurrentAdmin } from '@common/decorators/current-admin.decorator';
 import type { AdminJwtPayload } from '@common/guards/admin.guard';
@@ -76,5 +76,11 @@ export class RiskAdminController {
   @ApiOperation({ summary: '回滚回收记录' })
   async rollback(@Param('rid') rid: string, @Body() dto: RiskRollbackDto, @CurrentAdmin() admin: AdminJwtPayload) {
     return { record: await this.riskWashService.rollback(rid, admin.username, dto.reason) };
+  }
+
+  @Post('cases/:id/lock')
+  @ApiOperation({ summary: '高危线索封禁/交易封锁联动' })
+  async lock(@Param('id') id: string, @Body() dto: RiskLockDto, @CurrentAdmin() admin: AdminJwtPayload) {
+    return { result: await this.riskWashService.lock(id, admin.username, dto.level, dto.reason) };
   }
 }

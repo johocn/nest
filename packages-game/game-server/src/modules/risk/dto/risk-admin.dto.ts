@@ -1,5 +1,5 @@
 import { IsString, IsOptional, IsEnum } from 'class-validator';
-import { RiskCaseStatus } from '@constants/enums';
+import { RiskCaseStatus, PenaltyLevel } from '@constants/enums';
 
 export class RiskDisposeDto {
   @IsEnum(RiskCaseStatus)
@@ -31,6 +31,15 @@ export class RiskRecoverDto {
 }
 
 export class RiskRollbackDto {
+  @IsString()
+  @IsOptional()
+  reason?: string;
+}
+
+export class RiskLockDto {
+  @IsEnum(PenaltyLevel)
+  level: PenaltyLevel; // 复用既有惩罚等级（如 trade_limit 交易封锁 / ban 封禁）
+
   @IsString()
   @IsOptional()
   reason?: string;

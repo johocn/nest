@@ -18,6 +18,7 @@ describe('RiskAdminController', () => {
     recoverProposal: jest.fn(),
     recover: jest.fn(),
     rollback: jest.fn(),
+    lock: jest.fn(),
   };
 
   beforeAll(async () => {
@@ -69,5 +70,11 @@ describe('RiskAdminController', () => {
     svc.rollback.mockResolvedValue({ id: 'r1', status: 'rolled_back' });
     await ctrl.rollback('r1', { reason: '误判' } as any, { username: 'GM1' } as any);
     expect(svc.rollback).toHaveBeenCalledWith('r1', 'GM1', '误判');
+  });
+
+  it('lock 携带管理员、惩罚等级与原因', async () => {
+    svc.lock.mockResolvedValue({ caseId: 'c1', applied: [{ playerId: 'p1', level: 'ban', appliedAt: new Date() }] });
+    await ctrl.lock('c1', { level: 'ban', reason: '风控封禁' } as any, { username: 'GM1' } as any);
+    expect(svc.lock).toHaveBeenCalledWith('c1', 'GM1', 'ban', '风控封禁');
   });
 });

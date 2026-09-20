@@ -519,6 +519,49 @@ export class RiskWashService {
     this.logger.log(`risk recover rollback id=${recoverId} refund=${amount} to=${r.toId} by=${operator}`);
     return saved;
   }
+
+  /** 封禁/交易封锁联动：对涉事账号落既有惩罚（PenaltyLevel），写 audit，线索置 FROZEN 保留 recover 关联 */
+  async lock(
+    caseId: string,
+    operator: string,
+    level: PenaltyLevel,
+    reason?: string,
+  ): Promise<{ caseId: string; applied: Array<{ playerId: string; level: PenaltyLevel; appliedAt: Date }> }> {
+    const c = await this.caseRepo.findOne({ where: { id: caseId } });
+    if (!c) throw new GameException(ErrorCodes.RISK_CASE_NOT_FOUND, '风控线索不存在');
+    const affected = [...new Set([c.fromId, c.toId])];
+    const applied: Array<{ playerId: string; level: PenaltyLevel; appliedAt: Date }> = [];
+    for (const playerId of affected) {
+      const player = await this.playerService.getById(playerId);
+      if (!player) continue;
+      const penalty = await this.authService.applyPenalty(
+        operator,
+        player.id,
+        player.accountId,
+        level,
+        reason?.trim() || '风控封锁',
+      );
+      applied.push({ playerId, level, appliedAt: penalty.createdAt ?? new Date() });
+    }
+    if (!applied.length) {
+      throw new GameException(ErrorCodes.RISK_CASE_NOT_FOUND, '涉事账号不可用，未执行封锁');
+    }
+    await this.adminService.logOperation({
+      adminId: operator,
+      targetPlayerId: c.toId,
+      operation: 'risk.case.lock',
+      changeBefore: { status: c.status },
+      changeAfter: { caseId, status: RiskCaseStatus.FROZEN, level, affected: affected.join(',') },
+    });
+    if (c.status === RiskCaseStatus.OPEN) {
+      c.status = RiskCaseStatus.FROZEN;
+      c.handledBy = operator;
+      c.handledAt = new Date();
+      await this.caseRepo.save(c);
+    }
+    this.logger.log(`risk case lock case=${caseId} level=${level} by=${operator} applied=${applied.length}`);
+    return { caseId, applied };
+  }
 }
 
 function facepair(a: string, b: string): boolean {
