@@ -34,13 +34,17 @@ import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { CurrentPlayer } from '@common/decorators/current-player.decorator';
 import type { CurrentPlayerData } from '@common/decorators/current-player.decorator';
 import { DonateType, ReportReason, ReportTargetType } from '@constants/enums';
+import { SocialEconomyService } from './social-economy.service';
 
 @ApiTags('Social')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('api/client/v1/social')
 export class SocialController {
-  constructor(private readonly socialService: SocialService) {}
+  constructor(
+    private readonly socialService: SocialService,
+    private readonly economyService: SocialEconomyService,
+  ) {}
 
   // ===== Friends =====
 
@@ -502,5 +506,36 @@ export class SocialController {
     @Query('limit') limit = 10,
   ) {
     return this.socialService.recommendFriends(player.playerId, Number(limit));
+  }
+
+  // ===== 社交积分（阶段5批2） =====
+
+  @Get('point/info')
+  @ApiOperation({ summary: '社交积分信息' })
+  async getPointInfo(@CurrentPlayer() player: CurrentPlayerData) {
+    return this.economyService.getPointInfo(player.playerId);
+  }
+
+  @Get('point/records')
+  @ApiOperation({ summary: '社交积分流水' })
+  async getPointRecords(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Query('page') page: number = 1,
+    @Query('pageSize') pageSize: number = 20,
+  ) {
+    return this.economyService.getPointRecords(
+      player.playerId,
+      Number(page),
+      Number(pageSize),
+    );
+  }
+
+  @Post('point/exchange')
+  @ApiOperation({ summary: '积分兑换宝箱' })
+  async exchangeChest(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Body() dto: { tier: number },
+  ) {
+    return this.economyService.exchangeChest(player.playerId, Number(dto.tier));
   }
 }
