@@ -171,6 +171,13 @@ if [ -n "$AT" ]; then
   echo "$R" | grep -q '"peerId":"'$PID2'"' && ok "identity graph P1 peers with P2" || { echo "$R" | grep -q '"clusterSize":0' && ok "identity graph empty (bg not built)" || echo "$R" | grep -q '"clusterSize":2' && ok "identity graph cluster{}" || ok "identity graph reachable (bg pending)"; }
   R=$(curl -s $BASE/api/admin/v1/risk/identity/player/$PID2 -H "$AA")
   check_code "risk identity graph P2 reachable" 0 "$R"
+
+  # ---- 16. Plan4 GM 经济宏观看板：只读聚合结构非空、currencyStats 有 gold ----
+  R=$(curl -s $BASE/api/admin/v1/economy/dashboard -H "$AA")
+  check_code "economy dashboard reachable" 0 "$R"
+  echo "$R" | grep -q '"currencyStats":{' && ok "economy dashboard has currencyStats" || bad "economy dashboard currencyStats" "$R"
+  echo "$R" | grep -q '"totalGold":"' && ok "economy dashboard currencyStats.totalGold present" || bad "economy dashboard totalGold" "$R"
+  echo "$R" | grep -q '"assetDistribution":{' && echo "$R" | grep -q '"frozenAmount":"' && echo "$R" | grep -q '"recoveryToDate":"' && ok "economy dashboard full snapshot structure" || bad "economy dashboard snapshot fields" "$R"
 else
   echo "SKIP: admin points section (admin login failed, body=$R)" >&2
   ok "admin points skipped (no admin creds)"

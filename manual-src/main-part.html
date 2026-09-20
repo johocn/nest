@@ -2225,6 +2225,8 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
     <li><b>流失预警</b>：社交活跃骤降（组队 / 送礼 / 帮派发言减少）触发预警，早干预（推送社交召集，见 8.14① 联动）。</li>
     <li><b>社交漏斗</b>：新玩家 7 日内是否建立 ≥ 1 个稳定关系（好友 / 帮派 / 结义）——<b>社交建立率是留存的先行指标</b>，低于阈值触发新手引导调整（见 15 章初始数值）。</li>
   </ul>
+  <h3>13.9 GM 经济宏观看板（economy/dashboard，只读）</h3>
+  <p><b>玩法定位</b>：给 GM 一个只读「经济仪表盘」量化经济健康度——金总量、近 7 日产出-消耗（净通胀/净通缩）、账号资产分布（P50/P90/max/活跃数）、被 BAN/TRADE_LIMIT 惩罚账号持仓冻结量、风控累计回收额。<code>GET /api/admin/v1/economy/dashboard</code>，AdminGuard 保护、只读聚合、不触发任何处置动作；金额用 numeric 避免 float 误差（关联流水见 11.12、多币种审计见 4.4）。</p>
   </div>
 </section>
 
