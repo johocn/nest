@@ -515,6 +515,37 @@ describe('SSO 登录', () => {
       response: { code: ErrorCodes.SSO_AUTH_FAILED },
     });
   });
+});
+
+describe('登出与改密', () => {
+  let service: AuthService;
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        AuthService,
+        { provide: getRepositoryToken(AuthAccount), useValue: mockAccountRepo },
+        {
+          provide: getRepositoryToken(AccountLoginLog),
+          useValue: mockLoginLogRepo,
+        },
+        {
+          provide: getRepositoryToken(AccountPenalty),
+          useValue: mockPenaltyRepo,
+        },
+        {
+          provide: getRepositoryToken(AccountSecurityEvent),
+          useValue: mockSecurityEventRepo,
+        },
+        { provide: PlayerService, useValue: mockPlayerService },
+        { provide: JwtService, useValue: mockJwtService },
+        { provide: ConfigService, useValue: mockConfigService },
+      ],
+    }).compile();
+
+    service = moduleRef.get(AuthService);
+  });
 
   it('should bump tokenVersion on logout', async () => {
     mockAccountRepo.findOne.mockResolvedValue({ id: '2', tokenVersion: 1 });
