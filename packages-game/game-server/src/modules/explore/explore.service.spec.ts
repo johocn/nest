@@ -88,6 +88,7 @@ describe('ExploreService', () => {
   ] as unknown as EncounterTemplate[];
 
   beforeEach(async () => {
+    jest.restoreAllMocks();
     jest.clearAllMocks();
     encRepo.manager.query.mockResolvedValue([{ now: new Date(), hour: '10', day: '2026-09-20' }]);
     const mod = await Test.createTestingModule({
@@ -140,6 +141,7 @@ describe('ExploreService', () => {
         100,
         expect.any(String),
         expect.any(String),
+        undefined,
       );
       expect(explRepo.save).toHaveBeenCalledWith(
         expect.objectContaining({ playerId: 'p1', sceneId: 's1', times: 1 }),
@@ -180,9 +182,8 @@ describe('ExploreService', () => {
   describe('triggerEncounter 奇遇触发', () => {
     it('触发率命中返回当前选项', async () => {
       encRepo.find.mockResolvedValue(templates);
-      (Math.random as any) = () => 0.1; // <0.5
+      jest.spyOn(Math, 'random').mockReturnValue(0.1); // <0.5
       cacheService.acquireLock.mockResolvedValue(true);
-      cacheService.get.mockResolvedValue(null);
       const res = await service.triggerEncounter('p1', 's1');
       expect(res.hit).toBe(true);
       expect(res.encounterId).toBeTruthy();
@@ -191,7 +192,7 @@ describe('ExploreService', () => {
 
     it('未命中返回 hit=false', async () => {
       encRepo.find.mockResolvedValue(templates);
-      (Math.random as any) = () => 0.9;
+      jest.spyOn(Math, 'random').mockReturnValue(0.9);
       const res = await service.triggerEncounter('p1', 's1');
       expect(res.hit).toBe(false);
       expect(res.options).toBeUndefined();
@@ -199,7 +200,7 @@ describe('ExploreService', () => {
 
     it('CD 拦截时不触发', async () => {
       encRepo.find.mockResolvedValue(templates);
-      (Math.random as any) = () => 0.1;
+      jest.spyOn(Math, 'random').mockReturnValue(0.1);
       cacheService.acquireLock.mockResolvedValue(false); // CD
       const res = await service.triggerEncounter('p1', 's1');
       expect(res.hit).toBe(false);
@@ -229,6 +230,7 @@ describe('ExploreService', () => {
         100,
         expect.any(String),
         expect.any(String),
+        undefined,
       );
       expect(res.delivered).toContain('currency:gold:100');
     });
