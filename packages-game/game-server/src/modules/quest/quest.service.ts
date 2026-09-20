@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { QuestTemplate, PlayerQuest, QuestHelpRequest } from './entities';
 import { EventBusService } from '@event-bus/event-bus.service';
 import { GameEvents } from '@event-bus/game-events';
@@ -20,6 +20,7 @@ import {
 } from '@constants/ranks';
 import { CharacterService } from '@modules/character/character.service';
 import { SocialService } from '@modules/social/social.service';
+import { PlayerService } from '@modules/player/player.service';
 import { EconomyService } from '@modules/economy/economy.service';
 import { CacheService } from '@cache/cache.service';
 
@@ -67,12 +68,12 @@ export class QuestService {
     private readonly socialService: SocialService,
     private readonly economyService: EconomyService,
     private readonly cacheService: CacheService,
+    private readonly playerService: PlayerService,
   ) {}
 
   async acceptQuest(
     playerId: string,
     questTemplateId: string,
-    playerLevel?: number,
   ): Promise<PlayerQuest> {
     const template = await this.templateRepo.findOne({
       where: { id: questTemplateId },
@@ -81,16 +82,25 @@ export class QuestService {
       throw new GameException(ErrorCodes.QUEST_NOT_ACCEPTED, '任务模板不存在');
     }
 
-    if (playerLevel !== undefined && playerLevel < template.minLevel) {
+    // 等级门槛以库中玩家数据为唯一来源，避免调用方漏传导致校验失效
+    const player = await this.playerService.getById(playerId);
+    if (!player) {
+      throw new GameException(ErrorCodes.PLAYER_NOT_FOUND, '玩家不存在');
+    }
+    if (player.level < template.minLevel) {
       throw new GameException(
         ErrorCodes.QUEST_PREREQUISITE_NOT_MET,
         '等级不足',
       );
     }
 
+    await this.assertPrerequisiteQuests(playerId, template);
+
     if (template.prerequisiteSocial) {
       await this.checkPrerequisiteSocial(playerId, template.prerequisiteSocial);
     }
+
+    await this.assertAcceptLimit(playerId, template);
 
     const existing = await this.playerQuestRepo.findOne({
       where: { playerId, questTemplateId },
@@ -117,6 +127,45 @@ export class QuestService {
     });
 
     return saved;
+  }
+
+  /** 前置任务链：prerequisiteIds 必须全部处于已领奖（CLAIMED）状态 */
+  private async assertPrerequisiteQuests(
+    playerId: string,
+    template: QuestTemplate,
+  ): Promise<void> {
+    const required = template.prerequisiteIds ?? [];
+    if (required.length === 0) return;
+    const done = await this.playerQuestRepo.count({
+      where: {
+        playerId,
+        questTemplateId: In(required.map(String)),
+        status: QuestStatus.CLAIMED,
+      },
+    });
+    if (done < required.length) {
+      throw new GameException(
+        ErrorCodes.QUEST_PREREQUISITE_NOT_MET,
+        '前置任务未完成',
+      );
+    }
+  }
+
+  /** 接取次数上限：acceptLimit <= 0 视为不限 */
+  private async assertAcceptLimit(
+    playerId: string,
+    template: QuestTemplate,
+  ): Promise<void> {
+    if (!template.acceptLimit || template.acceptLimit <= 0) return;
+    const accepted = await this.playerQuestRepo.count({
+      where: { playerId, questTemplateId: template.id },
+    });
+    if (accepted >= template.acceptLimit) {
+      throw new GameException(
+        ErrorCodes.QUEST_ACCEPT_LIMIT_REACHED,
+        '接取次数已达上限',
+      );
+    }
   }
 
   private async checkPrerequisiteSocial(

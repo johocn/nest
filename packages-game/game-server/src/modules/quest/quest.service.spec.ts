@@ -22,6 +22,7 @@ import { CharacterService } from '@modules/character/character.service';
 import { SocialService } from '@modules/social/social.service';
 import { EconomyService } from '@modules/economy/economy.service';
 import { CacheService } from '@cache/cache.service';
+import { PlayerService } from '@modules/player/player.service';
 import type { Repository } from 'typeorm';
 
 describe('QuestService', () => {
@@ -34,6 +35,7 @@ describe('QuestService', () => {
   let socialService: jest.Mocked<SocialService>;
   let economyService: jest.Mocked<EconomyService>;
   let cacheService: jest.Mocked<CacheService>;
+  let playerService: jest.Mocked<PlayerService>;
 
   beforeEach(async () => {
     characterService = {
@@ -54,6 +56,10 @@ describe('QuestService', () => {
       incr: jest.fn().mockResolvedValue(1),
       expire: jest.fn().mockResolvedValue(true),
     } as unknown as jest.Mocked<CacheService>;
+    playerService = {
+      getById: jest.fn().mockResolvedValue({ id: 'p1', level: 99 } as any),
+      addExp: jest.fn().mockResolvedValue({ leveledUp: false }),
+    } as unknown as jest.Mocked<PlayerService>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -78,6 +84,7 @@ describe('QuestService', () => {
               .mockImplementation((data: any) => Promise.resolve(data)),
             create: jest.fn((data: any) => ({ ...data, id: '1' })),
             findAndCount: jest.fn(),
+            count: jest.fn().mockResolvedValue(0),
             increment: jest.fn().mockResolvedValue({ affected: 1 }),
             update: jest.fn().mockResolvedValue({ affected: 1 }),
           },
@@ -98,6 +105,7 @@ describe('QuestService', () => {
         { provide: SocialService, useValue: socialService },
         { provide: EconomyService, useValue: economyService },
         { provide: CacheService, useValue: cacheService },
+        { provide: PlayerService, useValue: playerService },
       ],
     }).compile();
 
@@ -165,7 +173,7 @@ describe('QuestService', () => {
       questTemplateRepo.findOne.mockResolvedValue(makeTemplate());
       playerQuestRepo.findOne.mockResolvedValue(null);
 
-      const result = await service.acceptQuest('p1', '1', 5);
+      const result = await service.acceptQuest('p1', '1');
 
       expect(result.status).toBe(QuestStatus.IN_PROGRESS);
       expect(playerQuestRepo.save).toHaveBeenCalled();
@@ -178,7 +186,7 @@ describe('QuestService', () => {
     it('should throw when quest template not found', async () => {
       questTemplateRepo.findOne.mockResolvedValue(null);
 
-      await expect(service.acceptQuest('p1', '999', 5)).rejects.toThrow(
+      await expect(service.acceptQuest('p1', '999')).rejects.toThrow(
         GameException,
       );
     });
@@ -187,8 +195,9 @@ describe('QuestService', () => {
       questTemplateRepo.findOne.mockResolvedValue(
         makeTemplate({ minLevel: 10 }),
       );
+      playerService.getById.mockResolvedValue({ id: 'p1', level: 5 } as any);
 
-      await expect(service.acceptQuest('p1', '1', 5)).rejects.toThrow(
+      await expect(service.acceptQuest('p1', '1')).rejects.toThrow(
         GameException,
       );
     });
@@ -199,7 +208,7 @@ describe('QuestService', () => {
       );
       playerQuestRepo.findOne.mockResolvedValue(makePlayerQuest());
 
-      await expect(service.acceptQuest('p1', '1', 5)).rejects.toThrow(
+      await expect(service.acceptQuest('p1', '1')).rejects.toThrow(
         GameException,
       );
     });
@@ -212,7 +221,7 @@ describe('QuestService', () => {
         { grade: IntelligenceGrade.C } as any,
       ]);
 
-      await expect(service.acceptQuest('p1', '1', 5)).rejects.toMatchObject({
+      await expect(service.acceptQuest('p1', '1')).rejects.toMatchObject({
         response: { code: ErrorCodes.QUEST_SOCIAL_PRE_REQ },
       });
     });
@@ -227,7 +236,7 @@ describe('QuestService', () => {
       ]);
       playerQuestRepo.findOne.mockResolvedValue(null);
 
-      const result = await service.acceptQuest('p1', '1', 5);
+      const result = await service.acceptQuest('p1', '1');
       expect(result.status).toBe(QuestStatus.IN_PROGRESS);
     });
 
@@ -239,7 +248,7 @@ describe('QuestService', () => {
         { grade: IntelligenceGrade.D } as any,
       ]);
 
-      await expect(service.acceptQuest('p1', '1', 5)).rejects.toMatchObject({
+      await expect(service.acceptQuest('p1', '1')).rejects.toMatchObject({
         response: { code: ErrorCodes.QUEST_SOCIAL_PRE_REQ },
       });
     });
@@ -254,7 +263,7 @@ describe('QuestService', () => {
       ]);
       playerQuestRepo.findOne.mockResolvedValue(null);
 
-      const result = await service.acceptQuest('p1', '1', 5);
+      const result = await service.acceptQuest('p1', '1');
       expect(result.status).toBe(QuestStatus.IN_PROGRESS);
     });
 
@@ -266,7 +275,7 @@ describe('QuestService', () => {
         { level: RelationshipLevel.ACQUAINTANCE, favorability: 80 } as any,
       ]);
 
-      await expect(service.acceptQuest('p1', '1', 5)).rejects.toMatchObject({
+      await expect(service.acceptQuest('p1', '1')).rejects.toMatchObject({
         response: { code: ErrorCodes.QUEST_SOCIAL_PRE_REQ },
       });
     });
@@ -280,7 +289,7 @@ describe('QuestService', () => {
       ]);
       playerQuestRepo.findOne.mockResolvedValue(null);
 
-      const result = await service.acceptQuest('p1', '1', 5);
+      const result = await service.acceptQuest('p1', '1');
       expect(result.status).toBe(QuestStatus.IN_PROGRESS);
     });
 
@@ -293,7 +302,7 @@ describe('QuestService', () => {
       ]);
       playerQuestRepo.findOne.mockResolvedValue(null);
 
-      const result = await service.acceptQuest('p1', '1', 5);
+      const result = await service.acceptQuest('p1', '1');
       expect(result.status).toBe(QuestStatus.IN_PROGRESS);
     });
 
@@ -306,7 +315,7 @@ describe('QuestService', () => {
         role: GuildRole.MEMBER,
       });
 
-      await expect(service.acceptQuest('p1', '1', 5)).rejects.toMatchObject({
+      await expect(service.acceptQuest('p1', '1')).rejects.toMatchObject({
         response: { code: ErrorCodes.QUEST_SOCIAL_PRE_REQ },
       });
     });
@@ -321,7 +330,7 @@ describe('QuestService', () => {
       });
       playerQuestRepo.findOne.mockResolvedValue(null);
 
-      const result = await service.acceptQuest('p1', '1', 5);
+      const result = await service.acceptQuest('p1', '1');
       expect(result.status).toBe(QuestStatus.IN_PROGRESS);
     });
 
@@ -331,7 +340,7 @@ describe('QuestService', () => {
       );
       socialService.getFriendList.mockResolvedValue([{}, {}] as any[]);
 
-      await expect(service.acceptQuest('p1', '1', 5)).rejects.toMatchObject({
+      await expect(service.acceptQuest('p1', '1')).rejects.toMatchObject({
         response: { code: ErrorCodes.QUEST_SOCIAL_PRE_REQ },
       });
     });
@@ -343,8 +352,65 @@ describe('QuestService', () => {
       socialService.getFriendList.mockResolvedValue([{}, {}] as any[]);
       playerQuestRepo.findOne.mockResolvedValue(null);
 
-      const result = await service.acceptQuest('p1', '1', 5);
+      const result = await service.acceptQuest('p1', '1');
       expect(result.status).toBe(QuestStatus.IN_PROGRESS);
+    });
+
+    it('等级不足时按库中玩家等级拒绝（不依赖调用方传参）', async () => {
+      questTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({ minLevel: 10 }),
+      );
+      playerService.getById.mockResolvedValue({ id: 'p1', level: 3 } as any);
+
+      await expect(service.acceptQuest('p1', '1')).rejects.toMatchObject({
+        response: { code: ErrorCodes.QUEST_PREREQUISITE_NOT_MET },
+      });
+      expect(playerQuestRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('前置任务未全部完成时拒绝', async () => {
+      questTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({
+          minLevel: 1,
+          prerequisiteIds: [11, 12],
+          acceptLimit: 99,
+        }),
+      );
+      playerService.getById.mockResolvedValue({ id: 'p1', level: 20 } as any);
+      // 只完成 1 个前置
+      playerQuestRepo.count.mockResolvedValue(1);
+
+      await expect(service.acceptQuest('p1', '1')).rejects.toMatchObject({
+        response: { code: ErrorCodes.QUEST_PREREQUISITE_NOT_MET },
+      });
+    });
+
+    it('前置任务全部完成时放行', async () => {
+      questTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({
+          minLevel: 1,
+          prerequisiteIds: [11, 12],
+          acceptLimit: 99,
+        }),
+      );
+      playerService.getById.mockResolvedValue({ id: 'p1', level: 20 } as any);
+      playerQuestRepo.count.mockResolvedValue(2);
+      playerQuestRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.acceptQuest('p1', '1');
+      expect(result.status).toBe(QuestStatus.IN_PROGRESS);
+    });
+
+    it('接取次数达上限时抛 40003', async () => {
+      questTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({ minLevel: 1, acceptLimit: 2, repeatable: true }),
+      );
+      playerService.getById.mockResolvedValue({ id: 'p1', level: 20 } as any);
+      playerQuestRepo.count.mockResolvedValue(2);
+
+      await expect(service.acceptQuest('p1', '1')).rejects.toMatchObject({
+        response: { code: ErrorCodes.QUEST_ACCEPT_LIMIT_REACHED },
+      });
     });
   });
 
