@@ -7,12 +7,14 @@ import {
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { AdminSessionService } from '@modules/auth/admin-session.service';
 
 export interface AdminJwtPayload {
   adminId: string;
   username: string;
   role: string;
   type: 'admin';
+  tokenVersion: number;
 }
 
 export const ADMIN_ROLES_KEY = 'adminRoles';
@@ -23,9 +25,10 @@ export class AdminGuard implements CanActivate {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly reflector: Reflector,
+    private readonly adminSessionService: AdminSessionService,
   ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
     const authHeader = request.headers.authorization;
 
@@ -44,6 +47,11 @@ export class AdminGuard implements CanActivate {
 
       if (payload.type !== 'admin') {
         throw new UnauthorizedException('Invalid admin token');
+      }
+
+      const sessionValid = await this.adminSessionService.validate(payload);
+      if (!sessionValid) {
+        throw new UnauthorizedException('Admin session revoked');
       }
 
       const requiredRoles = this.reflector.getAllAndOverride<string[]>(

@@ -53,6 +53,7 @@ export class AdminAuthService {
       username: admin.username,
       role: admin.role,
       type: 'admin',
+      tokenVersion: admin.tokenVersion,
     };
     const token = this.jwtService.sign(payload, {
       secret: this.jwtSecret,
