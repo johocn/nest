@@ -163,8 +163,15 @@ describe('RealmService', () => {
       realmValue: '50',
       milestoneClaimedJson: [],
     });
-    await expect(service.breakThrough('p1')).rejects.toBeInstanceOf(GameException);
-    await expect(service.breakThrough('p1')).rejects.toThrow(/修为/);
+    try {
+      await service.breakThrough('p1');
+      throw new Error('expected to throw');
+    } catch (err) {
+      expect(err).toBeInstanceOf(GameException);
+      const res = (err as GameException).getResponse();
+      expect((res as any).code).toBe(ErrorCodes.REALM_VALUE_NOT_ENOUGH);
+      expect((res as any).msg).toContain('修为');
+    }
   });
 
   it('breakThrough 里程碑按 realm_level 幂等不重复发奖', async () => {
@@ -200,6 +207,14 @@ describe('RealmService', () => {
       realmValue: '99999',
       milestoneClaimedJson: [2, 3],
     });
-    await expect(service.breakThrough('p1')).rejects.toThrow(/满级/);
+    try {
+      await service.breakThrough('p1');
+      throw new Error('expected to throw');
+    } catch (err) {
+      expect(err).toBeInstanceOf(GameException);
+      const res = (err as GameException).getResponse();
+      expect((res as any).code).toBe(ErrorCodes.REALM_ALREADY_MAX);
+      expect((res as any).msg).toContain('满级');
+    }
   });
 });
