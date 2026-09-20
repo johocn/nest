@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import { EconomyAdminController } from './economy-admin.controller';
 import { EconomyDashboardService } from './economy-dashboard.service';
+import { AdminSessionService } from '@modules/auth/admin-session.service';
 
 describe('EconomyAdminController', () => {
   let ctrl: EconomyAdminController;
@@ -16,6 +17,10 @@ describe('EconomyAdminController', () => {
         { provide: EconomyDashboardService, useValue: svc },
         { provide: JwtService, useValue: { verify: jest.fn() } },
         { provide: ConfigService, useValue: { get: jest.fn(() => 'secret') } },
+        {
+          provide: AdminSessionService,
+          useValue: { validate: jest.fn().mockResolvedValue(true) },
+        },
         Reflector,
       ],
     }).compile();

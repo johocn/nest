@@ -5,6 +5,7 @@ import { Reflector } from '@nestjs/core';
 import { ReconcileAdminController } from './reconcile-admin.controller';
 import { ReconcileService } from './reconcile.service';
 import { AdminService } from '@modules/admin/admin.service';
+import { AdminSessionService } from '@modules/auth/admin-session.service';
 import { ReconcileType } from '@constants/enums';
 
 describe('ReconcileAdminController', () => {
@@ -28,6 +29,10 @@ describe('ReconcileAdminController', () => {
         { provide: AdminService, useValue: adminService },
         { provide: JwtService, useValue: { verify: jest.fn() } },
         { provide: ConfigService, useValue: { get: jest.fn(() => 'secret') } },
+        {
+          provide: AdminSessionService,
+          useValue: { validate: jest.fn().mockResolvedValue(true) },
+        },
         Reflector,
       ],
     }).compile();

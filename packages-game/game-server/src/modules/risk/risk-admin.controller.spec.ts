@@ -7,6 +7,7 @@ import { RiskWashService } from './risk-wash.service';
 import { RiskReplayService } from './risk-replay.service';
 import { RiskIdentityService } from './risk-identity.service';
 import { AdminService } from '@modules/admin/admin.service';
+import { AdminSessionService } from '@modules/auth/admin-session.service';
 
 describe('RiskAdminController', () => {
   let ctrl: RiskAdminController;
@@ -43,6 +44,10 @@ describe('RiskAdminController', () => {
         { provide: RiskIdentityService, useValue: identityService },
         { provide: JwtService, useValue: { verify: jest.fn() } },
         { provide: ConfigService, useValue: { get: jest.fn(() => 'secret') } },
+        {
+          provide: AdminSessionService,
+          useValue: { validate: jest.fn().mockResolvedValue(true) },
+        },
         Reflector,
       ],
     }).compile();
