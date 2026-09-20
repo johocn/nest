@@ -112,4 +112,43 @@ describe('SocialEconomyService', () => {
       response: { code: 92303 },
     });
   });
+
+  it('claimWeeklyChests 上周活跃 70 发 3 档宝箱', async () => {
+    chestRepo.find.mockResolvedValue([]);
+    pointRepo.find.mockResolvedValue([
+      { reason: SocialPointReason.FRIEND_ADDED, createdAt: new Date() },
+    ]);
+    jest.spyOn(service, 'getLastWeekActivity' as any).mockResolvedValue(70);
+    chestRepo.save.mockImplementation((rows) => Promise.resolve(rows));
+    const chests = await service.claimWeeklyChests('1');
+    expect(chests.map((c) => c.tier).sort((a, b) => b - a)).toEqual([3, 2, 1]);
+  });
+
+  it('claimWeeklyChests 活跃不足抛 WEEKLY_CHEST_EMPTY', async () => {
+    chestRepo.find.mockResolvedValue([]);
+    jest.spyOn(service, 'getLastWeekActivity' as any).mockResolvedValue(5);
+    await expect(service.claimWeeklyChests('1')).rejects.toMatchObject({
+      response: { code: 92304 },
+    });
+  });
+
+  it('openChest 按权重池发奖', async () => {
+    chestRepo.findOne.mockResolvedValue({
+      id: 'c1',
+      playerId: '1',
+      tier: 1,
+      status: SocialChestStatus.PENDING,
+    });
+    configService.getConfig.mockResolvedValue({
+      value: JSON.stringify({ '1': { gold: { weight: 1 }, diamond: { weight: 1 } } }),
+    });
+    chestRepo.save.mockImplementation((e) => Promise.resolve(e));
+    const chest = await service.openChest('1', 'c1');
+    expect(chest.status).toBe(SocialChestStatus.OPENED);
+    expect(chest.openedAt).toBeInstanceOf(Date);
+    expect(eventBus.emit).toHaveBeenCalledWith(
+      GameEvents.CHEST_OPENED,
+      expect.any(Object),
+    );
+  });
 });

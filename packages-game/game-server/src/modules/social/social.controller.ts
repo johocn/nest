@@ -538,4 +538,19 @@ export class SocialController {
   ) {
     return this.economyService.exchangeChest(player.playerId, Number(dto.tier));
   }
+
+  @Post('chest/weekly/claim')
+  @ApiOperation({ summary: '领取上周活跃宝箱' })
+  async claimWeeklyChests(@CurrentPlayer() player: CurrentPlayerData) {
+    return this.economyService.claimWeeklyChests(player.playerId);
+  }
+
+  @Post('chest/:id/open')
+  @ApiOperation({ summary: '开启宝箱' })
+  async openChest(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Param('id') id: string,
+  ) {
+    return this.economyService.openChest(player.playerId, id);
+  }
 }
