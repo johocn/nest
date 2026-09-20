@@ -9,6 +9,7 @@ import { ErrorCodes } from '@constants/error-codes';
 import { CurrencyType } from '@constants/enums';
 import { EventBusService } from '@event-bus/event-bus.service';
 import { GameEvents } from '@event-bus/game-events';
+import { ConfigManageService } from '@modules/config/config.service';
 
 @Injectable()
 export class PlayerService {
@@ -18,6 +19,7 @@ export class PlayerService {
     private readonly currencyRepo: Repository<PlayerCurrency>,
     private readonly configService: ConfigService,
     private readonly eventBus: EventBusService,
+    private readonly configManageService: ConfigManageService,
   ) {}
 
   async createPlayer(accountId: string, nickname: string): Promise<Player> {
@@ -200,5 +202,29 @@ export class PlayerService {
       BigInt(player.totalRecharge) + BigInt(amount)
     ).toString();
     return this.playerRepo.save(player);
+  }
+
+  async isNewbie(
+    playerId: string,
+  ): Promise<{ protected: boolean; daysLeft: number }> {
+    const player = await this.getById(playerId);
+    if (!player) {
+      throw new GameException(ErrorCodes.PLAYER_NOT_FOUND, '玩家不存在');
+    }
+    const days = await this.readConfigNumber('pvp.newbie_protect_days', 7);
+    const elapsedDays = Math.floor(
+      (Date.now() - player.createdAt.getTime()) / 86400000,
+    );
+    const daysLeft = Math.max(0, days - elapsedDays);
+    return { protected: elapsedDays < days, daysLeft };
+  }
+
+  private async readConfigNumber(key: string, fallback: number): Promise<number> {
+    try {
+      const config = await this.configManageService.getConfig(key);
+      return Number(config.value) || fallback;
+    } catch {
+      return fallback;
+    }
   }
 }

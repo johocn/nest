@@ -15,6 +15,7 @@ import { AnalyticsService } from '@modules/analytics/analytics.service';
 import { AuthService } from '@modules/auth/auth.service';
 import { RankingService } from '@modules/ranking/ranking.service';
 import { SocialService } from '@modules/social/social.service';
+import { EconomyService } from '@modules/economy/economy.service';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
 import {
@@ -25,6 +26,7 @@ import {
   ReportHandleAction,
   ReportStatus,
   ReportTargetType,
+  CurrencyType,
 } from '@constants/enums';
 import type { Repository } from 'typeorm';
 
@@ -38,6 +40,7 @@ describe('CommunityService', () => {
   let charTitleRepo: jest.Mocked<Repository<CharacterTitle>>;
   let adminService: jest.Mocked<AdminService>;
   let eventBus: jest.Mocked<EventBusService>;
+  let economyService: jest.Mocked<EconomyService>;
   let module: TestingModule;
 
   beforeEach(async () => {
@@ -135,6 +138,10 @@ describe('CommunityService', () => {
             kickGuildMember: jest.fn(),
           },
         },
+        {
+          provide: EconomyService,
+          useValue: { addCurrency: jest.fn() },
+        },
       ],
     }).compile();
 
@@ -147,6 +154,7 @@ describe('CommunityService', () => {
     charTitleRepo = module.get(getRepositoryToken(CharacterTitle));
     adminService = module.get(AdminService);
     eventBus = module.get(EventBusService);
+    economyService = module.get(EconomyService);
   });
 
   describe('submitFeedback', () => {
@@ -429,6 +437,13 @@ describe('CommunityService', () => {
         '封禁处置',
       );
       expect(rankingService.removePlayerFromAll).toHaveBeenCalledWith('9');
+      expect(economyService.addCurrency).toHaveBeenCalledWith(
+        '9',
+        CurrencyType.INFAMY,
+        100,
+        'ban_penalty',
+        'ban:9',
+      );
     });
 
     it('BAN 处置无称号无帮派时仍执行榜单移除', async () => {

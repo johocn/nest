@@ -21,6 +21,8 @@ import { AnalyticsService } from '@modules/analytics/analytics.service';
 import { AuthService } from '@modules/auth/auth.service';
 import { RankingService } from '@modules/ranking/ranking.service';
 import { SocialService } from '@modules/social/social.service';
+import { EconomyService } from '@modules/economy/economy.service';
+import { CurrencyType } from '@constants/enums';
 import { Player } from '@modules/player/entities/player.entity';
 import {
   Character,
@@ -53,6 +55,7 @@ export class CommunityService {
     private readonly eventBus: EventBusService,
     private readonly rankingService: RankingService,
     private readonly socialService: SocialService,
+    private readonly economyService: EconomyService,
   ) {}
 
   // ===== 建议箱 =====
@@ -356,6 +359,14 @@ export class CommunityService {
   // ===== 封禁社交后果（阶段5批2） =====
 
   private async applyBanSocialConsequences(playerId: string): Promise<void> {
+    // 0. 落恶名（红名标记）：封禁处分即社会污点
+    await this.economyService.addCurrency(
+      playerId,
+      CurrencyType.INFAMY,
+      100,
+      'ban_penalty',
+      `ban:${playerId}`,
+    );
     // 1. 称号收回
     const character = await this.charRepo.findOne({ where: { playerId } });
     if (character) {

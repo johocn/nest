@@ -8,6 +8,7 @@ import { EventBusService } from '@event-bus/event-bus.service';
 import { GameEvents } from '@event-bus/game-events';
 import { CombatResult, CurrencyType } from '@constants/enums';
 import { ErrorCodes } from '@constants/error-codes';
+import { PlayerService } from '@modules/player/player.service';
 import type { Repository } from 'typeorm';
 
 describe('FaceService', () => {
@@ -16,6 +17,7 @@ describe('FaceService', () => {
   let economyService: jest.Mocked<EconomyService>;
   let cacheService: jest.Mocked<CacheService>;
   let eventBus: jest.Mocked<EventBusService>;
+  let playerService: jest.Mocked<PlayerService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -48,6 +50,10 @@ describe('FaceService', () => {
           },
         },
         { provide: EventBusService, useValue: { emit: jest.fn() } },
+        {
+          provide: PlayerService,
+          useValue: { isNewbie: jest.fn() },
+        },
       ],
     }).compile();
 
@@ -56,6 +62,7 @@ describe('FaceService', () => {
     economyService = module.get(EconomyService);
     cacheService = module.get(CacheService);
     eventBus = module.get(EventBusService);
+    playerService = module.get(PlayerService);
   });
 
   describe('adjustFace', () => {
@@ -181,6 +188,7 @@ describe('FaceService', () => {
 
   describe('declareGrudge', () => {
     it('should set grudge key for 7 days and emit event', async () => {
+      economyService.getBalance.mockResolvedValue('0');
       const result = await service.declareGrudge('1001', '1002');
 
       expect(cacheService.set).toHaveBeenCalledWith(
@@ -193,6 +201,25 @@ describe('FaceService', () => {
         expect.objectContaining({ playerId: '1001', targetId: '1002' }),
       );
       expect(result).toMatchObject({ playerId: '1001', targetId: '1002' });
+    });
+
+    it('红名向新手宣战被拒', async () => {
+      economyService.getBalance.mockResolvedValue('100');
+      playerService.isNewbie.mockResolvedValue({ protected: true, daysLeft: 5 });
+      await expect(
+        service.declareGrudge('1001', '1002'),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.RED_NAME_TARGET_PROTECTED },
+      });
+      expect(cacheService.set).not.toHaveBeenCalled();
+    });
+
+    it('红名向老玩家宣战放行', async () => {
+      economyService.getBalance.mockResolvedValue('100');
+      playerService.isNewbie.mockResolvedValue({ protected: false, daysLeft: 0 });
+      const result = await service.declareGrudge('1001', '1002');
+      expect(result).toMatchObject({ playerId: '1001', targetId: '1002' });
+      expect(cacheService.set).toHaveBeenCalled();
     });
   });
 

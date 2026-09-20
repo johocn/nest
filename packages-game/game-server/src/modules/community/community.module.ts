@@ -15,6 +15,7 @@ import { AnalyticsModule } from '@modules/analytics/analytics.module';
 import { AuthModule } from '@modules/auth/auth.module';
 import { RankingModule } from '@modules/ranking/ranking.module';
 import { SocialModule } from '@modules/social/social.module';
+import { EconomyModule } from '@modules/economy/economy.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { SocialModule } from '@modules/social/social.module';
     AuthModule,
     RankingModule,
     SocialModule,
+    EconomyModule,
   ],
   controllers: [CommunityController],
   providers: [CommunityService],

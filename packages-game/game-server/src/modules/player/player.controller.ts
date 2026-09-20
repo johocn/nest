@@ -27,4 +27,10 @@ export class PlayerController {
   ) {
     return this.playerService.changeNickname(player.playerId, dto.nickname);
   }
+
+  @Get('protection')
+  @ApiOperation({ summary: '新手保护期状态' })
+  async getProtection(@CurrentPlayer() player: CurrentPlayerData) {
+    return this.playerService.isNewbie(player.playerId);
+  }
 }

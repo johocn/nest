@@ -23,6 +23,7 @@ import { QueueModule } from '@queue/queue.module';
 import { EconomyModule } from '@modules/economy/economy.module';
 import { CharacterModule } from '@modules/character/character.module';
 import { SocialModule } from '@modules/social/social.module';
+import { PlayerModule } from '@modules/player/player.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { SocialModule } from '@modules/social/social.module';
     EconomyModule,
     CharacterModule,
     SocialModule,
+    PlayerModule,
   ],
   controllers: [CombatController, CombatClientController],
   providers: [

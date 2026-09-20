@@ -4,6 +4,7 @@ import { PlayerService } from './player.service';
 import { Player } from './entities/player.entity';
 import { PlayerCurrency } from './entities/player-currency.entity';
 import { ConfigService } from '@nestjs/config';
+import { ConfigManageService } from '@modules/config/config.service';
 import { GameException } from '@common/exceptions/game.exception';
 import { CurrencyType } from '@constants/enums';
 import { EventBusService } from '@event-bus/event-bus.service';
@@ -34,6 +35,10 @@ describe('PlayerService', () => {
     }),
   };
 
+  const mockConfigManageService = {
+    getConfig: jest.fn(),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
     const moduleRef = await Test.createTestingModule({
@@ -46,6 +51,7 @@ describe('PlayerService', () => {
         },
         { provide: ConfigService, useValue: mockConfigService },
         { provide: EventBusService, useValue: { emit: jest.fn() } },
+        { provide: ConfigManageService, useValue: mockConfigManageService },
       ],
     }).compile();
     service = moduleRef.get<PlayerService>(PlayerService);
@@ -213,6 +219,38 @@ describe('PlayerService', () => {
       const result = await service.addRecharge('1', 500);
       expect(result.totalRecharge).toBe('1500');
       expect(mockPlayerRepo.save).toHaveBeenCalled();
+    });
+  });
+
+  describe('isNewbie', () => {
+    it('isNewbie 注册 3 天返回保护中', async () => {
+      mockPlayerRepo.findOne.mockResolvedValue({
+        id: '1',
+        createdAt: new Date(Date.now() - 3 * 86400000),
+      });
+      mockConfigManageService.getConfig.mockResolvedValue({ value: '7' });
+      const r = await service.isNewbie('1');
+      expect(r).toEqual({ protected: true, daysLeft: 4 });
+    });
+
+    it('isNewbie 注册超 7 天不保护', async () => {
+      mockPlayerRepo.findOne.mockResolvedValue({
+        id: '1',
+        createdAt: new Date(Date.now() - 10 * 86400000),
+      });
+      mockConfigManageService.getConfig.mockResolvedValue({ value: '7' });
+      const r = await service.isNewbie('1');
+      expect(r).toEqual({ protected: false, daysLeft: 0 });
+    });
+
+    it('isNewbie 配置读取失败回退 7 天', async () => {
+      mockPlayerRepo.findOne.mockResolvedValue({
+        id: '1',
+        createdAt: new Date(Date.now() - 2 * 86400000),
+      });
+      mockConfigManageService.getConfig.mockRejectedValue(new Error('no'));
+      const r = await service.isNewbie('1');
+      expect(r.protected).toBe(true);
     });
   });
 });

@@ -9,6 +9,7 @@ import { GameEvents } from '@event-bus/game-events';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
 import { CurrencyType, CombatResult } from '@constants/enums';
+import { PlayerService } from '@modules/player/player.service';
 
 const FACE_SOURCE = 'social_combat';
 
@@ -20,6 +21,7 @@ export class FaceService {
     private readonly economyService: EconomyService,
     private readonly cacheService: CacheService,
     private readonly eventBus: EventBusService,
+    private readonly playerService: PlayerService,
   ) {}
 
   async adjustFace(
@@ -141,6 +143,20 @@ export class FaceService {
   ): Promise<{ playerId: string; targetId: string }> {
     if (!/^\d+$/.test(playerId) || !/^\d+$/.test(targetId)) {
       throw new GameException(ErrorCodes.PARAM_INVALID, '参数不合法');
+    }
+    // 新手保护：红名（恶名>0）不可主动向新手宣战
+    const infamy = await this.economyService.getBalance(
+      playerId,
+      CurrencyType.INFAMY,
+    );
+    if (Number(infamy) > 0) {
+      const targetNewbie = await this.playerService.isNewbie(targetId);
+      if (targetNewbie.protected) {
+        throw new GameException(
+          ErrorCodes.RED_NAME_TARGET_PROTECTED,
+          '红名不可主动攻击新手',
+        );
+      }
     }
     await this.cacheService.set(
       `grudge:${playerId}:${targetId}`,
