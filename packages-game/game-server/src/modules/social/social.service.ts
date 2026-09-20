@@ -51,6 +51,7 @@ import {
 } from '@constants/enums';
 import { CacheService } from '@cache/cache.service';
 import { EconomyService } from '@modules/economy/economy.service';
+import { VipService } from '@modules/vip/vip.service';
 
 export interface DonateResult {
   donation: GuildDonate;
@@ -108,6 +109,7 @@ export class SocialService {
     private readonly espionageRepo: Repository<CharacterEspionage>,
     private readonly cacheService: CacheService,
     private readonly economyService: EconomyService,
+    private readonly vipService: VipService,
     private readonly characterService: CharacterService,
     private readonly inventoryService: InventoryService,
     private readonly playerService: PlayerService,
@@ -124,6 +126,18 @@ export class SocialService {
         ErrorCodes.TARGET_BLOCKED_YOU,
         '对方已将你拉黑，无法申请好友',
       );
+    }
+
+    const friendSlots = await this.vipService.getPrivilegeValue(
+      playerId,
+      'friendSlots',
+      50,
+    );
+    const friendCount = await this.friendRepo.count({
+      where: { playerId, status: FriendStatus.ACCEPTED },
+    });
+    if (friendCount >= friendSlots) {
+      throw new GameException(ErrorCodes.FRIEND_LIMIT_REACHED, '好友数量已达上限');
     }
 
     const existing = await this.friendRepo.findOne({
@@ -533,7 +547,13 @@ export class SocialService {
       throw new GameException(ErrorCodes.GUILD_PERMISSION_DENIED, '不在公会中');
     }
 
-    const contributionGained = Math.floor(parseInt(amount, 10) / 100);
+    const contribBonus =
+      Number(
+        await this.vipService.getPrivilegeValue(playerId, 'guildContribBonus', 0),
+      ) || 0;
+    const contributionGained = Math.floor(
+      (parseInt(amount, 10) / 100) * (1 + contribBonus),
+    );
     member.contribution += contributionGained;
     await this.guildMemberRepo.save(member);
 
@@ -860,7 +880,18 @@ export class SocialService {
       throw new GameException(ErrorCodes.GUILD_BUILDING_LEVEL_CAP, '建筑已达最高等级');
     }
 
-    const cost = targetLevel * SocialService.BUILDING_COST_PER_LEVEL;
+    const members = await this.guildMemberRepo.find({ where: { guildId } });
+    let boost = 0;
+    for (const m of members) {
+      const b =
+        Number(
+          await this.vipService.getPrivilegeValue(m.playerId, 'guildBuildBoost', 0),
+        ) || 0;
+      if (b > boost) boost = b;
+    }
+    const cost = Math.floor(
+      targetLevel * SocialService.BUILDING_COST_PER_LEVEL * (1 - boost),
+    );
     await this.adjustGuildFundInternal(
       operatorId,
       guildId,
@@ -1435,7 +1466,13 @@ export class SocialService {
 
     const capKey = `gift:send:${playerId}`;
     const sent = parseInt((await this.cacheService.get(capKey)) ?? '0', 10);
-    if (sent >= template.dailyCap) {
+    const vipCap = await this.vipService.getPrivilegeValue(
+      playerId,
+      'dailyGiftCap',
+      0,
+    );
+    const cap = Math.max(template.dailyCap, Number(vipCap) || 0);
+    if (sent >= cap) {
       throw new GameException(ErrorCodes.GIFT_DAILY_CAP, '今日送礼已达上限');
     }
     await this.cacheService.set(

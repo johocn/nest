@@ -25,6 +25,7 @@ import { PlayerService } from '@modules/player/player.service';
 import { EventBusService } from '@event-bus/event-bus.service';
 import { CacheService } from '@cache/cache.service';
 import { EconomyService } from '@modules/economy/economy.service';
+import { VipService } from '@modules/vip/vip.service';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
 import { GameEvents } from '@event-bus/game-events';
@@ -71,6 +72,7 @@ describe('SocialService', () => {
   let espionageRepo: jest.Mocked<Repository<CharacterEspionage>>;
   let cacheService: jest.Mocked<CacheService>;
   let economyService: jest.Mocked<EconomyService>;
+  let vipService: jest.Mocked<VipService>;
   let characterService: jest.Mocked<CharacterService>;
   let inventoryService: jest.Mocked<InventoryService>;
   let playerService: jest.Mocked<PlayerService>;
@@ -92,6 +94,7 @@ describe('SocialService', () => {
               .mockImplementation((data: any) => Promise.resolve(data)),
             create: jest.fn((data: any) => ({ ...data, id: '1' })),
             delete: jest.fn(),
+            count: jest.fn().mockResolvedValue(0),
           },
         },
         {
@@ -110,7 +113,7 @@ describe('SocialService', () => {
           provide: getRepositoryToken(GuildMember),
           useValue: {
             findOne: jest.fn(),
-            find: jest.fn(),
+            find: jest.fn().mockResolvedValue([]),
             save: jest
               .fn()
               .mockImplementation((data: any) => Promise.resolve(data)),
@@ -234,6 +237,10 @@ describe('SocialService', () => {
           },
         },
         {
+          provide: VipService,
+          useValue: { getPrivilegeValue: jest.fn().mockResolvedValue(0) },
+        },
+        {
           provide: CharacterService,
           useValue: {
             increaseFavorability: jest.fn(),
@@ -300,6 +307,7 @@ describe('SocialService', () => {
     espionageRepo = module.get(getRepositoryToken(CharacterEspionage));
     cacheService = module.get(CacheService);
     economyService = module.get(EconomyService);
+    vipService = module.get(VipService);
     characterService = module.get(CharacterService);
     inventoryService = module.get(InventoryService);
     playerService = module.get(PlayerService);
@@ -307,6 +315,10 @@ describe('SocialService', () => {
   });
 
   describe('applyFriend', () => {
+    beforeEach(() => {
+      vipService.getPrivilegeValue.mockResolvedValue(50);
+    });
+
     it('should create friend request with pending status', async () => {
       friendRepo.findOne.mockResolvedValue(null);
 
@@ -329,6 +341,31 @@ describe('SocialService', () => {
 
       await expect(service.applyFriend('p1', 'p2')).rejects.toThrow(
         GameException,
+      );
+    });
+
+    it('throws FRIEND_LIMIT_REACHED when friend slots exhausted', async () => {
+      friendRepo.findOne.mockResolvedValue(null);
+      friendRepo.count.mockResolvedValue(50);
+
+      await expect(service.applyFriend('p1', 'p2')).rejects.toMatchObject({
+        response: { code: ErrorCodes.FRIEND_LIMIT_REACHED },
+      });
+      expect(friendRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('VIP 扩容好友位后允许更多好友', async () => {
+      friendRepo.findOne.mockResolvedValue(null);
+      friendRepo.count.mockResolvedValue(50);
+      vipService.getPrivilegeValue.mockResolvedValue(80);
+
+      const result = await service.applyFriend('p1', 'p2');
+
+      expect(result.status).toBe(FriendStatus.PENDING);
+      expect(vipService.getPrivilegeValue).toHaveBeenCalledWith(
+        'p1',
+        'friendSlots',
+        50,
       );
     });
   });
@@ -540,6 +577,35 @@ describe('SocialService', () => {
       expect(eventBus.emit).toHaveBeenCalledWith(
         'social.guild.donated',
         expect.any(Object),
+      );
+    });
+
+    it('VIP 帮贡加成按特权比例上浮', async () => {
+      guildMemberRepo.findOne.mockResolvedValue({
+        id: '1',
+        guildId: '1',
+        playerId: 'p1',
+        role: GuildRole.MEMBER,
+        contribution: 0,
+        joinedAt: new Date(),
+      } as GuildMember);
+      guildRepo.findOne.mockResolvedValue({ id: '1', fund: '0' } as any);
+      guildRepo.save = jest.fn().mockImplementation((g: any) => Promise.resolve(g));
+      economyService.addCurrency.mockResolvedValue({ balanceAfter: '1' });
+      vipService.getPrivilegeValue.mockResolvedValue(0.5);
+
+      const result = await service.donateToGuild(
+        'p1',
+        '1',
+        DonateType.GOLD,
+        '1000',
+      );
+
+      expect(result.contributionGained).toBe(15);
+      expect(vipService.getPrivilegeValue).toHaveBeenCalledWith(
+        'p1',
+        'guildContribBonus',
+        0,
       );
     });
   });
@@ -1030,6 +1096,21 @@ describe('SocialService', () => {
         response: { code: ErrorCodes.GIFT_DAILY_CAP },
       });
       expect(inventoryService.removeItem).not.toHaveBeenCalled();
+    });
+
+    it('VIP 提升送礼上限后超过模板上限仍可送', async () => {
+      cacheService.get.mockResolvedValue('5');
+      vipService.getPrivilegeValue.mockResolvedValue(10);
+
+      const result = await service.sendGift('p1', 't1', 'g1');
+
+      expect(result.giftWeight).toBe(10);
+      expect(vipService.getPrivilegeValue).toHaveBeenCalledWith(
+        'p1',
+        'dailyGiftCap',
+        0,
+      );
+      expect(cacheService.set).toHaveBeenCalledWith('gift:send:p1', '6', 86400);
     });
   });
 
@@ -1588,6 +1669,35 @@ describe('SocialService', () => {
         response: { code: ErrorCodes.GUILD_FUND_NOT_ENOUGH },
       });
       expect(guild.fund).toBe('5000');
+    });
+
+    it('VIP 建筑折扣取帮内最高 boost 降低建造成本', async () => {
+      guildMemberRepo.findOne.mockResolvedValue(leader);
+      guildMemberRepo.find.mockResolvedValue([
+        { id: '1', guildId: '1', playerId: 'p1', role: GuildRole.LEADER } as any,
+        { id: '2', guildId: '1', playerId: 'p2', role: GuildRole.MEMBER } as any,
+      ]);
+      vipService.getPrivilegeValue.mockImplementation(
+        async (playerId: string) => (playerId === 'p1' ? 0.2 : 0),
+      );
+      buildingRepo.findOne.mockResolvedValue(null);
+      const guild = { id: '1', fund: '50000' } as any;
+      guildRepo.findOne.mockResolvedValue(guild);
+      guildRepo.save = jest.fn().mockImplementation((g: any) => Promise.resolve(g));
+      fundLogRepo.save.mockImplementation((d: any) => Promise.resolve(d));
+      buildingRepo.save.mockResolvedValue({
+        id: '1', guildId: '1', buildingType: GuildBuildingType.MEETING_HALL, level: 1,
+      } as any);
+
+      const result = await service.buildBuilding(
+        'p1', '1', GuildBuildingType.MEETING_HALL,
+      );
+
+      expect(result.level).toBe(1);
+      expect(guild.fund).toBe('42000');
+      expect(fundLogRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: '8000', type: GuildFundType.EXPENSE }),
+      );
     });
   });
 

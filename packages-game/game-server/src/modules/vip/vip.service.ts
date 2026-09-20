@@ -9,6 +9,7 @@ import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
 import { CurrencyType } from '@constants/enums';
 import { getTodayStr } from '@utils/time.util';
+import { Character, CharacterTitle } from '@modules/character/entities';
 
 const VIP_DAILY_KEY = (playerId: string) =>
   `vip:daily:${playerId}:${getTodayStr()}`;
@@ -18,6 +19,10 @@ export class VipService {
   constructor(
     @InjectRepository(VipConfig)
     private readonly configRepo: Repository<VipConfig>,
+    @InjectRepository(Character)
+    private readonly characterRepo: Repository<Character>,
+    @InjectRepository(CharacterTitle)
+    private readonly charTitleRepo: Repository<CharacterTitle>,
     private readonly playerService: PlayerService,
     private readonly cacheService: CacheService,
     private readonly economyService: EconomyService,
@@ -112,6 +117,40 @@ export class VipService {
       where: { level: player.vipLevel },
     });
     return config?.privilegeJson ?? {};
+  }
+
+  async getPrivilegeValue(
+    playerId: string,
+    key: string,
+    fallback: any,
+  ): Promise<any> {
+    const player = await this.playerService.getById(playerId);
+    if (!player) return fallback;
+    const config = await this.configRepo.findOne({
+      where: { level: player.vipLevel },
+    });
+    const privilege = config?.privilegeJson ?? {};
+    return privilege[key] !== undefined ? privilege[key] : fallback;
+  }
+
+  /** VIP_LEVEL_UP 监听：达到等级且有 vipTitleId 时发放称号（经 character_title） */
+  async grantVipTitleIfEligible(playerId: string): Promise<void> {
+    const privilege = await this.getPrivilege(playerId);
+    const vipTitleId = privilege.vipTitleId as string | undefined;
+    if (!vipTitleId) return;
+    const character = await this.characterRepo.findOne({ where: { playerId } });
+    if (!character) return;
+    const existing = await this.charTitleRepo.findOne({
+      where: { characterId: character.id, titleId: vipTitleId },
+    });
+    if (existing) return;
+    await this.charTitleRepo.save(
+      this.charTitleRepo.create({
+        characterId: character.id,
+        titleId: vipTitleId,
+        isEquipped: false,
+      }),
+    );
   }
 
   // ===== Admin CRUD =====
