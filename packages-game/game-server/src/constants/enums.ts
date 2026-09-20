@@ -820,3 +820,9 @@ export enum RiskLevel {
   WATCH = 'watch',
   HIGH = 'high',
 }
+
+export enum RiskLinkType {
+  SAME_IP = 'same_ip',
+  SAME_DEVICE = 'same_device',
+  SSO = 'sso',
+}
