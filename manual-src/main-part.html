@@ -2595,6 +2595,7 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
     <li><b>实时拦截</b>：高危账号经 <code>RiskGateService</code> 实时限制——拍卖起拍价超 <code>auction_value_cap</code> 拒上架（93202）、单日送礼 / 转账累计超限拒执行（93201）。</li>
     <li><b>风控回收闭环</b>：GM 对线索出回收提案（净差额）→ 确认对净收款方真实扣款（EconomyService 扣 GOLD，流水号留 <code>economy_ref_id</code>，快照存动账前余额）并落 <code>risk_recover_records</code> 台账、切断线索（open→frozen）→ 可按流水号精确回滚；高危线索可联动既有惩罚封禁 / 交易封锁（<code>POST cases/:id/lock</code>，复用 PenaltyLevel）。</li>
     <li><b>只读回放校准阈值</b>：支持 GM 按 <code>[since, until]</code> 时段 + <code>configOverrides</code>（仅 <code>risk.*</code> 检测阈值键，非法 92901）对 <code>risk_wash_flows</code> 历史重放三类检测，返回命中清单 <code>hitAccounts</code> 与分数档位分布 <code>scoreBuckets</code>，供运营量化「阈值配到某值会命中多少人」，读多线不落库不处置。</li>
+    <li><b>身份聚类信号（一人多号）</b>：定时从登录日志 / 账号数据聚合身份邻接（窗口内同 IP、同设备、SSO 同源，写入 <code>risk_identity_links</code> 无向去重幂等），强信号即为「同人多号」特征，其身份分（分量 2 个账号基础分、≥3 更高分）并入 <code>risk_account_scores</code> 且不越 <code>score_cap</code>；GM 经 <code>GET identity/player/:playerId</code> 只读查看该玩家的身份图谱（peer 关联 + 簇规模）。</li>
   </ul>
   <p><b>配置键（remote_configs，未配走代码默认，见 13.2）</b>：</p>
   <table>

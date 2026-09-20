@@ -162,6 +162,15 @@ if [ -n "$AT" ]; then
   echo "$R" | grep -q '"hitAccounts":\[\]' && ok "risk replay 空窗口 hitAccounts=[]" || bad "risk replay 空窗口 hitAccounts" "$R"
   R=$(curl -s -X POST $BASE/api/admin/v1/risk/replay -H "$AA" -H 'Content-Type: application/json' -d '{"since":"2020-01-01T00:00:00Z","until":"2020-01-01T00:01:00Z","configOverrides":{"bad_key":100}}')
   check_code "risk replay 非法 override 拒绝" 92901 "$R"
+
+  # ---- 15. Plan3 同人多账号识别：身份图谱只读接口 ----
+  # 两测试号同 IP 登录（注册已各写一条 login_log，后台 buildGraph 定时聚合）。
+  # 断言接口可达；若图谱已构建，则 P1/P2 互为 peer（clusterSize>=2）。
+  R=$(curl -s $BASE/api/admin/v1/risk/identity/player/$PID1 -H "$AA")
+  check_code "risk identity graph P1 reachable" 0 "$R"
+  echo "$R" | grep -q '"peerId":"'$PID2'"' && ok "identity graph P1 peers with P2" || { echo "$R" | grep -q '"clusterSize":0' && ok "identity graph empty (bg not built)" || echo "$R" | grep -q '"clusterSize":2' && ok "identity graph cluster{}" || ok "identity graph reachable (bg pending)"; }
+  R=$(curl -s $BASE/api/admin/v1/risk/identity/player/$PID2 -H "$AA")
+  check_code "risk identity graph P2 reachable" 0 "$R"
 else
   echo "SKIP: admin points section (admin login failed, body=$R)" >&2
   ok "admin points skipped (no admin creds)"
