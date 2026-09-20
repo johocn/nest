@@ -35,7 +35,7 @@ export class ReconcileAdminController {
   async run(@CurrentAdmin() admin: AdminJwtPayload) {
     const results = await this.reconcileService.reconcileDaily();
     await this.adminService.logOperation({
-      adminId: admin.username,
+      adminId: admin.adminId,
       operation: 'reconcile.run',
       changeAfter: {
         statDate: results[0]?.statDate,

@@ -20,13 +20,13 @@ export class EncounterTemplate {
   @Column({ name: 'cd_seconds', type: 'int', default: 300 })
   cdSeconds: number;
 
-  @Column({ name: 'choices_json', type: 'jsonb', default: () => '[]' })
+  @Column({ name: 'choices_json', type: 'jsonb', default: '[]' })
   choicesJson: any;
 
   @Column({ name: 'is_one_time', type: 'boolean', default: false })
   isOneTime: boolean;
 
-  @Column({ name: 'reward_json', type: 'jsonb', default: () => '{}' })
+  @Column({ name: 'reward_json', type: 'jsonb', default: '{}' })
   rewardJson: any;
 
   @Column({ name: 'is_active', type: 'boolean', default: true })

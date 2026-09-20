@@ -48,10 +48,10 @@ describe('ReconcileAdminController', () => {
   });
 
   it('POST run 触发对账并留 gm-log', async () => {
-    const res = await ctrl.run({ username: 'GM1' } as any);
+    const res = await ctrl.run({ username: 'GM1', adminId: 100 } as any);
     expect(reconcileService.reconcileDaily).toHaveBeenCalled();
     expect(adminService.logOperation).toHaveBeenCalledWith(
-      expect.objectContaining({ operation: 'reconcile.run', adminId: 'GM1' }),
+      expect.objectContaining({ operation: 'reconcile.run', adminId: 100 }),
     );
     expect(res.results).toHaveLength(2);
   });

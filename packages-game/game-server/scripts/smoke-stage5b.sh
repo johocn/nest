@@ -195,6 +195,10 @@ fi
 # 预置境界模板 lv1 凡体/lv2 炼气/lv3 筑基（本段只做养成长线闭环与幂等性验证，不连线上结算）
 docker exec 1Panel-postgresql-4LsS psql -U game -d game_server -c "INSERT INTO realm_templates (realm_level, realm_name, required_value, consume_items_json, stat_bonus_json, milestone_reward_json) VALUES (1,'凡体','0','[]','{\"strength\":0}','{}'),(2,'炼气','100','[]','{\"strength\":50}','{\"currency\":[{\"currencyType\":\"gold\",\"amount\":1000}]}'),(3,'筑基','200','[]','{\"strength\":120}','{\"currency\":[{\"currencyType\":\"gold\",\"amount\":3000}]}') ON CONFLICT (realm_level) DO NOTHING" >/dev/null && ok "seed realm_templates lv1-3" || bad "seed realm templates" "sql"
 
+# realm 依赖角色存在，先为 smoke 玩家建角（幂等：已存在则跳过）
+R=$(curl -s -X POST $BASE/api/client/v1/character/create -H "$A1" -H 'Content-Type: application/json' -d '{"name":"SmokeR'"$(date +%s | tail -c 8)"'","nickname":"SmokeRealm","profession":"farmer","gender":"male","age":25}')
+if echo "$R" | grep -q '"code":0'; then ok "realm create character"; else bad "realm create character" "$R"; fi
+
 R=$(curl -s -X POST $BASE/api/client/v1/realm/cultivate -H "$A1" -H 'Content-Type: application/json' -d '{"amount":500}')
 echo "$R" | grep -q '"realmValue":"500"' && ok "realm cultivate A realmValue=500" || bad "realm cultivate A" "$R"
 
@@ -212,7 +216,7 @@ echo "$R" | grep -q '"realmLevel":3' && echo "$R" | grep -q '"rewardDelivered":\
 
 # 幂等：里程碑按 realm_level 去重，claimed 仅含 [2,3] 不重复；满级后再突破应 94002 且不发新奖
 CLAIMED=$(docker exec 1Panel-postgresql-4LsS psql -U game -d game_server -t -A -c "SELECT milestone_claimed_json FROM characters WHERE player_id='$PID1'")
-echo "$CLAIMED" | grep -q '"2"' && echo "$CLAIMED" | grep -q '"3"' && ok "realm milestone claimed [2,3] (idempotent, no duplicate)" || bad "realm milestone claimed json" "$CLAIMED"
+echo "$CLAIMED" | tr -d ' ' | grep -qE '\[2,3\]' && ok "realm milestone claimed [2,3] (idempotent, no duplicate)" || bad "realm milestone claimed json" "$CLAIMED"
 
 R=$(curl -s -X POST $BASE/api/client/v1/realm/breakthrough -H "$A1")
 code_of "$R" | grep -q "94002" && ok "realm breakthrough at max → 94002 (no duplicate reward)" || bad "realm breakthrough at max code" "$R"

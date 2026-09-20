@@ -47,7 +47,7 @@ export class Character {
   @Column({ name: 'realm_value', type: 'bigint', default: '0' })
   realmValue: string;
 
-  @Column({ name: 'milestone_claimed_json', type: 'jsonb', default: [] })
+  @Column({ name: 'milestone_claimed_json', type: 'jsonb', default: '[]' })
   milestoneClaimedJson: any;
 
   @CreateDateColumn({ name: 'created_at' })

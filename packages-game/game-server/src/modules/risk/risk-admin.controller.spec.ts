@@ -101,10 +101,10 @@ describe('RiskAdminController', () => {
     });
     const res = await ctrl.replay(
       { since: new Date('2026-01-01T00:00:00Z'), until: new Date('2026-01-02T00:00:00Z'), configOverrides: { 'risk.high_score': 50 } } as any,
-      { username: 'GM1' } as any,
+      { username: 'GM1', adminId: 100 } as any,
     );
     expect(replayService.replay).toHaveBeenCalled();
-    expect(adminService.logOperation).toHaveBeenCalledWith(expect.objectContaining({ operation: 'risk.replay', adminId: 'GM1' }));
+    expect(adminService.logOperation).toHaveBeenCalledWith(expect.objectContaining({ operation: 'risk.replay', adminId: 100 }));
     expect(res.hitCount).toBe(1);
   });
 

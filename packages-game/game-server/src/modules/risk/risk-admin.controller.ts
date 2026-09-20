@@ -110,7 +110,7 @@ export class RiskAdminController {
       configOverrides: dto.configOverrides,
     });
     await this.adminService.logOperation({
-      adminId: admin.username,
+      adminId: admin.adminId,
       operation: 'risk.replay',
       changeBefore: { since: dto.since.toISOString(), until: dto.until.toISOString() },
       changeAfter: { iterated: result.iterated, hitCount: result.hitCount, scoreBuckets: result.scoreBuckets },
