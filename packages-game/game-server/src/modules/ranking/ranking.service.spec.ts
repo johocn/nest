@@ -29,6 +29,7 @@ describe('RankingService', () => {
           useValue: {
             zAdd: jest.fn(),
             zRange: jest.fn(),
+            zRem: jest.fn(),
             get: jest.fn(),
             set: jest.fn(),
           },
@@ -86,6 +87,54 @@ describe('RankingService', () => {
       const result = await service.getPlayerRank(RankingType.POWER, 'p2');
 
       expect(result).toBe(2);
+    });
+  });
+
+  describe('removePlayer', () => {
+    it('should remove matching player from Redis ZSet', async () => {
+      cacheService.zRange.mockResolvedValue([
+        JSON.stringify({ playerId: 'p1', playerName: '张三' }),
+        JSON.stringify({ playerId: 'p2', playerName: '李四' }),
+      ]);
+
+      await service.removePlayer(RankingType.POWER, 'p1');
+
+      expect(cacheService.zRem).toHaveBeenCalledWith(
+        'ranking:power',
+        JSON.stringify({ playerId: 'p1', playerName: '张三' }),
+      );
+    });
+
+    it('should skip zRem when player not in ZSet', async () => {
+      cacheService.zRange.mockResolvedValue([
+        JSON.stringify({ playerId: 'p2', playerName: '李四' }),
+      ]);
+
+      await service.removePlayer(RankingType.POWER, 'p1');
+
+      expect(cacheService.zRem).not.toHaveBeenCalled();
+    });
+
+    it('should skip malformed members without throwing', async () => {
+      cacheService.zRange.mockResolvedValue(['not-json', '123']);
+
+      await expect(
+        service.removePlayer(RankingType.POWER, 'p1'),
+      ).resolves.toBeUndefined();
+      expect(cacheService.zRem).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('removePlayerFromAll', () => {
+    it('should remove player from every ranking type', async () => {
+      cacheService.zRange.mockResolvedValue([
+        JSON.stringify({ playerId: 'p1', playerName: '张三' }),
+      ]);
+
+      const removed = await service.removePlayerFromAll('p1');
+
+      expect(removed).toEqual(Object.values(RankingType));
+      expect(cacheService.zRem).toHaveBeenCalled();
     });
   });
 

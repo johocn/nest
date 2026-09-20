@@ -13,6 +13,8 @@ import {
 import { AdminModule } from '@modules/admin/admin.module';
 import { AnalyticsModule } from '@modules/analytics/analytics.module';
 import { AuthModule } from '@modules/auth/auth.module';
+import { RankingModule } from '@modules/ranking/ranking.module';
+import { SocialModule } from '@modules/social/social.module';
 
 @Module({
   imports: [
@@ -28,6 +30,8 @@ import { AuthModule } from '@modules/auth/auth.module';
     AdminModule,
     AnalyticsModule,
     AuthModule,
+    RankingModule,
+    SocialModule,
   ],
   controllers: [CommunityController],
   providers: [CommunityService],

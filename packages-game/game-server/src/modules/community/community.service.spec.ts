@@ -13,6 +13,8 @@ import { EventBusService } from '@event-bus/event-bus.service';
 import { AdminService } from '@modules/admin/admin.service';
 import { AnalyticsService } from '@modules/analytics/analytics.service';
 import { AuthService } from '@modules/auth/auth.service';
+import { RankingService } from '@modules/ranking/ranking.service';
+import { SocialService } from '@modules/social/social.service';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
 import {
@@ -102,6 +104,8 @@ describe('CommunityService', () => {
             save: jest
               .fn()
               .mockImplementation((data: any) => Promise.resolve(data)),
+            delete: jest.fn(),
+            count: jest.fn(),
           },
         },
         {
@@ -119,6 +123,17 @@ describe('CommunityService', () => {
         {
           provide: EventBusService,
           useValue: { emit: jest.fn() },
+        },
+        {
+          provide: RankingService,
+          useValue: { removePlayerFromAll: jest.fn() },
+        },
+        {
+          provide: SocialService,
+          useValue: {
+            getMyGuildRole: jest.fn(),
+            kickGuildMember: jest.fn(),
+          },
         },
       ],
     }).compile();
@@ -278,10 +293,14 @@ describe('CommunityService', () => {
   describe('举报台账与处置', () => {
     let reportRepo: any;
     let authService: any;
+    let socialService: any;
+    let rankingService: any;
 
     beforeEach(() => {
       reportRepo = module.get(getRepositoryToken(PlayerReport));
       authService = module.get(AuthService);
+      socialService = module.get(SocialService);
+      rankingService = module.get(RankingService);
       jest.clearAllMocks();
     });
 
@@ -366,6 +385,108 @@ describe('CommunityService', () => {
         'x',
       );
       expect(authService.applyPenalty).not.toHaveBeenCalled();
+    });
+
+    it('BAN 处置联动三项社交后果：称号收回/帮派除名/榜单移除', async () => {
+      reportRepo.findOne.mockResolvedValueOnce({
+        id: 'r1',
+        status: ReportStatus.PENDING,
+        targetType: ReportTargetType.PLAYER,
+        targetId: '9',
+      });
+      playerRepo.findOne.mockResolvedValueOnce({ id: '9', accountId: '9' });
+      authService.applyPenalty.mockResolvedValueOnce(undefined);
+      charRepo.findOne.mockResolvedValueOnce({ id: 'c9', playerId: '9' });
+      charTitleRepo.delete.mockResolvedValueOnce({ affected: 2 });
+      socialService.getMyGuildRole.mockResolvedValueOnce({ guildId: 'g1' });
+      socialService.kickGuildMember.mockResolvedValueOnce({ removed: true });
+      rankingService.removePlayerFromAll.mockResolvedValueOnce(['power']);
+      adminService.logOperation.mockResolvedValueOnce(undefined);
+      reportRepo.update.mockResolvedValueOnce({ affected: 1 });
+
+      await service.handleReport(
+        'a1',
+        'admin',
+        'r1',
+        ReportHandleAction.BAN,
+        '违规',
+        3600,
+      );
+
+      expect(authService.applyPenalty).toHaveBeenCalledWith(
+        'admin',
+        '9',
+        '9',
+        PenaltyLevel.BAN,
+        '违规',
+        3600,
+      );
+      expect(charTitleRepo.delete).toHaveBeenCalledWith({ characterId: 'c9' });
+      expect(socialService.kickGuildMember).toHaveBeenCalledWith(
+        '0',
+        'g1',
+        '9',
+        '封禁处置',
+      );
+      expect(rankingService.removePlayerFromAll).toHaveBeenCalledWith('9');
+    });
+
+    it('BAN 处置无称号无帮派时仍执行榜单移除', async () => {
+      reportRepo.findOne.mockResolvedValueOnce({
+        id: 'r2',
+        status: ReportStatus.PENDING,
+        targetType: ReportTargetType.PLAYER,
+        targetId: '10',
+      });
+      playerRepo.findOne.mockResolvedValueOnce({ id: '10', accountId: '10' });
+      authService.applyPenalty.mockResolvedValueOnce(undefined);
+      charRepo.findOne.mockResolvedValueOnce(null);
+      socialService.getMyGuildRole.mockResolvedValueOnce(null);
+      rankingService.removePlayerFromAll.mockResolvedValueOnce(['power', 'level']);
+      reportRepo.update.mockResolvedValueOnce({ affected: 1 });
+
+      await service.handleReport(
+        'a1',
+        'admin',
+        'r2',
+        ReportHandleAction.BAN,
+        '违规',
+        3600,
+      );
+
+      expect(charTitleRepo.delete).not.toHaveBeenCalled();
+      expect(socialService.kickGuildMember).not.toHaveBeenCalled();
+      expect(rankingService.removePlayerFromAll).toHaveBeenCalledWith('10');
+    });
+
+    it('socialCleanup 无待清理资产时报已清理且幂等移除榜单', async () => {
+      charRepo.findOne.mockResolvedValueOnce(null);
+      socialService.getMyGuildRole.mockResolvedValueOnce(null);
+      rankingService.removePlayerFromAll.mockResolvedValueOnce(['power']);
+
+      const err: any = await service
+        .socialCleanup('a1', '9')
+        .catch((e) => e);
+      expect(err).toBeInstanceOf(GameException);
+      expect(err.response.code).toBe(ErrorCodes.CLEANUP_ALREADY_DONE);
+      expect(rankingService.removePlayerFromAll).toHaveBeenCalledWith('9');
+    });
+
+    it('socialCleanup 有待清理资产时执行三项联动', async () => {
+      charRepo.findOne.mockResolvedValue({ id: 'c9', playerId: '9' });
+      charTitleRepo.count.mockResolvedValue(1);
+      charTitleRepo.delete.mockResolvedValueOnce({ affected: 1 });
+      socialService.getMyGuildRole.mockResolvedValue({ guildId: 'g1' });
+      socialService.kickGuildMember.mockResolvedValueOnce({ removed: true });
+      rankingService.removePlayerFromAll.mockResolvedValueOnce(['power']);
+      adminService.logOperation.mockResolvedValueOnce(undefined);
+
+      const result = await service.socialCleanup('a1', '9');
+
+      expect(result.cleaned).toBe(true);
+      expect(charTitleRepo.delete).toHaveBeenCalledWith({ characterId: 'c9' });
+      expect(socialService.kickGuildMember).toHaveBeenCalled();
+      expect(rankingService.removePlayerFromAll).toHaveBeenCalledWith('9');
     });
   });
 });

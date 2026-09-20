@@ -105,4 +105,31 @@ export class RankingService {
     });
     return { items, total };
   }
+
+  async removePlayer(type: RankingType, playerId: string): Promise<void> {
+    const members = await this.cacheService.zRange(
+      this.RANKING_KEY(type),
+      0,
+      -1,
+    );
+    const targets = members.filter((m) => {
+      try {
+        return JSON.parse(m).playerId === playerId;
+      } catch {
+        return false;
+      }
+    });
+    if (targets.length) {
+      await this.cacheService.zRem(this.RANKING_KEY(type), ...targets);
+    }
+  }
+
+  async removePlayerFromAll(playerId: string): Promise<string[]> {
+    const removed: string[] = [];
+    for (const type of Object.values(RankingType)) {
+      await this.removePlayer(type, playerId);
+      removed.push(type);
+    }
+    return removed;
+  }
 }

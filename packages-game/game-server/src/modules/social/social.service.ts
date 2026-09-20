@@ -478,6 +478,38 @@ export class SocialService {
     });
   }
 
+  /** 将成员移出帮派（封禁后果/逐出用）。帮主被移出时先移交副帮主，无副帮主则解散。 */
+  async kickGuildMember(
+    operatorId: string,
+    guildId: string,
+    targetPlayerId: string,
+    reason: string,
+  ): Promise<{ removed: boolean; guildDisbanded?: boolean; newLeaderId?: string }> {
+    const guild = await this.getGuildOrThrow(guildId);
+    const member = await this.getGuildMemberOrThrow(targetPlayerId, guildId);
+    if (member.role === GuildRole.LEADER) {
+      const vice = await this.guildMemberRepo.findOne({
+        where: { guildId, role: GuildRole.VICE_LEADER },
+        order: { contribution: 'DESC' },
+      });
+      if (vice) {
+        vice.role = GuildRole.LEADER;
+        await this.guildMemberRepo.save(vice);
+        await this.appendGuildLog(guild, 'kick', targetPlayerId, `帮主被移除，${vice.playerId} 继任帮主（${reason}）`);
+        await this.guildMemberRepo.delete({ playerId: targetPlayerId, guildId });
+        await this.appendGuildLog(guild, 'kick', targetPlayerId, `成员 ${targetPlayerId} 被移除（${reason}）`);
+        return { removed: true, newLeaderId: vice.playerId };
+      }
+      await this.appendGuildLog(guild, 'kick', targetPlayerId, `帮派因帮主被移除且无副帮主而解散（${reason}）`);
+      await this.guildMemberRepo.delete({ guildId });
+      await this.guildRepo.softRemove(guild);
+      return { removed: true, guildDisbanded: true };
+    }
+    await this.guildMemberRepo.delete({ playerId: targetPlayerId, guildId });
+    await this.appendGuildLog(guild, 'kick', targetPlayerId, `成员 ${targetPlayerId} 被移除（${reason}）`);
+    return { removed: true };
+  }
+
   /** 查询玩家所在公会与职位（无公会返回 null）。 */
   async getMyGuildRole(
     playerId: string,

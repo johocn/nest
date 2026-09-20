@@ -172,4 +172,14 @@ export class CommunityController {
       body.durationSeconds,
     );
   }
+
+  @UseGuards(AdminGuard)
+  @Post('api/admin/v1/community/players/:playerId/social-cleanup')
+  @ApiOperation({ summary: '[管理] 历史封禁补执行社交后果' })
+  async socialCleanup(
+    @CurrentAdmin() admin: AdminJwtPayload,
+    @Param('playerId') playerId: string,
+  ) {
+    return this.communityService.socialCleanup(admin.adminId, playerId);
+  }
 }

@@ -19,6 +19,8 @@ import { GameEvents } from '@event-bus/game-events';
 import { AdminService } from '@modules/admin/admin.service';
 import { AnalyticsService } from '@modules/analytics/analytics.service';
 import { AuthService } from '@modules/auth/auth.service';
+import { RankingService } from '@modules/ranking/ranking.service';
+import { SocialService } from '@modules/social/social.service';
 import { Player } from '@modules/player/entities/player.entity';
 import {
   Character,
@@ -49,6 +51,8 @@ export class CommunityService {
     private readonly analyticsService: AnalyticsService,
     private readonly authService: AuthService,
     private readonly eventBus: EventBusService,
+    private readonly rankingService: RankingService,
+    private readonly socialService: SocialService,
   ) {}
 
   // ===== 建议箱 =====
@@ -297,6 +301,9 @@ export class CommunityService {
         remark?.trim() || '举报处置',
         durationSeconds,
       );
+      if (level === PenaltyLevel.BAN) {
+        await this.applyBanSocialConsequences(player.id);
+      }
       updates.status = ReportStatus.PROCESSED;
       updates.handleAction = action;
       await this.adminService.logOperation({
@@ -344,5 +351,78 @@ export class CommunityService {
       ...i,
       nickname: map.get(i.playerId) ?? '',
     }));
+  }
+
+  // ===== 封禁社交后果（阶段5批2） =====
+
+  private async applyBanSocialConsequences(playerId: string): Promise<void> {
+    // 1. 称号收回
+    const character = await this.charRepo.findOne({ where: { playerId } });
+    if (character) {
+      const { affected } = await this.charTitleRepo.delete({
+        characterId: character.id,
+      });
+      if (affected) {
+        await this.adminService.logOperation({
+          adminId: '0',
+          targetPlayerId: playerId,
+          operation: 'community.ban.title_revoke',
+          changeBefore: { count: affected },
+        });
+      }
+    }
+    // 2. 帮派除名（含帮主移交/解散）
+    const guildMember = await this.socialService.getMyGuildRole(playerId);
+    if (guildMember?.guildId) {
+      const result = await this.socialService.kickGuildMember(
+        '0',
+        guildMember.guildId,
+        playerId,
+        '封禁处置',
+      );
+      await this.adminService.logOperation({
+        adminId: '0',
+        targetPlayerId: playerId,
+        operation: 'community.ban.guild_kick',
+        changeAfter: result,
+      });
+    }
+    // 3. 榜单移除
+    const removed = await this.rankingService.removePlayerFromAll(playerId);
+    await this.adminService.logOperation({
+      adminId: '0',
+      targetPlayerId: playerId,
+      operation: 'community.ban.ranking_remove',
+      changeAfter: { removed },
+    });
+  }
+
+  async socialCleanup(
+    adminId: string,
+    playerId: string,
+  ): Promise<{ cleaned: boolean }> {
+    const character = await this.charRepo.findOne({ where: { playerId } });
+    const guildMember = await this.socialService.getMyGuildRole(playerId);
+    const titles = character
+      ? await this.charTitleRepo.count({
+          where: { characterId: character.id },
+        })
+      : 0;
+    if (!titles && !guildMember) {
+      // 榜单 Redis 无查询入口，直接执行移除视为幂等完成
+      await this.rankingService.removePlayerFromAll(playerId);
+      throw new GameException(
+        ErrorCodes.CLEANUP_ALREADY_DONE,
+        '该玩家无待清理的社交资产',
+      );
+    }
+    await this.applyBanSocialConsequences(playerId);
+    await this.adminService.logOperation({
+      adminId,
+      targetPlayerId: playerId,
+      operation: 'community.social.cleanup',
+      changeAfter: { playerId },
+    });
+    return { cleaned: true };
   }
 }
