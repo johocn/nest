@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AchievementTemplate, PlayerAchievement } from './entities';
@@ -6,21 +6,32 @@ import { EventBusService } from '@event-bus/event-bus.service';
 import { GameEvents } from '@event-bus/game-events';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
-import { AchievementCategory } from '@constants/enums';
+import {
+  AchievementCategory,
+  AchievementCondition,
+  CurrencyType,
+} from '@constants/enums';
+import { EconomyService } from '@modules/economy/economy.service';
 
 export interface ClaimAchievementResult {
   reward: Record<string, any>;
   isRewardClaimed: boolean;
 }
 
+/** increment: 在既有进度上累加；set: 直接写为绝对值（等级类快照条件） */
+export type ProgressMode = 'increment' | 'set';
+
 @Injectable()
 export class AchievementService {
+  private readonly logger = new Logger(AchievementService.name);
+
   constructor(
     @InjectRepository(AchievementTemplate)
     private readonly templateRepo: Repository<AchievementTemplate>,
     @InjectRepository(PlayerAchievement)
     private readonly playerAchievementRepo: Repository<PlayerAchievement>,
     private readonly eventBus: EventBusService,
+    private readonly economyService: EconomyService,
   ) {}
 
   async updateProgress(
@@ -66,6 +77,71 @@ export class AchievementService {
     }
 
     return this.playerAchievementRepo.save(record);
+  }
+
+  /**
+   * 按成就条件推进进度：命中同一 condition 的所有模板逐一推进。
+   * 单条模板失败只记日志，不阻断其余模板与调用方主流程。
+   */
+  async advanceByCondition(
+    playerId: string,
+    condition: AchievementCondition,
+    value: number,
+    mode: ProgressMode = 'increment',
+  ): Promise<void> {
+    if (!Number.isFinite(value) || value <= 0) return;
+
+    const templates = await this.templateRepo.find({ where: { condition } });
+    for (const template of templates) {
+      try {
+        await this.applyProgress(playerId, template, value, mode);
+      } catch (err) {
+        this.logger.error(
+          `Achievement progress failed: player=${playerId} achievement=${template.id}`,
+          (err as Error).message,
+        );
+      }
+    }
+  }
+
+  private async applyProgress(
+    playerId: string,
+    template: AchievementTemplate,
+    value: number,
+    mode: ProgressMode,
+  ): Promise<void> {
+    let record = await this.playerAchievementRepo.findOne({
+      where: { playerId, achievementId: template.id },
+    });
+    if (record?.isUnlocked) {
+      return;
+    }
+
+    if (!record) {
+      record = this.playerAchievementRepo.create({
+        playerId,
+        achievementId: template.id,
+        currentValue: 0,
+        isUnlocked: false,
+        isRewardClaimed: false,
+      });
+    }
+
+    const nextValue =
+      mode === 'increment' ? record.currentValue + value : value;
+    record.currentValue = nextValue;
+
+    if (nextValue >= template.targetValue && !record.isUnlocked) {
+      record.isUnlocked = true;
+      record.unlockedAt = new Date();
+      this.eventBus.emit(GameEvents.ACHIEVEMENT_UNLOCKED, {
+        playerId,
+        achievementId: template.id,
+        achievementName: template.name,
+      });
+    }
+
+    await this.playerAchievementRepo.save(record);
   }
 
   async claimReward(

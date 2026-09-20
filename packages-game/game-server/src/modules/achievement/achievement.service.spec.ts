@@ -7,12 +7,15 @@ import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
 import { AchievementCategory, AchievementCondition } from '@constants/enums';
 import type { Repository } from 'typeorm';
+import { EconomyService } from '@modules/economy/economy.service';
+import { GameEvents } from '@event-bus/game-events';
 
 describe('AchievementService', () => {
   let service: AchievementService;
   let templateRepo: jest.Mocked<Repository<AchievementTemplate>>;
   let playerAchievementRepo: jest.Mocked<Repository<PlayerAchievement>>;
   let eventBus: jest.Mocked<EventBusService>;
+  let economyService: jest.Mocked<EconomyService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -36,6 +39,7 @@ describe('AchievementService', () => {
             findOne: jest.fn(),
             find: jest.fn(),
             create: jest.fn((data: any) => ({ ...data })),
+            update: jest.fn().mockResolvedValue({ affected: 1 }),
             save: jest
               .fn()
               .mockImplementation((data: any) => Promise.resolve(data)),
@@ -45,6 +49,10 @@ describe('AchievementService', () => {
           provide: EventBusService,
           useValue: { emit: jest.fn() },
         },
+        {
+          provide: EconomyService,
+          useValue: { addCurrency: jest.fn().mockResolvedValue({}) },
+        },
       ],
     }).compile();
 
@@ -52,6 +60,7 @@ describe('AchievementService', () => {
     templateRepo = module.get(getRepositoryToken(AchievementTemplate));
     playerAchievementRepo = module.get(getRepositoryToken(PlayerAchievement));
     eventBus = module.get(EventBusService);
+    economyService = module.get(EconomyService);
   });
 
   describe('updateProgress', () => {
@@ -110,6 +119,129 @@ describe('AchievementService', () => {
 
       expect(result.isUnlocked).toBe(true);
       expect(result.currentValue).toBe(100); // unchanged
+    });
+  });
+
+  describe('advanceByCondition', () => {
+    it('should increment every template matching the condition and unlock on target', async () => {
+      templateRepo.find.mockResolvedValue([
+        {
+          id: 'a1',
+          name: '百战之王',
+          condition: AchievementCondition.KILL_COUNT,
+          targetValue: 100,
+        },
+        {
+          id: 'a2',
+          name: '小试牛刀',
+          condition: AchievementCondition.KILL_COUNT,
+          targetValue: 5,
+        },
+      ] as any);
+      playerAchievementRepo.findOne
+        .mockResolvedValueOnce({
+          id: 'pa1',
+          playerId: 'p1',
+          achievementId: 'a1',
+          currentValue: 10,
+          isUnlocked: false,
+        } as any)
+        .mockResolvedValueOnce({
+          id: 'pa2',
+          playerId: 'p1',
+          achievementId: 'a2',
+          currentValue: 4,
+          isUnlocked: false,
+        } as any);
+
+      await service.advanceByCondition(
+        'p1',
+        AchievementCondition.KILL_COUNT,
+        1,
+      );
+
+      expect(templateRepo.find).toHaveBeenCalledWith({
+        where: { condition: AchievementCondition.KILL_COUNT },
+      });
+      expect(playerAchievementRepo.save).toHaveBeenCalledTimes(2);
+      expect(eventBus.emit).toHaveBeenCalledTimes(1);
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        GameEvents.ACHIEVEMENT_UNLOCKED,
+        expect.objectContaining({ playerId: 'p1', achievementId: 'a2' }),
+      );
+    });
+
+    it('should set absolute value when mode is set', async () => {
+      templateRepo.find.mockResolvedValue([
+        {
+          id: 'a3',
+          name: '登堂入室',
+          condition: AchievementCondition.REACH_LEVEL,
+          targetValue: 30,
+        },
+      ] as any);
+      playerAchievementRepo.findOne.mockResolvedValue(null);
+
+      await service.advanceByCondition(
+        'p1',
+        AchievementCondition.REACH_LEVEL,
+        30,
+        'set',
+      );
+
+      expect(playerAchievementRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ currentValue: 30, isUnlocked: true }),
+      );
+    });
+
+    it('should ignore non-positive values without querying templates', async () => {
+      await service.advanceByCondition(
+        'p1',
+        AchievementCondition.EARN_CURRENCY,
+        0,
+      );
+
+      expect(templateRepo.find).not.toHaveBeenCalled();
+    });
+
+    it('should skip templates already unlocked', async () => {
+      templateRepo.find.mockResolvedValue([
+        {
+          id: 'a1',
+          name: '百战之王',
+          condition: AchievementCondition.KILL_COUNT,
+          targetValue: 1,
+        },
+      ] as any);
+      playerAchievementRepo.findOne.mockResolvedValue({
+        id: 'pa1',
+        currentValue: 99,
+        isUnlocked: true,
+      } as any);
+
+      await service.advanceByCondition(
+        'p1',
+        AchievementCondition.KILL_COUNT,
+        5,
+      );
+
+      expect(playerAchievementRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('should continue with other templates when one fails', async () => {
+      templateRepo.find.mockResolvedValue([
+        { id: 'a1', name: 'x', condition: AchievementCondition.KILL_COUNT, targetValue: 9 },
+        { id: 'a2', name: 'y', condition: AchievementCondition.KILL_COUNT, targetValue: 9 },
+      ] as any);
+      playerAchievementRepo.findOne.mockResolvedValue(null);
+      playerAchievementRepo.save
+        .mockRejectedValueOnce(new Error('db down'))
+        .mockResolvedValueOnce({} as any);
+
+      await expect(
+        service.advanceByCondition('p1', AchievementCondition.KILL_COUNT, 1),
+      ).resolves.toBeUndefined();
+      expect(playerAchievementRepo.save).toHaveBeenCalledTimes(2);
     });
   });
 
