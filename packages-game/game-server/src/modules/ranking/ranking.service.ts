@@ -36,22 +36,30 @@ export class RankingService {
   }
 
   async getTopN(type: RankingType, n: number): Promise<RankEntry[]> {
-    const members = await this.cacheService.zRange(
+    const members = await this.cacheService.zRangeWithScores(
       this.RANKING_KEY(type),
       0,
-      -1,
+      n - 1,
+      true,
     );
-    const reversed = members.reverse().slice(0, n);
 
-    return reversed.map((member, index) => {
-      const parsed = JSON.parse(member);
-      return {
+    const entries: RankEntry[] = [];
+    for (const member of members) {
+      let parsed: { playerId?: string; playerName?: string };
+      try {
+        parsed = JSON.parse(member.value);
+      } catch {
+        continue;
+      }
+      if (!parsed.playerId) continue;
+      entries.push({
         playerId: parsed.playerId,
-        playerName: parsed.playerName,
-        rank: index + 1,
-        score: 0,
-      };
-    });
+        playerName: parsed.playerName ?? '',
+        rank: entries.length + 1,
+        score: Number(member.score),
+      });
+    }
+    return entries;
   }
 
   async getPlayerRank(type: RankingType, playerId: string): Promise<number> {
@@ -79,7 +87,9 @@ export class RankingService {
         rankingType: type,
         playerId: entry.playerId,
         playerName: entry.playerName,
-        rankValue: entry.score.toString(),
+        rankValue: Number.isFinite(entry.score)
+          ? String(Math.trunc(entry.score))
+          : '0',
         rankOrder: entry.rank,
       });
       await this.rankingRepo.save(record);

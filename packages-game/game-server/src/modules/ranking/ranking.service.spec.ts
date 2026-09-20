@@ -29,6 +29,7 @@ describe('RankingService', () => {
           useValue: {
             zAdd: jest.fn(),
             zRange: jest.fn(),
+            zRangeWithScores: jest.fn(),
             zRem: jest.fn(),
             get: jest.fn(),
             set: jest.fn(),
@@ -55,24 +56,54 @@ describe('RankingService', () => {
   });
 
   describe('getTopN', () => {
-    it('should return top N players from Redis', async () => {
-      cacheService.zRange.mockResolvedValue([
-        JSON.stringify({ playerId: 'p1', playerName: '张三' }),
-        JSON.stringify({ playerId: 'p2', playerName: '李四' }),
+    it('should return top N players with real scores, highest first', async () => {
+      cacheService.zRangeWithScores.mockResolvedValue([
+        {
+          value: JSON.stringify({ playerId: 'p2', playerName: '李四' }),
+          score: 900,
+        },
+        {
+          value: JSON.stringify({ playerId: 'p1', playerName: '张三' }),
+          score: 500,
+        },
       ]);
 
       const result = await service.getTopN(RankingType.POWER, 10);
 
-      expect(result).toHaveLength(2);
-      expect(result[0].playerId).toBe('p2'); // reversed from ascending ZSet
+      expect(cacheService.zRangeWithScores).toHaveBeenCalledWith(
+        'ranking:power',
+        0,
+        9,
+        true,
+      );
+      expect(result).toEqual([
+        { playerId: 'p2', playerName: '李四', rank: 1, score: 900 },
+        { playerId: 'p1', playerName: '张三', rank: 2, score: 500 },
+      ]);
     });
 
     it('should return empty array when no rankings', async () => {
-      cacheService.zRange.mockResolvedValue([]);
+      cacheService.zRangeWithScores.mockResolvedValue([]);
+
+      await expect(service.getTopN(RankingType.POWER, 10)).resolves.toEqual(
+        [],
+      );
+    });
+
+    it('should skip malformed members and keep rank contiguous', async () => {
+      cacheService.zRangeWithScores.mockResolvedValue([
+        { value: 'not-json', score: 900 },
+        {
+          value: JSON.stringify({ playerId: 'p1', playerName: '张三' }),
+          score: 500,
+        },
+      ]);
 
       const result = await service.getTopN(RankingType.POWER, 10);
 
-      expect(result).toEqual([]);
+      expect(result).toEqual([
+        { playerId: 'p1', playerName: '张三', rank: 1, score: 500 },
+      ]);
     });
   });
 
@@ -139,14 +170,24 @@ describe('RankingService', () => {
   });
 
   describe('createSnapshot', () => {
-    it('should save current rankings to DB', async () => {
-      cacheService.zRange.mockResolvedValue([
-        JSON.stringify({ playerId: 'p1', playerName: '张三' }),
+    it('should persist real integer scores to DB', async () => {
+      cacheService.zRangeWithScores.mockResolvedValue([
+        {
+          value: JSON.stringify({ playerId: 'p1', playerName: '张三' }),
+          score: 5000.7,
+        },
       ]);
 
       await service.createSnapshot(RankingType.POWER);
 
-      expect(rankingRepo.save).toHaveBeenCalled();
+      expect(rankingRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          rankingType: RankingType.POWER,
+          playerId: 'p1',
+          rankValue: '5000',
+          rankOrder: 1,
+        }),
+      );
     });
   });
 
