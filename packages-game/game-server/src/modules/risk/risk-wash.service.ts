@@ -1,7 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThan } from 'typeorm';
-import { TradeStatus, RiskBizType, RiskCaseType, RiskLevel, ConfigType } from '@constants/enums';
+import { TradeStatus, RiskBizType, RiskCaseType, RiskLevel, RiskCaseStatus, ConfigType } from '@constants/enums';
+import { GameException } from '@common/exceptions/game.exception';
+import { ErrorCodes } from '@constants/error-codes';
 import { ConfigManageService } from '@modules/config/config.service';
 import { TradeOrder } from '@modules/trade/entities/trade-order.entity';
 import { RiskWashFlow, RiskCase, RiskAccountScore, RiskWhitelist } from './entities';
@@ -191,6 +193,50 @@ export class RiskWashService {
       const level = score >= high ? RiskLevel.HIGH : score >= watch ? RiskLevel.WATCH : RiskLevel.NORMAL;
       await this.scoreRepo.save({ playerId: pid, riskScore: score, level });
     }
+  }
+
+  async listCases(status?: RiskCaseStatus, caseType?: string, limit = 50): Promise<RiskCase[]> {
+    const where: any = {};
+    if (status) where.status = status;
+    if (caseType) where.caseType = caseType;
+    return this.caseRepo.find({ where, order: { createdAt: 'DESC' }, take: limit });
+  }
+
+  async listOpenCasesByPlayer(playerId: string): Promise<RiskCase[]> {
+    return this.caseRepo.find({
+      where: [
+        { fromId: playerId, status: 'open' as any },
+        { toId: playerId, status: 'open' as any },
+      ],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async getAccountScore(playerId: string): Promise<RiskAccountScore | null> {
+    return this.scoreRepo.findOne({ where: { playerId } });
+  }
+
+  async disposeCase(id: string, action: RiskCaseStatus, operator: string, note?: string): Promise<RiskCase> {
+    const c = await this.caseRepo.findOne({ where: { id } });
+    if (!c) throw new GameException(ErrorCodes.RISK_CASE_NOT_FOUND, '风控线索不存在');
+    if (action !== RiskCaseStatus.FROZEN && action !== RiskCaseStatus.IGNORED) {
+      throw new GameException(ErrorCodes.RISK_INVALID_ACTION, '仅支持 frozen/ignored');
+    }
+    c.status = action;
+    c.handledBy = operator;
+    c.handledAt = new Date();
+    if (note) c.detailJson = { ...c.detailJson, note };
+    await this.caseRepo.save(c);
+    await this.updateScores();
+    return c;
+  }
+
+  async addWhitelist(playerId: string, note: string | undefined, operator: string): Promise<RiskWhitelist> {
+    return this.whitelistRepo.save(this.whitelistRepo.create({ playerId, note, createdBy: operator }));
+  }
+
+  async removeWhitelist(playerId: string): Promise<void> {
+    await this.whitelistRepo.delete({ playerId });
   }
 }
 
