@@ -27,6 +27,7 @@ describe('RiskIdentityService', () => {
     // 模拟真实表：find 返回已保存的行，save 落表 → 幂等去重可被观测
     linkRepo.find.mockImplementation(() => Promise.resolve([...sink]));
     linkRepo.save.mockImplementation((x: any) => { sink.push(x); return x; });
+    linkRepo.create.mockImplementation((x: any) => x);
     const mod = await Test.createTestingModule({
       providers: [
         RiskIdentityService,
@@ -90,4 +91,42 @@ describe('RiskIdentityService', () => {
     const keys = saved.map((e: any) => `${e.playerIdA}|${e.playerIdB}|${e.linkType}`);
     expect(new Set(keys).size).toBe(keys.length); // 无重复行
   });
+
+  // ===== Plan3 T3 身份分并入 =====
+
+  const seedCluster = (edges: Array<[string, string, string]>) => {
+    linkRepo.find.mockClear();
+    linkRepo.find.mockImplementation(() =>
+      Promise.resolve(
+        edges.map(([a, b, t], i) => ({
+          id: String(i),
+          playerIdA: a,
+          playerIdB: b,
+          linkType: t,
+          confidence: 0.9,
+          evidenceJson: {},
+        })),
+      ),
+    );
+  };
+
+  it('resolveIdentityScore：连通分量=2 给基础分，>=3 给更高分，单账号给 0', async () => {
+    seedCluster([['P1', 'P2', 'same_device']]);
+    expect(await service.resolveIdentityScore('P1')).toBe(20);
+    seedCluster([
+      ['P1', 'P2', 'same_device'],
+      ['P2', 'P3', 'same_ip'],
+    ]);
+    expect(await service.resolveIdentityScore('P3')).toBe(30);
+    seedCluster([]);
+    expect(await service.resolveIdentityScore('P9')).toBe(0);
+  });
+
+  it('identityMemberIds 返回图中全部账号', async () => {
+    seedCluster([
+      ['P1', 'P2', 'same_device'],
+      ['P3', 'P4', 'same_ip'],
+    ]);
+    expect((await service.identityMemberIds()).sort()).toEqual(['P1', 'P2', 'P3', 'P4']);
+  });// ----
 });

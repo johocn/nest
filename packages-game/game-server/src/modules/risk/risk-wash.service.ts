@@ -12,6 +12,7 @@ import { PlayerService } from '@modules/player/player.service';
 import { AdminService } from '@modules/admin/admin.service';
 import { RiskWashFlow, RiskCase, RiskAccountScore, RiskWhitelist, RiskRecoverRecord } from './entities';
 import { detectWindow, buildRiskThresholds, type RiskThresholds } from './risk-detect';
+import { RiskIdentityService } from './risk-identity.service';
 
 @Injectable()
 export class RiskWashService {
@@ -35,6 +36,7 @@ export class RiskWashService {
     private readonly authService: AuthService,
     private readonly playerService: PlayerService,
     private readonly adminService: AdminService,
+    private readonly identityService: RiskIdentityService,
   ) {}
 
   async scan(): Promise<{ ingested: number; cases: number }> {
@@ -299,12 +301,16 @@ export class RiskWashService {
     const high = await this.readNumber('risk.high_score', 70);
     const open = await this.caseRepo.find({ where: { status: 'open' as any } });
     const involved = new Set(open.flatMap((c) => [c.fromId, c.toId]));
-    for (const pid of involved) {
+    // 并入身份聚类信号：一人多号（连通分量内账号）的身份分
+    const identityMembers = await this.identityService.identityMemberIds();
+    const all = new Set([...involved, ...identityMembers]);
+    for (const pid of all) {
       let sum = 0;
       for (const c of open) {
         if (c.fromId === pid || c.toId === pid) sum += c.riskScore;
       }
-      const score = Math.min(sum, cap);
+      sum += await this.identityService.resolveIdentityScore(pid); // 只加分不减分
+      const score = Math.min(sum, cap); // 封顶 score_cap
       const level = score >= high ? RiskLevel.HIGH : score >= watch ? RiskLevel.WATCH : RiskLevel.NORMAL;
       await this.scoreRepo.save({ playerId: pid, riskScore: score, level });
     }

@@ -9,6 +9,7 @@ import { EconomyService } from '@modules/economy/economy.service';
 import { AuthService } from '@modules/auth/auth.service';
 import { PlayerService } from '@modules/player/player.service';
 import { AdminService } from '@modules/admin/admin.service';
+import { RiskIdentityService } from './risk-identity.service';
 
 describe('RiskWashService', () => {
   let service: RiskWashService;
@@ -51,6 +52,10 @@ describe('RiskWashService', () => {
   const adminService = {
     logOperation: jest.fn().mockResolvedValue({}),
   };
+  const identityService = {
+    identityMemberIds: jest.fn().mockResolvedValue([]),
+    resolveIdentityScore: jest.fn().mockResolvedValue(0),
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -68,6 +73,7 @@ describe('RiskWashService', () => {
         { provide: AuthService, useValue: authService },
         { provide: PlayerService, useValue: playerService },
         { provide: AdminService, useValue: adminService },
+        { provide: RiskIdentityService, useValue: identityService },
       ],
     }).compile();
     service = mod.get(RiskWashService);
@@ -206,5 +212,21 @@ describe('RiskWashService', () => {
     expect(authService.applyPenalty).toHaveBeenCalled();
     expect(res.applied.length).toBeGreaterThanOrEqual(1);
     expect(adminService.logOperation).toHaveBeenCalled();
+  });
+
+  // ===== Plan3 T3 身份分并入评分（只加分不减分、不越 score_cap） =====
+
+  it('updateScores 并入身份分且不越 score_cap', async () => {
+    config.getConfig.mockImplementation((k: string) => ({ 'risk.score_cap': '100', 'risk.watch_score': '40', 'risk.high_score': '70' })[k] ?? null);
+    caseRepo.find.mockResolvedValue([{ fromId: 'P1', toId: 'P2', riskScore: 90, status: 'open' }]);
+    identityService.identityMemberIds.mockResolvedValue(['P1']);
+    identityService.resolveIdentityScore.mockImplementation(async (pid: string) => (pid === 'P1' ? 30 : 0));
+    scoreRepo.save.mockClear();
+    scoreRepo.save.mockImplementation((s: any) => s);
+    await (service as any).updateScores();
+    const saved = scoreRepo.save.mock.calls.flat();
+    const p1 = saved.find((s: any) => s.playerId === 'P1');
+    expect(p1.riskScore).toBe(100); // 90+30=120 → 封顶 100
+    expect(p1.level).toBe('high');
   });
 });

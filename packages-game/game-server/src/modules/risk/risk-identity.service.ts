@@ -13,6 +13,8 @@ const CONFIDENCE: Record<RiskLinkType, number> = {
   [RiskLinkType.SAME_DEVICE]: 0.95,
   [RiskLinkType.SSO]: 0.85,
 };
+const IDENTITY_SCORE_BASE = 20; // 连通分量 2 个账号
+const IDENTITY_SCORE_CLUSTER = 30; // 连通分量 >=3 个账号
 
 interface Edge {
   playerIdA: string;
@@ -139,5 +141,69 @@ export class RiskIdentityService {
     }
     this.logger.log(`risk identity buildGraph window=${windowMin}m edges=${edges.size} new=${saved}`);
     return { links: edges.size };
+  }
+
+  /** 含 playerId 的连通分量：size 为分量内账号数，links 为分量内全部邻接。 */
+  async resolveCluster(playerId: string): Promise<{ playerId: string; links: RiskIdentityLink[]; clusterSize: number }> {
+    const all = await this.linkRepo.find();
+    const adj = new Map<string, Set<string>>();
+    const byKey = new Map<string, RiskIdentityLink>();
+    for (const e of all) {
+      byKey.set(`${e.playerIdA}|${e.playerIdB}|${e.linkType}`, e);
+      if (!adj.has(e.playerIdA)) adj.set(e.playerIdA, new Set());
+      if (!adj.has(e.playerIdB)) adj.set(e.playerIdB, new Set());
+      adj.get(e.playerIdA)!.add(e.playerIdB);
+      adj.get(e.playerIdB)!.add(e.playerIdA);
+    }
+    const seen = new Set<string>([playerId]);
+    const queue = [playerId];
+    while (queue.length) {
+      const cur = queue.pop()!;
+      for (const nb of adj.get(cur) ?? []) {
+        if (seen.has(nb)) continue;
+        seen.add(nb);
+        queue.push(nb);
+      }
+    }
+    const links = all.filter(
+      (e) => seen.has(e.playerIdA) && seen.has(e.playerIdB),
+    );
+    return { playerId, links, clusterSize: seen.size };
+  }
+
+  /** 身份分：单账号 0；连通分量 2 个账号给基础分；>=3 给更高分。 */
+  async resolveIdentityScore(playerId: string): Promise<number> {
+    const { clusterSize } = await this.resolveCluster(playerId);
+    if (clusterSize <= 1) return 0;
+    return clusterSize >= 3 ? IDENTITY_SCORE_CLUSTER : IDENTITY_SCORE_BASE;
+  }
+
+  /** 图中全部账号 id（供 updateScores 遍历身份分并入）。 */
+  async identityMemberIds(): Promise<string[]> {
+    const all = await this.linkRepo.find();
+    const set = new Set<string>();
+    for (const e of all) {
+      set.add(e.playerIdA);
+      set.add(e.playerIdB);
+    }
+    return [...set];
+  }
+
+  /** GM 只读图谱：含 playerId 的簇 + 其 peer 关联。 */
+  async graphOf(playerId: string): Promise<{
+    playerId: string;
+    links: Array<{ peerId: string; linkType: RiskLinkType; confidence: number }>;
+    clusterSize: number;
+  }> {
+    const { links, clusterSize } = await this.resolveCluster(playerId);
+    return {
+      playerId,
+      clusterSize,
+      links: links.map((e) => ({
+        peerId: e.playerIdA === playerId ? e.playerIdB : e.playerIdA,
+        linkType: e.linkType,
+        confidence: e.confidence,
+      })),
+    };
   }
 }
