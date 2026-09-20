@@ -97,7 +97,10 @@ describe('ActivityService', () => {
         },
         {
           provide: CharacterService,
-          useValue: { getRelationships: jest.fn().mockResolvedValue([]) },
+          useValue: {
+            getByPlayerId: jest.fn().mockResolvedValue({ id: 'c1' }),
+            getRelationships: jest.fn().mockResolvedValue([]),
+          },
         },
         {
           provide: SocialService,
@@ -574,6 +577,7 @@ describe('ActivityService', () => {
         }),
       );
       playerRepo.findOne.mockResolvedValue({ id: 'p1', level: 99 } as any);
+      characterService.getByPlayerId.mockResolvedValue({ id: 'c1' } as any);
       characterService.getRelationships.mockResolvedValue([
         { level: RelationshipLevel.ACQUAINTANCE, favorability: 100 },
       ] as any);
@@ -581,6 +585,40 @@ describe('ActivityService', () => {
       await expect(service.joinActivity('p1', '1')).rejects.toMatchObject({
         response: { code: ErrorCodes.ACTIVITY_CONDITION_NOT_MET },
       });
+      // 关系表按 character_id 查询，不能直接传 playerId
+      expect(characterService.getRelationships).toHaveBeenCalledWith('c1');
+    });
+
+    it('好感档位达标放行报名', async () => {
+      templateRepo.findOne.mockResolvedValue(
+        makeTemplate({
+          conditionJson: { favorLevel: RelationshipLevel.FRIEND },
+        }),
+      );
+      playerRepo.findOne.mockResolvedValue({ id: 'p1', level: 99 } as any);
+      characterService.getByPlayerId.mockResolvedValue({ id: 'c1' } as any);
+      characterService.getRelationships.mockResolvedValue([
+        { level: RelationshipLevel.CONFIDANT, favorability: 300 },
+      ] as any);
+      playerActivityRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.joinActivity('p1', '1');
+      expect(result.progress).toBe(0);
+    });
+
+    it('无角色时好感门槛视为不达标', async () => {
+      templateRepo.findOne.mockResolvedValue(
+        makeTemplate({
+          conditionJson: { favorLevel: RelationshipLevel.ACQUAINTANCE },
+        }),
+      );
+      playerRepo.findOne.mockResolvedValue({ id: 'p1', level: 99 } as any);
+      characterService.getByPlayerId.mockResolvedValue(null);
+
+      await expect(service.joinActivity('p1', '1')).rejects.toMatchObject({
+        response: { code: ErrorCodes.ACTIVITY_CONDITION_NOT_MET },
+      });
+      expect(characterService.getRelationships).not.toHaveBeenCalled();
     });
 
     it('帮派职位不足拒绝报名', async () => {

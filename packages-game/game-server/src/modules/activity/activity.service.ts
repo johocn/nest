@@ -180,8 +180,11 @@ export class ActivityService {
     }
 
     if (cond.favorLevel !== undefined) {
-      const relationships =
-        await this.characterService.getRelationships(playerId);
+      // 关系表按 character_id 存储，须先由 playerId 换算出角色 id
+      const character = await this.characterService.getByPlayerId(playerId);
+      const relationships = character
+        ? await this.characterService.getRelationships(character.id)
+        : [];
       const required = FAVOR_RANKS[cond.favorLevel] ?? 0;
       const maxRank = relationships.reduce((max, rel) => {
         const rank = rel.level
