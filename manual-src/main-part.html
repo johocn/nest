@@ -2585,6 +2585,37 @@ td code{background:transparent; border:none; color:#e8cf7a; padding:0}
       <tr><td>业务钩子</td><td>zhao-website/zhao-course/zhao-point/商品站插件 eco-hook.ts</td><td>回调 POST（签名）</td></tr>
     </tbody>
   </table>
+
+  <h3>16.10 互刷 / 洗分检测风控（risk 模块）</h3>
+  <p><b>玩法定位</b>：把「跨账号价值转移」归一化后按时间窗检测对敲 / 失衡 / 异动三类风险信号，给账号累计风险分，供 GM 预警与处置——防洗金打金、礼物互刷、拍卖对倒洗价值。</p>
+  <ul>
+    <li><b>流水归一化</b>：<code>risk_wash_flows</code> 统一摄入跨账号转移（成交 / 礼物 / 拍卖结算 / 托管放款 escrow / 悬赏奖励 bounty），<code>flow_class</code> 区分 <code>TRANSFER</code>（参与回环 / 失衡检测）与 <code>PAYOUT</code>（仅供价值异动观察）；refId 幂等，各源高水位键自动推进。</li>
+    <li><b>三类信号</b>：回环对敲（双向净额近乎抵消但总量大）、失衡赠与（单向大额无回流）、价值异动（同资产对倒 / 价格偏离近期成交基准 &gt;n× 或频次暴涨）。</li>
+    <li><b>账号评分</b>：<code>risk_account_scores</code> 累计 0–100，评级正常 / 关注（≥<code>watch_score</code>）/ 高危（≥<code>high_score</code>）；每 10 分钟定时批扫。</li>
+    <li><b>实时拦截</b>：高危账号经 <code>RiskGateService</code> 实时限制——拍卖起拍价超 <code>auction_value_cap</code> 拒上架（93202）、单日送礼 / 转账累计超限拒执行（93201）。</li>
+    <li><b>半自动回收</b>：GM 对线索出回收提案（净差额）→ 确认生成 <code>risk_recover_records</code> 台账并切断线索（open→frozen）→ 可回滚；本期只落台账，不直接扣玩家余额。</li>
+  </ul>
+  <p><b>配置键（remote_configs，未配走代码默认，见 13.2）</b>：</p>
+  <table>
+    <thead><tr><th>配置键</th><th>默认</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td><code>risk.enable</code></td><td>1</td><td>风控检测总开关</td></tr>
+      <tr><td><code>risk.window_min</code></td><td>10</td><td>检测批内时间窗（分钟）</td></tr>
+      <tr><td><code>risk.pair_min_amount</code></td><td>0</td><td>回环对敲判定的双向流量门槛</td></tr>
+      <tr><td><code>risk.roundtrip_total_min</code></td><td>1000</td><td>回环判定的双向总量阈值</td></tr>
+      <tr><td><code>risk.oneway_big_amount</code></td><td>3000</td><td>失衡判定的单向大额门槛</td></tr>
+      <tr><td><code>risk.oneway_backflow_ratio</code></td><td>0</td><td>判定「无回流」的回流比阈值</td></tr>
+      <tr><td><code>risk.price_dev_ratio</code></td><td>2</td><td>价值异动的价格偏离倍数（基准 P50/P90）</td></tr>
+      <tr><td><code>risk.price_dev_freq</code></td><td>3</td><td>价值异动触发频次</td></tr>
+      <tr><td><code>risk.score_cap</code></td><td>100</td><td>账号风险分上限</td></tr>
+      <tr><td><code>risk.watch_score</code></td><td>40</td><td>关注评级阈值</td></tr>
+      <tr><td><code>risk.high_score</code></td><td>70</td><td>高危评级阈值（进实时拦截）</td></tr>
+      <tr><td><code>risk.auction_value_cap</code></td><td>线上已配 20000</td><td>高危拍卖上架起拍价上限（金）</td></tr>
+      <tr><td><code>risk.gift_daily_cap</code></td><td>线上已配 100</td><td>高危单日送礼累计上限（社交积分）</td></tr>
+      <tr><td><code>risk.transfer_daily_cap</code></td><td>线上已配 50000</td><td>高危单日转账累计上限（金）</td></tr>
+      <tr><td><code>risk.ingest_*_id</code></td><td>0</td><td>各源摄入高水位（trade/gift/auction/escrow/bounty，系统自动推进，勿手改）</td></tr>
+    </tbody>
+  </table>
   </div>
 </section>
 
