@@ -1,12 +1,25 @@
 import { AppConfig } from './AppConfig';
+import { Platform } from '../platform/Platform';
 import type { ManifestScene, SceneConfig, SceneManifest } from './schema';
 import { validateSceneConfig } from './validate';
 
 export class ConfigLoader {
+  /** 小游戏端读包内文件（config/xxx.json），H5 端走 HTTP */
+  private static async readText(file: string): Promise<string> {
+    if (Platform.isMiniGame()) {
+      const text = Platform.readLocalText(`config/${file}`);
+      if (text === null) {
+        throw new Error(`小游戏包内缺少 config/${file}（请把 assets/config 复制进导出目录）`);
+      }
+      return text;
+    }
+    const res = await fetch(`${AppConfig.configBase}/${file}`);
+    if (!res.ok) throw new Error(`配置加载失败 HTTP ${res.status}（${file}）`);
+    return res.text();
+  }
+
   static async loadManifest(): Promise<SceneManifest> {
-    const res = await fetch(`${AppConfig.configBase}/manifest.json`);
-    if (!res.ok) throw new Error(`配置清单加载失败 HTTP ${res.status}`);
-    const manifest = (await res.json()) as SceneManifest;
+    const manifest = JSON.parse(await ConfigLoader.readText('manifest.json')) as SceneManifest;
     if (!manifest || !Array.isArray(manifest.scenes) || manifest.scenes.length === 0) {
       throw new Error('配置清单为空（请先执行 npm run seed:scene-spike）');
     }
@@ -19,9 +32,7 @@ export class ConfigLoader {
     const item: ManifestScene =
       manifest.scenes.find((s) => s.sceneId === sceneId) ?? manifest.scenes[0];
 
-    const res = await fetch(`${AppConfig.configBase}/${item.file}`);
-    if (!res.ok) throw new Error(`配置包加载失败 HTTP ${res.status}（${item.file}）`);
-    const text = await res.text();
+    const text = await ConfigLoader.readText(item.file);
 
     await ConfigLoader.verifyHash(text, item.hash, item.file);
 

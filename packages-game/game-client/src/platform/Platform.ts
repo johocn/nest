@@ -22,6 +22,21 @@ export const Platform = {
     localStorage.removeItem(key);
   },
 
+  /**
+   * 读取小游戏包内文本文件（相对于小游戏根目录）。
+   * 小游戏环境没有 fetch 与 DOM，配置包随包分发后用本方法读取。
+   */
+  readLocalText(relPath: string): string | null {
+    const wx = (globalThis as any).wx;
+    if (!wx || typeof wx.getFileSystemManager !== 'function') return null;
+    try {
+      return wx.getFileSystemManager().readFileSync(relPath, 'utf8') as string;
+    } catch (e) {
+      console.warn(`[S1] 读取包内文件失败 ${relPath}`, e);
+      return null;
+    }
+  },
+
   toast(text: string, ms = 2600): void {
     if (typeof document === 'undefined') {
       console.log(`[toast] ${text}`);

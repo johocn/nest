@@ -5,3 +5,4 @@ local
 release
 node_modules
 bin
+debug.log
