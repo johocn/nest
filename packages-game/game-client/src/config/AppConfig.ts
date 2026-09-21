@@ -24,4 +24,35 @@ export const AppConfig = {
   interactRadius: 120,
   /** 设备标识：后端 DTO 未标 @IsOptional，不传会 400（见 §1.2） */
   deviceId: 'laya2d-s1',
+  /**
+   * HUD（引擎内自绘）常量：尺寸/位置/颜色集中在此，避免魔法数字散落各处。
+   * 全部是**舞台坐标**（Hud 挂 Laya.stage 顶层，不随世界层滚动）。
+   */
+  hud: {
+    /** HUD 根节点 zOrder：须大于世界层，保证盖在场景之上 */
+    zOrder: 9999,
+    /** toast：屏幕中上部（stageHeight 的比例）、默认时长与内边距 */
+    toastTopRatio: 0.22,
+    toastMs: 2000,
+    /** Toast.error 用的较长时长（沿用 S1 的 3600ms） */
+    toastErrorMs: 3600,
+    toastFontSize: 16,
+    toastPadX: 14,
+    toastPadY: 8,
+    toastBgColor: 'rgba(0,0,0,0.75)',
+    toastTextColor: '#ffffff',
+    /** hint：底部固定提示条，底边距、最大宽度、最大行数（超出截断）、字号与内边距 */
+    hintBottomOffset: 24,
+    hintMaxWidth: 640,
+    hintMaxLines: 3,
+    hintFontSize: 14,
+    hintPadX: 12,
+    hintPadY: 8,
+    hintBgColor: 'rgba(0,0,0,0.75)',
+    hintTextColor: '#e6edf3',
+    /** highlight：选中目标脚底光圈 */
+    highlightRadius: 22,
+    highlightColor: '#ffd75e',
+    highlightLineWidth: 2,
+  },
 };

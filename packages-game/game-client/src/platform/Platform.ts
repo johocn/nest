@@ -37,25 +37,8 @@ export const Platform = {
     }
   },
 
-  toast(text: string, ms = 2600): void {
-    if (typeof document === 'undefined') {
-      console.log(`[toast] ${text}`);
-      return;
-    }
-    let el = document.getElementById('s1-toast');
-    if (!el) {
-      el = document.createElement('div');
-      el.id = 's1-toast';
-      document.body.appendChild(el);
-    }
-    el.textContent = text;
-    el.style.display = 'block';
-    if ((this as any)._toastTimer) clearTimeout((this as any)._toastTimer);
-    (this as any)._toastTimer = setTimeout(() => {
-      if (el) el.style.display = 'none';
-    }, ms);
-  },
-
+  // 提示出口已迁到引擎内自绘 `ui/Hud.ts`（双端一致），此处不再有 DOM 提示实现。
+  // `showLoginForm` / `hideLoginForm` 是 H5 特有能力的适配，保留在此。
   showLoginForm(handlers: {
     onSubmit: (username: string, password: string) => Promise<void>;
   }): void {

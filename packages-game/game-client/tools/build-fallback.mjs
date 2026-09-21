@@ -67,8 +67,6 @@ const html = `<!DOCTYPE html>
   #s1-login input { width: 100%; box-sizing: border-box; padding: 8px; border-radius: 4px; border: 1px solid #2c3540; background: #0d1117; color: #e6edf3; }
   #s1-login button { margin-top: 16px; width: 100%; padding: 10px; border: 0; border-radius: 4px; background: #2f81f7; color: #fff; cursor: pointer; }
   #s1-login .err { color: #ff7b72; font-size: 12px; margin-top: 10px; min-height: 16px; }
-  #s1-toast { position: absolute; left: 50%; bottom: 60px; transform: translateX(-50%); z-index: 20;
-    background: rgba(0,0,0,.75); color: #e6edf3; padding: 8px 16px; border-radius: 4px; font-size: 13px; display: none; }
 </style>
 </head>
 <body>

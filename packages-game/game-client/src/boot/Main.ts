@@ -13,6 +13,7 @@ import { PlayerControl } from '../world/PlayerControl';
 import { InteractController } from '../world/InteractController';
 import { SceneBuilder } from '../world/SceneBuilder';
 import { Toast } from '../ui/Toast';
+import { Hud } from '../ui/Hud';
 
 const state = {
   cfg: null as SceneConfig | null,
@@ -92,6 +93,8 @@ async function afterLogin(): Promise<void> {
 
 async function main(): Promise<void> {
   await Boot.start();
+  // 引擎内自绘 HUD 挂到舞台顶层（须在 Laya.init 之后），此后所有提示走 Hud
+  Hud.init();
   Session.load();
 
   if (Session.token) {
