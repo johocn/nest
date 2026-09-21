@@ -23,6 +23,9 @@ import {
 } from './entities';
 import { SceneConfigVersion } from './config/entities/scene-config-version.entity';
 import { SceneConfigService } from './config/scene-config.service';
+import { PlayerQuest } from '@modules/quest/entities/player-quest.entity';
+import { PlayerModule } from '@modules/player/player.module';
+import { NpcPresenceService } from './npc/npc-presence.service';
 
 @Module({
   imports: [
@@ -41,13 +44,15 @@ import { SceneConfigService } from './config/scene-config.service';
       SceneConfigVersion,
       NpcSpawnRule,
       NpcPatrolRoute,
+      PlayerQuest,
     ]),
     EconomyModule,
     CharacterModule,
     AdminModule,
+    PlayerModule,
   ],
   controllers: [WorldController, WorldClientController],
-  providers: [WorldService, SceneConfigService],
-  exports: [WorldService],
+  providers: [WorldService, SceneConfigService, NpcPresenceService],
+  exports: [WorldService, NpcPresenceService],
 })
 export class WorldModule {}
