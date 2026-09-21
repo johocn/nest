@@ -206,6 +206,8 @@ export class GameGateway
         scene: sceneData.scene,
         spawns: sceneData.spawns,
         triggers: sceneData.triggers,
+        // S4：新增 NPC 实例下发（旧字段零变更）
+        npcs: sceneData.npcs,
       },
     };
   }

@@ -29,6 +29,7 @@ import {
 } from '@constants/enums';
 import { ErrorCodes } from '@constants/error-codes';
 import { EconomyService } from '../economy/economy.service';
+import { NpcPresenceService } from './npc/npc-presence.service';
 import type { Repository } from 'typeorm';
 
 describe('WorldService', () => {
@@ -126,6 +127,10 @@ describe('WorldService', () => {
           },
         },
         { provide: EventBusService, useValue: { emit: jest.fn() } },
+        {
+          provide: NpcPresenceService,
+          useValue: { listNpcsForPlayer: jest.fn().mockResolvedValue([]) },
+        },
       ],
     }).compile();
 
@@ -258,6 +263,7 @@ describe('WorldService', () => {
       cacheService.exists.mockResolvedValue(false);
       const result = await service.enterScene('p1', '1');
       expect(result.scene.name).toBe('中央城');
+      expect(result.npcs).toEqual([]);
       expect(eventBus.emit).toHaveBeenCalledWith('world.player.enter_scene', {
         playerId: 'p1',
         sceneId: '1',

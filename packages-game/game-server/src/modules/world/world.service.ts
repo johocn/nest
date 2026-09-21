@@ -31,11 +31,17 @@ import {
 } from '@constants/enums';
 import { EconomyService } from '../economy/economy.service';
 import { ResourceBalancePolicy } from './resource-balance.policy';
+import {
+  NpcPresenceService,
+  NpcInstance,
+} from './npc/npc-presence.service';
 
 export interface SceneEnterResult {
   scene: Scene;
   spawns: SceneEntitySpawn[];
   triggers: SceneTrigger[];
+  /** 该玩家在此场景可见的 NPC 实例（S4，新增字段，旧字段零变更） */
+  npcs: NpcInstance[];
 }
 
 export interface NpcTalkResult {
@@ -75,6 +81,7 @@ export class WorldService {
     private readonly sessionRepo: Repository<GameSession>,
     @InjectRepository(LandmarkMessage)
     private readonly landmarkMsgRepo: Repository<LandmarkMessage>,
+    private readonly npcPresence: NpcPresenceService,
   ) {}
 
   async getScene(id: string): Promise<Scene> {
@@ -149,9 +156,11 @@ export class WorldService {
     const scene = await this.getScene(sceneId);
     const spawns = await this.getSceneSpawns(sceneId);
     const triggers = await this.getSceneTriggers(sceneId);
+    // S4：按该玩家的 condition 过滤后下发 NPC 实例（位置/路点由服务端权威给出）
+    const npcs = await this.npcPresence.listNpcsForPlayer(sceneId, playerId);
     await this.cacheService.sAdd(`scene:${sceneId}:players`, playerId);
     this.eventBus.emit(GameEvents.PLAYER_ENTER_SCENE, { playerId, sceneId });
-    return { scene, spawns, triggers };
+    return { scene, spawns, triggers, npcs };
   }
 
   async leaveScene(playerId: string, sceneId: string): Promise<void> {
