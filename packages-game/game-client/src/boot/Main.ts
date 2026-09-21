@@ -5,9 +5,11 @@ import { ConfigLoader } from '../config/loader';
 import type { SceneConfig, ServerSpawn } from '../config/schema';
 import { Entity } from '../entity/Entity';
 import { EntityFactory } from '../entity/EntityFactory';
+import { EntityRegistry } from '../entity/EntityRegistry';
 import { Session } from '../net/Session';
 import { WsClient } from '../net/ws';
 import { Platform } from '../platform/Platform';
+import { PlayerControl } from '../world/PlayerControl';
 import { SceneBuilder } from '../world/SceneBuilder';
 import { Toast } from '../ui/Toast';
 
@@ -62,6 +64,23 @@ async function afterLogin(): Promise<void> {
   SceneBuilder.addEntity(me);
   state.me = me;
   console.log(`[S1] 本地玩家 ${me.entityId} 出生于 (${me.x},${me.y})`);
+
+  // ⑥ 世界广播：其他玩家（服务端 world.move 广播含自己，必须忽略自己）
+  ws.onBroadcast((m) => {
+    if (m.cmd !== 'world.entity_update') return;
+    const d = m.data;
+    if (!d || d.entityType !== 'player') return;
+    if (String(d.playerId) === String(Session.playerId)) return;
+
+    const pos = d.pos ?? { x: 0, y: 0 };
+    const entity = EntityRegistry.upsert(d.entityId, pos, () =>
+      EntityFactory.createOtherPlayer(String(d.playerId), pos.x, pos.y),
+    );
+    SceneBuilder.addEntity(entity);
+  });
+
+  // ⑦ 本地移动 → 10Hz 上报
+  new PlayerControl(me, ws, { width: cfg.scene.mapWidth, height: cfg.scene.mapHeight }).attach();
 
   Laya.timer.frameLoop(10, null, () => SceneBuilder.resort());
   console.log(`[S1] 客户端版本 ${AppConfig.clientVersion}，配置包 v${cfg.version}`);

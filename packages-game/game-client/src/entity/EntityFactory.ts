@@ -36,6 +36,21 @@ export class EntityFactory {
     );
   }
 
+  static createOtherPlayer(playerId: string, x: number, y: number): Entity {
+    return new Entity(
+      `player:${playerId}`,
+      'player',
+      null,
+      null,
+      null,
+      `玩家${playerId}`,
+      x,
+      y,
+      COLORS.player,
+      EntityFactory.texture,
+    );
+  }
+
   static createFromStatic(e: StaticEntity): Entity {
     return new Entity(
       `object:${e.spawnId}`,
