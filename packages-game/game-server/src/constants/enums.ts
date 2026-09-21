@@ -196,6 +196,12 @@ export enum SceneStatus {
   MAINTENANCE = 'maintenance',
 }
 
+export enum SceneConfigStatus {
+  DRAFT = 'draft',
+  PUBLISHED = 'published',
+  ARCHIVED = 'archived',
+}
+
 export enum NpcInteractType {
   TALK = 'talk',
   SHOP = 'shop',

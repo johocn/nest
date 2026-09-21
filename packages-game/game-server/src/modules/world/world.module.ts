@@ -18,6 +18,7 @@ import {
   LandmarkMessage,
   TriggerUnlock,
 } from './entities';
+import { SceneConfigVersion } from './config/entities/scene-config-version.entity';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import {
       GameSession,
       LandmarkMessage,
       TriggerUnlock,
+      SceneConfigVersion,
     ]),
     EconomyModule,
     CharacterModule,
