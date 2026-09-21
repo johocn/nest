@@ -87,6 +87,7 @@ describe('TradeService', () => {
             findOne: jest.fn(),
             find: jest.fn(),
             findAndCount: jest.fn(),
+            update: jest.fn(),
             create: jest.fn((data: any) => ({ ...data })),
             save: jest
               .fn()
@@ -437,11 +438,14 @@ describe('TradeService', () => {
       auctionRepo.findOne.mockResolvedValue({
         id: 'a1',
         sellerId: 'p1',
+        itemTemplateId: 'i1',
+        quantity: 1,
         currentPrice: '600',
         currentBidderId: 'p2',
         status: AuctionStatus.BID,
         expireAt: new Date(Date.now() - 1000),
       } as any);
+      auctionRepo.update.mockResolvedValue({ affected: 1 } as any);
 
       const result = await service.endAuction('a1');
 
@@ -453,15 +457,150 @@ describe('TradeService', () => {
       auctionRepo.findOne.mockResolvedValue({
         id: 'a1',
         sellerId: 'p1',
+        itemTemplateId: 'i1',
+        quantity: 1,
         currentPrice: '500',
         currentBidderId: null,
         status: AuctionStatus.LISTED,
         expireAt: new Date(Date.now() - 1000),
       } as any);
+      auctionRepo.update.mockResolvedValue({ affected: 1 } as any);
 
       const result = await service.endAuction('a1');
 
       expect(result.status).toBe(AuctionStatus.EXPIRED);
+    });
+  });
+
+  describe('auction settlement', () => {
+    const auction = {
+      id: '9',
+      sellerId: 'seller',
+      itemTemplateId: '100',
+      itemName: '道具',
+      quantity: 2,
+      startPrice: '100',
+      currentPrice: '150',
+      currentBidderId: null,
+      expireAt: new Date(Date.now() - 1000),
+      isExclusive: false,
+      status: AuctionStatus.LISTED,
+    };
+
+    it('should escrow items and charge listing fee on listAuction', async () => {
+      auctionRepo.save.mockImplementation((data: any) =>
+        Promise.resolve({ ...data, id: '9' }),
+      );
+
+      await service.listAuction({
+        sellerId: 'seller',
+        itemTemplateId: '100',
+        itemName: '道具',
+        quantity: 2,
+        startPrice: '100',
+        expireAt: new Date(Date.now() + 3600000),
+      });
+
+      expect(inventoryService.removeUnboundItem).toHaveBeenCalledWith(
+        'seller',
+        '100',
+        2,
+        'trade.listAuction',
+      );
+      // 起拍总额 200，上架费 2% = 4
+      expect(economyService.deductCurrency).toHaveBeenCalledWith(
+        'seller',
+        CurrencyType.GOLD,
+        4,
+        'auction_listing_fee',
+        'trade.listAuction',
+      );
+    });
+
+    it('should settle bidder payment and transfer item on endAuction', async () => {
+      auctionRepo.findOne.mockResolvedValue({
+        ...auction,
+        currentBidderId: 'buyer',
+        status: AuctionStatus.BID,
+      });
+      auctionRepo.update.mockResolvedValue({ affected: 1 } as any);
+
+      const result = await service.endAuction('9');
+
+      expect(result.status).toBe(AuctionStatus.SOLD);
+      // 成交额 150*2 = 300，税 5% = 15，卖家到手 285
+      expect(economyService.deductCurrency).toHaveBeenCalledWith(
+        'buyer',
+        CurrencyType.GOLD,
+        300,
+        'auction_buy',
+        'trade.endAuction',
+        '9',
+      );
+      expect(economyService.addCurrency).toHaveBeenCalledWith(
+        'seller',
+        CurrencyType.GOLD,
+        285,
+        'auction_sell',
+        'trade.endAuction',
+        '9',
+      );
+      expect(inventoryService.addItem).toHaveBeenCalledWith(
+        'buyer',
+        '100',
+        2,
+        'trade.endAuction',
+      );
+    });
+
+    it('should expire auction and return items when no bidder', async () => {
+      auctionRepo.findOne.mockResolvedValue({ ...auction });
+      auctionRepo.update.mockResolvedValue({ affected: 1 } as any);
+
+      const result = await service.endAuction('9');
+
+      expect(result.status).toBe(AuctionStatus.EXPIRED);
+      expect(inventoryService.addItem).toHaveBeenCalledWith(
+        'seller',
+        '100',
+        2,
+        'trade.endAuction.expired',
+      );
+    });
+
+    it('should expire auction and return items when bidder cannot pay', async () => {
+      auctionRepo.findOne.mockResolvedValue({
+        ...auction,
+        currentBidderId: 'buyer',
+        status: AuctionStatus.BID,
+      });
+      auctionRepo.update.mockResolvedValue({ affected: 1 } as any);
+      economyService.deductCurrency.mockRejectedValue(
+        new GameException(ErrorCodes.CURRENCY_NOT_ENOUGH, '货币不足'),
+      );
+
+      await expect(service.endAuction('9')).rejects.toMatchObject({
+        response: { code: ErrorCodes.CURRENCY_NOT_ENOUGH },
+      });
+      expect(auctionRepo.update).toHaveBeenLastCalledWith(
+        { id: '9' },
+        { status: AuctionStatus.EXPIRED },
+      );
+      expect(inventoryService.addItem).toHaveBeenCalledWith(
+        'seller',
+        '100',
+        2,
+        'trade.endAuction.rollback',
+      );
+    });
+
+    it('should reject double settlement', async () => {
+      auctionRepo.findOne.mockResolvedValue({ ...auction });
+      auctionRepo.update.mockResolvedValue({ affected: 0 } as any);
+
+      await expect(service.endAuction('9')).rejects.toMatchObject({
+        response: { code: ErrorCodes.AUCTION_ALREADY_ENDED },
+      });
     });
   });
 

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import {
   TradeOrder,
   AuctionItem,
@@ -373,22 +373,70 @@ export class TradeService {
         );
       }
     }
-    const item = this.auctionRepo.create({
-      ...params,
-      isExclusive: exclusive,
-      currentPrice: params.startPrice,
-      currentBidderId: null,
-      status: AuctionStatus.LISTED,
-    });
-    const saved = await this.auctionRepo.save(item);
 
-    this.eventBus.emit(GameEvents.AUCTION_LISTED, {
-      auctionId: saved.id,
-      sellerId: params.sellerId,
-      itemName: params.itemName,
-    });
+    // 上架即托管卖家库存（绑定/禁交易道具在此被拒）
+    await this.inventoryService.removeUnboundItem(
+      params.sellerId,
+      params.itemTemplateId,
+      params.quantity,
+      'trade.listAuction',
+    );
 
-    return saved;
+    // 上架手续费：按起拍总额百分比从卖家扣金币
+    const listingBase = BigInt(params.startPrice) * BigInt(params.quantity);
+    const feePercent = await this.readPercent(
+      TradeService.LISTING_FEE_KEY,
+      TradeService.DEFAULT_LISTING_FEE_PERCENT,
+    );
+    const fee = (listingBase * BigInt(feePercent)) / BigInt(100);
+
+    let feeCharged = false;
+    try {
+      if (fee > BigInt(0)) {
+        await this.economyService.deductCurrency(
+          params.sellerId,
+          CurrencyType.GOLD,
+          Number(fee),
+          'auction_listing_fee',
+          'trade.listAuction',
+        );
+        feeCharged = true;
+      }
+
+      const item = this.auctionRepo.create({
+        ...params,
+        isExclusive: exclusive,
+        currentPrice: params.startPrice,
+        currentBidderId: null,
+        status: AuctionStatus.LISTED,
+      });
+      const saved = await this.auctionRepo.save(item);
+
+      this.eventBus.emit(GameEvents.AUCTION_LISTED, {
+        auctionId: saved.id,
+        sellerId: params.sellerId,
+        itemName: params.itemName,
+      });
+
+      return saved;
+    } catch (err) {
+      await this.inventoryService.addItem(
+        params.sellerId,
+        params.itemTemplateId,
+        params.quantity,
+        'trade.listAuction.rollback',
+      );
+      if (feeCharged) {
+        await this.economyService.addCurrency(
+          params.sellerId,
+          CurrencyType.GOLD,
+          Number(fee),
+          'auction_listing_fee_refund',
+          'trade.listAuction.rollback',
+        );
+      }
+      throw err;
+    }
   }
 
   async placeBid(
@@ -442,19 +490,110 @@ export class TradeService {
       throw new GameException(ErrorCodes.AUCTION_NOT_FOUND, '拍卖物品不存在');
     }
 
-    if (item.currentBidderId) {
-      item.status = AuctionStatus.SOLD;
-      this.eventBus.emit(GameEvents.AUCTION_SOLD, {
-        auctionId: item.id,
-        sellerId: item.sellerId,
-        buyerId: item.currentBidderId,
-        finalPrice: item.currentPrice,
-      });
-    } else {
-      item.status = AuctionStatus.EXPIRED;
+    const bidderId = item.currentBidderId;
+    const nextStatus = bidderId ? AuctionStatus.SOLD : AuctionStatus.EXPIRED;
+
+    // 原子占位：仅 listed/bid 可结算，防重复结算
+    const claimed = await this.auctionRepo.update(
+      { id: item.id, status: In([AuctionStatus.LISTED, AuctionStatus.BID]) },
+      { status: nextStatus },
+    );
+    if (!claimed.affected) {
+      throw new GameException(ErrorCodes.AUCTION_ALREADY_ENDED, '拍卖已结束');
     }
 
-    return this.auctionRepo.save(item);
+    if (!bidderId) {
+      await this.inventoryService.addItem(
+        item.sellerId,
+        item.itemTemplateId,
+        item.quantity,
+        'trade.endAuction.expired',
+      );
+      item.status = nextStatus;
+      return item;
+    }
+
+    const total = BigInt(item.currentPrice) * BigInt(item.quantity);
+    const taxPercent = await this.readPercent(
+      TradeService.SALE_TAX_KEY,
+      TradeService.DEFAULT_SALE_TAX_PERCENT,
+    );
+    const guildSharePercent = await this.readPercent(
+      TradeService.TAX_GUILD_SHARE_KEY,
+      TradeService.DEFAULT_TAX_GUILD_SHARE_PERCENT,
+    );
+    const tax = (total * BigInt(taxPercent)) / BigInt(100);
+    const toSeller = total - tax;
+    const guildShare = (tax * BigInt(guildSharePercent)) / BigInt(100);
+
+    let deducted = false;
+    try {
+      await this.economyService.deductCurrency(
+        bidderId,
+        CurrencyType.GOLD,
+        Number(total),
+        'auction_buy',
+        'trade.endAuction',
+        item.id,
+      );
+      deducted = true;
+
+      if (toSeller > BigInt(0)) {
+        await this.economyService.addCurrency(
+          item.sellerId,
+          CurrencyType.GOLD,
+          Number(toSeller),
+          'auction_sell',
+          'trade.endAuction',
+          item.id,
+        );
+      }
+      if (guildShare > BigInt(0)) {
+        await this.recycleTaxToGuild(
+          item.sellerId,
+          Number(guildShare),
+          'auction_tax_guild',
+        );
+      }
+      await this.inventoryService.addItem(
+        bidderId,
+        item.itemTemplateId,
+        item.quantity,
+        'trade.endAuction',
+      );
+    } catch (err) {
+      // 买家余额不足等 → 流拍并退回卖家库存
+      if (deducted) {
+        await this.economyService.addCurrency(
+          bidderId,
+          CurrencyType.GOLD,
+          Number(total),
+          'auction_buy_refund',
+          'trade.endAuction.rollback',
+          item.id,
+        );
+      }
+      await this.auctionRepo.update(
+        { id: item.id },
+        { status: AuctionStatus.EXPIRED },
+      );
+      await this.inventoryService.addItem(
+        item.sellerId,
+        item.itemTemplateId,
+        item.quantity,
+        'trade.endAuction.rollback',
+      );
+      throw err;
+    }
+
+    item.status = AuctionStatus.SOLD;
+    this.eventBus.emit(GameEvents.AUCTION_SOLD, {
+      auctionId: item.id,
+      sellerId: item.sellerId,
+      buyerId: bidderId,
+      finalPrice: item.currentPrice,
+    });
+    return item;
   }
 
   async getAuctionList(
