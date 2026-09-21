@@ -631,6 +631,31 @@ describe('TradeService', () => {
     });
   });
 
+  describe('expired auction scan', () => {
+    it('should return ids of listed/bid auctions whose expireAt has passed', async () => {
+      auctionRepo.find.mockResolvedValue([
+        { id: '9', status: AuctionStatus.LISTED },
+        { id: '10', status: AuctionStatus.BID },
+      ] as any);
+
+      const ids = await service.listExpiredAuctionIds();
+
+      expect(ids).toEqual(['9', '10']);
+      const [arg] = auctionRepo.find.mock.calls[0];
+      expect(arg.take).toBe(100);
+      expect(arg.where.expireAt).toBeDefined();
+    });
+
+    it('should cap the scan batch size at the given limit', async () => {
+      auctionRepo.find.mockResolvedValue([] as any);
+
+      await service.listExpiredAuctionIds(5);
+
+      const [arg] = auctionRepo.find.mock.calls[0];
+      expect(arg.take).toBe(5);
+    });
+  });
+
   // ===== Social Economy Event Emissions =====
 
   describe('acceptNegotiation', () => {

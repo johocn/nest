@@ -7,6 +7,7 @@ import { ConnectionModule } from '@modules/gateway/connection.module';
 import { MatchmakingModule } from '@modules/matchmaking/matchmaking.module';
 import { RiskModule } from '@modules/risk/risk.module';
 import { ReconcileModule } from '@modules/reconcile/reconcile.module';
+import { TradeModule } from '@modules/trade/trade.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { ReconcileModule } from '@modules/reconcile/reconcile.module';
     MatchmakingModule,
     RiskModule,
     ReconcileModule,
+    TradeModule,
   ],
   providers: [SchedulerService],
 })

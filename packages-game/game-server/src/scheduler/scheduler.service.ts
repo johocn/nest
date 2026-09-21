@@ -8,6 +8,7 @@ import { RankingType } from '@constants/enums';
 import { MatchMode } from '@constants/enums';
 import { RiskWashService } from '@modules/risk/risk-wash.service';
 import { ReconcileService } from '@modules/reconcile/reconcile.service';
+import { TradeService } from '@modules/trade/trade.service';
 
 @Injectable()
 export class SchedulerService {
@@ -20,6 +21,7 @@ export class SchedulerService {
     private readonly matchmakingService: MatchmakingService,
     private readonly riskWashService: RiskWashService,
     private readonly reconcileService: ReconcileService,
+    private readonly tradeService: TradeService,
   ) {}
 
   @Cron('0 0 * * *')
@@ -105,6 +107,29 @@ export class SchedulerService {
       }
     } catch (err) {
       this.logger.error('Risk scan failed', (err as Error).message);
+    }
+  }
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async settleExpiredAuctions() {
+    try {
+      const ids = await this.tradeService.listExpiredAuctionIds();
+      for (const id of ids) {
+        try {
+          await this.tradeService.endAuction(id);
+        } catch (err) {
+          // 单个流拍/结算失败不阻断其余拍卖
+          this.logger.error(
+            `Auction settle failed (id=${id})`,
+            (err as Error).message,
+          );
+        }
+      }
+      if (ids.length) {
+        this.logger.log(`Auction settle done: ${ids.length} expired`);
+      }
+    } catch (err) {
+      this.logger.error('Auction settle scan failed', (err as Error).message);
     }
   }
 }

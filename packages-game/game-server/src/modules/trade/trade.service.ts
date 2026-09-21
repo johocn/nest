@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, LessThan, Repository } from 'typeorm';
 import {
   TradeOrder,
   AuctionItem,
@@ -594,6 +594,18 @@ export class TradeService {
       finalPrice: item.currentPrice,
     });
     return item;
+  }
+
+  /** 到期拍卖 id 列表（供每分钟定时任务结算）；只取进行中的 listed/bid */
+  async listExpiredAuctionIds(limit = 100): Promise<string[]> {
+    const items = await this.auctionRepo.find({
+      where: {
+        status: In([AuctionStatus.LISTED, AuctionStatus.BID]),
+        expireAt: LessThan(new Date()),
+      },
+      take: limit,
+    });
+    return items.map((it) => it.id);
   }
 
   async getAuctionList(
