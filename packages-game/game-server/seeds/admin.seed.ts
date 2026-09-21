@@ -19,7 +19,8 @@ async function seed() {
   await dataSource.initialize();
 
   const adminRepo = dataSource.getRepository(AdminUser);
-  const existing = await adminRepo.findOne({ where: { username: 'admin' } });
+  const username = process.env.ADMIN_USERNAME || 'admin';
+  const existing = await adminRepo.findOne({ where: { username } });
 
   if (existing) {
     console.log('Admin user already exists, skipping seed.');
@@ -32,14 +33,14 @@ async function seed() {
   const passwordHash = await bcrypt.hash(password, 10);
 
   const admin = adminRepo.create({
-    username: 'admin',
+    username,
     passwordHash,
     role: AdminRole.SUPER_ADMIN,
     isActive: true,
   });
 
   await adminRepo.save(admin);
-  console.log(`Default admin user created: admin / ${password}`);
+  console.log(`Default admin user created: ${username} / ${password}`);
   await dataSource.destroy();
 }
 
