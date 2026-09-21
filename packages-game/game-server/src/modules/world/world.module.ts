@@ -5,6 +5,7 @@ import { WorldController } from './world.controller';
 import { WorldClientController } from './world.client.controller';
 import { EconomyModule } from '@modules/economy/economy.module';
 import { CharacterModule } from '@modules/character/character.module';
+import { AdminModule } from '@modules/admin/admin.module';
 import {
   Scene,
   NpcTemplate,
@@ -19,6 +20,7 @@ import {
   TriggerUnlock,
 } from './entities';
 import { SceneConfigVersion } from './config/entities/scene-config-version.entity';
+import { SceneConfigService } from './config/scene-config.service';
 
 @Module({
   imports: [
@@ -38,9 +40,10 @@ import { SceneConfigVersion } from './config/entities/scene-config-version.entit
     ]),
     EconomyModule,
     CharacterModule,
+    AdminModule,
   ],
   controllers: [WorldController, WorldClientController],
-  providers: [WorldService],
+  providers: [WorldService, SceneConfigService],
   exports: [WorldService],
 })
 export class WorldModule {}
