@@ -1,0 +1,277 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://game.joho.cn/config-schema/scene-config.schema.json",
+  "title": "SceneConfigPackage",
+  "description": "场景配置包契约（单一来源）。字段与枚举取值来自 S1 已验证产物与 game-server/src/constants/enums.ts。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "sceneId",
+    "version",
+    "scene",
+    "layers",
+    "staticEntities",
+    "fixedNpcs",
+    "triggers",
+    "hash"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "sceneId": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "scene": {
+      "$ref": "#/definitions/sceneMeta"
+    },
+    "layers": {
+      "type": "object"
+    },
+    "staticEntities": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/staticEntity"
+      }
+    },
+    "fixedNpcs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/fixedNpc"
+      }
+    },
+    "triggers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/trigger"
+      }
+    },
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "包内 hash = sha256(canonicalJson(payload))（键排序，不含 hash 自身）"
+    }
+  },
+  "definitions": {
+    "sceneMeta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "mapResKey",
+        "mapWidth",
+        "mapHeight",
+        "minLevel",
+        "maxPlayers",
+        "sceneType",
+        "entry"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "mapResKey": {
+          "type": "string"
+        },
+        "mapWidth": {
+          "type": "integer"
+        },
+        "mapHeight": {
+          "type": "integer"
+        },
+        "minLevel": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxPlayers": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sceneType": {
+          "type": "string",
+          "enum": ["town", "dungeon", "arena", "wild"]
+        },
+        "entry": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["x", "y"],
+          "properties": {
+            "x": {
+              "type": "integer"
+            },
+            "y": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "staticEntity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "spawnId",
+        "templateId",
+        "resKey",
+        "x",
+        "y",
+        "rotation",
+        "interact"
+      ],
+      "properties": {
+        "kind": {
+          "const": "object"
+        },
+        "spawnId": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "templateId": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "resKey": {
+          "type": "string"
+        },
+        "x": {
+          "type": "integer"
+        },
+        "y": {
+          "type": "integer"
+        },
+        "rotation": {
+          "type": "integer"
+        },
+        "interact": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "cd", "oneTime"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["collect", "read"]
+            },
+            "cd": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "oneTime": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "fixedNpc": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["spawnId", "npcTemplateId", "resKey", "x", "y", "anim"],
+      "properties": {
+        "spawnId": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "npcTemplateId": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "resKey": {
+          "type": "string"
+        },
+        "x": {
+          "type": "integer"
+        },
+        "y": {
+          "type": "integer"
+        },
+        "anim": {
+          "type": "string"
+        }
+      }
+    },
+    "trigger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "area", "targetSceneId", "onceOnly"],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "type": {
+          "type": "string",
+          "enum": ["transport", "story", "battle", "activity", "puzzle", "gate", "trap"]
+        },
+        "area": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["x", "y", "w", "h"],
+          "properties": {
+            "x": {
+              "type": "integer"
+            },
+            "y": {
+              "type": "integer"
+            },
+            "w": {
+              "type": "integer"
+            },
+            "h": {
+              "type": "integer"
+            }
+          }
+        },
+        "targetSceneId": {
+          "type": ["integer", "null"]
+        },
+        "onceOnly": {
+          "type": "boolean"
+        }
+      }
+    },
+    "manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["generatedAt", "scenes"],
+      "properties": {
+        "generatedAt": {
+          "type": "string"
+        },
+        "scenes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["sceneId", "version", "hash", "file"],
+            "properties": {
+              "sceneId": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "version": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "hash": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "description": "manifest.hash = 场景文件原始文本的 sha256"
+              },
+              "file": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
