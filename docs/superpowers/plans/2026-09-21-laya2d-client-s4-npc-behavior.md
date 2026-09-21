@@ -229,12 +229,12 @@
 
 ### Task 8: 生产部署与线上验收（若确认本批上线）
 
-- [ ] **Step 1** 本地 `npm run build` → 打包 dist → `scp` 到 `odoo:/tmp/`。
-- [ ] **Step 2** 服务器：备份旧 dist → 替换 → `systemctl restart game-server` → `journalctl -u game-server --since '-1 min'` 见 `successfully started`。
-- [ ] **Step 3** 核对新表已由 `DB_SYNCHRONIZE=true` 建出：`\d npc_spawn_rules`。
-- [ ] **Step 4** 线上造 1 条 patrol 规则（面板或 curl）→ 进场景点检 NPC 移动；留证（截图 + 广播日志）。
-- [ ] **Step 5** 无回归：线上 S1 冒烟 + 旧接口 200。
-- [ ] **Step 6** commit（如有脚本改动）`chore(npc): S4 部署与线上验收记录`
+- [x] **Step 1** 本地 `npm run build` → 打包 dist → `scp` 到 `odoo:/tmp/`。
+- [x] **Step 2** 服务器：备份旧 dist → 替换 → `systemctl restart game-server` → `journalctl -u game-server --since '-1 min'` 见 `successfully started`。
+- [x] **Step 3** 核对新表已由 `DB_SYNCHRONIZE=true` 建出：`\d npc_spawn_rules`。
+- [x] **Step 4** 线上造 1 条 patrol 规则（面板或 curl）→ 进场景点检 NPC 移动；留证（截图 + 广播日志）。
+- [x] **Step 5** 无回归：线上 S1 冒烟 + 旧接口 200。
+- [x] **Step 6** commit（如有脚本改动）`chore(npc): S4 部署与线上验收记录`
 
 ---
 
@@ -285,7 +285,8 @@
 | Task 4 | `00383f407` | feat(npc): NPC 位置 tick 与房间广播校正 |
 | Task 5 | `da238c406` | feat(game-client): NPC 路点插值与位移校正 |
 | Task 6 | `834108b4e` | feat(npc): NPC 规则与巡逻路径 GM 面板 |
-| Task 7 | （本次提交） | test(npc): S4 冒烟脚本与验收记录 |
+| Task 7 | `7897d2c8d` | test(npc): S4 冒烟脚本与验收记录 |
+| Task 8 | （本次提交） | chore(npc): S4 部署与线上验收记录 |
 
 ### 6.2 门禁实测
 
@@ -363,6 +364,40 @@ S4 冒烟全部通过
 5. **不做寻路**：巡逻在路点间走直线，不绕障（无碰撞/地形数据）；`points.length < 2` 时原地静止。
 6. **不做视野裁剪**：NPC 广播是全房间的（50 人带宽属 S8）。
 
-### 6.8 Task 8 状态
+### 6.8 Task 8 生产部署与线上验收（2026-09-22 执行）
 
-**未执行**：生产部署与线上验收（`npm run build` → scp → `systemctl restart` → 线上点检）**本批不做，待用户确认后再执行**；Task 8 的 6 个 `- [ ]` 保持未勾选。
+**部署目标**：SSH 别名 `odoo`（39.106.99.9），站点 `https://game.joho.cn`，应用目录 `/opt/game-server`，服务 `game-server`，入口 `node dist/src/main`。
+
+| Step | 动作 | 实测 |
+|---|---|---|
+| 1 | 本地构建 | `npm run build` → 退出码 0；`dist/` = `{seeds,src,tsconfig.build.tsbuildinfo}`，含 `dist/src/modules/world/npc/{npc-presence,npc-tick}.service.js`、`npc-admin.controller.js`、`entities/npc-{spawn-rule,patrol-route}.entity.js`、`dto/npc-rule.dto.js`、`seeds/npc-demo.seed.js` |
+| 1 | 打包上传 | `tar.exe -czf dist-s4.tar.gz -C dist .` → 682653 字节；`scp` 到 `odoo:/tmp/`；两端 md5 一致（`6da46d978e4dbc98eec70c767952f2a0`） |
+| 2 | 备份替换重启 | 备份 `dist_prev_20260922_064125` → `rm -rf dist && mkdir dist` → `tar -xzf` → 解包后顶层仍是 `seeds/src/tsconfig.build.tsbuildinfo`、入口 `dist/src/main.js`（与旧结构一致）→ `systemctl restart game-server` → `is-active` = **active** |
+| 2 | 启动日志 | `Nest application successfully started` + `Game server started on port 3000`；`journalctl --since "-5 min"` 中 `error` 计数 **0**；8 条 `/api/admin/v1/world/npc-{rules,routes}*` 路由已 Mapped |
+| 3 | 新表核对 | `\d npc_spawn_rules`：17 列（`id/scene_id/npc_template_id/rule_type/spawn_x/spawn_y/spawn_radius/spawn_count/max_alive/respawn_interval_sec/time_window/condition/patrol_route_id/name/is_active/created_at/updated_at/deleted_at`）+ `idx_npc_spawn_rule_scene(scene_id,is_active)`；`\d npc_patrol_routes`：11 列（`id/scene_id/npc_template_id/name/loop_mode/speed/points/schedule/is_active/created_at/updated_at/deleted_at`）+ `idx_npc_patrol_route_scene(scene_id)`。均由 `DB_SYNCHRONIZE=true` 自动建出 |
+| 4 | 线上造数据 | 用 admin 接口（**在服务器内 curl，凭据不出服务器**）建 `npc-routes` id=1（`S4-demo-route-4pt`，4 点 `(700,380)(700,480)(600,480)(600,380)`，speed=60，loop）+ `npc-rules` id=1（`S4-demo-patrol-rule`，patrol，patrolRouteId=1）→ 均 `code:0` |
+| 5 | 无回归 | 线上 S1 冒烟 `SMOKE_API=http://game.joho.cn node scripts/smoke-laya2d-s1.mjs` → **9/9 PASS**；`https://game.joho.cn/gamedata/manifest.json` 200、`https://game.joho.cn/health` 200 |
+| 7 | 清理 | 服务器 `/tmp/dist-s4.tar.gz` 与本地临时包均已删除（未入库） |
+
+**线上 S4 点检原始输出**（`http://game.joho.cn`，websocket transport）：
+
+```
+PASS ① 线上 /health 可达 :: http://game.joho.cn/health → 200
+PASS ② 登录/注册线上测试账号 :: playerId=123
+PASS ③ 进场景应答 world.enter_scene_sync :: cmd=world.enter_scene_sync code=0
+PASS ④ 旧契约不回归：data.spawns.length === 13 :: spawns=13 triggers=2
+PASS ⑤ 新增 npcs 数组下发 :: npcs=4；ids=npc:11,npc:12,npc:13,npcs:1:0
+PASS ⑥ 线上 patrol 规则实例携带 route.points(4) :: npcId=npcs:1:0 x=700 y=380 points=4 speed=60 loopMode=loop
+PASS ⑦ 8s 窗口内收到 entityType=npc 的 world.entity_update 广播 :: 首个 +1387ms，共 4 条；entityId=npcs:1:0
+PASS ⑧ 同一 NPC 多次广播坐标在变化（服务端权威推进） :: entityId=npcs:1:0 坐标序列=(700.0,480.0) → (620.0,480.0) → (600.0,380.0) → (660.0,380.0)
+```
+
+**结论**：S4 服务端能力在线上生效（新表自动建出、patrol 规则经 admin 接口录入后进场景即下发路点，并以 `entityType='npc'` 的房间广播做权威位置校正）；旧契约 `spawns=13`/`triggers=2` 与 S1 全链路均不回归。**未触发回滚**（无需回滚）。
+
+**遗留问题（如实记录）**
+
+1. **HTTPS(443) 下 socket.io 握手在本机不可达**：`https://game.joho.cn/socket.io/?EIO=4&transport=polling` 由 node 直连返回 400（服务端仅支持 websocket transport），但 socket.io 客户端的 `transport=websocket` 升级请求**未出现在 nginx 访问日志中**（`:80` 同请求有 101 记录），且本机 TLS 栈本身异常（`curl.exe` 报 `getaddrinfo() thread failed to start`、`Invoke-WebRequest` 报证书信任失败）。判定为**本机环境问题**，非服务端故障；线上验收改走 `http://game.joho.cn`（websocket）全量通过。
+2. **443 站点配置缺 WebSocket 升级头**：`game.joho.cn-ssl.conf` 的 `location /` 无 `proxy_http_version 1.1` / `Upgrade` / `Connection`（`:80` 的 `game.joho.cn.conf` 在 server 级有）。若浏览器端以 `wss://game.joho.cn` 连接，将无法升级。**建议核查**（本次未擅自修改 nginx）。
+3. **线上演示数据保留**：`npc_spawn_rules` id=1 + `npc_patrol_routes` id=1 留在生产场景 1（新手村），可在 GM 面板「NPC 规则」中删除。
+4. **规则变更需重启**：沿用 §6.7-1，线上新增/改动规则后需 `systemctl restart game-server` 才生效（场景级实例缓存不失效）。
+5. 线上点检新建了 1 个测试账号（`smoke_s4prod_*`，与既有 64 个 smoke 账号同类，未清理）；S1 冒烟另建 `spike01/spike02`。
