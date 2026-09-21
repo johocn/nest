@@ -63,11 +63,9 @@ export class InteractController {
         Toast.info(`${res.name}：${res.text}`);
         console.log(`[S1] 对话返回 ${JSON.stringify(res)}`);
       } else {
-        const res = await Api.interactObject(
-          target.templateId!,
-          target.interactType ?? 'collect',
-          Session.token,
-        );
+        // S3 Task 1：Entity.interactType 已删除，物件交互类型暂以 'collect' 兜底；
+        // 真正的 kind 派发在 Task 4/5 由 InteractComponent 承载（本 Task 不改派发逻辑）。
+        const res = await Api.interactObject(target.templateId!, 'collect', Session.token);
         const amount = res?.reward?.amount;
         Toast.info(
           amount ? `采集成功，获得 ${amount} ${res.reward?.currencyType ?? ''}` : '交互成功',

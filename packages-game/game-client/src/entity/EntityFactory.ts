@@ -22,79 +22,74 @@ export class EntityFactory {
   }
 
   static createPlayer(playerId: string, x: number, y: number): Entity {
-    return new Entity(
-      `player:${playerId}`,
-      'player',
-      null,
-      null,
-      null,
-      `我(${playerId})`,
+    return new Entity({
+      entityId: `player:${playerId}`,
+      kind: 'player',
+      spawnId: null,
+      templateId: null,
+      displayName: `我(${playerId})`,
       x,
       y,
-      COLORS.player,
-      EntityFactory.texture,
-    );
+      color: COLORS.player,
+      texture: EntityFactory.texture,
+    });
   }
 
   static createOtherPlayer(playerId: string, x: number, y: number): Entity {
-    return new Entity(
-      `player:${playerId}`,
-      'player',
-      null,
-      null,
-      null,
-      `玩家${playerId}`,
+    return new Entity({
+      entityId: `player:${playerId}`,
+      kind: 'player',
+      spawnId: null,
+      templateId: null,
+      displayName: `玩家${playerId}`,
       x,
       y,
-      COLORS.player,
-      EntityFactory.texture,
-    );
+      color: COLORS.player,
+      texture: EntityFactory.texture,
+    });
   }
 
   static createFromStatic(e: StaticEntity): Entity {
-    return new Entity(
-      `object:${e.spawnId}`,
-      'object',
-      e.spawnId,
-      e.templateId,
-      e.interact.type,
-      `物${e.spawnId}`,
-      e.x,
-      e.y,
-      COLORS.object,
-      EntityFactory.texture,
-    );
+    return new Entity({
+      entityId: `object:${e.spawnId}`,
+      kind: 'object',
+      spawnId: e.spawnId,
+      templateId: e.templateId,
+      displayName: `物${e.spawnId}`,
+      x: e.x,
+      y: e.y,
+      color: COLORS.object,
+      texture: EntityFactory.texture,
+    });
   }
 
   static createFromFixedNpc(n: FixedNpc): Entity {
-    return new Entity(
-      `npc:${n.spawnId}`,
-      'npc',
-      n.spawnId,
-      n.npcTemplateId,
-      'talk',
-      `NPC${n.spawnId}`,
-      n.x,
-      n.y,
-      COLORS.npc,
-      EntityFactory.texture,
-    );
+    return new Entity({
+      entityId: `npc:${n.spawnId}`,
+      kind: 'npc',
+      spawnId: n.spawnId,
+      templateId: n.npcTemplateId,
+      displayName: `NPC${n.spawnId}`,
+      x: n.x,
+      y: n.y,
+      color: COLORS.npc,
+      texture: EntityFactory.texture,
+    });
   }
 
   static createFromServerSpawn(sp: ServerSpawn): Entity {
     const id = Number(sp.id);
     const kind = sp.entityType === 'monster' ? 'npc' : sp.entityType;
-    return new Entity(
-      `${kind}:${id}`,
+    return new Entity({
+      entityId: `${kind}:${id}`,
       kind,
-      id,
-      Number(sp.templateId),
-      kind === 'npc' ? 'talk' : null,
-      `${sp.entityType}${id}`,
-      sp.spawnX,
-      sp.spawnY,
-      COLORS[sp.entityType] ?? COLORS.object,
-      EntityFactory.texture,
-    );
+      spawnId: id,
+      templateId: Number(sp.templateId),
+      displayName: `${sp.entityType}${id}`,
+      x: sp.spawnX,
+      y: sp.spawnY,
+      color: COLORS[sp.entityType] ?? COLORS.object,
+      texture: EntityFactory.texture,
+    });
   }
 }
