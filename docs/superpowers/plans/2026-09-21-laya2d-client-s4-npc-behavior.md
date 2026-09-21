@@ -146,60 +146,60 @@
 
 **Files:** 新建 `src/modules/world/entities/npc-spawn-rule.entity.ts`、`npc-patrol-route.entity.ts`；修改 `src/constants/enums.ts`、`src/modules/world/world.module.ts`
 
-- [ ] **Step 1** 加枚举：`NpcSpawnRuleType { FIXED='fixed', RANDOM='random', PATROL='patrol' }`、`NpcPatrolLoopMode { LOOP='loop', PINGPONG='pingpong', ONCE='once' }`。
-- [ ] **Step 2** `npc_spawn_rules` 字段（照 [scene-entity-spawn.entity.ts](file:///e:/code/nest/packages-game/game-server/src/modules/world/entities/scene-entity-spawn.entity.ts) 的写法：bigint PK + 显式列名 + 软删三件套）：`scene_id`、`npc_template_id`、`rule_type`(enum)、`spawn_x/spawn_y`、`spawn_radius`、`spawn_count`(默认1)、`max_alive`、`respawn_interval_sec`、`time_window jsonb`、`condition jsonb`、`patrol_route_id`(bigint nullable)、`name`(varchar 64)、`is_active`(默认true)；索引 `(scene_id, is_active)`。
-- [ ] **Step 3** `npc_patrol_routes` 字段：`scene_id`、`npc_template_id`、`name`、`loop_mode`(enum 默认 loop)、`speed`(int，像素/秒，默认 60)、`points jsonb`（`[{x,y,pauseSec}]`，默认 `[]`）、`schedule jsonb`（nullable，本批不消费）、`is_active`；索引 `(scene_id)`。
-- [ ] **Step 4** 注册进 `world.module.ts` 的 `TypeOrmModule.forFeature([...])`（先读现状再改）。
-- [ ] **Step 5** 验证：`npx tsc --noEmit` → 0 error；后端起来后 `psql -U postgres -h localhost -d game_server -c "\d npc_spawn_rules"` 与 `\d npc_patrol_routes` 列齐（贴原始输出）。
-- [ ] **Step 6** commit `feat(npc): 新增 NPC 出现规则与巡逻路径两张表`
+- [x] **Step 1** 加枚举：`NpcSpawnRuleType { FIXED='fixed', RANDOM='random', PATROL='patrol' }`、`NpcPatrolLoopMode { LOOP='loop', PINGPONG='pingpong', ONCE='once' }`。
+- [x] **Step 2** `npc_spawn_rules` 字段（照 [scene-entity-spawn.entity.ts](file:///e:/code/nest/packages-game/game-server/src/modules/world/entities/scene-entity-spawn.entity.ts) 的写法：bigint PK + 显式列名 + 软删三件套）：`scene_id`、`npc_template_id`、`rule_type`(enum)、`spawn_x/spawn_y`、`spawn_radius`、`spawn_count`(默认1)、`max_alive`、`respawn_interval_sec`、`time_window jsonb`、`condition jsonb`、`patrol_route_id`(bigint nullable)、`name`(varchar 64)、`is_active`(默认true)；索引 `(scene_id, is_active)`。
+- [x] **Step 3** `npc_patrol_routes` 字段：`scene_id`、`npc_template_id`、`name`、`loop_mode`(enum 默认 loop)、`speed`(int，像素/秒，默认 60)、`points jsonb`（`[{x,y,pauseSec}]`，默认 `[]`）、`schedule jsonb`（nullable，本批不消费）、`is_active`；索引 `(scene_id)`。
+- [x] **Step 4** 注册进 `world.module.ts` 的 `TypeOrmModule.forFeature([...])`（先读现状再改）。
+- [x] **Step 5** 验证：`npx tsc --noEmit` → 0 error；后端起来后 `psql -U postgres -h localhost -d game_server -c "\d npc_spawn_rules"` 与 `\d npc_patrol_routes` 列齐（贴原始输出）。
+- [x] **Step 6** commit `feat(npc): 新增 NPC 出现规则与巡逻路径两张表`
 
 ### Task 2: NpcPresenceService（三分支 + 条件过滤）
 
 **Files:** 新建 `src/modules/world/npc/npc-presence.service.ts` + `.spec.ts`
 
-- [ ] **Step 1** `listNpcsForPlayer(sceneId, playerId)` 返回 `NpcInstance[]`：
+- [x] **Step 1** `listNpcsForPlayer(sceneId, playerId)` 返回 `NpcInstance[]`：
   - 查场景激活的 `npc_spawn_rules`；`fixed` → 取 `scene_entity_spawns` 中 `entityType='npc'` 的行（沿用 S1 语义，**不从规则生成**）；`random` → 在 `spawn_x/y ± spawn_radius` 内取 `spawn_count` 个点（**每场景一次、服务端内存缓存，见 D6**）；`patrol` → 取关联 `npc_patrol_routes` 的路点，初始位置 = 第一个路点。
   - `condition` 过滤：支持 `minLevel`、`questId`（`questId` 用现有任务进度查询；等级用玩家数据）——两个键都支持，未识别的键**忽略并在 debug 日志记录**。
   - 返回项：`{ npcId, npcTemplateId, resKey, x, y, anim, route?: { points, speed, loopMode, cursor } }`；`npcId` 按 D2（`npcs:<ruleId>:<slot>`）。
-- [ ] **Step 2** `advanceTick(sceneIds: number[])`：对每个场景推进 patrol 实例的 `cursor/位置`（按 `speed` × tick 间隔、`pauseSec` 停留、`loopMode` 循环/往返/停），random/fixed 不动。**只更新内存态**（服务端不需要落库当前位置）。
-- [ ] **Step 3** 单测（≥8）：三分支各 1；`condition.minLevel` 过滤 1；`condition.questId` 过滤 1；`random` 点落在半径内 1；`random` 第二次调用位置稳定（D6）1；`pingpong` 到端点折返 1；`points` 为空/单点时行为（不崩、原地站）1；`advanceTick` 对 fixed/random 无副作用 1。
-- [ ] **Step 4** `npm test` → 全绿（贴 suites/tests 计数）。
-- [ ] **Step 5** commit `feat(npc): NPC 在场计算与巡逻位置推进服务`
+- [x] **Step 2** `advanceTick(sceneIds: number[])`：对每个场景推进 patrol 实例的 `cursor/位置`（按 `speed` × tick 间隔、`pauseSec` 停留、`loopMode` 循环/往返/停），random/fixed 不动。**只更新内存态**（服务端不需要落库当前位置）。
+- [x] **Step 3** 单测（≥8）：三分支各 1；`condition.minLevel` 过滤 1；`condition.questId` 过滤 1；`random` 点落在半径内 1；`random` 第二次调用位置稳定（D6）1；`pingpong` 到端点折返 1；`points` 为空/单点时行为（不崩、原地站）1；`advanceTick` 对 fixed/random 无副作用 1。
+- [x] **Step 4** `npm test` → 全绿（贴 suites/tests 计数）。
+- [x] **Step 5** commit `feat(npc): NPC 在场计算与巡逻位置推进服务`
 
 ### Task 3: 进场景下发契约扩展（向后兼容）
 
 **Files:** 修改 `src/modules/world/world.service.ts`、`src/modules/gateway/game.gateway.ts`
 
-- [ ] **Step 1** `worldService.enterScene` 的返回对象增加 `npcs`（委托 `NpcPresenceService.listNpcsForPlayer`），**`scene`/`spawns`/`triggers` 原样不动**。
-- [ ] **Step 2** gateway `handleEnterScene` 的 `data` 增加 `npcs: sceneData.npcs`（[game.gateway.ts:205-209](file:///e:/code/nest/packages-game/game-server/src/modules/gateway/game.gateway.ts#L205-L209)）。
-- [ ] **Step 3** 契约冻结记录：在计划执行记录里写明「`world.enter_scene_sync` 新增字段 `npcs`，类型 `NpcInstance[]`，旧字段零变更」。
+- [x] **Step 1** `worldService.enterScene` 的返回对象增加 `npcs`（委托 `NpcPresenceService.listNpcsForPlayer`），**`scene`/`spawns`/`triggers` 原样不动**。
+- [x] **Step 2** gateway `handleEnterScene` 的 `data` 增加 `npcs: sceneData.npcs`（[game.gateway.ts:205-209](file:///e:/code/nest/packages-game/game-server/src/modules/gateway/game.gateway.ts#L205-L209)）。
+- [x] **Step 3** 契约冻结记录：在计划执行记录里写明「`world.enter_scene_sync` 新增字段 `npcs`，类型 `NpcInstance[]`，旧字段零变更」。
   - 契约冻结（Task 3 已落地）：`world.enter_scene_sync` 新增字段 `npcs`（类型 `NpcInstance[]`），旧字段零变更。
-- [ ] **Step 4** 验证（真实调用，非猜）：用 S1 冒烟脚本登录拿 token，WS 发 `world.enter-scene`，断言 `data.npcs` 存在且为数组；**同时断言 `data.spawns.length` 与 S1 一致**（13）。
-- [ ] **Step 5** commit `feat(npc): 进场景下发 NPC 实例（新增 npcs 字段，向后兼容）`
+- [x] **Step 4** 验证（真实调用，非猜）：用 S1 冒烟脚本登录拿 token，WS 发 `world.enter-scene`，断言 `data.npcs` 存在且为数组；**同时断言 `data.spawns.length` 与 S1 一致**（13）。
+- [x] **Step 5** commit `feat(npc): 进场景下发 NPC 实例（新增 npcs 字段，向后兼容）`
 
 ### Task 4: NPC tick 与低频校正广播
 
 **Files:** 新建 `src/modules/world/npc/npc-tick.service.ts` + `.spec.ts`；修改 `src/event-bus/game-events.ts`、`src/modules/gateway/game.gateway.ts`、`src/modules/world/world.module.ts`
 
-- [ ] **Step 1** 加事件 `GameEvents.NPC_POSITIONS_UPDATED`，payload `{ sceneId, npcs: [{npcId, npcTemplateId, x, y, rotation?, state}] }`。
-- [ ] **Step 2** `NpcTickService`：`@Cron('*/2 * * * * *')`（每 2 秒，可配 `NPC_TICK_MS`）→ 取**当前有玩家在场的场景 id 列表**（复用现有连接/场景登记，如 `connectionService` 或房间查询；确认现有可用来源后写死依赖）→ `advanceTick(sceneIds)` → 有变化才 `eventBus.emit(NPC_POSITIONS_UPDATED, ...)`（空场景**不 emit**，D7）。
-- [ ] **Step 3** gateway：新增 EventBus 订阅 handler → `this.server.to('scene:'+sceneId).emit('message', { cmd:'world.entity_update', seq:0, code:0, msg:'success', data:{ entityId: npcId, entityType:'npc', npcTemplateId, pos:{x,y}, rotation, state } })`（**沿用同一 cmd/事件名**，见 §1.2）。
-- [ ] **Step 4** 单测（≥4）：空场景不 emit；有玩家才推进；广播 payload 字段与玩家包结构一致（`entityId/entityType/pos`）；tick 内异常被 catch 且不中断后续场景。
-- [ ] **Step 5** `npm test` 全绿；本地起后端观察日志中出现 tick 且无 error。
-- [ ] **Step 6** commit `feat(npc): NPC 位置 tick 与房间广播校正`
+- [x] **Step 1** 加事件 `GameEvents.NPC_POSITIONS_UPDATED`，payload `{ sceneId, npcs: [{npcId, npcTemplateId, x, y, rotation?, state}] }`。
+- [x] **Step 2** `NpcTickService`：`@Cron('*/2 * * * * *')`（每 2 秒，可配 `NPC_TICK_MS`）→ 取**当前有玩家在场的场景 id 列表**（复用现有连接/场景登记，如 `connectionService` 或房间查询；确认现有可用来源后写死依赖）→ `advanceTick(sceneIds)` → 有变化才 `eventBus.emit(NPC_POSITIONS_UPDATED, ...)`（空场景**不 emit**，D7）。
+- [x] **Step 3** gateway：新增 EventBus 订阅 handler → `this.server.to('scene:'+sceneId).emit('message', { cmd:'world.entity_update', seq:0, code:0, msg:'success', data:{ entityId: npcId, entityType:'npc', npcTemplateId, pos:{x,y}, rotation, state } })`（**沿用同一 cmd/事件名**，见 §1.2）。
+- [x] **Step 4** 单测（≥4）：空场景不 emit；有玩家才推进；广播 payload 字段与玩家包结构一致（`entityId/entityType/pos`）；tick 内异常被 catch 且不中断后续场景。
+- [x] **Step 5** `npm test` 全绿；本地起后端观察日志中出现 tick 且无 error。
+- [x] **Step 6** commit `feat(npc): NPC 位置 tick 与房间广播校正`
 
 ### Task 5: 客户端 AI 插值（cwd = `packages-game/game-client`）
 
 **Files:** 新建 `src/entity/components/AiComponent.ts`；修改 `src/net/ws.ts`、`src/config/schema.ts`、`src/entity/EntityFactory.ts`、`src/entity/components/interact/TalkComponent.ts`
 
-- [ ] **Step 1** `AiComponent`：持有 `points/speed/loopMode/cursor`，每帧推进（按 `Laya.timer.delta`）；支持 `pauseSec` 停留；`applyCorrection(x,y)` 用**限速逼近**（单帧最大位移阈值，如 8px/帧）纠偏，不瞬移。
-- [ ] **Step 2** `ws.ts`：`world.entity_update` 增加 `entityType==='npc'` 分支 → `EntityRegistry.get(npcId)` 存在则 `applyCorrection`，不存在则**按下发数据创建**（防止漏包）。
-- [ ] **Step 3** `schema.ts` 加 `NpcInstanceConfig` 类型（与 Task 3 契约逐字段对齐）。
-- [ ] **Step 4** `EntityFactory`：按 `npcs[]` 建实体并挂 `AiComponent`（有 `route` 才挂）+ 复用 S3 的 `TalkComponent`。
-- [ ] **Step 5** `TalkComponent`：`npcs:<ruleId>:<slot>` 形态的 NPC 需要服务端可寻址的 talk 入口——**先只支持 `fixed` 类 NPC 对话**（现有 `npcs/:spawnId/talk`），其余给出「该 NPC 暂不可对话」提示，并在计划记录里标注（服务端 talk 接口扩展留 S5）。
-- [ ] **Step 6** 断言脚本：`node scripts/smoke-s4-npc.mjs`（纯逻辑部分）覆盖插值推进、pingpong 折返、纠偏限速。
-- [ ] **Step 7** 浏览器点检：双窗口进同一场景 → 两端 NPC 位置一致、连续移动、无抖动/瞬移。
-- [ ] **Step 8** commit `feat(game-client): NPC 路点插值与位移校正`
+- [x] **Step 1** `AiComponent`：持有 `points/speed/loopMode/cursor`，每帧推进（按 `Laya.timer.delta`）；支持 `pauseSec` 停留；`applyCorrection(x,y)` 用**限速逼近**（单帧最大位移阈值，如 8px/帧）纠偏，不瞬移。
+- [x] **Step 2** `ws.ts`：`world.entity_update` 增加 `entityType==='npc'` 分支 → `EntityRegistry.get(npcId)` 存在则 `applyCorrection`，不存在则**按下发数据创建**（防止漏包）。
+- [x] **Step 3** `schema.ts` 加 `NpcInstanceConfig` 类型（与 Task 3 契约逐字段对齐）。
+- [x] **Step 4** `EntityFactory`：按 `npcs[]` 建实体并挂 `AiComponent`（有 `route` 才挂）+ 复用 S3 的 `TalkComponent`。
+- [x] **Step 5** `TalkComponent`：`npcs:<ruleId>:<slot>` 形态的 NPC 需要服务端可寻址的 talk 入口——**先只支持 `fixed` 类 NPC 对话**（现有 `npcs/:spawnId/talk`），其余给出「该 NPC 暂不可对话」提示，并在计划记录里标注（服务端 talk 接口扩展留 S5）。
+- [x] **Step 6** 断言脚本：`node scripts/smoke-s4-npc.mjs`（纯逻辑部分）覆盖插值推进、pingpong 折返、纠偏限速。
+- [x] **Step 7** 浏览器点检：双窗口进同一场景 → 两端 NPC 位置一致、连续移动、无抖动/瞬移。
+- [x] **Step 8** commit `feat(game-client): NPC 路点插值与位移校正`
 
 > **实施记录（2026-09-22）**
 > - **限制**：`npcs:<ruleId>:<slot>`（patrol/random）形态的 NPC **暂不可对话**——服务端 `npcs/:spawnId/talk` 按 `spawnId` 寻址，非 `npc:<spawnId>` 形态无对应入口；客户端在 `TalkComponent` 中以「该 NPC 暂不可对话」提示收口，服务端 talk 接口扩展留 S5。
@@ -209,23 +209,23 @@
 
 **Files:** 新建 `src/modules/world/npc-admin.controller.ts`、`src/modules/world/dto/npc-rule.dto.ts`、`admin/panels/npc-rules.js`；修改 `admin/index.html`、`seeds/npc-demo.seed.ts`、`package.json`
 
-- [ ] **Step 1** admin 接口（全 `AdminGuard`，前缀 `api/admin/v1/world`）：`GET npc-rules/list?sceneId`、`POST npc-rules`、`PUT npc-rules/:id`、`DELETE npc-rules/:id`、`GET npc-routes/list?sceneId`、`POST npc-routes`、`PUT npc-routes/:id`、`DELETE npc-routes/:id`；写操作记 `adminService.logOperation`。
-- [ ] **Step 2** 面板 `admin/panels/npc-rules.js`：注册 `window.XGamePanels['npc-rules'] = { label:'NPC 规则', icon:'ti ti-walk', order:40, component:{...} }`；功能 = 规则列表（按场景筛选）+ 新建/编辑（规则类型、坐标、半径、数量、condition 的 minLevel/questId）+ 路径点表格（`x/y/pauseSec` 行内编辑，**不做拖拽**）+ 删除二次确认（`XGameCore.confirmDanger`）。
-- [ ] **Step 3** `admin/index.html` 只加一行 `<script src="panels/npc-rules.js"></script>`（照现有面板引入位置）。
-- [ ] **Step 4** `seeds/npc-demo.seed.ts`（`synchronize:false`，幂等）：给已有场景造 1 条 `random`（count=2, radius=120）+ 1 条 `patrol`（4 个路点围一圈）；`package.json` 加 `seed:npc-demo`。
-- [ ] **Step 5** 验证：`npm run seed:npc-demo` → 面板能看到 2 条规则；改一个路径点 → 进场景 NPC 走向改变。
-- [ ] **Step 6** commit `feat(npc): NPC 规则与巡逻路径 GM 面板`
+- [x] **Step 1** admin 接口（全 `AdminGuard`，前缀 `api/admin/v1/world`）：`GET npc-rules/list?sceneId`、`POST npc-rules`、`PUT npc-rules/:id`、`DELETE npc-rules/:id`、`GET npc-routes/list?sceneId`、`POST npc-routes`、`PUT npc-routes/:id`、`DELETE npc-routes/:id`；写操作记 `adminService.logOperation`。
+- [x] **Step 2** 面板 `admin/panels/npc-rules.js`：注册 `window.XGamePanels['npc-rules'] = { label:'NPC 规则', icon:'ti ti-walk', order:40, component:{...} }`；功能 = 规则列表（按场景筛选）+ 新建/编辑（规则类型、坐标、半径、数量、condition 的 minLevel/questId）+ 路径点表格（`x/y/pauseSec` 行内编辑，**不做拖拽**）+ 删除二次确认（`XGameCore.confirmDanger`）。
+- [x] **Step 3** `admin/index.html` 只加一行 `<script src="panels/npc-rules.js"></script>`（照现有面板引入位置）。
+- [x] **Step 4** `seeds/npc-demo.seed.ts`（`synchronize:false`，幂等）：给已有场景造 1 条 `random`（count=2, radius=120）+ 1 条 `patrol`（4 个路点围一圈）；`package.json` 加 `seed:npc-demo`。
+- [x] **Step 5** 验证：`npm run seed:npc-demo` → 面板能看到 2 条规则；改一个路径点 → 进场景 NPC 走向改变。
+- [x] **Step 6** commit `feat(npc): NPC 规则与巡逻路径 GM 面板`
 
 ### Task 7: 冒烟脚本 + 全量回归 + 验收
 
 **Files:** 新建 `scripts/smoke-s4-npc.mjs`
 
-- [ ] **Step 1** 冒烟断言（每条 PASS/FAIL + 证据，FAIL 即 exit 1）：① 登录两个账号（不同等级）② 进场景拿到 `npcs` ③ 低等级账号 `npcs` 条数 ≤ 高等级（condition 生效）④ `random` 实例坐标落在半径内 ⑤ `patrol` 实例带 `route.points` ⑥ 2 个 tick 内收到 `entityType='npc'` 广播 ⑦ 两次广播的坐标不同（确实在动）⑧ 空场景无广播（用一个无人场景或退出后再观察）⑨ S1 的 `spawns.length` 仍是 13（旧契约不变）。
-- [ ] **Step 2** `node scripts/smoke-s4-npc.mjs` → Expected：9/9 PASS。
-- [ ] **Step 3** S1 冒烟回归：`node scripts/smoke-laya2d-s1.mjs` → 9/9 PASS。
-- [ ] **Step 4** 后端回归：`npm test` → 全绿，tests ≥ 998。
-- [ ] **Step 5** 契约与依赖自检：`git diff <基线> -- src/modules/gateway/game.gateway.ts` 无旧字段变更（仅新增）；`package.json` 无依赖变更。
-- [ ] **Step 6** commit `test(npc): S4 冒烟脚本与验收记录`
+- [x] **Step 1** 冒烟断言（每条 PASS/FAIL + 证据，FAIL 即 exit 1）：① 登录两个账号（不同等级）② 进场景拿到 `npcs` ③ 低等级账号 `npcs` 条数 ≤ 高等级（condition 生效）④ `random` 实例坐标落在半径内 ⑤ `patrol` 实例带 `route.points` ⑥ 2 个 tick 内收到 `entityType='npc'` 广播 ⑦ 两次广播的坐标不同（确实在动）⑧ 空场景无广播（用一个无人场景或退出后再观察）⑨ S1 的 `spawns.length` 仍是 13（旧契约不变）。
+- [x] **Step 2** `node scripts/smoke-s4-npc.mjs` → Expected：9/9 PASS。
+- [x] **Step 3** S1 冒烟回归：`node scripts/smoke-laya2d-s1.mjs` → 9/9 PASS。
+- [x] **Step 4** 后端回归：`npm test` → 全绿，tests ≥ 998。
+- [x] **Step 5** 契约与依赖自检：`git diff <基线> -- src/modules/gateway/game.gateway.ts` 无旧字段变更（仅新增）；`package.json` 无依赖变更。
+- [x] **Step 6** commit `test(npc): S4 冒烟脚本与验收记录`
 
 ### Task 8: 生产部署与线上验收（若确认本批上线）
 
@@ -268,3 +268,101 @@
 沿用 **Subagent-Driven**：每 Task 派新 subagent，Task 间两阶段评审，每 Task 提交后跑 S1 冒烟作为回归门禁。
 
 任务依赖：Task 1 → Task 2 → Task 3 → Task 4 →（Task 5 客户端可与 Task 4 并行）→ Task 6 → Task 7 → Task 8。
+
+---
+
+## 6. 执行记录（S4）
+
+> 执行时间：2026-09-22。环境：本机 PostgreSQL 16（`localhost:5432`，库 `game_server`）+ mock-redis（`:6379`）+ 后端 dev server（`:3000`，`nest start --watch`，scene 1 published = **v1**）。客户端断言在 `packages-game/game-client` 下跑构建产物。
+
+### 6.1 各 Task 提交（本地主分支）
+
+| Task | commit | message |
+|---|---|---|
+| Task 1 | `f0b6c0815` | feat(npc): 新增 NPC 出现规则与巡逻路径两张表 |
+| Task 2 | `253072f5d` | feat(npc): NPC 在场计算与巡逻位置推进服务 |
+| Task 3 | `3394e4b0a` | feat(npc): 进场景下发 NPC 实例（新增 npcs 字段，向后兼容） |
+| Task 4 | `00383f407` | feat(npc): NPC 位置 tick 与房间广播校正 |
+| Task 5 | `da238c406` | feat(game-client): NPC 路点插值与位移校正 |
+| Task 6 | `834108b4e` | feat(npc): NPC 规则与巡逻路径 GM 面板 |
+| Task 7 | （本次提交） | test(npc): S4 冒烟脚本与验收记录 |
+
+### 6.2 门禁实测
+
+| 项 | 命令 | 期望 | 实测 |
+|---|---|---|---|
+| S4 冒烟（服务端，新增） | `game-server: node scripts/smoke-s4-npc.mjs` | 9/9 PASS | **9/9 PASS**（末行「S4 冒烟全部通过」，退出码 0） |
+| S1 冒烟回归 | `game-server: node scripts/smoke-laya2d-s1.mjs` | 9/9 PASS | **9/9 PASS**（末行「S1 冒烟全部通过」） |
+| 后端回归 | `game-server: npx jest --silent` | 全绿，tests ≥ 998 | **Test Suites: 83 passed / 83；Tests: 1031 passed / 1031** |
+| 客户端断言 | `game-client: node tools/build-fallback.mjs; node scripts/smoke-s4-npc.mjs` | 18/18 PASS | **构建 OK（27 个产物重写导入扩展名）；18/18 PASS，退出码 0** |
+
+> **基线核对**：§1.6 写的「基线 998 tests」已过时（S3 验收时实际基线为 **83 suites / 1031 tests**）。本次实测保持 **83/1031**，未下降。
+
+### 6.3 Task 7 冒烟脚本原始输出（9 条断言）
+
+```
+  后端 /health 可达（http://localhost:3000）
+  admin 登录成功（token=eyJhbGciOiJI…）
+  临时规则已新建：id=6（condition={minLevel:5}）
+  ⚠️ 本次新建了临时规则：若断言 ③ 未通过，请重启后端进程（场景级实例缓存）后重跑
+  账号等级：spike01=1（playerId=1），spike02=5（playerId=3）
+PASS ① 登录两个账号（等级不同） :: low=1(lv1) high=3(lv5)
+PASS ② 进场景应答携带 npcs 数组 :: cmd=world.enter_scene_sync code=0 npcs=6
+PASS ③ 低等级 npcs 条数 ≤ 高等级，且低等级看不到 condition 不满足的 NPC :: low=6 high=7；临时规则(npcs:6:) 低等级可见=false 高等级可见=true
+PASS ④ random 实例坐标落在 spawn_x/y ± spawn_radius 内 :: rule=3 期望 2 个 → 实际 2 个；中心=(600,380) r=120；坐标=(537.9,461.5) (533.7,317.3)
+PASS ⑤ patrol 实例带 route.points 且路点数 = 4 :: rule=4 实例=1 带路点=1；points=4 speed=60 loopMode=loop
+PASS ⑥ 7s 窗口内收到 entityType='npc' 的 world.entity_update 广播 :: 首个广播 +548ms，共 8 条；entityId=npcs:4:0
+PASS ⑦ 同一 NPC 的两次广播坐标不同（服务端确实在推进位置） :: entityId=npcs:4:0 坐标序列=(615.1,464.9) → … → (597.0,283.0)
+PASS ⑧ 玩家全部离开后 6s 内无该场景 npc 广播 :: 离开后 0 条 npc 广播
+PASS ⑨ 旧契约不回归：data.spawns.length === 13 :: spawns=13（期望 13）triggers=2
+
+S4 冒烟全部通过
+[清理] 删除临时规则 id=6：code=0 msg=success
+```
+
+> 断言 ⑥ 的 8 条 = 4 个 tick × 2 个客户端 socket（A/B 各收一份，用于同时证明「房间广播对两端一致」）；断言 ⑧ 的观察窗口在 `socket.close()` → `handleDisconnect` → `leaveScene` 摘除 `scenes:active` 之后开始。
+
+### 6.4 测试数据准备与清理（断言 ③ 的 condition 验证）
+
+| 项 | 做法 | 清理 |
+|---|---|---|
+| 不同等级账号 | 本地两个账号默认都是 1 级；临时 `UPDATE players SET level=5 WHERE id=3;`（spike02） | 已还原 `level=1`（实测 `spike01=1 / spike02=1`） |
+| condition 规则 | seed 规则无 `condition`，故用 admin 接口临时建 1 条 `random`（`condition={minLevel:5}`、`name=smoke-tmp-minlevel5`）；**脚本自建**，规则 id=6 | 脚本收尾 `DELETE npc-rules/6` → `code=0`；DB 实测 `deleted_at` 已置位 |
+| 临时脚本/进程 | 冒烟脚本本身为交付物（保留）；重启探针 `src/__restart_probe.ts` 已删除 | 已删除，`git status` 无残留 |
+
+### 6.5 契约与依赖自检（A3 / A8）
+
+- `git diff 14a297623 -- packages-game/game-server/src/modules/gateway/game.gateway.ts`：**仅新增**——
+  - `import { Namespace, Server, Socket }`（新增 `Namespace` 类型，用于读房间表）；
+  - 新增 `@OnEvent(GameEvents.NPC_POSITIONS_UPDATED) handleNpcPositions()`（空房间提前 return；广播 `world.entity_update`，`entityType='npc'`，沿用同一 cmd 与事件名 `'message'`）；
+  - `world.enter-scene` 的 `data` **新增 `npcs: sceneData.npcs`**，`scene/spawns/triggers` 原样不动；
+  - `sceneId` 由 `message?.data?.sceneId` 改为 `String(rawSceneId)` 归一（房间名仍为 `scene:1`，响应契约不变）。
+  - 结论：**无旧字段删除/改名，无旧行为语义变更**；S1 冒烟 9/9 复跑通过。
+- `git diff 14a297623 -- packages-game/game-server/package.json`：**仅 1 行 `scripts` 新增**（`"seed:npc-demo": "ts-node -r tsconfig-paths/register seeds/npc-demo.seed.ts"`），**dependencies / devDependencies 零变更**（零新增依赖）。
+- 客户端工程无独立 `package.json`（依赖复用 `game-server/node_modules`），S4 客户端改动同样零新增依赖。
+
+### 6.6 A1–A8 逐条结论与证据
+
+| # | 验收项 | 结论 | 证据 |
+|---|---|---|---|
+| A1 | 三分支都能产出正确在场集 | **PASS** | 冒烟 ④⑤ + 单测：`fixed` 用 `scene_entity_spawns`（scene 1 → 3 个，`npc:11/12/13`）；`random` 规则 id=3（count=2、r=120）产出 2 个实例且坐标 `(537.9,461.5)/(533.7,317.3)` 均在 `(600,380)±120` 内；`patrol` 规则 id=4 产出 1 个实例并携带 4 点路点（`speed=60 loopMode=loop`） |
+| A2 | `condition` 按玩家过滤 | **PASS** | 冒烟 ③：同场景下低等级（lv1）`npcs=6`、高等级（lv5）`npcs=7`；临时规则 `npcs:6:*` 低等级可见 `false`、高等级可见 `true`（`condition={minLevel:5}`） |
+| A3 | 进场景下发契约向后兼容 | **PASS** | 冒烟 ⑨ `data.spawns.length=13`、`triggers=2`（与 S1 一致）；新增 `data.npcs` 为数组（`NpcInstance[]`）；S1 冒烟 9/9 不回归；见 6.5 diff |
+| A4 | 服务端校正广播有效 | **PASS** | 冒烟 ⑥⑦：进场景后 **+548ms** 即收到首个 `entityType='npc'` 的 `world.entity_update`；7s 内 4 个 tick 各 1 条（A/B 两端各收一份），同一 NPC `npcs:4:0` 坐标逐 tick 变化 `(615.1,464.9)→(572.7,452.7)→(512.1,367.9)→(597.0,283.0)`（位置由服务端算） |
+| A5 | 客户端插值平滑、校正不瞬移 | **PASS** | 客户端断言 18/18：`applyCorrection` 当帧不瞬移（只记录误差）、逐帧限速消费（8 帧内精确到达且单帧位移 ≤ 8px）、单次校正后与权威同步（残差 `0.0000px`，最大单帧位移 `10.40` = 阈值 + 自由插值步长）；Task 5 双窗口实测两端口径差 median 3px / max 10.3px |
+| A6 | 空场景不空转 | **PASS** | 冒烟 ⑧：玩家全部离开后 6s（≥2 tick）内**0 条**该场景 npc 广播；实现侧 `NpcTickService` 读 `scenes:active` 为空直接 return，`leaveScene` 在最后一人离开时 `sRem` 活跃标记，gateway 另做空房间双保险 |
+| A7 | 面板可录入并生效 | **PASS** | Task 6 已落地 GM 面板（`admin/panels/npc-rules.js`，规则列表 + 路径点表格 + `confirmDanger` 二次确认）+ 8 个 `AdminGuard` 接口；本次冒烟通过 admin 接口建/删 `condition` 规则即为该链路的端到端复证（建 → 进场景生效 → 删） |
+| A8 | 旧契约零改动 + 回归全绿 + 零新增依赖 | **PASS** | `npx jest --silent` → 83 suites / 1031 tests 全绿（基线未下降）；gateway diff 仅新增；`package.json` 依赖零变更；客户端 18/18 PASS |
+
+### 6.7 已知限制（S4 明确不覆盖，如实记录）
+
+1. **规则变更需重启进程**：`NpcPresenceService` 的场景级实例缓存（`sceneInstances` / `randomPoints`）**不随规则增删改失效**；本次验证即依赖「重启后端（`nest start --watch` 重编译触发新进程）后再跑断言」的顺序，脚本在自建临时规则时会打印该提示。
+2. **`TalkComponent` 只支持 `fixed` 类 NPC 对话**：`npcs:<ruleId>:<slot>`（random/patrol）形态无服务端可寻址的 talk 入口，客户端以「该 NPC 暂不可对话」收口；服务端 `talk` 接口扩展留 S5。
+3. **`max_alive` / `respawn_interval_sec` / `time_window` / `schedule` 建字段不消费**：NPC 视为常驻；巡逻时段表只存不用（用户已确认）。
+4. **`random` 为「场景级一致」**：同场景所有玩家看到同一批随机点（服务端内存缓存，D6），`condition` 只做玩家级可见性过滤。
+5. **不做寻路**：巡逻在路点间走直线，不绕障（无碰撞/地形数据）；`points.length < 2` 时原地静止。
+6. **不做视野裁剪**：NPC 广播是全房间的（50 人带宽属 S8）。
+
+### 6.8 Task 8 状态
+
+**未执行**：生产部署与线上验收（`npm run build` → scp → `systemctl restart` → 线上点检）**本批不做，待用户确认后再执行**；Task 8 的 6 个 `- [ ]` 保持未勾选。
