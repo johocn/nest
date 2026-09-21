@@ -4,6 +4,7 @@ import { WorldService } from './world.service';
 import { WorldController } from './world.controller';
 import { WorldClientController } from './world.client.controller';
 import { NpcAdminController } from './npc-admin.controller';
+import { DialogueAdminController } from './dialogue-admin.controller';
 import { EconomyModule } from '@modules/economy/economy.module';
 import { CharacterModule } from '@modules/character/character.module';
 import { AdminModule } from '@modules/admin/admin.module';
@@ -62,7 +63,12 @@ import { DialogueService } from './dialogue/dialogue.service';
     QuestModule,
     InventoryModule,
   ],
-  controllers: [WorldController, WorldClientController, NpcAdminController],
+  controllers: [
+    WorldController,
+    WorldClientController,
+    NpcAdminController,
+    DialogueAdminController,
+  ],
   providers: [
     WorldService,
     SceneConfigService,
