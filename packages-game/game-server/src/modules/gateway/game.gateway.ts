@@ -9,7 +9,7 @@ import {
 } from '@nestjs/websockets';
 import { Logger, UseFilters, OnApplicationShutdown } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
-import { Server, Socket } from 'socket.io';
+import { Namespace, Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { AuthService } from '@modules/auth/auth.service';
 import { WorldService } from '@modules/world/world.service';
@@ -131,6 +131,47 @@ export class GameGateway
     });
   }
 
+  /**
+   * NPC 位置校正（S4）：tick 推进结果 → 向场景房间广播 world.entity_update。
+   * 沿用 world.move 的同一 cmd 与事件名 'message'，仅 entityType 用 'npc'。
+   */
+  @OnEvent(GameEvents.NPC_POSITIONS_UPDATED)
+  handleNpcPositions(payload: {
+    sceneId: string;
+    npcs: Array<{
+      npcId: string;
+      npcTemplateId: string;
+      x: number;
+      y: number;
+      rotation?: number;
+      state?: string;
+    }>;
+  }) {
+    // 空房间直接返回（双重保险，A6：无人在场不产生广播）
+    // 注意：命名空间网关注入的 @WebSocketServer() 实为 Namespace（不是 Server），
+    // 房间表挂在 namespace.adapter.rooms 上（server.sockets.adapter 为 undefined）。
+    const namespace = this.server as unknown as Namespace;
+    const room = namespace?.adapter?.rooms?.get(`scene:${payload.sceneId}`);
+    if (!room || room.size === 0) return;
+
+    for (const npc of payload.npcs) {
+      this.server.to(`scene:${payload.sceneId}`).emit('message', {
+        cmd: 'world.entity_update',
+        seq: 0,
+        code: 0,
+        msg: 'success',
+        data: {
+          entityId: npc.npcId,
+          entityType: 'npc',
+          npcTemplateId: npc.npcTemplateId,
+          pos: { x: npc.x, y: npc.y },
+          rotation: npc.rotation ?? 0,
+          state: npc.state ?? 'move',
+        },
+      });
+    }
+  }
+
   onApplicationShutdown(signal?: string) {
     this.logger.log(`Server shutting down (${signal}), notifying clients...`);
     this.server.emit('server:shutdown', {
@@ -173,8 +214,8 @@ export class GameGateway
       };
     }
 
-    const sceneId = message?.data?.sceneId;
-    if (!sceneId) {
+    const rawSceneId = message?.data?.sceneId;
+    if (!rawSceneId) {
       return {
         cmd: 'world.enter_scene_sync',
         seq: message?.seq ?? 0,
@@ -182,6 +223,8 @@ export class GameGateway
         msg: '缺少场景ID',
       };
     }
+    // 场景 id 统一为字符串：下游 redis 集合键与 NPC 实例缓存键都按字符串寻址
+    const sceneId = String(rawSceneId);
 
     await this.worldService.checkEnterRequirement(sceneId, 1);
 

@@ -26,6 +26,7 @@ import { SceneConfigService } from './config/scene-config.service';
 import { PlayerQuest } from '@modules/quest/entities/player-quest.entity';
 import { PlayerModule } from '@modules/player/player.module';
 import { NpcPresenceService } from './npc/npc-presence.service';
+import { NpcTickService } from './npc/npc-tick.service';
 
 @Module({
   imports: [
@@ -52,7 +53,12 @@ import { NpcPresenceService } from './npc/npc-presence.service';
     PlayerModule,
   ],
   controllers: [WorldController, WorldClientController],
-  providers: [WorldService, SceneConfigService, NpcPresenceService],
+  providers: [
+    WorldService,
+    SceneConfigService,
+    NpcPresenceService,
+    NpcTickService,
+  ],
   exports: [WorldService, NpcPresenceService],
 })
 export class WorldModule {}

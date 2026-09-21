@@ -41,6 +41,8 @@ export const GameEvents = {
   // 世界事件
   ENTITY_SPAWNED: 'world.entity.spawned',
   ENTITY_REMOVED: 'world.entity.removed',
+  // S4：NPC 位置推进结果（tick → gateway → scene:<id> 房间广播校正）
+  NPC_POSITIONS_UPDATED: 'world.npc.positions_updated',
 
   // 网关事件
   PLAYER_ONLINE: 'gateway.player.online',

@@ -110,7 +110,7 @@ describe('WorldService', () => {
             hGetAll: jest.fn(),
             sAdd: jest.fn(),
             sRem: jest.fn(),
-            sMembers: jest.fn(),
+            sMembers: jest.fn().mockResolvedValue([]),
             del: jest.fn(),
             exists: jest.fn(),
             acquireLock: jest.fn(),

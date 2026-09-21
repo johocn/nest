@@ -36,6 +36,9 @@ import {
   NpcInstance,
 } from './npc/npc-presence.service';
 
+/** 活跃场景登记键（S4：只跑有玩家在场的场景，D7） */
+export const ACTIVE_SCENES_KEY = 'scenes:active';
+
 export interface SceneEnterResult {
   scene: Scene;
   spawns: SceneEntitySpawn[];
@@ -159,12 +162,21 @@ export class WorldService {
     // S4：按该玩家的 condition 过滤后下发 NPC 实例（位置/路点由服务端权威给出）
     const npcs = await this.npcPresence.listNpcsForPlayer(sceneId, playerId);
     await this.cacheService.sAdd(`scene:${sceneId}:players`, playerId);
+    // S4：登记活跃场景，供 NPC tick 只跑有玩家在场的场景（D7）
+    await this.cacheService.sAdd(ACTIVE_SCENES_KEY, String(sceneId));
     this.eventBus.emit(GameEvents.PLAYER_ENTER_SCENE, { playerId, sceneId });
     return { scene, spawns, triggers, npcs };
   }
 
   async leaveScene(playerId: string, sceneId: string): Promise<void> {
     await this.cacheService.sRem(`scene:${sceneId}:players`, playerId);
+    // S4：场景内最后一名玩家离开时摘除活跃标记，空场景不再空转（D7）
+    const remaining = await this.cacheService.sMembers(
+      `scene:${sceneId}:players`,
+    );
+    if (remaining.length === 0) {
+      await this.cacheService.sRem(ACTIVE_SCENES_KEY, sceneId);
+    }
     this.eventBus.emit(GameEvents.PLAYER_LEAVE_SCENE, { playerId, sceneId });
   }
 

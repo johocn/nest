@@ -148,6 +148,28 @@ const server = net.createServer((socket) => {
       else if (op === 'TTL') {
         writeResp(socket, 'INT', -1);
       }
+      else if (op === 'SADD') {
+        // Set：值以 Set 存于 store（与 String 值共存，靠 instanceof 区分）
+        let set = store.get(args[1]);
+        if (!(set instanceof Set)) { set = new Set(); store.set(args[1], set); }
+        let added = 0;
+        for (const member of args.slice(2)) {
+          if (!set.has(member)) { set.add(member); added++; }
+        }
+        writeResp(socket, 'INT', added);
+      }
+      else if (op === 'SREM') {
+        const set = store.get(args[1]);
+        let removed = 0;
+        if (set instanceof Set) {
+          for (const member of args.slice(2)) if (set.delete(member)) removed++;
+        }
+        writeResp(socket, 'INT', removed);
+      }
+      else if (op === 'SMEMBERS') {
+        const set = store.get(args[1]);
+        writeResp(socket, 'ARRAY', set instanceof Set ? [...set] : []);
+      }
       else if (op === 'KEYS') {
         writeResp(socket, 'ARRAY', [...store.keys()]);
       }
