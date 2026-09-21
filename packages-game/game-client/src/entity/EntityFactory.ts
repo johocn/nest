@@ -1,10 +1,11 @@
 import { AppConfig } from '../config/AppConfig';
+import { AiComponent } from './components/AiComponent';
 import { Component } from './components/Component';
 import { createInteractComponent } from './components/interact/registry';
 import { TransformComponent } from './components/TransformComponent';
 import { VisualComponent } from './components/VisualComponent';
 import { Entity, type EntityOptions } from './Entity';
-import type { FixedNpc, ServerSpawn, StaticEntity } from '../config/schema';
+import type { FixedNpc, NpcInstanceConfig, ServerSpawn, StaticEntity } from '../config/schema';
 
 const PLACEHOLDER_URL = `${AppConfig.assetBase}resources/placeholder.png`;
 
@@ -113,6 +114,53 @@ export class EntityFactory {
       // 动态 NPC 与静态 NPC 一致挂对话组件；怪物的战斗交互属 S4，此处不挂交互组件
       sp.entityType === 'npc' ? [createInteractComponent({ kind: 'talk' })] : [],
     );
+  }
+
+  /**
+   * 按进场景应答的 `npcs[]` 建实体（S4）：`entityId` 直接用服务端 `npcId`
+   * （`npc:<spawnId>` 或 `npcs:<ruleId>:<slot>`），仅 patrol（带 `route`）挂 `AiComponent`。
+   * 交互复用 S3 的 `TalkComponent`；`npcs:<ruleId>:<slot>` 形态暂不可对话（见 TalkComponent）。
+   */
+  static createFromNpcInstance(n: NpcInstanceConfig): Entity {
+    const extras: Component[] = [createInteractComponent({ kind: 'talk' })];
+    if (n.route) extras.push(new AiComponent(n.route, n.x, n.y));
+    return EntityFactory.assemble(
+      {
+        entityId: n.npcId,
+        kind: 'npc',
+        spawnId: EntityFactory.spawnIdOf(n.npcId),
+        templateId: Number(n.npcTemplateId),
+        displayName: n.name || n.npcId,
+        x: n.x,
+        y: n.y,
+        color: COLORS.npc,
+        texture: EntityFactory.texture,
+      },
+      extras,
+    );
+  }
+
+  /**
+   * 广播漏包兜底：`world.entity_update`（npc）到达但本地无该实体时按包内数据补建。
+   * 包内只有 `npcId/npcTemplateId/pos`，故补建为无 `route` 的静止 NPC（位置由后续校正继续逼近）。
+   */
+  static createFromNpcUpdate(npcId: string, npcTemplateId: string, x: number, y: number): Entity {
+    return EntityFactory.createFromNpcInstance({
+      npcId,
+      npcTemplateId,
+      resKey: '',
+      name: npcId,
+      scale: 1,
+      anim: '',
+      x,
+      y,
+    });
+  }
+
+  /** 只有 `npc:<spawnId>` 形态能映射到 `scene_entity_spawns.id`（对话接口按 spawnId 寻址） */
+  private static spawnIdOf(npcId: string): number | null {
+    const m = /^npc:(\d+)$/.exec(String(npcId ?? ''));
+    return m ? Number(m[1]) : null;
   }
 
   /**

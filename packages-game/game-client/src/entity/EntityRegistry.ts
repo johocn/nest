@@ -50,6 +50,13 @@ export const EntityRegistry = {
     return created;
   },
 
+  /** 逐帧推进所有实体的组件（`Component.update` 契约的唯一驱动点，S4 的 AiComponent 依赖它） */
+  updateAll(dtMs: number): void {
+    for (const e of byId.values()) {
+      for (const c of e.components.values()) c.update(dtMs);
+    }
+  },
+
   clear(): void {
     for (const e of byId.values()) {
       if (e.sprite.parent) e.sprite.parent.removeChild(e.sprite);
