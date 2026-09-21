@@ -41,6 +41,7 @@ describe('TradeService Negotiation', () => {
     findOne: jest.fn(),
     find: jest.fn(),
     findAndCount: jest.fn(),
+    update: jest.fn(),
     create: jest.fn((data: any) => ({ ...data })),
     save: jest.fn().mockImplementation((data: any) => Promise.resolve(data)),
   });
@@ -124,6 +125,7 @@ describe('TradeService Negotiation', () => {
     itemName: '铁剑',
     quantity: 1,
     pricePerUnit: '100',
+    currencyType: CurrencyType.GOLD,
     status: TradeStatus.PENDING,
   });
 
@@ -206,6 +208,10 @@ describe('TradeService Negotiation', () => {
   });
 
   describe('acceptNegotiation', () => {
+    beforeEach(() => {
+      tradeRepo.update.mockResolvedValue({ affected: 1 } as any);
+    });
+
     it('should settle at min(ask, reply) with no discount', async () => {
       negotiationRepo.findOne.mockResolvedValue(pendingNegotiation());
       tradeRepo.findOne.mockResolvedValue(makePendingOrder());
@@ -263,9 +269,10 @@ describe('TradeService Negotiation', () => {
 
       await service.acceptNegotiation('p1', 'n1');
 
-      const savedOrder = tradeRepo.save.mock.calls[0][0];
-      expect(savedOrder.buyerId).toBe('p1');
-      expect(savedOrder.status).toBe(TradeStatus.COMPLETED);
+      expect(tradeRepo.update).toHaveBeenCalledWith(
+        { id: 't1', status: TradeStatus.PENDING },
+        { status: TradeStatus.COMPLETED, buyerId: 'p1' },
+      );
       expect(eventBus.emit).toHaveBeenCalled();
     });
 

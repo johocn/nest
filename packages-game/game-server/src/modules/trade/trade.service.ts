@@ -171,20 +171,39 @@ export class TradeService {
 
   async createTradeOrder(params: CreateTradeParams): Promise<TradeOrder> {
     this.assertTradableCurrency(params.currencyType);
-    const order = this.tradeRepo.create({
-      ...params,
-      buyerId: null,
-      status: TradeStatus.PENDING,
-    });
-    const saved = await this.tradeRepo.save(order);
 
-    this.eventBus.emit(GameEvents.TRADE_CREATED, {
-      tradeId: saved.id,
-      sellerId: params.sellerId,
-      itemName: params.itemName,
-    });
+    // 挂单即托管卖家库存：绑定/禁交易道具在此被拒，且防同一道具重复挂单
+    await this.inventoryService.removeUnboundItem(
+      params.sellerId,
+      params.itemTemplateId,
+      params.quantity,
+      'trade.createTradeOrder',
+    );
 
-    return saved;
+    try {
+      const order = this.tradeRepo.create({
+        ...params,
+        buyerId: null,
+        status: TradeStatus.PENDING,
+      });
+      const saved = await this.tradeRepo.save(order);
+
+      this.eventBus.emit(GameEvents.TRADE_CREATED, {
+        tradeId: saved.id,
+        sellerId: params.sellerId,
+        itemName: params.itemName,
+      });
+
+      return saved;
+    } catch (err) {
+      await this.inventoryService.addItem(
+        params.sellerId,
+        params.itemTemplateId,
+        params.quantity,
+        'trade.createTradeOrder.rollback',
+      );
+      throw err;
+    }
   }
 
   async buyItem(buyerId: string, tradeId: string): Promise<TradeOrder> {
@@ -199,9 +218,83 @@ export class TradeService {
       throw new GameException(ErrorCodes.TRADE_NOT_OWNER, '不能购买自己的商品');
     }
 
-    order.buyerId = buyerId;
-    order.status = TradeStatus.COMPLETED;
-    const saved = await this.tradeRepo.save(order);
+    const currency = order.currencyType as CurrencyType;
+    const total = BigInt(order.pricePerUnit) * BigInt(order.quantity);
+    const taxPercent = await this.readPercent(
+      TradeService.SALE_TAX_KEY,
+      TradeService.DEFAULT_SALE_TAX_PERCENT,
+    );
+    const guildSharePercent = await this.readPercent(
+      TradeService.TAX_GUILD_SHARE_KEY,
+      TradeService.DEFAULT_TAX_GUILD_SHARE_PERCENT,
+    );
+    const tax = (total * BigInt(taxPercent)) / BigInt(100);
+    const toSeller = total - tax;
+    // BigInt 整除余数归系统回收，保证「卖家到手 + 帮派 + 回收 = total」
+    const guildShare = (tax * BigInt(guildSharePercent)) / BigInt(100);
+
+    // 状态原子占位：并发双买只有一次能拿到 affected=1
+    const claimed = await this.tradeRepo.update(
+      { id: order.id, status: TradeStatus.PENDING },
+      { status: TradeStatus.COMPLETED, buyerId },
+    );
+    if (!claimed.affected) {
+      throw new GameException(ErrorCodes.TRADE_ALREADY_COMPLETED, '交易已结束');
+    }
+
+    let deducted = false;
+    try {
+      await this.economyService.deductCurrency(
+        buyerId,
+        currency,
+        Number(total),
+        'trade_buy',
+        'trade.buyItem',
+        order.id,
+      );
+      deducted = true;
+
+      if (toSeller > BigInt(0)) {
+        await this.economyService.addCurrency(
+          order.sellerId,
+          currency,
+          Number(toSeller),
+          'trade_sell',
+          'trade.buyItem',
+          order.id,
+        );
+      }
+      if (guildShare > BigInt(0)) {
+        await this.recycleTaxToGuild(
+          order.sellerId,
+          Number(guildShare),
+          'trade_tax_guild',
+        );
+      }
+      await this.inventoryService.addItem(
+        buyerId,
+        order.itemTemplateId,
+        order.quantity,
+        'trade.buyItem',
+      );
+    } catch (err) {
+      // 补偿：已扣款则退款，并回滚状态占位，避免「钱扣了单还是完成」
+      if (deducted) {
+        await this.economyService.addCurrency(
+          buyerId,
+          currency,
+          Number(total),
+          'trade_buy_refund',
+          'trade.buyItem.rollback',
+          order.id,
+        );
+      }
+      await this.tradeRepo.update(
+        { id: order.id },
+        { status: TradeStatus.PENDING, buyerId: null },
+      );
+      throw err;
+    }
 
     this.eventBus.emit(GameEvents.TRADE_COMPLETED, {
       tradeId: order.id,
@@ -209,7 +302,9 @@ export class TradeService {
       buyerId,
     });
 
-    return saved;
+    order.buyerId = buyerId;
+    order.status = TradeStatus.COMPLETED;
+    return order;
   }
 
   async cancelTradeOrder(
@@ -223,9 +318,28 @@ export class TradeService {
     if (order.sellerId !== sellerId) {
       throw new GameException(ErrorCodes.TRADE_NOT_OWNER, '无权操作他人交易');
     }
+    if (order.status !== TradeStatus.PENDING) {
+      throw new GameException(ErrorCodes.TRADE_ALREADY_COMPLETED, '交易已结束');
+    }
+
+    // 原子占位：与 buyItem 竞争同一 PENDING 状态
+    const claimed = await this.tradeRepo.update(
+      { id: order.id, status: TradeStatus.PENDING },
+      { status: TradeStatus.CANCELLED },
+    );
+    if (!claimed.affected) {
+      throw new GameException(ErrorCodes.TRADE_ALREADY_COMPLETED, '交易已结束');
+    }
+
+    await this.inventoryService.addItem(
+      sellerId,
+      order.itemTemplateId,
+      order.quantity,
+      'trade.cancelTradeOrder',
+    );
 
     order.status = TradeStatus.CANCELLED;
-    return this.tradeRepo.save(order);
+    return order;
   }
 
   async getMarketList(

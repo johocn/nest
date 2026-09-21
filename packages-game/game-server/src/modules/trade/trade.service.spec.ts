@@ -74,6 +74,7 @@ describe('TradeService', () => {
             findOne: jest.fn(),
             find: jest.fn(),
             findAndCount: jest.fn(),
+            update: jest.fn(),
             create: jest.fn((data: any) => ({ ...data })),
             save: jest
               .fn()
@@ -230,7 +231,9 @@ describe('TradeService', () => {
         itemName: '铁剑',
         quantity: 1,
         pricePerUnit: '100',
+        currencyType: CurrencyType.GOLD,
       } as any);
+      tradeRepo.update.mockResolvedValue({ affected: 1 } as any);
 
       const result = await service.buyItem('p2', 't1');
 
@@ -273,7 +276,10 @@ describe('TradeService', () => {
         id: 't1',
         sellerId: 'p1',
         status: TradeStatus.PENDING,
+        itemTemplateId: 'i1',
+        quantity: 1,
       } as any);
+      tradeRepo.update.mockResolvedValue({ affected: 1 } as any);
 
       const result = await service.cancelTradeOrder('p1', 't1');
 
@@ -506,7 +512,12 @@ describe('TradeService', () => {
         sellerId: 'seller',
         buyerId: null,
         status: TradeStatus.PENDING,
+        itemTemplateId: 'i1',
+        quantity: 1,
+        pricePerUnit: '100',
+        currencyType: CurrencyType.GOLD,
       } as any);
+      tradeRepo.update.mockResolvedValue({ affected: 1 } as any);
       economyService.getBalance.mockResolvedValue('0');
 
       const result = await service.acceptNegotiation('buyer', 'n1');
@@ -696,6 +707,153 @@ describe('TradeService', () => {
         5,
       );
       expect(percent).toBe(8);
+    });
+  });
+
+  describe('trade order settlement', () => {
+    const order = {
+      id: '1',
+      sellerId: 'seller',
+      buyerId: null,
+      itemTemplateId: '100',
+      itemName: '道具',
+      quantity: 3,
+      pricePerUnit: '100',
+      currencyType: CurrencyType.GOLD,
+      status: TradeStatus.PENDING,
+    };
+
+    it('should escrow seller inventory on createTradeOrder', async () => {
+      tradeRepo.save.mockImplementation((data: any) =>
+        Promise.resolve({ ...data, id: '1' }),
+      );
+
+      await service.createTradeOrder({
+        sellerId: 'seller',
+        itemTemplateId: '100',
+        itemName: '道具',
+        quantity: 3,
+        pricePerUnit: '100',
+        currencyType: CurrencyType.GOLD,
+      });
+
+      expect(inventoryService.removeUnboundItem).toHaveBeenCalledWith(
+        'seller',
+        '100',
+        3,
+        'trade.createTradeOrder',
+      );
+    });
+
+    it('should return escrowed items when order save fails', async () => {
+      tradeRepo.save.mockRejectedValue(new Error('db down'));
+
+      await expect(
+        service.createTradeOrder({
+          sellerId: 'seller',
+          itemTemplateId: '100',
+          itemName: '道具',
+          quantity: 3,
+          pricePerUnit: '100',
+          currencyType: CurrencyType.GOLD,
+        }),
+      ).rejects.toThrow('db down');
+
+      expect(inventoryService.addItem).toHaveBeenCalledWith(
+        'seller',
+        '100',
+        3,
+        'trade.createTradeOrder.rollback',
+      );
+    });
+
+    it('should settle payment, tax and item transfer on buy', async () => {
+      tradeRepo.findOne.mockResolvedValue({ ...order });
+      tradeRepo.update.mockResolvedValue({ affected: 1 } as any);
+
+      await service.buyItem('buyer', '1');
+
+      // 买家付 300，税 5% = 15，卖家到手 285
+      expect(economyService.deductCurrency).toHaveBeenCalledWith(
+        'buyer',
+        CurrencyType.GOLD,
+        300,
+        'trade_buy',
+        'trade.buyItem',
+        '1',
+      );
+      expect(economyService.addCurrency).toHaveBeenCalledWith(
+        'seller',
+        CurrencyType.GOLD,
+        285,
+        'trade_sell',
+        'trade.buyItem',
+        '1',
+      );
+      expect(inventoryService.addItem).toHaveBeenCalledWith(
+        'buyer',
+        '100',
+        3,
+        'trade.buyItem',
+      );
+    });
+
+    it('should reject second buyer when status placeholder fails', async () => {
+      tradeRepo.findOne.mockResolvedValue({ ...order });
+      tradeRepo.update.mockResolvedValue({ affected: 0 } as any);
+
+      await expect(service.buyItem('buyer2', '1')).rejects.toMatchObject({
+        response: { code: ErrorCodes.TRADE_ALREADY_COMPLETED },
+      });
+      expect(economyService.deductCurrency).not.toHaveBeenCalled();
+    });
+
+    it('should refund buyer and restore status when settlement fails', async () => {
+      tradeRepo.findOne.mockResolvedValue({ ...order });
+      tradeRepo.update.mockResolvedValue({ affected: 1 } as any);
+      economyService.deductCurrency.mockResolvedValue({
+        balanceAfter: '700',
+      } as any);
+      economyService.addCurrency.mockRejectedValueOnce(new Error('db down'));
+
+      await expect(service.buyItem('buyer', '1')).rejects.toThrow('db down');
+
+      expect(economyService.addCurrency).toHaveBeenCalledWith(
+        'buyer',
+        CurrencyType.GOLD,
+        300,
+        'trade_buy_refund',
+        'trade.buyItem.rollback',
+        '1',
+      );
+      expect(tradeRepo.update).toHaveBeenLastCalledWith(
+        { id: '1' },
+        { status: TradeStatus.PENDING, buyerId: null },
+      );
+    });
+
+    it('should return escrowed items on cancel', async () => {
+      tradeRepo.findOne.mockResolvedValue({ ...order });
+      tradeRepo.update.mockResolvedValue({ affected: 1 } as any);
+
+      await service.cancelTradeOrder('seller', '1');
+
+      expect(inventoryService.addItem).toHaveBeenCalledWith(
+        'seller',
+        '100',
+        3,
+        'trade.cancelTradeOrder',
+      );
+    });
+
+    it('should reject cancel by non-owner', async () => {
+      tradeRepo.findOne.mockResolvedValue({ ...order });
+
+      await expect(
+        service.cancelTradeOrder('other', '1'),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.TRADE_NOT_OWNER },
+      });
     });
   });
 });
