@@ -243,6 +243,7 @@ export class TradeService {
     }
 
     let deducted = false;
+    let delivered = false;
     try {
       await this.economyService.deductCurrency(
         buyerId,
@@ -253,6 +254,15 @@ export class TradeService {
         order.id,
       );
       deducted = true;
+
+      // 先发货再给卖家入账：发货失败（背包满/模板异常）时卖家尚未入账，补偿无需追回卖方资金
+      await this.inventoryService.addItem(
+        buyerId,
+        order.itemTemplateId,
+        order.quantity,
+        'trade.buyItem',
+      );
+      delivered = true;
 
       if (toSeller > BigInt(0)) {
         await this.economyService.addCurrency(
@@ -271,14 +281,16 @@ export class TradeService {
           'trade_tax_guild',
         );
       }
-      await this.inventoryService.addItem(
-        buyerId,
-        order.itemTemplateId,
-        order.quantity,
-        'trade.buyItem',
-      );
     } catch (err) {
-      // 补偿：已扣款则退款，并回滚状态占位，避免「钱扣了单还是完成」
+      // 补偿：已发货先扣回道具（防「退款后白得道具」），再退买家全款并回滚状态占位
+      if (delivered) {
+        await this.inventoryService.removeUnboundItem(
+          buyerId,
+          order.itemTemplateId,
+          order.quantity,
+          'trade.buyItem.rollback',
+        );
+      }
       if (deducted) {
         await this.economyService.addCurrency(
           buyerId,
@@ -527,6 +539,7 @@ export class TradeService {
     const guildShare = (tax * BigInt(guildSharePercent)) / BigInt(100);
 
     let deducted = false;
+    let delivered = false;
     try {
       await this.economyService.deductCurrency(
         bidderId,
@@ -537,6 +550,15 @@ export class TradeService {
         item.id,
       );
       deducted = true;
+
+      // 先发货再给卖家入账：发货失败时卖家尚未入账，走流拍分支即可，无需追回卖方资金
+      await this.inventoryService.addItem(
+        bidderId,
+        item.itemTemplateId,
+        item.quantity,
+        'trade.endAuction',
+      );
+      delivered = true;
 
       if (toSeller > BigInt(0)) {
         await this.economyService.addCurrency(
@@ -555,14 +577,16 @@ export class TradeService {
           'auction_tax_guild',
         );
       }
-      await this.inventoryService.addItem(
-        bidderId,
-        item.itemTemplateId,
-        item.quantity,
-        'trade.endAuction',
-      );
     } catch (err) {
-      // 买家余额不足等 → 流拍并退回卖家库存
+      // 结算失败 → 流拍：已发货先扣回（防「退款后白得道具」），再退买家款并退回卖家库存
+      if (delivered) {
+        await this.inventoryService.removeUnboundItem(
+          bidderId,
+          item.itemTemplateId,
+          item.quantity,
+          'trade.endAuction.rollback',
+        );
+      }
       if (deducted) {
         await this.economyService.addCurrency(
           bidderId,

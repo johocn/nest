@@ -595,6 +595,80 @@ describe('TradeService', () => {
       );
     });
 
+    it('should not credit seller when delivery fails on auction', async () => {
+      auctionRepo.findOne.mockResolvedValue({
+        ...auction,
+        currentBidderId: 'buyer',
+        status: AuctionStatus.BID,
+      });
+      auctionRepo.update.mockResolvedValue({ affected: 1 } as any);
+      economyService.deductCurrency.mockResolvedValue({
+        balanceAfter: '700',
+      } as any);
+      inventoryService.addItem.mockRejectedValueOnce(
+        new GameException(ErrorCodes.BAG_FULL, '背包已满'),
+      );
+
+      await expect(service.endAuction('9')).rejects.toMatchObject({
+        response: { code: ErrorCodes.BAG_FULL },
+      });
+
+      // 未发货则不得给卖家入账，且流拍退回库存
+      expect(economyService.addCurrency).not.toHaveBeenCalledWith(
+        'seller',
+        CurrencyType.GOLD,
+        285,
+        'auction_sell',
+        'trade.endAuction',
+        '9',
+      );
+      expect(economyService.addCurrency).toHaveBeenCalledWith(
+        'buyer',
+        CurrencyType.GOLD,
+        300,
+        'auction_buy_refund',
+        'trade.endAuction.rollback',
+        '9',
+      );
+      expect(auctionRepo.update).toHaveBeenLastCalledWith(
+        { id: '9' },
+        { status: AuctionStatus.EXPIRED },
+      );
+      expect(inventoryService.addItem).toHaveBeenCalledWith(
+        'seller',
+        '100',
+        2,
+        'trade.endAuction.rollback',
+      );
+    });
+
+    it('should claw back delivered item when seller credit fails on auction', async () => {
+      auctionRepo.findOne.mockResolvedValue({
+        ...auction,
+        currentBidderId: 'buyer',
+        status: AuctionStatus.BID,
+      });
+      auctionRepo.update.mockResolvedValue({ affected: 1 } as any);
+      economyService.addCurrency.mockRejectedValueOnce(new Error('db down'));
+
+      await expect(service.endAuction('9')).rejects.toThrow('db down');
+
+      expect(inventoryService.removeUnboundItem).toHaveBeenCalledWith(
+        'buyer',
+        '100',
+        2,
+        'trade.endAuction.rollback',
+      );
+      expect(economyService.addCurrency).toHaveBeenCalledWith(
+        'buyer',
+        CurrencyType.GOLD,
+        300,
+        'auction_buy_refund',
+        'trade.endAuction.rollback',
+        '9',
+      );
+    });
+
     it('should reject double settlement', async () => {
       auctionRepo.findOne.mockResolvedValue({ ...auction });
       auctionRepo.update.mockResolvedValue({ affected: 0 } as any);
@@ -973,7 +1047,7 @@ describe('TradeService', () => {
       expect(economyService.deductCurrency).not.toHaveBeenCalled();
     });
 
-    it('should refund buyer and restore status when settlement fails', async () => {
+    it('should refund buyer, claw back item and restore status when settlement fails', async () => {
       tradeRepo.findOne.mockResolvedValue({ ...order });
       tradeRepo.update.mockResolvedValue({ affected: 1 } as any);
       economyService.deductCurrency.mockResolvedValue({
@@ -983,6 +1057,50 @@ describe('TradeService', () => {
 
       await expect(service.buyItem('buyer', '1')).rejects.toThrow('db down');
 
+      expect(economyService.addCurrency).toHaveBeenCalledWith(
+        'buyer',
+        CurrencyType.GOLD,
+        300,
+        'trade_buy_refund',
+        'trade.buyItem.rollback',
+        '1',
+      );
+      // 已发货必须扣回，否则「退款后白得道具」
+      expect(inventoryService.removeUnboundItem).toHaveBeenCalledWith(
+        'buyer',
+        '100',
+        3,
+        'trade.buyItem.rollback',
+      );
+      expect(tradeRepo.update).toHaveBeenLastCalledWith(
+        { id: '1' },
+        { status: TradeStatus.PENDING, buyerId: null },
+      );
+    });
+
+    it('should not credit seller when delivery fails on buy', async () => {
+      tradeRepo.findOne.mockResolvedValue({ ...order });
+      tradeRepo.update.mockResolvedValue({ affected: 1 } as any);
+      economyService.deductCurrency.mockResolvedValue({
+        balanceAfter: '700',
+      } as any);
+      inventoryService.addItem.mockRejectedValueOnce(
+        new GameException(ErrorCodes.BAG_FULL, '背包已满'),
+      );
+
+      await expect(service.buyItem('buyer', '1')).rejects.toMatchObject({
+        response: { code: ErrorCodes.BAG_FULL },
+      });
+
+      // 发货失败时卖家一分未得，且订单回到可再购状态
+      expect(economyService.addCurrency).not.toHaveBeenCalledWith(
+        'seller',
+        CurrencyType.GOLD,
+        285,
+        'trade_sell',
+        'trade.buyItem',
+        '1',
+      );
       expect(economyService.addCurrency).toHaveBeenCalledWith(
         'buyer',
         CurrencyType.GOLD,
