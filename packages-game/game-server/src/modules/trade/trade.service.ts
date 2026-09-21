@@ -1075,17 +1075,72 @@ export class TradeService {
     itemsAJson: Record<string, any>,
     goldAmount: string,
   ): Promise<BarterDeal> {
-    const deal = this.barterRepo.create({
-      partyAId,
-      partyBId: null,
-      itemsAJson,
-      itemsBJson: {},
-      goldAmount,
-      aConfirm: true,
-      bConfirm: false,
-      status: BarterStatus.PENDING,
-    });
-    return this.barterRepo.save(deal);
+    const itemsA = this.parseItemMap(itemsAJson);
+    let gold: bigint;
+    try {
+      gold = BigInt(goldAmount || '0');
+    } catch {
+      throw new GameException(ErrorCodes.PARAM_INVALID, '金币数量格式非法');
+    }
+    if (gold < BigInt(0)) {
+      throw new GameException(ErrorCodes.PARAM_INVALID, '金币数量不能为负');
+    }
+
+    // 先托管 A 侧道具与金币，失败则逆向补偿，保证「未落单不扣资产」
+    const escrowed: Array<{ itemTemplateId: string; quantity: number }> = [];
+    let goldHeld = false;
+    try {
+      for (const it of itemsA) {
+        await this.inventoryService.removeUnboundItem(
+          partyAId,
+          it.itemTemplateId,
+          it.quantity,
+          'trade.createBarter',
+        );
+        escrowed.push(it);
+      }
+      if (gold > BigInt(0)) {
+        await this.economyService.deductCurrency(
+          partyAId,
+          CurrencyType.GOLD,
+          Number(gold),
+          'barter_hold',
+          'trade.createBarter',
+        );
+        goldHeld = true;
+      }
+
+      const deal = this.barterRepo.create({
+        partyAId,
+        partyBId: null,
+        itemsAJson,
+        itemsBJson: {},
+        goldAmount,
+        aConfirm: true,
+        bConfirm: false,
+        status: BarterStatus.PENDING,
+      });
+      return await this.barterRepo.save(deal);
+    } catch (err) {
+      for (const it of escrowed) {
+        await this.inventoryService.addItem(
+          partyAId,
+          it.itemTemplateId,
+          it.quantity,
+          'trade.createBarter.rollback',
+        );
+      }
+      if (goldHeld) {
+        await this.economyService.addCurrency(
+          partyAId,
+          CurrencyType.GOLD,
+          Number(gold),
+          'barter_hold_refund',
+          'trade.createBarter.rollback',
+        );
+      }
+      throw err;
+    }
   }
 
   async acceptBarter(
@@ -1101,22 +1156,103 @@ export class TradeService {
       throw new GameException(ErrorCodes.BARTER_CONFIRM_MISMATCH, '易物确认不匹配');
     }
 
+    const itemsA = this.parseItemMap(deal.itemsAJson);
+    const itemsB = this.parseItemMap(itemsBJson);
+
+    // 先扣 B 侧（绑定/禁交易/不足在此被拒），扣减阶段失败可无副作用回退
+    const escrowedB: Array<{ itemTemplateId: string; quantity: number }> = [];
+    try {
+      for (const it of itemsB) {
+        await this.inventoryService.removeUnboundItem(
+          partyBId,
+          it.itemTemplateId,
+          it.quantity,
+          'trade.acceptBarter',
+        );
+        escrowedB.push(it);
+      }
+    } catch (err) {
+      for (const it of escrowedB) {
+        await this.inventoryService.addItem(
+          partyBId,
+          it.itemTemplateId,
+          it.quantity,
+          'trade.acceptBarter.rollback',
+        );
+      }
+      throw err;
+    }
+
+    // 状态原子占位：并发重复接受、A 侧未确认（aConfirm=false 的遗留单）都只有 affected=1 才成交
+    const claimed = await this.barterRepo.update(
+      { id: deal.id, status: BarterStatus.PENDING, aConfirm: true, bConfirm: false },
+      {
+        status: BarterStatus.COMPLETED,
+        partyBId,
+        bConfirm: true,
+        itemsBJson,
+      },
+    );
+    if (!claimed.affected) {
+      for (const it of escrowedB) {
+        await this.inventoryService.addItem(
+          partyBId,
+          it.itemTemplateId,
+          it.quantity,
+          'trade.acceptBarter.rollback',
+        );
+      }
+      throw new GameException(ErrorCodes.BARTER_CONFIRM_MISMATCH, '易物确认不匹配');
+    }
+
+    // 发放阶段：失败只记 warning 不回滚，避免逆向收道具引发二次不一致
+    try {
+      for (const it of itemsA) {
+        await this.inventoryService.addItem(
+          partyBId,
+          it.itemTemplateId,
+          it.quantity,
+          'trade.acceptBarter',
+        );
+      }
+      for (const it of itemsB) {
+        await this.inventoryService.addItem(
+          deal.partyAId,
+          it.itemTemplateId,
+          it.quantity,
+          'trade.acceptBarter',
+        );
+      }
+      const gold = BigInt(deal.goldAmount || '0');
+      if (gold > BigInt(0)) {
+        await this.economyService.addCurrency(
+          partyBId,
+          CurrencyType.GOLD,
+          Number(gold),
+          'barter_release',
+          'trade.acceptBarter',
+          deal.id,
+        );
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Barter release failed (barter=${deal.id}): ${(err as Error).message}`,
+      );
+    }
+
+    this.eventBus.emit(GameEvents.BARTER_COMPLETED, { playerId: partyBId });
+    this.eventBus.emit(GameEvents.TRADE_COMPLETED, {
+      barterId: deal.id,
+      partyAId: deal.partyAId,
+      partyBId,
+      kind: 'barter',
+    });
+
     deal.partyBId = partyBId;
     deal.itemsBJson = itemsBJson;
     deal.bConfirm = true;
-    if (deal.aConfirm && deal.bConfirm) {
-      deal.status = BarterStatus.COMPLETED;
-      this.eventBus.emit(GameEvents.BARTER_COMPLETED, {
-        playerId: partyBId,
-      });
-      this.eventBus.emit(GameEvents.TRADE_COMPLETED, {
-        barterId: deal.id,
-        partyAId: deal.partyAId,
-        partyBId,
-        kind: 'barter',
-      });
-    }
-    return this.barterRepo.save(deal);
+    deal.status = BarterStatus.COMPLETED;
+    return deal;
   }
 
   async getBarterList(playerId: string): Promise<BarterDeal[]> {

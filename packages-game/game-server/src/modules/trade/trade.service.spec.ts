@@ -148,6 +148,7 @@ describe('TradeService', () => {
             findOne: jest.fn(),
             find: jest.fn(),
             findAndCount: jest.fn(),
+            update: jest.fn().mockResolvedValue({ affected: 1 }),
             create: jest.fn((data: any) => ({ ...data })),
             save: jest
               .fn()
@@ -791,7 +792,7 @@ describe('TradeService', () => {
       } as any);
 
       const result = await service.acceptBarter('pB', 'd1', {
-        itemX: 1,
+        '200': 1,
       });
 
       expect(result.status).toBe(BarterStatus.COMPLETED);
@@ -1018,6 +1019,108 @@ describe('TradeService', () => {
       ).rejects.toMatchObject({
         response: { code: ErrorCodes.TRADE_NOT_OWNER },
       });
+    });
+  });
+
+  describe('barter settlement', () => {
+    it('should escrow party A items and gold on createBarter', async () => {
+      barterRepo.save.mockImplementation((data: any) =>
+        Promise.resolve({ ...data, id: '7' }),
+      );
+
+      await service.createBarter('a', { '100': 2 }, '50');
+
+      expect(inventoryService.removeUnboundItem).toHaveBeenCalledWith(
+        'a',
+        '100',
+        2,
+        'trade.createBarter',
+      );
+      expect(economyService.deductCurrency).toHaveBeenCalledWith(
+        'a',
+        CurrencyType.GOLD,
+        50,
+        'barter_hold',
+        'trade.createBarter',
+      );
+    });
+
+    it('should reject illegal item map format', async () => {
+      await expect(
+        service.createBarter('a', { abc: 1 } as any, '0'),
+      ).rejects.toMatchObject({ response: { code: ErrorCodes.PARAM_INVALID } });
+      expect(inventoryService.removeUnboundItem).not.toHaveBeenCalled();
+    });
+
+    it('should transfer items both ways on acceptBarter', async () => {
+      barterRepo.findOne.mockResolvedValue({
+        id: '7',
+        partyAId: 'a',
+        partyBId: null,
+        itemsAJson: { '100': 2 },
+        itemsBJson: {},
+        goldAmount: '50',
+        aConfirm: true,
+        bConfirm: false,
+        status: BarterStatus.PENDING,
+      } as any);
+      barterRepo.update.mockResolvedValue({ affected: 1 } as any);
+
+      await service.acceptBarter('b', '7', { '200': 1 });
+
+      expect(inventoryService.removeUnboundItem).toHaveBeenCalledWith(
+        'b',
+        '200',
+        1,
+        'trade.acceptBarter',
+      );
+      expect(inventoryService.addItem).toHaveBeenCalledWith(
+        'b',
+        '100',
+        2,
+        'trade.acceptBarter',
+      );
+      expect(inventoryService.addItem).toHaveBeenCalledWith(
+        'a',
+        '200',
+        1,
+        'trade.acceptBarter',
+      );
+      expect(economyService.addCurrency).toHaveBeenCalledWith(
+        'b',
+        CurrencyType.GOLD,
+        50,
+        'barter_release',
+        'trade.acceptBarter',
+        '7',
+      );
+    });
+
+    it('should refund party B items when placeholder fails', async () => {
+      barterRepo.findOne.mockResolvedValue({
+        id: '7',
+        partyAId: 'a',
+        partyBId: null,
+        itemsAJson: {},
+        itemsBJson: {},
+        goldAmount: '0',
+        aConfirm: true,
+        bConfirm: false,
+        status: BarterStatus.PENDING,
+      } as any);
+      barterRepo.update.mockResolvedValue({ affected: 0 } as any);
+
+      await expect(
+        service.acceptBarter('b', '7', { '200': 1 }),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.BARTER_CONFIRM_MISMATCH },
+      });
+      expect(inventoryService.addItem).toHaveBeenCalledWith(
+        'b',
+        '200',
+        1,
+        'trade.acceptBarter.rollback',
+      );
     });
   });
 });

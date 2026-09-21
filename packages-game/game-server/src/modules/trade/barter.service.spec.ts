@@ -29,11 +29,13 @@ describe('TradeService Barter', () => {
   let service: TradeService;
   let barterRepo: jest.Mocked<Repository<BarterDeal>>;
   let eventBus: jest.Mocked<EventBusService>;
+  let inventoryService: jest.Mocked<InventoryService>;
 
   const repoMock = () => ({
     findOne: jest.fn(),
     find: jest.fn(),
     findAndCount: jest.fn(),
+    update: jest.fn().mockResolvedValue({ affected: 1 }),
     create: jest.fn((data: any) => ({ ...data })),
     save: jest.fn().mockImplementation((data: any) => Promise.resolve(data)),
   });
@@ -104,13 +106,14 @@ describe('TradeService Barter', () => {
     service = module.get(TradeService);
     barterRepo = module.get(getRepositoryToken(BarterDeal));
     eventBus = module.get(EventBusService);
+    inventoryService = module.get(InventoryService);
   });
 
   const pendingDeal = (overrides: any = {}): any => ({
     id: 'b1',
     partyAId: 'p1',
     partyBId: null,
-    itemsAJson: { iron: 5 },
+    itemsAJson: { '100': 5 },
     itemsBJson: {},
     goldAmount: '100',
     aConfirm: true,
@@ -121,7 +124,7 @@ describe('TradeService Barter', () => {
 
   describe('createBarter', () => {
     it('should create pending deal with aConfirm true', async () => {
-      const result = await service.createBarter('p1', { iron: 5 }, '100');
+      const result = await service.createBarter('p1', { '100': 5 }, '100');
 
       expect(result.status).toBe(BarterStatus.PENDING);
       expect(result.aConfirm).toBe(true);
@@ -134,7 +137,7 @@ describe('TradeService Barter', () => {
     it('should throw BARTER_NOT_FOUND when deal missing', async () => {
       barterRepo.findOne.mockResolvedValue(null);
 
-      await expect(service.acceptBarter('p2', 'b999', { wood: 3 })).rejects.toMatchObject({
+      await expect(service.acceptBarter('p2', 'b999', { '200': 3 })).rejects.toMatchObject({
         response: { code: ErrorCodes.BARTER_NOT_FOUND },
       });
     });
@@ -142,7 +145,7 @@ describe('TradeService Barter', () => {
     it('should throw BARTER_CONFIRM_MISMATCH when partyB is partyA', async () => {
       barterRepo.findOne.mockResolvedValue(pendingDeal());
 
-      await expect(service.acceptBarter('p1', 'b1', { wood: 3 })).rejects.toMatchObject({
+      await expect(service.acceptBarter('p1', 'b1', { '200': 3 })).rejects.toMatchObject({
         response: { code: ErrorCodes.BARTER_CONFIRM_MISMATCH },
       });
     });
@@ -152,28 +155,33 @@ describe('TradeService Barter', () => {
         pendingDeal({ partyBId: 'p2', bConfirm: true }),
       );
 
-      await expect(service.acceptBarter('p3', 'b1', { wood: 3 })).rejects.toMatchObject({
+      await expect(service.acceptBarter('p3', 'b1', { '200': 3 })).rejects.toMatchObject({
         response: { code: ErrorCodes.BARTER_CONFIRM_MISMATCH },
       });
     });
 
-    it('should stay pending when only party B confirms', async () => {
+    it('should reject and refund when party A has not confirmed', async () => {
       barterRepo.findOne.mockResolvedValue(pendingDeal({ aConfirm: false }));
+      barterRepo.update.mockResolvedValue({ affected: 0 } as any);
 
-      const result = await service.acceptBarter('p2', 'b1', { wood: 3 });
-
-      expect(result.status).toBe(BarterStatus.PENDING);
-      expect(result.bConfirm).toBe(true);
-      expect(result.partyBId).toBe('p2');
-      expect(result.itemsBJson).toEqual({ wood: 3 });
+      await expect(service.acceptBarter('p2', 'b1', { '200': 3 })).rejects.toMatchObject({
+        response: { code: ErrorCodes.BARTER_CONFIRM_MISMATCH },
+      });
+      expect(inventoryService.addItem).toHaveBeenCalledWith(
+        'p2',
+        '200',
+        3,
+        'trade.acceptBarter.rollback',
+      );
     });
 
     it('should complete when both parties confirm and emit event', async () => {
       barterRepo.findOne.mockResolvedValue(pendingDeal());
 
-      const result = await service.acceptBarter('p2', 'b1', { wood: 3 });
+      const result = await service.acceptBarter('p2', 'b1', { '200': 3 });
 
       expect(result.status).toBe(BarterStatus.COMPLETED);
+      expect(result.itemsBJson).toEqual({ '200': 3 });
       expect(eventBus.emit).toHaveBeenCalledWith(
         GameEvents.TRADE_COMPLETED,
         expect.objectContaining({ kind: 'barter' }),
