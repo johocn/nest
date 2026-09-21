@@ -158,6 +158,88 @@ export class InventoryService {
     );
   }
 
+  /**
+   * 交易/拍卖/易物专用扣减：只认「未绑定」堆。
+   * 手册 11.2：绑定道具禁止交易流通，故不能复用 removeItem（后者不区分 bindStatus）。
+   */
+  async removeUnboundItem(
+    playerId: string,
+    itemTemplateId: string,
+    quantity: number,
+    opTrace: string,
+  ): Promise<InventoryItem> {
+    if (quantity <= 0) {
+      throw new GameException(ErrorCodes.PARAM_INVALID, '数量必须大于0');
+    }
+    if (!/^\d+$/.test(itemTemplateId)) {
+      throw new GameException(ErrorCodes.ITEM_NOT_FOUND, '道具模板不存在');
+    }
+
+    const template = await this.templateRepo.findOne({
+      where: { id: itemTemplateId },
+    });
+    if (!template) {
+      throw new GameException(ErrorCodes.ITEM_NOT_FOUND, '道具模板不存在');
+    }
+    if (template.canTrade === false) {
+      throw new GameException(ErrorCodes.ITEM_CANNOT_TRADE, '该道具禁止交易');
+    }
+
+    const lockKey = `lock:item:${playerId}:${itemTemplateId}`;
+    return this.cacheService.withLock(
+      lockKey,
+      async () => {
+        const item = await this.itemRepo.findOne({
+          where: {
+            playerId,
+            itemTemplateId,
+            bindStatus: BindStatus.UNBOUND,
+          },
+        });
+        if (!item) {
+          // 区分「没有该道具」与「有但已绑定」，便于运营定位
+          const anyItem = await this.itemRepo.findOne({
+            where: { playerId, itemTemplateId },
+          });
+          throw new GameException(
+            anyItem ? ErrorCodes.ITEM_BOUND : ErrorCodes.ITEM_NOT_FOUND,
+            anyItem ? '道具已绑定，禁止交易流通' : '道具不存在',
+          );
+        }
+
+        if (item.quantity < quantity) {
+          throw new GameException(ErrorCodes.ITEM_NOT_ENOUGH, '道具数量不足', {
+            current: item.quantity,
+            required: quantity,
+          });
+        }
+
+        item.quantity -= quantity;
+        const saved = await this.itemRepo.save(item);
+
+        await this.logRepo.save(
+          this.logRepo.create({
+            playerId,
+            itemTemplateId,
+            changeType: ItemChangeType.REMOVE,
+            quantity: -quantity,
+            opTrace,
+            balanceAfter: saved.quantity,
+          }),
+        );
+
+        this.eventBus.emit(GameEvents.ITEM_CONSUMED, {
+          playerId,
+          itemTemplateId,
+          quantity,
+        });
+
+        return saved;
+      },
+      { ttl: 10, retry: 3, retryDelay: 100 },
+    );
+  }
+
   async useItem(
     playerId: string,
     itemTemplateId: string,

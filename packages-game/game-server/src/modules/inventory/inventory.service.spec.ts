@@ -10,6 +10,7 @@ import {
 import { CacheService } from '@cache/cache.service';
 import { EventBusService } from '@event-bus/event-bus.service';
 import { GameException } from '@common/exceptions/game.exception';
+import { ErrorCodes } from '@constants/error-codes';
 import {
   ItemType,
   ItemRarity,
@@ -227,6 +228,70 @@ describe('InventoryService', () => {
         expect.any(Function),
         expect.any(Object),
       );
+    });
+  });
+
+  describe('removeUnboundItem', () => {
+    it('should deduct from unbound stack and write change log', async () => {
+      itemTemplateRepo.findOne.mockResolvedValue(makeTemplate({ canTrade: true }));
+      inventoryItemRepo.findOne.mockResolvedValue({
+        id: '1',
+        playerId: 'p1',
+        itemTemplateId: '100',
+        quantity: 10,
+        bindStatus: BindStatus.UNBOUND,
+      } as any);
+      inventoryItemRepo.save.mockImplementation((data: any) =>
+        Promise.resolve(data),
+      );
+
+      const result = await service.removeUnboundItem('p1', '100', 4, 'trade.test');
+
+      expect(result.quantity).toBe(6);
+      expect(changeLogRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ quantity: -4, opTrace: 'trade.test' }),
+      );
+    });
+
+    it('should reject with ITEM_BOUND when only bound stack exists', async () => {
+      itemTemplateRepo.findOne.mockResolvedValue(makeTemplate({ canTrade: true }));
+      inventoryItemRepo.findOne
+        .mockResolvedValueOnce(null) // UNBOUND 行不存在
+        .mockResolvedValueOnce({ id: '1', bindStatus: BindStatus.BOUND } as any);
+
+      await expect(
+        service.removeUnboundItem('p1', '100', 1, 'trade.test'),
+      ).rejects.toMatchObject({ response: { code: ErrorCodes.ITEM_BOUND } });
+    });
+
+    it('should reject with ITEM_CANNOT_TRADE when template forbids trade', async () => {
+      itemTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({ canTrade: false }),
+      );
+
+      await expect(
+        service.removeUnboundItem('p1', '100', 1, 'trade.test'),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.ITEM_CANNOT_TRADE },
+      });
+      expect(inventoryItemRepo.findOne).not.toHaveBeenCalled();
+    });
+
+    it('should reject with ITEM_NOT_ENOUGH when unbound stack is insufficient', async () => {
+      itemTemplateRepo.findOne.mockResolvedValue(makeTemplate({ canTrade: true }));
+      inventoryItemRepo.findOne.mockResolvedValue({
+        id: '1',
+        playerId: 'p1',
+        itemTemplateId: '100',
+        quantity: 2,
+        bindStatus: BindStatus.UNBOUND,
+      } as any);
+
+      await expect(
+        service.removeUnboundItem('p1', '100', 5, 'trade.test'),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.ITEM_NOT_ENOUGH },
+      });
     });
   });
 
