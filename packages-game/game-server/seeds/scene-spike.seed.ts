@@ -1,7 +1,4 @@
 import 'reflect-metadata';
-import { createHash } from 'node:crypto';
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { DataSource } from 'typeorm';
 import { Scene } from '../src/modules/world/entities/scene.entity';
 import { SceneTrigger } from '../src/modules/world/entities/scene-trigger.entity';
@@ -17,16 +14,6 @@ import {
 } from '../src/constants/enums';
 
 const SCENE_NAME = '新手村（Spike）';
-const CONFIG_DIR = join(__dirname, '..', '..', 'game-client', 'assets', 'config');
-
-/** ObjectType -> InteractType（客户端交互组件与后端交互链路对齐） */
-const INTERACT_BY_OBJECT_TYPE: Record<string, string> = {
-  [ObjectType.COLLECT]: 'collect',
-  [ObjectType.STONE]: 'collect',
-  [ObjectType.PLANT]: 'collect',
-  [ObjectType.CHEST]: 'collect',
-  [ObjectType.LANDMARK]: 'read',
-};
 
 const OBJECT_TEMPLATES = [
   { name: 'spike-草药丛', resKey: 'obj/plant_01', type: ObjectType.PLANT, interactCd: 10, reward: { type: 'currency', currencyType: 'gold', amount: 3 } },
@@ -52,17 +39,6 @@ const NPC_SPOTS: Array<[number, number]> = [
   [600, 380], [700, 520], [500, 560],
 ];
 
-function canonicalJson(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
-  const keys = Object.keys(value as Record<string, unknown>).sort();
-  return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalJson((value as any)[k])}`).join(',')}}`;
-}
-
-function sha256(text: string): string {
-  return `sha256:${createHash('sha256').update(text, 'utf8').digest('hex')}`;
-}
-
 async function seed() {
   const dataSource = new DataSource({
     type: 'postgres',
@@ -85,7 +61,7 @@ async function seed() {
 
   let scene = await sceneRepo.findOne({ where: { name: SCENE_NAME } });
   if (scene) {
-    console.log(`场景已存在（id=${scene.id}），跳过播种，仅重新生成配置包`);
+    console.log(`场景已存在（id=${scene.id}），跳过播种`);
   } else {
     scene = await sceneRepo.save(
       sceneRepo.create({
@@ -182,87 +158,9 @@ async function seed() {
     console.log('创建触发器 2 个');
   }
 
-  // ---- 生成配置包 ----
-  const sceneId = scene.id;
-  const spawns = await spawnRepo.find({ where: { sceneId, isActive: true } });
-  const triggers = await triggerRepo.find({ where: { sceneId }, order: { id: 'ASC' } });
-
-  const staticEntities: any[] = [];
-  const fixedNpcs: any[] = [];
-  for (const sp of spawns) {
-    if (sp.entityType === EntityType.OBJECT) {
-      const tpl = await objRepo.findOne({ where: { id: sp.templateId } });
-      if (!tpl) continue;
-      staticEntities.push({
-        kind: 'object',
-        spawnId: Number(sp.id),
-        templateId: Number(tpl.id),
-        resKey: tpl.resKey,
-        x: sp.spawnX,
-        y: sp.spawnY,
-        rotation: sp.spawnRotation,
-        interact: {
-          type: INTERACT_BY_OBJECT_TYPE[tpl.type] ?? 'collect',
-          cd: tpl.interactCd,
-          oneTime: tpl.isOneTime,
-        },
-      });
-    } else if (sp.entityType === EntityType.NPC) {
-      const tpl = await npcRepo.findOne({ where: { id: sp.templateId } });
-      if (!tpl) continue;
-      fixedNpcs.push({
-        spawnId: Number(sp.id),
-        npcTemplateId: Number(tpl.id),
-        resKey: tpl.resKey,
-        x: sp.spawnX,
-        y: sp.spawnY,
-        anim: tpl.defaultAnim ?? 'idle',
-      });
-    }
-  }
-
-  const payload = {
-    schemaVersion: 1,
-    sceneId: Number(sceneId),
-    version: 1,
-    scene: {
-      name: scene.name,
-      mapResKey: scene.mapResKey,
-      mapWidth: scene.mapWidth,
-      mapHeight: scene.mapHeight,
-      minLevel: scene.minLevel,
-      maxPlayers: scene.maxPlayers,
-      sceneType: scene.sceneType,
-      entry: { x: 640, y: 480 },
-    },
-    layers: scene.layerConfig ?? {},
-    staticEntities,
-    fixedNpcs,
-    triggers: triggers.map((t) => ({
-      id: Number(t.id),
-      type: t.triggerType,
-      area: { x: t.areaX, y: t.areaY, w: t.areaW, h: t.areaH },
-      targetSceneId: t.targetSceneId ? Number(t.targetSceneId) : null,
-      onceOnly: t.onceOnly,
-    })),
-  };
-
-  const withHash = { ...payload, hash: sha256(canonicalJson(payload)) };
-  const fileName = `scene-${Number(sceneId)}-v1.json`;
-  const fileText = `${JSON.stringify(withHash, null, 2)}\n`;
-  mkdirSync(CONFIG_DIR, { recursive: true });
-  writeFileSync(join(CONFIG_DIR, fileName), fileText, 'utf8');
-
-  const manifest = {
-    generatedAt: new Date().toISOString(),
-    scenes: [
-      { sceneId: Number(sceneId), version: 1, hash: sha256(fileText), file: fileName },
-    ],
-  };
-  writeFileSync(join(CONFIG_DIR, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
-
-  console.log(`配置包已生成：${join(CONFIG_DIR, fileName)}`);
-  console.log(`manifest 已生成：${join(CONFIG_DIR, 'manifest.json')}`);
+  console.log(
+    '播种完成。配置包请用 `npm run config:export -- --scene <id>` 导出',
+  );
   await dataSource.destroy();
 }
 

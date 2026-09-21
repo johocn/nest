@@ -20,6 +20,10 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "seed:admin": "ts-node -r tsconfig-paths/register seeds/admin.seed.ts",
     "seed:scene-spike": "ts-node -r tsconfig-paths/register seeds/scene-spike.seed.ts",
+    "config:list": "node scripts/scene-config-cli.mjs list",
+    "config:export": "node scripts/scene-config-cli.mjs export",
+    "config:publish": "node scripts/scene-config-cli.mjs publish",
+    "config:rollback": "node scripts/scene-config-cli.mjs rollback",
     "typeorm:migrate": "typeorm-ts-node-commonjs migration:generate src/migrations/%npm_config_name% -d src/data-source.ts",
     "typeorm:run": "typeorm-ts-node-commonjs migration:run -d src/data-source.ts"
   },
