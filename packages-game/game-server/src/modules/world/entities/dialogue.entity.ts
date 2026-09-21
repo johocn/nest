@@ -12,8 +12,8 @@ import {
  * 对话树（S5）
  * 整棵树以 jsonb 存于 nodes，单表不拆节点子表。
  * 节点形状（仅约定，无子表）：
- *   { key, speaker?, text, condition?, options: [{ text, next?, action?, actionArgs? }] }
- * 其中 condition 为节点级玩家条件；选项无 condition 字段；next 为空表示对话结束。
+ *   { key, speaker?, text, condition?, options: [{ text, condition?, next?, action?, actionArgs? }] }
+ * 其中 condition 可出现在节点与选项两处（玩家级条件）；next 为空表示对话结束。
  */
 @Entity('dialogues')
 @Index('uq_dialogue_code', ['code'], { unique: true })

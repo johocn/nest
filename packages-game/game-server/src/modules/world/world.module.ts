@@ -26,9 +26,11 @@ import {
 import { SceneConfigVersion } from './config/entities/scene-config-version.entity';
 import { SceneConfigService } from './config/scene-config.service';
 import { PlayerQuest } from '@modules/quest/entities/player-quest.entity';
+import { InventoryItem } from '@modules/inventory/entities/inventory-item.entity';
 import { PlayerModule } from '@modules/player/player.module';
 import { NpcPresenceService } from './npc/npc-presence.service';
 import { NpcTickService } from './npc/npc-tick.service';
+import { DialogueService } from './dialogue/dialogue.service';
 
 @Module({
   imports: [
@@ -48,6 +50,7 @@ import { NpcTickService } from './npc/npc-tick.service';
       NpcSpawnRule,
       NpcPatrolRoute,
       PlayerQuest,
+      InventoryItem,
       Dialogue,
     ]),
     EconomyModule,
@@ -61,7 +64,8 @@ import { NpcTickService } from './npc/npc-tick.service';
     SceneConfigService,
     NpcPresenceService,
     NpcTickService,
+    DialogueService,
   ],
-  exports: [WorldService, NpcPresenceService],
+  exports: [WorldService, NpcPresenceService, DialogueService],
 })
 export class WorldModule {}
