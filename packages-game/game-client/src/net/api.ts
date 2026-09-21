@@ -22,6 +22,16 @@ export interface InteractResult {
   reward?: { type?: string; currencyType?: string; amount?: number } | null;
 }
 
+/** 机关激活结果（world.service.activateTrigger） */
+export interface TriggerActivateResult {
+  unlocked: boolean;
+  members: string[];
+}
+
+export interface MountResult {
+  ok: boolean;
+}
+
 export const Api = {
   /** login 不能带 nickname（DTO 无该字段，forbidNonWhitelisted 会 400） */
   login(username: string, password: string): Promise<AuthResult> {
@@ -55,5 +65,22 @@ export const Api = {
       `/api/client/v1/world/npcs/${spawnId}/talk`,
       { token },
     );
+  },
+
+  /** triggerId 是 scene_triggers.id；后端仅允许 PUZZLE/GATE/TRAP（TriggerActivateDto 的 memberIds 可选，缺省单人） */
+  activateTrigger(triggerId: number, token: string | null): Promise<TriggerActivateResult> {
+    return httpJson<TriggerActivateResult>(
+      'POST',
+      `/api/client/v1/world/triggers/${triggerId}/activate`,
+      { token, body: {} },
+    );
+  },
+
+  /** 骑乘/收起坐骑；mountId 必填（MountActionDto），需已 equip 过对应坐骑 */
+  rideMount(mountId: string, token: string | null): Promise<MountResult> {
+    return httpJson<MountResult>('POST', '/api/client/v1/world/mounts/ride', {
+      token,
+      body: { mountId, ride: true },
+    });
   },
 };
