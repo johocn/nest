@@ -9,6 +9,7 @@
 #   T4 并发占位 —— 二次购买 70003，且买家未被二次扣款
 #   T5 取消退货 —— 取消后托管库存原样退回
 #   T6 拍卖    —— 上架托管 + 扣上架费 → 等定时任务结算 → 流拍退货
+#   T7 发货失败 —— 买家背包灌满 → 购买返回 20004，卖家不入账/买家全额退款/订单回 pending
 # 运行（服务器 odoo，新代码部署并重启之后）：
 #   bash /tmp/smoke-p07-trade.sh
 # 依赖：生产 PostgreSQL 容器 1Panel-postgresql-4LsS（用户 game，库 game_server）
@@ -149,6 +150,41 @@ echo "  等待定时任务结算到期拍卖（约 70s）..."
 sleep 70
 want_eq "auction auto expired" "$(PSQL "SELECT status FROM auction_items WHERE id=$AUC_ID;")" expired
 want_eq "expired auction returned items to 6" "$(INV_OF $P1 $TPL_ID)" 6
+
+echo "== T7 发货失败补偿（买家背包满 → 20004，卖家不入账）=="
+# 必须用买家未持有的模板挂单：已持有同模板且未满堆时会走「并堆」路径，不占新格子
+TPL_T7=$(NEW_TPL "P07T7道具_$TS" true)
+GRANT_ITEM $P1 $TPL_T7 2 unbound
+R=$(curl -s -X POST $BASE/api/client/v1/trade/order -H "$A1" -H 'Content-Type: application/json' \
+  -d "{\"itemTemplateId\":\"$TPL_T7\",\"itemName\":\"P07T7道具\",\"quantity\":2,\"pricePerUnit\":\"100\",\"currencyType\":\"gold\"}")
+O3=$(jstr "$R" id)
+[ -n "$O3" ] && ok "create order for T7 (id=$O3)" || bad "create order for T7" "$R"
+
+# 灌满买家背包至 100 格（容量 = GAME_BAG_MAX_SLOTS 默认 100）；填充行用独立模板便于清理
+USED_BEFORE=$(PSQL "SELECT count(*) FROM inventory_items WHERE player_id=$P2 AND deleted_at IS NULL;")
+FILL=$((100 - USED_BEFORE))
+TPL_FILL=$(NEW_TPL "P07填充_$TS" true)
+if [ "$FILL" -gt 0 ]; then
+  PSQL "INSERT INTO inventory_items (player_id,item_template_id,quantity,slot_index,bind_status,created_at,updated_at) SELECT $P2,$TPL_FILL,1,0,'unbound',now(),now() FROM generate_series(1,$FILL);" >/dev/null
+fi
+want_eq "buyer bag filled to capacity" "$(PSQL "SELECT count(*) FROM inventory_items WHERE player_id=$P2 AND deleted_at IS NULL;")" 100
+
+G1_BEFORE=$(GOLD_OF $P1); G2_BEFORE=$(GOLD_OF $P2)
+T7_ROWS2=$(PSQL "SELECT count(*) FROM inventory_items WHERE player_id=$P2 AND item_template_id=$TPL_T7 AND deleted_at IS NULL;")
+want_eq "buyer owns none of T7 item before buy" "$T7_ROWS2" 0
+R=$(curl -s -X POST $BASE/api/client/v1/trade/order/$O3/buy -H "$A2")
+want_code "buy rejected with BAG_FULL" "$R" 20004
+# 核心断言：发货失败时卖家一分未得、买家全额退回、订单回到可再购
+want_eq "seller not credited on delivery failure" "$(GOLD_OF $P1)" "$G1_BEFORE"
+want_eq "buyer refunded on delivery failure" "$(GOLD_OF $P2)" "$G2_BEFORE"
+want_eq "order rolled back to pending/unassigned" "$(PSQL "SELECT status||'/'||coalesce(buyer_id,'null') FROM trade_orders WHERE id=$O3;")" "pending/null"
+want_eq "buyer received nothing after failure" "$(PSQL "SELECT count(*) FROM inventory_items WHERE player_id=$P2 AND item_template_id=$TPL_T7 AND deleted_at IS NULL;")" 0
+
+# 清理填充行与遗留托管单，避免污染后续运行 / 留下悬空托管
+PSQL "DELETE FROM inventory_items WHERE player_id=$P2 AND item_template_id=$TPL_FILL;" >/dev/null
+want_eq "buyer bag cleaned" "$(PSQL "SELECT count(*) FROM inventory_items WHERE player_id=$P2 AND deleted_at IS NULL;")" "$USED_BEFORE"
+curl -s -X POST $BASE/api/client/v1/trade/order/$O3/cancel -H "$A1" >/dev/null
+want_eq "T7 order cancelled, escrow returned" "$(INV_OF $P1 $TPL_T7)" 2
 
 echo "=============================="
 echo "SMOKE P0-7 RESULT: PASS=$PASS FAIL=$FAIL"
