@@ -2,6 +2,7 @@ import type { SceneConfig, ServerSpawn } from '../config/schema';
 import { Entity } from '../entity/Entity';
 import { EntityFactory } from '../entity/EntityFactory';
 import { EntityRegistry } from '../entity/EntityRegistry';
+import { mergeServerSpawns as mergeSpawnList } from './spawn-merge';
 
 export class SceneBuilder {
   /** 世界层：child[0] = 背景层（地形/网格/触发器区域），child[1..] = 实体层（按 y 升序） */
@@ -60,32 +61,10 @@ export class SceneBuilder {
 
   /**
    * 总纲 §6.5 去重规则：按 spawnId 求交，配置包优先。
-   * - entity_type='object' 一律忽略（静态物件已在配置包，避免同屏双份与坐标漂移）
-   * - entity_type='npc' 且 spawnId 已在配置包 fixedNpcs 中 → 忽略（位置以服务端为准的规则留给 S4 的巡逻/随机 NPC）
-   * 返回被保留的动态 spawn，供调用方生成实体。
+   * 纯逻辑在 `world/spawn-merge.ts`（零引擎依赖，可被 node 断言），本方法只做委托。
    */
   static mergeServerSpawns(cfg: SceneConfig, spawns: ServerSpawn[]): ServerSpawn[] {
-    const staticNpcSpawnIds = new Set(cfg.fixedNpcs.map((n) => n.spawnId));
-    const accepted: ServerSpawn[] = [];
-    let ignored = 0;
-
-    for (const sp of spawns) {
-      const id = Number(sp.id);
-      if (sp.entityType === 'object') {
-        ignored++;
-        continue;
-      }
-      if (sp.entityType === 'npc' && staticNpcSpawnIds.has(id)) {
-        ignored++;
-        continue;
-      }
-      accepted.push(sp);
-    }
-
-    console.log(
-      `[S1] 服务端 spawns=${spawns.length}，去重忽略=${ignored}（静态物件/已在配置包的 NPC），接受动态=${accepted.length}`,
-    );
-    return accepted;
+    return mergeSpawnList(cfg, spawns);
   }
 
   /** 每 N 帧按 y 升序重排实体层，实现伪 3D 遮挡（n ≤ 150，成本可忽略） */
