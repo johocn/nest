@@ -58,4 +58,8 @@ console.log('write src/types/laya.d.ts');
 // 4. vendored socket.io（浏览器 UMD，全局 io）
 copy(join(SERVER, 'node_modules', 'socket.io-client', 'dist', 'socket.io.min.js'), join(root, 'vendor', 'socket.io.min.js'));
 
+// 5. 工程描述文件：IDE 靠根目录的 <工程名>.laya 识别工程根，缺失则该目录无法被「打开项目」
+writeFileSync(join(root, 'game-client.laya'), `${JSON.stringify({ version: '3.4.1' }, null, 2)}\n`, 'utf8');
+console.log('write game-client.laya');
+
 console.log('assemble done');
