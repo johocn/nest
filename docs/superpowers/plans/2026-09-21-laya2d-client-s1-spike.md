@@ -3223,6 +3223,12 @@ git add packages-game/game-client
 git commit -m "feat(game-client): 微信小游戏端最小适配（包内配置读取）与验收记录"
 ```
 
+> **实测结论（2026-09-21，S1 收尾时判定）**：Step 1-2 已落地、Step 3 H5 回归通过（提交 `9d6eefe11`）；**Step 4 未完成，验收 #8 记 BLOCKED**。
+> 原因：wxgame 只能用 IDE GUI 导出，命令行不可行——`LayaAirIDE.exe --project=… --script=Build.buildWxgame` 实测输出
+> `login failed Error: Interactive account login is unavailable in CLI mode.` + `unknown script 'Build.buildWxgame'`（CLI 模式要求交互式账号登录，故 `--script` 机制在本机整体不可用，与 Task 5 同因；`release\` 下只有 GUI 手动构建的 `web\`，`local\buildLogs\` 只有 `web-*.log`）。
+> 因此 Step 4-6 需人工 GUI 执行，步骤与原始报错已写入 `packages-game/game-client/README.md` 的「#8 未完成项」；#8 **不阻塞** #1-#7/#9。人工完成后即可按降级口径转 PASS。
+> 注：`tools/src/editor/Build.ts` 曾试加 `buildWxgame()`，因 CLI 机制不可用已撤回，不留死代码。
+
 ---
 
 ### Task 14: 冒烟脚本 + 全量回归 + 验收判定（验收 #9）
