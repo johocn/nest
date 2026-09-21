@@ -55,6 +55,8 @@ packages-game/**/package-lock.json
 # 例外：客户端 vendor 的第三方运行时与引擎类型声明是零依赖方案的一部分，必须入库
 !packages-game/game-client/vendor/**/*.js
 !packages-game/game-client/src/**/*.d.ts
+# 例外：mock-redis 是本地无 Redis 环境的开发替身脚本（非构建产物），必须入库
+!packages-game/game-server/scripts/*.js
 
 # tests
 /test
