@@ -9,3 +9,5 @@ export { StreetGame } from './street-game.entity';
 export { GameSession } from './game-session.entity';
 export { LandmarkMessage } from './landmark-message.entity';
 export { TriggerUnlock } from './trigger-unlock.entity';
+export { NpcSpawnRule } from './npc-spawn-rule.entity';
+export { NpcPatrolRoute } from './npc-patrol-route.entity';

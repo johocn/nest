@@ -18,6 +18,8 @@ import {
   GameSession,
   LandmarkMessage,
   TriggerUnlock,
+  NpcSpawnRule,
+  NpcPatrolRoute,
 } from './entities';
 import { SceneConfigVersion } from './config/entities/scene-config-version.entity';
 import { SceneConfigService } from './config/scene-config.service';
@@ -37,6 +39,8 @@ import { SceneConfigService } from './config/scene-config.service';
       LandmarkMessage,
       TriggerUnlock,
       SceneConfigVersion,
+      NpcSpawnRule,
+      NpcPatrolRoute,
     ]),
     EconomyModule,
     CharacterModule,

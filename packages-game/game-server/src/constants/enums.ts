@@ -215,6 +215,20 @@ export enum MonsterAiType {
   ACTIVE = 'active',
 }
 
+// NPC 出现规则类型（fixed 固定 / random 随机 / patrol 路径巡逻）
+export enum NpcSpawnRuleType {
+  FIXED = 'fixed',
+  RANDOM = 'random',
+  PATROL = 'patrol',
+}
+
+// NPC 巡逻路径循环模式（loop 循环 / pingpong 往返 / once 单次）
+export enum NpcPatrolLoopMode {
+  LOOP = 'loop',
+  PINGPONG = 'pingpong',
+  ONCE = 'once',
+}
+
 export enum ObjectType {
   CHEST = 'chest',
   COLLECT = 'collect',
