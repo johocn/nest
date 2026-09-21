@@ -104,7 +104,7 @@ export class WorldService {
   }
 
   async getSceneTriggers(sceneId: string): Promise<SceneTrigger[]> {
-    return this.triggerRepo.find({});
+    return this.triggerRepo.find({ where: { sceneId } });
   }
 
   async checkEnterRequirement(

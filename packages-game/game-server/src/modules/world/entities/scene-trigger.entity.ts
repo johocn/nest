@@ -5,13 +5,18 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
+  Index,
 } from 'typeorm';
 import { TriggerType } from '@constants/enums';
 
 @Entity('scene_triggers')
+@Index('idx_trigger_scene', ['sceneId'])
 export class SceneTrigger {
   @PrimaryGeneratedColumn({ type: 'bigint' })
   id: string;
+
+  @Column({ name: 'scene_id', type: 'bigint', nullable: true })
+  sceneId: string | null;
 
   @Column({ name: 'trigger_type', type: 'enum', enum: TriggerType })
   triggerType: TriggerType;

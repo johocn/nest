@@ -236,6 +236,16 @@ describe('WorldService', () => {
       const result = await service.getSceneTriggers('1');
       expect(result).toHaveLength(1);
     });
+
+    it('只返回该场景的触发器（按 sceneId 过滤）', async () => {
+      (triggerRepo.find as jest.Mock).mockResolvedValue([]);
+
+      await service.getSceneTriggers('7');
+
+      expect(triggerRepo.find).toHaveBeenCalledWith({
+        where: { sceneId: '7' },
+      });
+    });
   });
 
   describe('enterScene', () => {
