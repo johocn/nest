@@ -656,14 +656,24 @@
 | P0-4 | 配置字段不生效（活动条件/人数上限、任务前置/限次/自动发奖、公告时间窗）（已修复） | activity-template.entity.ts:45-49；quest-template.entity.ts:42-55；notice.entity.ts:22-48 | 配置了不生效，运营误判 |
 | P0-5 | GM token 无过期（已修复） | admin-auth.service.ts:57-59 | 泄露即永久可用 |
 | P0-6 | 无 logout/无会话管理/无改密（已修复） | auth 模块整体 | 无法主动失效凭证、无法踢下线 |
-| P0-7 | 交易不校验绑定道具、无手续费/成交税 | trade.service.ts:156-188 | 绑定道具可流通 + 经济无回收泵 |
+| P0-7 | 交易不校验绑定道具、无手续费/成交税（已修复） | trade.service.ts:156-188 | 绑定道具可流通 + 经济无回收泵 |
 | P0-8 | GM 后台缺关键面板（封禁处置/举报处置/风控回收/对账/经济看板/活动灰度） | admin/index.html:435-446 vs 60+ admin 路由 | 运营能力只能 curl |
 
 **修复进度（2026-09-21）**：P0-1（成就进度不推进）、P0-2（成就领奖不发奖）、P0-3（排行 score 恒 0）**已修复**。实施计划见 `docs/superpowers/plans/2026-09-20-achievement-ranking-fix.md`，提交 `6c1f6e7b3`/`518eed91a`/`eca559c8c`/`d1e1d3e53`/`573c43771`；回归 77 suites / 915 tests 全绿、`tsc --noEmit` 0 error、本地 `nest build` 通过。**尚未部署到生产**，冒烟未执行。P0-4 ~ P0-8 仍待修复。
 
 **修复进度（2026-09-21，第二批）**：P0-5（GM token 无过期）、P0-6（无 logout/无会话管理/无改密）**已修复**（代码层）。实施计划见 `docs/superpowers/plans/2026-09-21-account-security-fix.md`，提交 `48bc54ffc`/`6422151c1`/`aebcfe8be`/`a6b4de9fd`/`2f15e664f`/`457aedad4`/`4589895ef`/`bfcdb09c5`。落地要点：`AdminUser` 加 `token_version` 列 + 全局 `AdminSessionService`（`AdminGuard` 每请求校验存在/启用/版本一致）；GM token 固定 12h（`JWT_ADMIN_EXPIRES_IN`）；新增 GM 登出/改密、玩家登出/改密、GM 踢玩家下线共 5 条路由，失效统一为「tokenVersion +1」。回归 **80 suites / 939 tests 全绿**、`tsc --noEmit` 0 error。**尚未部署到生产**（Task 7 待办：生产库需先 `ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS token_version int NOT NULL DEFAULT 0;` 再加替换 dist 重启），冒烟脚本 `scripts/smoke-p0b-auth.sh` 未执行。注意：上线后存量 GM token 全部失效，GM 需重新登录一次（预期行为）。剩余 P0-4 / P0-7 / P0-8 待修复。
 
-**修复进度（2026-09-21，第三批）**：P0-4（配置字段不生效）**已修复**（代码层）。实施计划见 `docs/superpowers/plans/2026-09-21-config-fields-effect-fix.md`，提交 `68aa9a99a`（档位常量抽取 `@constants/ranks`）/`b1ea91cca`（任务前置链 + 接取限次 + 等级门槛改查库）/`24caabbee`（主奖励真发 + 手动领奖接口 `POST api/client/v1/quest/claim`）/`c806e0fbd`（活动 conditionJson 等级/前置任务条件 + 新增 60005/60006）/`63dd84d13`（活动人数上限 count 校验）/`cd9b781bb`（好感门槛按 character_id 换算修复）/`4b706724a`（公告时间窗 DTO + 查询过滤）。落地要点：任务 `minLevel` 由服务端查库校验（不再依赖调用方传参）、`prerequisiteIds` 须全部 CLAIMED、`acceptLimit` 按接取次数计数、`rewardJson` 扁平键真发（货币走经济模块 + `exp` 走经验 + 未识别键 warning）；发奖分两段（`autoReward=true` 提交即发，`false` 提交置 COMPLETED 后手动领取，原子占位防重复领）；活动 `conditionJson` 支持 `level`/`questIds`/`favorLevel`/`guildRole`，`maxParticipants` 按报名口径 count 校验；公告 `startAt`/`endAt` 支持为空（立即生效/永久有效）四分支时间窗。回归 **80 suites / 959 tests 全绿**、`tsc --noEmit` 0 error。**尚未部署到生产**，冒烟脚本 `scripts/smoke-p0d-config.sh` 未执行。**上线前需先排查存量任务配置**：`SELECT id,name,repeatable,accept_limit FROM quest_templates WHERE repeatable = true AND accept_limit <= 1;`（新限次会拦截原本可重复接取的任务），且存量 `auto_reward=false` 任务提交后需玩家手动领取。剩余 P0-7 / P0-8 待修复。
+**修复进度（2026-09-21，第三批）**：P0-4（配置字段不生效）**已修复**（代码层）。实施计划见 `docs/superpowers/plans/2026-09-21-config-fields-effect-fix.md`，提交 `68aa9a99a`（档位常量抽取 `@constants/ranks`）/`b1ea91cca`（任务前置链 + 接取限次 + 等级门槛改查库）/`24caabbee`（主奖励真发 + 手动领奖接口 `POST api/client/v1/quest/claim`）/`c806e0fbd`（活动 conditionJson 等级/前置任务条件 + 新增 60005/60006）/`63dd84d13`（活动人数上限 count 校验）/`cd9b781bb`（好感门槛按 character_id 换算修复）/`4b706724a`（公告时间窗 DTO + 查询过滤）。落地要点：任务 `minLevel` 由服务端查库校验（不再依赖调用方传参）、`prerequisiteIds` 须全部 CLAIMED、`acceptLimit` 按接取次数计数、`rewardJson` 扁平键真发（货币走经济模块 + `exp` 走经验 + 未识别键 warning）；发奖分两段（`autoReward=true` 提交即发，`false` 提交置 COMPLETED 后手动领取，原子占位防重复领）；活动 `conditionJson` 支持 `level`/`questIds`/`favorLevel`/`guildRole`，`maxParticipants` 按报名口径 count 校验；公告 `startAt`/`endAt` 支持为空（立即生效/永久有效）四分支时间窗。回归 **80 suites / 959 tests 全绿**、`tsc --noEmit` 0 error。**尚未部署到生产**，冒烟脚本 `scripts/smoke-p0d-config.sh` 未执行。**上线前需先排查存量任务配置**：`SELECT id,name,repeatable,accept_limit FROM quest_templates WHERE repeatable = true AND accept_limit <= 1;`（新限次会拦截原本可重复接取的任务），且存量 `auto_reward=false` 任务提交后需玩家手动领取。剩余 P0-8 待修复。
+
+**修复进度（2026-09-21，第四批）**：P0-7（交易不校验绑定道具、无手续费/成交税）**已修复**（代码层）。实施计划见 `docs/superpowers/plans/2026-09-21-trade-economy-settlement-fix.md`，提交 `e0c6070c1`（计划）/`d5fdebf9d`（`InventoryService.removeUnboundItem`：只扣未绑定堆）/`551294f85`（币种白名单 + 远程费率读取）/`4519e98bb`（摆摊：挂单托管 + 成交结算 + 取消退货）/`d62989d3d`（拍卖：上架托管 + 上架费 + 成交结算 + 流拍退货）/`6ab1a7fc0`（拍卖到期自动结算定时任务）/`c2914d2b3`（易物：格式契约 + 双向转移）。落地要点：三条交易链路原本**完全不结算**（挂单不托管库存、成交不扣买家货币/不给卖家入账/不转移道具、`endAuction` 无任何调用方），现已补全——交易只允许操作 `bindStatus = UNBOUND` 且模板 `canTrade !== false` 的堆（`ITEM_BOUND: 20003` / `ITEM_CANNOT_TRADE: 20005`），挂单/上架即托管卖家库存、取消/流拍原样退回；成交用「状态条件更新占位」（`affected = 0` 即已被处理）防并发双买，BigInt 算税保证「卖家到手 + 帮派分成 + 系统回收 = 总额」恒等；币种白名单限 `gold`/`diamond`（社交货币与绑定钻按手册 11.2/11.3 禁流通，越界抛新增的 `TRADE_CURRENCY_NOT_ALLOWED: 70008`）；费率走 `remote_configs` 的 `trade.listing_fee_percent`(2)/`trade.sale_tax_percent`(5)/`trade.tax_guild_share_percent`(50)，缺失或非法回退默认值不阻断交易；拍卖由新增的每分钟定时任务 `SchedulerService.settleExpiredAuctions` 驱动结算。回归 **80 suites / 987 tests 全绿**、`tsc --noEmit` 0 error。**尚未部署到生产**，冒烟脚本 `scripts/smoke-p07-trade.sh` 未执行。**上线前需先排查三条链路的存量单**（它们挂单时未托管库存，上线后成交会凭空发货）：
+
+```sql
+SELECT id,seller_id,item_template_id,quantity,status FROM trade_orders WHERE status = 'pending';
+SELECT id,seller_id,item_template_id,quantity,status FROM auction_items WHERE status IN ('listed','bid');
+SELECT id,party_a_id,items_a_json FROM barter_deals WHERE status = 'pending';
+```
+
+逐单确认卖家库存是否仍在；确认不了就批量置为 `cancelled`。另需注意：`smoke-eco.sh` 的 `intel_buy` 链路原依赖「挂单不校验库存」，上线后会在挂单处报 `20001`（属正确收紧）。剩余 P0-8 待修复。
 
 ### P1 · 玩法骨架级（设计核心玩法，代码成片空白）
 
@@ -694,7 +704,7 @@
 
 风险集中在两点：
 
-1. **已上线的功能里有 8 处"看起来能用、实际不对"**（P0），其中成就与排行属对玩家可见的功能性缺陷。**进度（2026-09-21）**：其中 6 处已修复并回归通过——P0-1 成就进度不推进 / P0-2 成就领奖不发奖 / P0-3 排行 score 恒 0（第一批），P0-5 GM token 无过期 / P0-6 无 logout·会话管理·改密（第二批），P0-4 配置字段不生效（第三批），均详见本节 P0 清单下方的修复进度说明；剩余 P0-7 / P0-8 待修复。
+1. **已上线的功能里有 8 处"看起来能用、实际不对"**（P0），其中成就与排行属对玩家可见的功能性缺陷。**进度（2026-09-21）**：其中 7 处已修复并回归通过——P0-1 成就进度不推进 / P0-2 成就领奖不发奖 / P0-3 排行 score 恒 0（第一批），P0-5 GM token 无过期 / P0-6 无 logout·会话管理·改密（第二批），P0-4 配置字段不生效（第三批），P0-7 交易不校验绑定道具·无手续费成交税（第四批），均详见本节 P0 清单下方的修复进度说明；剩余 P0-8 待修复。
 2. **手册描绘的核心玩法（战斗数值、武学养成、场景社交、社交经济）成片未实现**，第 5/6/8 章合计 178 项的完备度最低——这决定产品能否成立，而非体验优劣。
 
 建议顺序：P0 修复（小而确定，直接恢复既有功能）→ P1 按玩法域分批立项（每批独立可上线，参考阶段 5 批 2 的交付节奏）→ P2 长尾随版本推进。

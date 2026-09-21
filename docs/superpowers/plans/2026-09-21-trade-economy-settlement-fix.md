@@ -2010,20 +2010,30 @@ git push origin main
 
 ---
 
-## 执行记录（占位，执行时填写）
+## 执行记录（2026-09-21 执行，子代理驱动）
 
 | Task | 提交 | 文件 | 说明 |
 |---|---|---|---|
-| 1 | — | — | — |
-| 2 | — | — | — |
-| 3 | — | — | — |
-| 4 | — | — | — |
-| 5 | — | — | — |
-| 6 | — | — | — |
-| 7 | — | — | — |
+| 计划 | `e0c6070c1` | 本文件 | 自检后补入 Task 5（拍卖到期结算）与真实 GM 路由修正 |
+| 1 | `d5fdebf9d` | `inventory.service.ts` / `.spec.ts` | 纯新增 82 行 `removeUnboundItem`，`removeItem` 未动；inventory 20 tests |
+| 2 | `551294f85` | `error-codes.ts` / `trade.service.ts` / `trade.module.ts` / 6 个 spec | 70008 + 币种白名单 + 费率读取 + 4 个私有方法 |
+| 3 | `4519e98bb` | `trade.service.ts` / `trade.service.spec.ts` / `negotiation.service.spec.ts` | 摆摊挂单托管、成交结算、取消退货 |
+| 4 | `d62989d3d` | `trade.service.ts` / `trade.service.spec.ts` | 拍卖上架托管+上架费、成交结算、流拍退货 |
+| 5 | `6ab1a7fc0` | `trade.service.ts` / `.spec.ts` / `scheduler.service.ts` / `scheduler.module.ts` | 拍卖到期自动结算定时任务（`endAuction` 接入生产路径） |
+| 6 | `c2914d2b3` | `barter.dto.ts` / `trade.service.ts` / `trade.service.spec.ts` / `barter.service.spec.ts` | 易物格式契约 + 双向物品/金币转移 |
+| 7 | （本轮） | `scripts/smoke-p07-trade.sh` / 盘点报告 / 本文件 | 全量回归 + 冒烟脚本 + 文档同步 + push |
 
-**测试账目**：待填。
+**测试账目**：起 80 suites / 960 tests → 收 **80 suites / 987 tests 全绿**（+27 例：inventory 4 + trade 基础设施 5 + 摆摊 7 + 拍卖 5 + 拍卖扫描 2 + 易物 4），`npx tsc --noEmit` 0 error。
 
-**执行偏离**：待填。
+**执行偏离**：
+1. Task 2：计划漏列 5 个共用 `TradeService` 的 spec（escrow/barter/negotiation/bounty/credit）需补 `InventoryService`/`ConfigManageService` provider，否则注入新依赖后全部 `Nest can't resolve dependencies`；已补齐（4 个还需补 `GameException` import）。
+2. Task 2：`tsconfig` 未开 `noUnusedLocals`，但为免死导入，`In` 延到 Task 4 需要时才加（计划原写 Task 2 就导入）。
+3. Task 2：`createTradeOrder` 里的 `assertTradableCurrency(params.currencyType)` 调用，计划只在 Step 5 文字里隐含，已按 Step 5 与测试要求置入 `tradeRepo.create` 之前。核实 `CreateTradeParams.currencyType` 为必填、controller 已 `?? 'gold'`，无需额外兜底。
+4. Task 3：补偿用例原计划用 `addCurrency.mockRejectedValue`（会连退款一起拒、状态回滚断言失效），改为 `mockRejectedValueOnce`。
+5. Task 3 额外改 `negotiation.service.spec.ts`：`acceptNegotiation` 内部调 `buyItem`，5 个用例因缺 `tradeRepo.update` mock 而失败。
+6. Task 6 两处加固：占位条件增加 `aConfirm: true`（保留原「A 侧未确认不成交」防护，避免凭空发道具）；`BigInt(goldAmount)` 包 try/catch 转 `PARAM_INVALID`（避免非法字符串 500）。
+7. Task 7 冒烟脚本：计划原写的 4 个路由是编造的，已按实际代码改正（见 §文件结构 与脚本注释）。
+
+**已验证的非问题**：子代理提出 `AuctionItem.expireAt` 为无时区 `timestamp`、`LessThan(new Date())` 可能时区偏移。核实结论为**无偏移**：pg driver 将 `Date` 参数序列化为 UTC ISO 串、`timestamp` 列直接截取该 UTC 值，与 DB 容器（UTC）的 `now()` 同源；项目内 `activity.service.ts:574`、`balance-audit.service.ts:237` 等处已有同口径注释确认。
 
 **未完成 / 待办**：生产部署（存量 `trade_orders`/`auction_items`/`barter_deals` 排查后替换 dist 重启）、冒烟脚本未执行。
