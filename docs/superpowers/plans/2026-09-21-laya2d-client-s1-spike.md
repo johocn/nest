@@ -3415,6 +3415,8 @@ S1 冒烟全部通过
 ```
 > 注意：脚本里的固定 `seq=999001` 只用于 `world.move`（服务端广播的 `seq` 固定为 0），不影响其他请求。
 
+> **实测偏离（2026-09-21，已修复后 9/9 通过）**：原稿的 `send()` 用 `socket.emit('message', {cmd,seq,data})` 等 `message` 事件——真实契约是服务端 `@SubscribeMessage(cmd)` 订阅，**事件名即 cmd**，且 handler 直接 `return` 的应答走 **socket.io ack 回调**（`emit(cmd, payload, ack)`，与 `game-client/src/net/ws.ts` 一致）；否则 `world.enter-scene` 必然 8s 超时。`world.move` 同样要按事件名 `world.move` 发（广播仍走 `message` 事件，`on('message')` 端不变）。修复后实测：`A=1 B=3`、`spawns=13 triggers=2`、`entityId=player:1`、采集 `amount:3`、对话 `spawnId=11 → 村长：…`。
+
 - [ ] **Step 3: 后端全量回归（验收 #9）**
 
 ```
