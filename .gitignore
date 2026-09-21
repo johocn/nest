@@ -57,6 +57,9 @@ packages-game/**/package-lock.json
 !packages-game/game-client/src/**/*.d.ts
 # 例外：mock-redis 是本地无 Redis 环境的开发替身脚本（非构建产物），必须入库
 !packages-game/game-server/scripts/*.js
+# 场景配置包产物由服务端发布时写盘，不入库；仅用 .gitkeep 占位托管目录
+packages-game/game-server/gamedata/*
+!packages-game/game-server/gamedata/.gitkeep
 
 # tests
 /test
