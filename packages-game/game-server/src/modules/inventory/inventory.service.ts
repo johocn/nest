@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
 import {
   ItemTemplate,
   InventoryItem,
@@ -33,6 +34,7 @@ export class InventoryService {
     private readonly logRepo: Repository<PlayerItemChangeLog>,
     private readonly cacheService: CacheService,
     private readonly eventBus: EventBusService,
+    private readonly configService: ConfigService,
   ) {}
 
   async addItem(
@@ -60,15 +62,24 @@ export class InventoryService {
     });
 
     const shouldBind = template.bindType === BindType.BIND_ON_PICKUP;
+    const canStack =
+      !!existing && !shouldBind && existing.quantity < template.maxStack;
     let item: InventoryItem;
 
-    if (existing && !shouldBind && existing.quantity < template.maxStack) {
+    if (canStack) {
       existing.quantity += quantity;
       if (existing.quantity > template.maxStack) {
         existing.quantity = template.maxStack;
       }
       item = await this.itemRepo.save(existing);
     } else {
+      // 新开堆才占格子：容量取 game.bagMaxSlots（env GAME_BAG_MAX_SLOTS），满则拒绝发放
+      const maxSlots = this.configService.get('game')?.bagMaxSlots ?? 100;
+      const used = await this.itemRepo.count({ where: { playerId } });
+      if (used >= maxSlots) {
+        throw new GameException(ErrorCodes.BAG_FULL, '背包已满');
+      }
+
       item = this.itemRepo.create({
         playerId,
         itemTemplateId,

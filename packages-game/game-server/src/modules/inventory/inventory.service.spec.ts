@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { ConfigService } from '@nestjs/config';
 import { InventoryService } from './inventory.service';
 import {
   ItemTemplate,
@@ -48,7 +49,11 @@ describe('InventoryService', () => {
         },
         {
           provide: getRepositoryToken(InventoryItem),
-          useValue: { ...createMockRepo(), query: jest.fn() },
+          useValue: {
+            ...createMockRepo(),
+            count: jest.fn().mockResolvedValue(0),
+            query: jest.fn(),
+          },
         },
         {
           provide: getRepositoryToken(CharacterEquipment),
@@ -63,6 +68,10 @@ describe('InventoryService', () => {
           useValue: { withLock: jest.fn((_, cb) => cb()) },
         },
         { provide: EventBusService, useValue: { emit: jest.fn() } },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn().mockReturnValue({ bagMaxSlots: 100 }) },
+        },
       ],
     }).compile();
 
@@ -159,6 +168,68 @@ describe('InventoryService', () => {
 
       await expect(service.addItem('p1', '999', 1, 'test')).rejects.toThrow(
         GameException,
+      );
+    });
+
+    it('should throw BAG_FULL when bag is full and a new slot is needed', async () => {
+      itemTemplateRepo.findOne.mockResolvedValue(makeTemplate());
+      inventoryItemRepo.findOne.mockResolvedValue(null);
+      inventoryItemRepo.count.mockResolvedValue(100);
+
+      await expect(service.addItem('p1', '100', 1, 'test')).rejects.toMatchObject(
+        { response: { code: ErrorCodes.BAG_FULL } },
+      );
+      expect(inventoryItemRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('should allow a new slot when occupied below capacity', async () => {
+      itemTemplateRepo.findOne.mockResolvedValue(makeTemplate());
+      inventoryItemRepo.findOne.mockResolvedValue(null);
+      inventoryItemRepo.count.mockResolvedValue(99);
+      inventoryItemRepo.save.mockImplementation(
+        async (data: any) => ({ ...data, id: '1' }) as any,
+      );
+
+      const result = await service.addItem('p1', '100', 1, 'test');
+
+      expect(result.quantity).toBe(1);
+    });
+
+    it('should stack onto existing item even when bag is full', async () => {
+      itemTemplateRepo.findOne.mockResolvedValue(makeTemplate({ maxStack: 99 }));
+      inventoryItemRepo.findOne.mockResolvedValue({
+        id: '1',
+        playerId: 'p1',
+        itemTemplateId: '100',
+        quantity: 50,
+        bindStatus: BindStatus.UNBOUND,
+      } as any);
+      inventoryItemRepo.count.mockResolvedValue(100);
+      inventoryItemRepo.save.mockImplementation(
+        async (data: any) => ({ ...data, id: '1' }) as any,
+      );
+
+      const result = await service.addItem('p1', '100', 10, 'test');
+
+      expect(result.quantity).toBe(60);
+      expect(inventoryItemRepo.count).not.toHaveBeenCalled();
+    });
+
+    it('should throw BAG_FULL when bind-on-pickup needs a new bound slot at capacity', async () => {
+      itemTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({ bindType: BindType.BIND_ON_PICKUP }),
+      );
+      inventoryItemRepo.findOne.mockResolvedValue({
+        id: '1',
+        playerId: 'p1',
+        itemTemplateId: '100',
+        quantity: 1,
+        bindStatus: BindStatus.UNBOUND,
+      } as any);
+      inventoryItemRepo.count.mockResolvedValue(100);
+
+      await expect(service.addItem('p1', '100', 1, 'test')).rejects.toMatchObject(
+        { response: { code: ErrorCodes.BAG_FULL } },
       );
     });
   });
