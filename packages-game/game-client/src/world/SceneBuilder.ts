@@ -44,6 +44,20 @@ export class SceneBuilder {
     return layer;
   }
 
+  private static entityLayer(): Laya.Sprite | null {
+    const layer = SceneBuilder.layer;
+    if (!layer) return null;
+    return (layer.getChildByName('s1-entities') as Laya.Sprite) ?? null;
+  }
+
+  /** 幂等挂载：同一实体重复调用不会重复 addChild */
+  static addEntity(entity: Entity): void {
+    const target = SceneBuilder.entityLayer();
+    if (!target) return;
+    EntityRegistry.add(entity);
+    if (entity.sprite.parent !== target) target.addChild(entity.sprite);
+  }
+
   /**
    * 总纲 §6.5 去重规则：按 spawnId 求交，配置包优先。
    * - entity_type='object' 一律忽略（静态物件已在配置包，避免同屏双份与坐标漂移）
@@ -76,9 +90,7 @@ export class SceneBuilder {
 
   /** 每 N 帧按 y 升序重排实体层，实现伪 3D 遮挡（n ≤ 150，成本可忽略） */
   static resort(): void {
-    const layer = SceneBuilder.layer;
-    if (!layer) return;
-    const entityLayer = layer.getChildByName('s1-entities') as Laya.Sprite | null;
+    const entityLayer = SceneBuilder.entityLayer();
     if (!entityLayer) return;
 
     const list = EntityRegistry.all().slice().sort((a, b) => a.y - b.y);
