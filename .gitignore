@@ -52,6 +52,9 @@ packages-game/**/*.d.ts
 packages-game/**/package-lock.json
 # 例外：GM 后台静态前端是源码而非构建产物，必须入库（否则面板脚本静默漏提）
 !packages-game/game-server/admin/**/*.js
+# 例外：客户端 vendor 的第三方运行时与引擎类型声明是零依赖方案的一部分，必须入库
+!packages-game/game-client/vendor/**/*.js
+!packages-game/game-client/src/types/*.d.ts
 
 # tests
 /test
