@@ -80,11 +80,13 @@ if [ -z "$TPL_ID" ] || [ -z "$TPL_NOTRADE" ] || [ -z "$TPL_BOUND" ]; then echo "
 GRANT_ITEM $P1 $TPL_ID 10 unbound
 GRANT_ITEM $P1 $TPL_NOTRADE 1 unbound
 GRANT_ITEM $P1 $TPL_BOUND 1 bound
+# 新号注册自带 initialGold（默认 1000），故基线以发钱前余额为准做增量断言
+G1_SEED=$(GOLD_OF $P1); G2_SEED=$(GOLD_OF $P2)
 GRANT_GOLD $P1 1000
 GRANT_GOLD $P2 1000
 want_eq "seller seeded 10 unbound" "$(INV_OF $P1 $TPL_ID)" 10
-want_eq "seller seeded 1000 gold" "$(GOLD_OF $P1)" 1000
-want_eq "buyer seeded 1000 gold" "$(GOLD_OF $P2)" 1000
+want_eq "seller seeded +1000 gold" "$(GOLD_OF $P1)" "$((G1_SEED + 1000))"
+want_eq "buyer seeded +1000 gold" "$(GOLD_OF $P2)" "$((G2_SEED + 1000))"
 
 echo "== T1 挂单托管库存 =="
 R=$(curl -s -X POST $BASE/api/client/v1/trade/order -H "$A1" -H 'Content-Type: application/json' \
@@ -109,17 +111,19 @@ want_code "bound-only stack rejected" "$R" 20003
 want_eq "rejections left inventory untouched" "$(INV_OF $P1 $TPL_ID)" 6
 
 echo "== T3 成交结算（买家付 400 / 卖家到手 380 / 买家收货 4）=="
+G1_BEFORE=$(GOLD_OF $P1); G2_BEFORE=$(GOLD_OF $P2)
 R=$(curl -s -X POST $BASE/api/client/v1/trade/order/$ORDER_ID/buy -H "$A2")
 echo "$R" | grep -q '"status":"completed"' && ok "buy completed" || bad "buy completed" "$R"
-want_eq "buyer paid 400 (1000->600)" "$(GOLD_OF $P2)" 600
+want_eq "buyer paid 400" "$(GOLD_OF $P2)" "$((G2_BEFORE - 400))"
 # 成交税 5% = 20，卖家无帮派则帮派分成为 0（差额归系统回收），卖家到手 380
-want_eq "seller received 380 (1000->1380)" "$(GOLD_OF $P1)" 1380
+want_eq "seller received 380" "$(GOLD_OF $P1)" "$((G1_BEFORE + 380))"
 want_eq "buyer received 4 items" "$(INV_OF $P2 $TPL_ID)" 4
 
 echo "== T4 二次购买被拒 =="
+G2_AFTER=$(GOLD_OF $P2)
 R=$(curl -s -X POST $BASE/api/client/v1/trade/order/$ORDER_ID/buy -H "$A2")
 want_code "second buy rejected" "$R" 70003
-want_eq "buyer not charged twice" "$(GOLD_OF $P2)" 600
+want_eq "buyer not charged twice" "$(GOLD_OF $P2)" "$G2_AFTER"
 
 echo "== T5 取消退货 =="
 R=$(curl -s -X POST $BASE/api/client/v1/trade/order -H "$A1" -H 'Content-Type: application/json' \
