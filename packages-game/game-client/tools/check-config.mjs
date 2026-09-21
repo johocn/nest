@@ -1,11 +1,11 @@
-// 校验 seed 生成的配置包：manifest 结构、文件存在性、manifest.hash 与文件字节一致、场景必填字段
+// 校验服务端导出的配置包（game-server/gamedata）：manifest 结构、文件存在性、manifest.hash 与文件字节一致、场景必填字段
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const dir = join(root, 'assets', 'config');
+const dir = join(root, '..', 'game-server', 'gamedata');
 const issues = [];
 
 function sha256(text) {
@@ -14,7 +14,7 @@ function sha256(text) {
 
 const manifestPath = join(dir, 'manifest.json');
 if (!existsSync(manifestPath)) {
-  console.error('缺少 manifest.json，请先执行 npm run seed:scene-spike');
+  console.error(`缺少 ${manifestPath}，请先在 game-server 执行 npm run config:export && npm run config:publish`);
   process.exit(1);
 }
 const manifestText = readFileSync(manifestPath, 'utf8');

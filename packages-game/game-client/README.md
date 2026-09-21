@@ -7,8 +7,8 @@ LayaAir 3.x 工程，零新增 npm 依赖：模板、引擎类型、运行时都
 - `tools/assemble.mjs` —— 从 LayaAir IDE 安装目录装配工程壳（模板文件、引擎类型声明、vendored socket.io、工程描述文件）。默认 IDE 路径 `D:\Program Files\LayaAirIDE`，可用 `LAYA_IDE_DIR` 覆盖。
 - `tools/build-cli.ps1` —— 尝试用 IDE 命令行构建（实证见下）。
 - `tools/build-fallback.mjs` —— 不依赖 IDE 的兜底构建：借用 `../game-server/node_modules/typescript` 编译 `src/` 到 `bin/js`，重写产物导入扩展名，生成 `bin/js/player-config.js` 与 `bin/index.html`。
-- `tools/serve.mjs` —— 零依赖静态服务器（默认 5173），把 `/config`、`/assets`、`/vendor`、`/libs`、`/js`、`/` 映射到统一 URL 空间。
-- `tools/check-config.mjs` —— 校验 `assets/config` 配置包与 manifest 的 hash 一致性。
+- `tools/serve.mjs` —— 零依赖静态服务器（默认 5173），把 `/assets`、`/vendor`、`/libs`、`/js`、`/` 映射到统一 URL 空间，并把 `/gamedata` 反向代理到后端（同源，规避静态响应无 CORS 头）。
+- `tools/check-config.mjs` —— 校验服务端导出目录 `../game-server/gamedata` 的配置包与 manifest 的 hash 一致性。
 
 ## S1 工具链实证
 
@@ -142,7 +142,7 @@ unknown script 'Build.buildWxgame'
 待人工执行（完成后即可按降级口径把 #8 判为 PASS）：
 
 1. IDE 打开工程 `packages-game/game-client` → 「构建/发布」选「微信小游戏」执行，记录实际产物目录（预期 `release/wxgame`）；
-2. `Copy-Item -Recurse -Force assets\config (Join-Path (Resolve-Path .\release\wxgame).Path 'config')`；
+2. `Copy-Item -Recurse -Force ..\game-server\gamedata (Join-Path (Resolve-Path .\release\wxgame).Path 'config')`；
 3. 微信开发者工具导入产物根目录（AppID 用测试号），本地设置勾选「不校验合法域名…」；
 4. Console 执行 `wx.request({ url: 'http://localhost:3000/health', success: (r) => console.log('health', r.statusCode, r.data) })`，预期 `health 200`。
 

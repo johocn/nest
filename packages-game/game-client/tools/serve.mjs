@@ -1,12 +1,13 @@
-// 零依赖静态服务器：把「产物目录 / 源码资源 / IDE 引擎库 / vendored 三方库」映射到统一 URL 空间
+// 零依赖静态服务器：把「源码资源 / IDE 引擎库 / vendored 三方库」映射到统一 URL 空间，并把 /gamedata 反向代理到后端
 import { createReadStream, existsSync, statSync } from 'node:fs';
-import { createServer } from 'node:http';
+import { createServer, request as httpRequest } from 'node:http';
 import { extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const IDE = process.env.LAYA_IDE_DIR || 'D:\\Program Files\\LayaAirIDE';
 const PORT = Number(process.env.S1_PORT || 5173);
+const BACKEND = process.env.S1_BACKEND || 'http://localhost:3000';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -21,7 +22,6 @@ const MIME = {
 };
 
 const ROUTES = [
-  ['/config/', join(root, 'assets', 'config')],
   ['/assets/', join(root, 'assets')],
   ['/vendor/', join(root, 'vendor')],
   ['/libs/', join(IDE, 'resources', 'engine', 'libs')],
@@ -45,7 +45,33 @@ function resolveFile(urlPath) {
   return null;
 }
 
+// /gamedata/* 反向代理到后端：客户端与配置包同源，规避静态响应不带 CORS 头的问题
+function proxyGamedata(req, res) {
+  const target = new URL(req.url ?? '/gamedata', BACKEND);
+  const headers = { ...req.headers, host: target.host };
+  const upstream = httpRequest(target, { method: req.method, headers }, (up) => {
+    const outHeaders = { ...up.headers };
+    // 逐跳首部不转发（由本机连接自行决定）
+    delete outHeaders.connection;
+    delete outHeaders['keep-alive'];
+    delete outHeaders['transfer-encoding'];
+    res.writeHead(up.statusCode ?? 502, outHeaders);
+    up.pipe(res);
+    console.log(`${up.statusCode} ${req.url} (proxy)`);
+  });
+  upstream.on('error', (e) => {
+    res.writeHead(502, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end(`502 代理后端失败（${BACKEND}）：${e.message}`);
+    console.log(`502 ${req.url} (proxy) ${e.message}`);
+  });
+  req.pipe(upstream);
+}
+
 createServer((req, res) => {
+  if ((req.url ?? '').startsWith('/gamedata/')) {
+    proxyGamedata(req, res);
+    return;
+  }
   const file = resolveFile(req.url ?? '/');
   if (!file) {
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -59,5 +85,6 @@ createServer((req, res) => {
 }).listen(PORT, () => {
   console.log(`S1 static server: http://localhost:${PORT}/`);
   console.log(`libs 来源: ${join(IDE, 'resources', 'engine', 'libs')}`);
-  console.log('提示：请确保后端已在 3000 端口运行，且 CORS_ORIGINS 含 http://localhost:5173');
+  console.log(`/gamedata 代理到: ${BACKEND}`);
+  console.log('提示：请确保后端已在 3000 端口运行（配置包与接口均依赖它）');
 });
