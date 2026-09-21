@@ -117,6 +117,9 @@ async function bootstrap() {
   // Static files - sandbox
   app.useStaticAssets(join(__dirname, '..', '..', 'sandbox', 'dist'), { prefix: '/sandbox' });
 
+  // Static files - 场景配置包产物（发布/回滚只改文件内容，无需重建重启）
+  app.useStaticAssets(join(__dirname, '..', '..', 'gamedata'), { prefix: '/gamedata' });
+
   // Security headers
   app.use(
     helmet({
