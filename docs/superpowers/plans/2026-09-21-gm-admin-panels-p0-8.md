@@ -130,10 +130,16 @@
 - `account_penalties` id=4：`player_id=1 / account_id=1 / level=warning / reason=「P0-8 面板点检验证」/ created_by=admin`；
 - `risk_cases` id=2：`status=ignored / handled_by=admin / detail_json.note=「P0-8 点检忽略线索」`。
 
+**举报处置端到端二次点检（2026-09-21，6/6 PASS）**：
+- 造数据：`scripts/smoke-p08-reports.sh`（服务器执行，9 项断言全过）→ 待处理举报 #2（119→120 / abuse）、#3（120→119 / ad）；
+- 面板：3 行台账 + 分页「共 3 条」→ 筛选「待处理」剩 2 行 → #2 选 IGNORE（理由留空被拦截，补理由后成功）→ #3 选 WARN → 筛选回「全部」显示 3 行且状态分别为 已处理/已忽略/已处理；
+- 落库核对：`player_reports` #2 `status=ignored / handle_action=IGNORE / handler_admin_id=1`、#3 `status=processed / handle_action=WARN / handler_admin_id=1`；WARN 联动惩罚 `account_penalties` id=5（`player_id=119 / level=warning / reason=「P0-8 点检：警告一次」/ created_by=admin`）；
+- 控制台无业务侧 JS 报错（仅 https 证书类网络告警与 harness 的 MaxListeners 警告）。
+
 **实现中对计划的偏离（均已落地，不含后端改动）**：
 1. `core.js` 未实现 `createPager()`：3 个面板分别用后端分页（reports）与固定 limit（risk），无复用点，按「不做冗余抽象」省略。
 2. 风控线索列表**无分页**：后端 `GET /risk/cases` 固定 `take=50` 且无 total，面板改为「状态 + 类型」筛选并在空态注明最多 50 条，未做假分页。
 3. `recover/:rid/rollback` 的 `rid` 来源：后端无「回收记录列表」接口（仅 `recover` 返回记录实体）。UI 采用「本页确认回收后行内直接出现回滚按钮（rid 取自返回值）」+「手工回滚」卡片输入 rid（跨会话），未扩展后端路由。
-4. 举报处置的**写动作未能端到端验证**：生产 `player_reports` 仅 1 条且已是 `processed`（面板按设计只对 `pending` 显示处置按钮），未新建测试举报数据；已验证列表/筛选/空态与确认框拦截。
+4. 举报处置的写动作最初无法端到端验证（生产 `player_reports` 仅 1 条且已是 `processed`，面板按设计只对 `pending` 显示处置按钮）。**已补齐**：新增造数据脚本 `scripts/smoke-p08-reports.sh`（官方客户端 API 注册 A/B 两账号 → 双向举报 A→B(abuse)、B→A(ad) → 断言管理端台账 `{items,total}` 含两条 pending，9 项断言全过），随后在面板上真实处置两条待处理举报（IGNORE + WARN），落库核对见下。
 5. 生产 `risk_cases` 存在 legacy `case_type='wash'`（不在 `RiskCaseType` 枚举内，源码已无写入路径）；类型筛选只覆盖枚举 3 值，wash 行在「全部」下可见。
 6. 新增「社交后果补执行」「手工回滚」两个前台入口（计划已列 T3/T4 动作，此处记录为一级卡片，均为二次确认 + 理由必填）。
