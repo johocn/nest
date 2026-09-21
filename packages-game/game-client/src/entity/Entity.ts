@@ -1,10 +1,10 @@
 import { Component } from './components/Component';
 import { TransformComponent } from './components/TransformComponent';
-import { VisualComponent } from './components/VisualComponent';
 
-export type EntityKind = 'player' | 'npc' | 'object';
+/** `building` 为 S6 建造预留的类型占位，当前无任何实现 */
+export type EntityKind = 'player' | 'npc' | 'object' | 'building';
 
-/** Entity 构造参数：只声明身份与外观初值，能力由组件承载 */
+/** Entity 构造参数：只声明身份与装配初值，能力由 EntityFactory 展开为组件 */
 export interface EntityOptions {
   entityId: string;
   kind: EntityKind;
@@ -20,6 +20,7 @@ export interface EntityOptions {
 /**
  * 实体 = 身份 + 组件表（组件容器）。
  * 渲染/空间/交互能力全部下沉到组件；sprite 是实体唯一的显示节点，由 Transform/Visual 组件共同作用。
+ * 构造只建显示节点、不挂组件 —— 组件清单由 EntityFactory 声明并装配（见 EntityFactory.assemble）。
  * 原点在「脚底中心」：贴图绘制在 (x-16, y-32)，与后端 spawn_x/spawn_y 直接对齐，不做坐标换算。
  */
 export class Entity {
@@ -38,10 +39,6 @@ export class Entity {
     this.templateId = opts.templateId;
 
     this.sprite = new Laya.Sprite();
-    this.attach(new TransformComponent(this.sprite, opts.x, opts.y));
-    this.attach(
-      new VisualComponent(this.sprite, opts.kind, opts.displayName, opts.color, opts.texture),
-    );
   }
 
   attach(component: Component): void {
