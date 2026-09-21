@@ -74,6 +74,12 @@ export class GameGateway
       return;
     }
 
+    // 先落身份再 await：handleConnection 是异步的，客户端 connect 后可能立刻发第一条业务消息，
+    // 若等到 validateToken 之后才写 data，那条消息会被判成「未认证」。
+    client.data.playerId = payload.playerId;
+    client.data.accountId = payload.accountId;
+    client.data.sceneId = null;
+
     const isValid = await this.authService.validateToken(payload);
     if (!isValid) {
       this.logger.warn(
@@ -82,10 +88,6 @@ export class GameGateway
       client.disconnect();
       return;
     }
-
-    client.data.playerId = payload.playerId;
-    client.data.accountId = payload.accountId;
-    client.data.sceneId = null;
 
     const loginIp = (client.handshake?.address as string) ?? '';
     const deviceId = (client.handshake?.query?.deviceId as string) ?? '';
