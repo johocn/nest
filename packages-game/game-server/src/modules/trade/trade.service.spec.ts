@@ -13,13 +13,15 @@ import {
 import { EventBusService } from '@event-bus/event-bus.service';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
-import { TradeStatus, AuctionStatus, NegotiationStatus, EscrowStatus, BountyStatus, CreditStatus, BarterStatus } from '@constants/enums';
+import { TradeStatus, AuctionStatus, NegotiationStatus, EscrowStatus, BountyStatus, CreditStatus, BarterStatus, CurrencyType, ConfigType } from '@constants/enums';
 import { EconomyService } from '@modules/economy/economy.service';
 import { SocialService } from '@modules/social/social.service';
 import { CharacterService } from '@modules/character/character.service';
 import { CombatService } from '@modules/combat/combat.service';
 import { VipService } from '@modules/vip/vip.service';
 import { RiskGateService } from '@modules/risk/risk-gate.service';
+import { ConfigManageService } from '@modules/config/config.service';
+import { InventoryService } from '@modules/inventory/inventory.service';
 import { GameEvents } from '@event-bus/game-events';
 import type { Repository } from 'typeorm';
 
@@ -38,6 +40,8 @@ describe('TradeService', () => {
   let combatService: jest.Mocked<CombatService>;
   let vipService: jest.Mocked<VipService>;
   let eventBus: jest.Mocked<EventBusService>;
+  let configService: jest.Mocked<ConfigManageService>;
+  let inventoryService: jest.Mocked<InventoryService>;
 
   beforeEach(async () => {
     economyService = {
@@ -161,6 +165,21 @@ describe('TradeService', () => {
           provide: RiskGateService,
           useValue: { assertAuction: jest.fn().mockResolvedValue(undefined), assertTransfer: jest.fn() },
         },
+        {
+          provide: InventoryService,
+          useValue: {
+            removeUnboundItem: jest.fn(),
+            addItem: jest.fn(),
+          },
+        },
+        {
+          provide: ConfigManageService,
+          useValue: {
+            getConfig: jest.fn().mockRejectedValue(
+              new GameException(ErrorCodes.CONFIG_NOT_FOUND, '配置项不存在'),
+            ),
+          },
+        },
       ],
     }).compile();
 
@@ -177,6 +196,8 @@ describe('TradeService', () => {
     characterService = module.get(CharacterService);
     combatService = module.get(CombatService);
     eventBus = module.get(EventBusService);
+    configService = module.get(ConfigManageService);
+    inventoryService = module.get(InventoryService);
   });
 
   // ===== Trade Order =====
@@ -603,6 +624,78 @@ describe('TradeService', () => {
         GameEvents.BARTER_COMPLETED,
         { playerId: 'pB' },
       );
+    });
+  });
+
+  describe('settlement infrastructure', () => {
+    it('should reject social currency as trade currency', async () => {
+      await expect(
+        service.createTradeOrder({
+          sellerId: 'p1',
+          itemTemplateId: '100',
+          itemName: '道具',
+          quantity: 1,
+          pricePerUnit: '10',
+          currencyType: CurrencyType.FAVOR,
+        }),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.TRADE_CURRENCY_NOT_ALLOWED },
+      });
+      expect(tradeRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('should reject bound diamond as trade currency', async () => {
+      await expect(
+        service.createTradeOrder({
+          sellerId: 'p1',
+          itemTemplateId: '100',
+          itemName: '道具',
+          quantity: 1,
+          pricePerUnit: '10',
+          currencyType: CurrencyType.BOUND_DIAMOND,
+        }),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.TRADE_CURRENCY_NOT_ALLOWED },
+      });
+    });
+
+    it('should fall back to default sale tax when config missing', async () => {
+      configService.getConfig.mockRejectedValue(
+        new GameException(ErrorCodes.CONFIG_NOT_FOUND, '配置项不存在'),
+      );
+      const percent = await (service as any).readPercent(
+        'trade.sale_tax_percent',
+        5,
+      );
+      expect(percent).toBe(5);
+    });
+
+    it('should fall back to default when config value is illegal', async () => {
+      configService.getConfig.mockResolvedValue({
+        key: 'trade.sale_tax_percent',
+        value: 'not-a-number',
+        configType: ConfigType.NUMBER,
+        version: 1,
+      } as any);
+      const percent = await (service as any).readPercent(
+        'trade.sale_tax_percent',
+        5,
+      );
+      expect(percent).toBe(5);
+    });
+
+    it('should read percent from remote config', async () => {
+      configService.getConfig.mockResolvedValue({
+        key: 'trade.sale_tax_percent',
+        value: '8',
+        configType: ConfigType.NUMBER,
+        version: 1,
+      } as any);
+      const percent = await (service as any).readPercent(
+        'trade.sale_tax_percent',
+        5,
+      );
+      expect(percent).toBe(8);
     });
   });
 });

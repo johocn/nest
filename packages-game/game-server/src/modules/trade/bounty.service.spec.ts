@@ -18,6 +18,9 @@ import { CharacterService } from '@modules/character/character.service';
 import { CombatService } from '@modules/combat/combat.service';
 import { VipService } from '@modules/vip/vip.service';
 import { RiskGateService } from '@modules/risk/risk-gate.service';
+import { ConfigManageService } from '@modules/config/config.service';
+import { InventoryService } from '@modules/inventory/inventory.service';
+import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
 import { CurrencyType, BountyStatus, CombatResult } from '@constants/enums';
 import type { Repository } from 'typeorm';
@@ -82,6 +85,21 @@ describe('TradeService Bounty', () => {
         {
           provide: RiskGateService,
           useValue: { assertAuction: jest.fn().mockResolvedValue(undefined), assertTransfer: jest.fn() },
+        },
+        {
+          provide: InventoryService,
+          useValue: {
+            removeUnboundItem: jest.fn(),
+            addItem: jest.fn(),
+          },
+        },
+        {
+          provide: ConfigManageService,
+          useValue: {
+            getConfig: jest.fn().mockRejectedValue(
+              new GameException(ErrorCodes.CONFIG_NOT_FOUND, '配置项不存在'),
+            ),
+          },
         },
       ],
     }).compile();

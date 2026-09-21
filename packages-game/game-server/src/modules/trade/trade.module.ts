@@ -17,6 +17,8 @@ import { CharacterModule } from '@modules/character/character.module';
 import { CombatModule } from '@modules/combat/combat.module';
 import { VipModule } from '@modules/vip/vip.module';
 import { RiskModule } from '@modules/risk/risk.module';
+import { InventoryModule } from '@modules/inventory/inventory.module';
+import { ConfigManageModule } from '@modules/config/config.module';
 
 @Module({
   imports: [
@@ -35,6 +37,8 @@ import { RiskModule } from '@modules/risk/risk.module';
     CombatModule,
     VipModule,
     RiskModule,
+    InventoryModule,
+    ConfigManageModule,
   ],
   controllers: [TradeController],
   providers: [TradeService],

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
@@ -32,6 +32,8 @@ import { CharacterService } from '@modules/character/character.service';
 import { CombatService } from '@modules/combat/combat.service';
 import { VipService } from '@modules/vip/vip.service';
 import { RiskGateService } from '@modules/risk/risk-gate.service';
+import { InventoryService } from '@modules/inventory/inventory.service';
+import { ConfigManageService } from '@modules/config/config.service';
 
 export interface CreateTradeParams {
   sellerId: string;
@@ -54,6 +56,21 @@ export interface ListAuctionParams {
 
 @Injectable()
 export class TradeService {
+  private readonly logger = new Logger(TradeService.name);
+
+  /** 可交易币种白名单：社交货币与绑定钻石按手册 11.2/11.3 禁止流通 */
+  private static readonly TRADABLE_CURRENCIES: string[] = [
+    CurrencyType.GOLD,
+    CurrencyType.DIAMOND,
+  ];
+
+  private static readonly LISTING_FEE_KEY = 'trade.listing_fee_percent';
+  private static readonly SALE_TAX_KEY = 'trade.sale_tax_percent';
+  private static readonly TAX_GUILD_SHARE_KEY = 'trade.tax_guild_share_percent';
+  private static readonly DEFAULT_LISTING_FEE_PERCENT = 2;
+  private static readonly DEFAULT_SALE_TAX_PERCENT = 5;
+  private static readonly DEFAULT_TAX_GUILD_SHARE_PERCENT = 50;
+
   constructor(
     @InjectRepository(TradeOrder)
     private readonly tradeRepo: Repository<TradeOrder>,
@@ -76,11 +93,84 @@ export class TradeService {
     private readonly combatService: CombatService,
     private readonly vipService: VipService,
     private readonly riskGateService: RiskGateService,
+    private readonly inventoryService: InventoryService,
+    private readonly configService: ConfigManageService,
   ) {}
+
+  private assertTradableCurrency(currencyType: string): void {
+    if (!TradeService.TRADABLE_CURRENCIES.includes(currencyType)) {
+      throw new GameException(
+        ErrorCodes.TRADE_CURRENCY_NOT_ALLOWED,
+        '该币种不可用于交易',
+      );
+    }
+  }
+
+  /** 读取百分比配置：配置缺失或值非法一律回退默认值，不阻断交易 */
+  private async readPercent(key: string, fallback: number): Promise<number> {
+    try {
+      const { value } = await this.configService.getConfig(key);
+      const percent = Number(value);
+      if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
+        return fallback;
+      }
+      return percent;
+    } catch {
+      return fallback;
+    }
+  }
+
+  /** 成交税反哺卖家所在帮派资金；失败只记 warning，不阻断成交 */
+  private async recycleTaxToGuild(
+    sellerId: string,
+    amount: number,
+    reason: string,
+  ): Promise<void> {
+    try {
+      const guildRole = await this.socialService.getMyGuildRole(sellerId);
+      if (!guildRole) return;
+      await this.socialService.adjustGuildFund(
+        sellerId,
+        guildRole.guildId,
+        amount,
+        reason,
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Guild tax recycle failed (seller=${sellerId}, amount=${amount}): ${
+          (err as Error).message
+        }`,
+      );
+    }
+  }
+
+  /**
+   * 易物道具契约：{ "<道具模板id>": <正整数数量> }。
+   * 该格式为本批首次定义，非法键/值一律拒绝。
+   */
+  private parseItemMap(
+    json: Record<string, any>,
+  ): Array<{ itemTemplateId: string; quantity: number }> {
+    return Object.entries(json ?? {}).map(([itemTemplateId, raw]) => {
+      const quantity = Number(raw);
+      if (
+        !/^\d+$/.test(itemTemplateId) ||
+        !Number.isInteger(quantity) ||
+        quantity <= 0
+      ) {
+        throw new GameException(
+          ErrorCodes.PARAM_INVALID,
+          '易物道具格式须为 {"道具模板id": 正整数数量}',
+        );
+      }
+      return { itemTemplateId, quantity };
+    });
+  }
 
   // ===== Trade Order =====
 
   async createTradeOrder(params: CreateTradeParams): Promise<TradeOrder> {
+    this.assertTradableCurrency(params.currencyType);
     const order = this.tradeRepo.create({
       ...params,
       buyerId: null,
