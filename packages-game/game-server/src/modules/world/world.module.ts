@@ -27,6 +27,7 @@ import {
 import { SceneConfigVersion } from './config/entities/scene-config-version.entity';
 import { SceneConfigService } from './config/scene-config.service';
 import { PlayerQuest } from '@modules/quest/entities/player-quest.entity';
+import { QuestTemplate } from '@modules/quest/entities/quest-template.entity';
 import { InventoryItem } from '@modules/inventory/entities/inventory-item.entity';
 import { PlayerModule } from '@modules/player/player.module';
 import { QuestModule } from '@modules/quest/quest.module';
@@ -53,6 +54,7 @@ import { DialogueService } from './dialogue/dialogue.service';
       NpcSpawnRule,
       NpcPatrolRoute,
       PlayerQuest,
+      QuestTemplate,
       InventoryItem,
       Dialogue,
     ]),

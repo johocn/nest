@@ -11,6 +11,8 @@ import {
   FinishGameDto,
   LandmarkMessageDto,
 } from './dto/object-interact.dto';
+import { ChooseDialogueDto } from './dto/dialogue.dto';
+import { DialogueService } from './dialogue/dialogue.service';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { CurrentPlayer } from '@common/decorators/current-player.decorator';
 import type { CurrentPlayerData } from '@common/decorators/current-player.decorator';
@@ -25,6 +27,7 @@ export class WorldClientController {
   constructor(
     private readonly worldService: WorldService,
     private readonly characterService: CharacterService,
+    private readonly dialogueService: DialogueService,
   ) {}
 
   private async resolveCharacterId(playerId: string): Promise<string> {
@@ -56,6 +59,24 @@ export class WorldClientController {
     @Param('spawnId') spawnId: string,
   ) {
     return this.worldService.talkNpc(player.playerId, spawnId);
+  }
+
+  @Post('dialogue/choose')
+  @ApiOperation({ summary: '对话选项推进（服务端权威：条件过滤 + 动作执行）' })
+  async chooseDialogue(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Body() dto: ChooseDialogueDto,
+  ) {
+    return this.dialogueService.choose(player.playerId, dto);
+  }
+
+  @Post('triggers/:id/story')
+  @ApiOperation({ summary: '剧情触发（story_id → 对话首节点，once_only 只触发一次）' })
+  async triggerStory(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Param('id') triggerId: string,
+  ) {
+    return this.worldService.triggerStory(player.playerId, triggerId);
   }
 
   @Post('triggers/:id/activate')

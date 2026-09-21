@@ -30,6 +30,7 @@ import {
 import { ErrorCodes } from '@constants/error-codes';
 import { EconomyService } from '../economy/economy.service';
 import { NpcPresenceService } from './npc/npc-presence.service';
+import { DialogueService } from './dialogue/dialogue.service';
 import type { Repository } from 'typeorm';
 
 describe('WorldService', () => {
@@ -47,6 +48,11 @@ describe('WorldService', () => {
   let sessionRepo: jest.Mocked<Repository<GameSession>>;
   let landmarkMsgRepo: jest.Mocked<Repository<LandmarkMessage>>;
   let npcRepo: jest.Mocked<Repository<NpcTemplate>>;
+  let dialogueService: {
+    startById: jest.Mock;
+    buildQuestMarks: jest.Mock;
+    choose: jest.Mock;
+  };
 
   beforeEach(async () => {
     const createMockRepo = () => ({
@@ -131,6 +137,24 @@ describe('WorldService', () => {
           provide: NpcPresenceService,
           useValue: { listNpcsForPlayer: jest.fn().mockResolvedValue([]) },
         },
+        {
+          provide: DialogueService,
+          useValue: {
+            // 默认按「对话悬空」处理：talk 走旧兜底（attr.greeting）
+            startById: jest
+              .fn()
+              .mockRejectedValue(
+                new GameException(
+                  ErrorCodes.DIALOGUE_NOT_FOUND,
+                  '对话不存在或已停用',
+                ),
+              ),
+            buildQuestMarks: jest
+              .fn()
+              .mockResolvedValue({ available: [], submittable: [] }),
+            choose: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -148,6 +172,7 @@ describe('WorldService', () => {
     sessionRepo = module.get(getRepositoryToken(GameSession));
     landmarkMsgRepo = module.get(getRepositoryToken(LandmarkMessage));
     npcRepo = module.get(getRepositoryToken(NpcTemplate));
+    dialogueService = module.get(DialogueService);
   });
 
   const makeScene = (overrides: Partial<Scene> = {}): Scene =>
@@ -437,7 +462,7 @@ describe('WorldService', () => {
   });
 
   describe('talkNpc', () => {
-    it('返回 NPC 模板 attr.greeting 作为对话文案', async () => {
+    it('对话悬空/停用时回退 NPC 模板 attr.greeting（code/nodeKey 为 undefined，S1 行为不变）', async () => {
       spawnRepo.findOne.mockResolvedValue({
         id: '21',
         entityType: EntityType.NPC,
@@ -458,6 +483,55 @@ describe('WorldService', () => {
       expect(result.name).toBe('村长');
       expect(result.dialogueId).toBe(3);
       expect(result.text).toBe('远来的客人，先四处看看吧。');
+      expect(result.code).toBeUndefined();
+      expect(result.nodeKey).toBeUndefined();
+      expect(dialogueService.startById).toHaveBeenCalledWith('2', 3);
+    });
+
+    it('接入对话树：text 为节点正文，options 为过滤后可选项（next/index 分离）', async () => {
+      spawnRepo.findOne.mockResolvedValue({
+        id: '12',
+        entityType: EntityType.NPC,
+        templateId: '2',
+      } as any);
+      npcRepo.findOne.mockResolvedValue({
+        id: '2',
+        name: 'spike-铁匠',
+        interactType: NpcInteractType.TALK,
+        dialogueId: 1,
+        attr: { greeting: '铁匠：要打铁，先得有矿。' },
+      } as any);
+      dialogueService.startById.mockResolvedValue({
+        code: 'npc_blacksmith_main',
+        nodeKey: 'root',
+        finished: false,
+        node: {
+          key: 'root',
+          speaker: '铁匠',
+          text: '哟，客人来得正好。要打点什么家伙什？',
+          options: [
+            { index: 0, text: '我想找点事做', next: 'accepted' },
+            { index: 3, text: '闲聊' },
+          ],
+        },
+      });
+      dialogueService.buildQuestMarks.mockResolvedValue({
+        available: ['1'],
+        submittable: [],
+      });
+
+      const result = await service.talkNpc('2', '12');
+
+      expect(result.text).toBe('哟，客人来得正好。要打点什么家伙什？');
+      expect(result.code).toBe('npc_blacksmith_main');
+      expect(result.nodeKey).toBe('root');
+      // options 形状保持 Array<{text,next}>（S1 契约），原始下标另放 optionIndexes
+      expect(result.options).toEqual([
+        { text: '我想找点事做', next: 'accepted' },
+        { text: '闲聊', next: null },
+      ]);
+      expect(result.optionIndexes).toEqual([0, 3]);
+      expect(result.questMarks).toEqual({ available: ['1'], submittable: [] });
     });
 
     it('对非 NPC 的 spawn 抛 PARAM_INVALID', async () => {
@@ -476,6 +550,59 @@ describe('WorldService', () => {
       spawnRepo.findOne.mockResolvedValue(null);
 
       await expect(service.talkNpc('2', '99')).rejects.toMatchObject({
+        response: { code: ErrorCodes.PARAM_INVALID },
+      });
+    });
+  });
+
+  describe('triggerStory', () => {
+    it('story_id 为空 → DIALOGUE_NOT_FOUND（业务码而非 500）', async () => {
+      triggerRepo.findOne.mockResolvedValue({
+        id: '2',
+        triggerType: TriggerType.STORY,
+        storyId: null,
+        onceOnly: true,
+      } as any);
+
+      await expect(service.triggerStory('1', '2')).rejects.toMatchObject({
+        response: { code: ErrorCodes.DIALOGUE_NOT_FOUND },
+      });
+      expect(cacheService.acquireLock).not.toHaveBeenCalled();
+    });
+
+    it('once_only 拿锁成功 → 返回首节点；二次触发拿锁失败 → DIALOGUE_CONDITION_NOT_MET', async () => {
+      triggerRepo.findOne.mockResolvedValue({
+        id: '2',
+        triggerType: TriggerType.STORY,
+        storyId: 1,
+        onceOnly: true,
+      } as any);
+      dialogueService.startById.mockResolvedValue({
+        code: 'npc_blacksmith_main',
+        nodeKey: 'root',
+        finished: false,
+        node: { key: 'root', text: '剧情开场', options: [] },
+      });
+      cacheService.acquireLock.mockResolvedValue(true);
+
+      const view = await service.triggerStory('1', '2');
+      expect(view.nodeKey).toBe('root');
+      expect(cacheService.acquireLock).toHaveBeenCalledWith(
+        'world:story:once:2',
+        31536000,
+      );
+      expect(dialogueService.startById).toHaveBeenCalledWith('1', 1);
+
+      cacheService.acquireLock.mockResolvedValue(false);
+      await expect(service.triggerStory('1', '2')).rejects.toMatchObject({
+        response: { code: ErrorCodes.DIALOGUE_CONDITION_NOT_MET },
+      });
+    });
+
+    it('触发器不存在 → PARAM_INVALID', async () => {
+      triggerRepo.findOne.mockResolvedValue(null);
+
+      await expect(service.triggerStory('1', '99')).rejects.toMatchObject({
         response: { code: ErrorCodes.PARAM_INVALID },
       });
     });

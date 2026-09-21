@@ -18,6 +18,7 @@ interface ServiceMocks {
   dialogueRepo: { findOne: jest.Mock };
   playerQuestRepo: { find: jest.Mock };
   inventoryItemRepo: { find: jest.Mock };
+  questTemplateRepo: { find: jest.Mock };
   playerService: { getById: jest.Mock };
   cacheService: { exists: jest.Mock; set: jest.Mock };
   questService: { acceptQuest: jest.Mock; submitQuest: jest.Mock };
@@ -29,6 +30,7 @@ function createService(): ServiceMocks {
   const dialogueRepo = { findOne: jest.fn() };
   const playerQuestRepo = { find: jest.fn().mockResolvedValue([]) };
   const inventoryItemRepo = { find: jest.fn().mockResolvedValue([]) };
+  const questTemplateRepo = { find: jest.fn().mockResolvedValue([]) };
   const playerService = {
     getById: jest.fn().mockResolvedValue({ id: PLAYER_ID, level: 12 }),
   };
@@ -49,6 +51,7 @@ function createService(): ServiceMocks {
   const service = new DialogueService(
     playerQuestRepo as any,
     inventoryItemRepo as any,
+    questTemplateRepo as any,
     dialogueRepo as any,
     playerService as any,
     cacheService as any,
@@ -62,6 +65,7 @@ function createService(): ServiceMocks {
     dialogueRepo,
     playerQuestRepo,
     inventoryItemRepo,
+    questTemplateRepo,
     playerService,
     cacheService,
     questService,
@@ -588,5 +592,59 @@ describe('DialogueService.executeAction / choose / start', () => {
       service.start(PLAYER_ID, 'missing_dialogue'),
     );
     expect(res.code).toBe(ErrorCodes.DIALOGUE_NOT_FOUND);
+  });
+
+  it('startById：按 dialogues.id 查启用中的行并返回首节点（Task 4：talk/story 用 id 入口）', async () => {
+    const view = await service.startById(PLAYER_ID, 1);
+
+    expect(mocks.dialogueRepo.findOne).toHaveBeenCalledWith({
+      where: { id: '1', isActive: true },
+    });
+    expect(view.nodeKey).toBe('root');
+    expect(view.node?.text).toBe('客官要打点什么？');
+  });
+
+  it('startById：id 悬空/已停用 → DIALOGUE_NOT_FOUND（业务码，不抛 500）', async () => {
+    mocks.dialogueRepo.findOne.mockResolvedValue(null);
+    const res = await catchGameException(() =>
+      service.startById(PLAYER_ID, 999),
+    );
+    expect(res.code).toBe(ErrorCodes.DIALOGUE_NOT_FOUND);
+  });
+});
+
+describe('DialogueService.buildQuestMarks（D8）', () => {
+  let mocks: ServiceMocks;
+  let service: DialogueService;
+
+  beforeEach(() => {
+    mocks = createService();
+    service = mocks.service;
+  });
+
+  it('available 只含「等级达标且未接取」的任务；submittable 只含 in_progress', async () => {
+    // 玩家等级 12（createService 默认）
+    mocks.questTemplateRepo.find.mockResolvedValue([
+      { id: '1', minLevel: 1 }, // 可接（无记录）
+      { id: '2', minLevel: 50 }, // 等级不足
+      { id: '3', minLevel: 1 }, // 已接取（in_progress）→ 不在 available
+      { id: '4', minLevel: 1 }, // not_started → 仍可接
+    ]);
+    mocks.playerQuestRepo.find.mockResolvedValue([
+      { questTemplateId: '3', status: QuestStatus.IN_PROGRESS },
+      { questTemplateId: '5', status: QuestStatus.CLAIMED },
+      { questTemplateId: '4', status: QuestStatus.NOT_STARTED },
+    ]);
+
+    const marks = await service.buildQuestMarks(PLAYER_ID);
+
+    expect(marks.available).toEqual(['1', '4']);
+    expect(marks.submittable).toEqual(['3']);
+  });
+
+  it('无任务模板/无任务记录时返回两个空数组', async () => {
+    const marks = await service.buildQuestMarks(PLAYER_ID);
+    expect(marks.available).toEqual([]);
+    expect(marks.submittable).toEqual([]);
   });
 });

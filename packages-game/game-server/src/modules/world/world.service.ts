@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
@@ -35,6 +35,11 @@ import {
   NpcPresenceService,
   NpcInstance,
 } from './npc/npc-presence.service';
+import {
+  DialogueQuestMarks,
+  DialogueService,
+  DialogueView,
+} from './dialogue/dialogue.service';
 
 /** 活跃场景登记键（S4：只跑有玩家在场的场景，D7） */
 export const ACTIVE_SCENES_KEY = 'scenes:active';
@@ -55,10 +60,21 @@ export interface NpcTalkResult {
   dialogueId: number | null;
   text: string;
   options: Array<{ text: string; next: string | null }>;
+  // ===== 以下为 S5 增量字段（旧字段零变更，S1 冒烟不回归；计划 §0.3 / Task 4 Step 2）=====
+  /** 对话编码；未接入对话树（走 attr.greeting 兜底）时为 undefined */
+  code?: string;
+  /** 当前节点 key；未接入对话树时为 undefined */
+  nodeKey?: string;
+  /** 当前节点**可见**选项的原始下标（与 options 一一对应，客户端回传它作为 optionIndex） */
+  optionIndexes?: number[];
+  /** D8：服务端计算的任务标记（可接/可交），客户端不得自行推断 */
+  questMarks?: DialogueQuestMarks;
 }
 
 @Injectable()
 export class WorldService {
+  private readonly logger = new Logger(WorldService.name);
+
   constructor(
     @InjectRepository(Scene) private readonly sceneRepo: Repository<Scene>,
     @InjectRepository(NpcTemplate)
@@ -85,6 +101,7 @@ export class WorldService {
     @InjectRepository(LandmarkMessage)
     private readonly landmarkMsgRepo: Repository<LandmarkMessage>,
     private readonly npcPresence: NpcPresenceService,
+    private readonly dialogueService: DialogueService,
   ) {}
 
   async getScene(id: string): Promise<Scene> {
@@ -197,10 +214,12 @@ export class WorldService {
   }
 
   /**
-   * NPC 对话（S1 最小实现）：
-   * - spawnId 是 scene_entity_spawns.id
-   * - 文案先取 npc_templates.attr.greeting；S5 接入 dialogues 表后改为按 dialogueId 返回节点树
-   * - playerId 目前仅用于后续「按任务状态过滤/对话 CD」，S1 不产生副作用
+   * NPC 对话（S5 接入对话树）：
+   * - spawnId 是 scene_entity_spawns.id，校验规则与 S1 一致（NPC 落位 / 模板存在 / interactType=talk）；
+   * - `npc_templates.dialogue_id` 指向 `dialogues.id`（D5）：命中且启用时由 DialogueService 解析**首节点**下发
+   *   （条件过滤 + 服务端权威，D2/D4），`options` 为当前节点过滤后的可选项；
+   * - 未配对话、对话已停用或结构非法 → **原样回退 S1 行为**（`attr.greeting` + `attr.options`），
+   *   保证老 NPC 与 S1 冒烟不回归（风险 #1/#4）。
    */
   async talkNpc(playerId: string, spawnId: string): Promise<NpcTalkResult> {
     const spawn = await this.spawnRepo.findOne({ where: { id: spawnId } });
@@ -218,6 +237,34 @@ export class WorldService {
       throw new GameException(ErrorCodes.PARAM_INVALID, '该 NPC 当前无法对话');
     }
 
+    const hasDialogue =
+      template.dialogueId !== null && template.dialogueId !== undefined;
+    const view = hasDialogue
+      ? await this.tryStartDialogue(playerId, template.dialogueId as number)
+      : null;
+    // D8：任务标记随 talk 下发（可接/可交由服务端按玩家状态计算）
+    const questMarks = await this.dialogueService.buildQuestMarks(playerId);
+
+    if (view && view.node) {
+      return {
+        spawnId: spawn.id,
+        npcTemplateId: template.id,
+        name: template.name,
+        talkType: template.interactType,
+        dialogueId: template.dialogueId ?? null,
+        text: view.node.text,
+        options: view.node.options.map((opt) => ({
+          text: opt.text,
+          next: opt.next ?? null,
+        })),
+        code: view.code,
+        nodeKey: view.node.key,
+        optionIndexes: view.node.options.map((opt) => opt.index),
+        questMarks,
+      };
+    }
+
+    // 旧兜底（S1 行为，字段与语义零变更）
     const attr = (template.attr ?? {}) as Record<string, any>;
     const greeting = typeof attr.greeting === 'string' ? attr.greeting : '';
 
@@ -229,7 +276,69 @@ export class WorldService {
       dialogueId: template.dialogueId ?? null,
       text: greeting || `${template.name}：……`,
       options: Array.isArray(attr.options) ? attr.options : [],
+      questMarks,
     };
+  }
+
+  /**
+   * 按 `dialogue_id` 打开对话树，业务级失败降级为 null（调用方回退问候语）。
+   * 悬空的 `dialogue_id`（指向不存在/停用的行）与结构非法只记 warn 不抛 500（风险 #4）；
+   * 非业务异常（如 DB 不可用）照常上抛，不掩盖真实故障。
+   */
+  private async tryStartDialogue(
+    playerId: string,
+    dialogueId: number,
+  ): Promise<DialogueView | null> {
+    try {
+      return await this.dialogueService.startById(playerId, dialogueId);
+    } catch (err) {
+      if (err instanceof GameException) {
+        this.logger.warn(
+          `对话降级为问候语（player=${playerId} dialogueId=${dialogueId}）：${JSON.stringify(err.getResponse())}`,
+        );
+        return null;
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * 剧情触发（D6）：`scene_triggers.story_id` 指向 `dialogues.id`，返回该剧情首节点。
+   * - 触发器不存在 → PARAM_INVALID；story_id 为空 → DIALOGUE_NOT_FOUND（业务码而非 500，风险 #4）；
+   * - `once_only` 用 acquireLock('world:story:once:<triggerId>', 31536000) 占位（照抄 interactObject 写法），
+   *   重复触发 → DIALOGUE_CONDITION_NOT_MET（「一次性内容已消费」语义，见报告说明）。
+   */
+  async triggerStory(
+    playerId: string,
+    triggerId: string,
+  ): Promise<DialogueView> {
+    const trigger = await this.triggerRepo.findOne({
+      where: { id: triggerId },
+    });
+    if (!trigger) {
+      throw new GameException(ErrorCodes.PARAM_INVALID, '触发器不存在');
+    }
+    if (trigger.storyId === null || trigger.storyId === undefined) {
+      throw new GameException(
+        ErrorCodes.DIALOGUE_NOT_FOUND,
+        `该触发器未配置剧情：trigger=${triggerId}`,
+      );
+    }
+
+    if (trigger.onceOnly) {
+      const first = await this.cacheService.acquireLock(
+        `world:story:once:${triggerId}`,
+        31536000,
+      );
+      if (!first) {
+        throw new GameException(
+          ErrorCodes.DIALOGUE_CONDITION_NOT_MET,
+          '该剧情只能触发一次',
+        );
+      }
+    }
+
+    return this.dialogueService.startById(playerId, trigger.storyId);
   }
 
   async interactObject(

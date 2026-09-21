@@ -10,6 +10,28 @@ import {
   Min,
 } from 'class-validator';
 
+/**
+ * 客户端对话推进（D2/D7）：客户端只回 `optionIndex`（**原始下标**），
+ * 不传目标节点 key，防止伪造跳节点；`nodeKey` 仅用于服务端校验「当前确实在该节点」。
+ */
+export class ChooseDialogueDto {
+  @ApiProperty({ description: '对话编码，如 npc_blacksmith_main' })
+  @IsString()
+  @Length(1, 64)
+  code: string;
+
+  @ApiProperty({ description: '当前节点 key' })
+  @IsString()
+  @Length(1, 64)
+  nodeKey: string;
+
+  @ApiProperty({ description: '选项原始下标（见 talk 返回的 optionIndexes）' })
+  @IsInt()
+  @Min(0)
+  @Type(() => Number)
+  optionIndex: number;
+}
+
 /** 对话列表查询（分页 + 关键字，关键字匹配 code / title） */
 export class DialogueQueryDto {
   @ApiPropertyOptional({ description: '页码，从 1 开始' })

@@ -7,6 +7,7 @@ import { GameException } from '@common/exceptions/game.exception';
 import { CacheService } from '@cache/cache.service';
 import { PlayerService } from '@modules/player/player.service';
 import { PlayerQuest } from '@modules/quest/entities/player-quest.entity';
+import { QuestTemplate } from '@modules/quest/entities/quest-template.entity';
 import { QuestService } from '@modules/quest/quest.service';
 import { InventoryItem } from '@modules/inventory/entities/inventory-item.entity';
 import { InventoryService } from '@modules/inventory/inventory.service';
@@ -58,6 +59,14 @@ export interface DialogueView {
   finished: boolean;
 }
 
+/** D8：NPC 头顶任务标记（服务端权威计算，客户端不得自行推断） */
+export interface DialogueQuestMarks {
+  /** 可接任务：等级达标且玩家未接取（无记录或 not_started） */
+  available: string[];
+  /** 可提交任务：player_quests 中状态为 in_progress */
+  submittable: string[];
+}
+
 @Injectable()
 export class DialogueService {
   private readonly logger = new Logger(DialogueService.name);
@@ -67,6 +76,8 @@ export class DialogueService {
     private readonly playerQuestRepo: Repository<PlayerQuest>,
     @InjectRepository(InventoryItem)
     private readonly inventoryItemRepo: Repository<InventoryItem>,
+    @InjectRepository(QuestTemplate)
+    private readonly questTemplateRepo: Repository<QuestTemplate>,
     @InjectRepository(Dialogue)
     private readonly dialogueRepo: Repository<Dialogue>,
     private readonly playerService: PlayerService,
@@ -160,6 +171,36 @@ export class DialogueService {
    */
   async start(playerId: string, dialogueCode: string): Promise<DialogueView> {
     const dialogue = await this.findActiveDialogue(dialogueCode);
+    return this.buildStartView(dialogue, playerId);
+  }
+
+  /**
+   * 按 dialogues.id 打开对话（Task 4）：
+   * `npc_templates.dialogue_id` 与 `scene_triggers.story_id` 指向的都是 **id**（D5/D6），
+   * 因此复用同一条解析路径，只把入口从 code 换成 id。
+   * 不存在/已停用 → DIALOGUE_NOT_FOUND（业务码，不抛 500；风险 #4）。
+   */
+  async startById(
+    playerId: string,
+    dialogueId: number | string,
+  ): Promise<DialogueView> {
+    const dialogue = await this.dialogueRepo.findOne({
+      where: { id: String(dialogueId), isActive: true },
+    });
+    if (!dialogue) {
+      throw new GameException(
+        ErrorCodes.DIALOGUE_NOT_FOUND,
+        `对话不存在或已停用：id=${dialogueId}`,
+      );
+    }
+    return this.buildStartView(dialogue, playerId);
+  }
+
+  /** 解析首节点并组装视图（start / startById 共用；结构非法或首节点条件不满足即拒绝） */
+  private async buildStartView(
+    dialogue: Dialogue,
+    playerId: string,
+  ): Promise<DialogueView> {
     const nodes = this.assertNodes(dialogue);
 
     const ctx = await this.buildContext(playerId, collectFlagKeys(nodes));
@@ -172,6 +213,33 @@ export class DialogueService {
       );
     }
     return { code: dialogue.code, nodeKey: node.key, node, finished: false };
+  }
+
+  /**
+   * D8：计算 NPC 头顶任务标记（服务端权威，客户端不能凭配置推断）。
+   * - available：quest_templates 中 `minLevel <= 玩家等级`，且玩家**尚未接取**（无记录或 not_started）；
+   * - submittable：player_quests 中状态为 in_progress。
+   * 只读既有 player_quests / quest_templates，**不新增表或字段**。
+   */
+  async buildQuestMarks(playerId: string): Promise<DialogueQuestMarks> {
+    const [ctx, templates] = await Promise.all([
+      this.buildContext(playerId),
+      this.questTemplateRepo.find(),
+    ]);
+
+    const available: string[] = [];
+    for (const template of templates) {
+      const id = String(template.id);
+      if (template.minLevel > ctx.level) continue;
+      const status = ctx.questStatus.get(id);
+      if (!status || status === QuestStatus.NOT_STARTED) available.push(id);
+    }
+
+    const submittable: string[] = [];
+    for (const [id, status] of ctx.questStatus) {
+      if (status === QuestStatus.IN_PROGRESS) submittable.push(id);
+    }
+    return { available, submittable };
   }
 
   /**
