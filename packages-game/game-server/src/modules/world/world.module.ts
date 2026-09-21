@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { WorldService } from './world.service';
 import { WorldController } from './world.controller';
 import { WorldClientController } from './world.client.controller';
+import { NpcAdminController } from './npc-admin.controller';
 import { EconomyModule } from '@modules/economy/economy.module';
 import { CharacterModule } from '@modules/character/character.module';
 import { AdminModule } from '@modules/admin/admin.module';
@@ -52,7 +53,7 @@ import { NpcTickService } from './npc/npc-tick.service';
     AdminModule,
     PlayerModule,
   ],
-  controllers: [WorldController, WorldClientController],
+  controllers: [WorldController, WorldClientController, NpcAdminController],
   providers: [
     WorldService,
     SceneConfigService,
