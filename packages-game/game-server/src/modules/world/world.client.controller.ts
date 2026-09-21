@@ -49,6 +49,15 @@ export class WorldClientController {
     );
   }
 
+  @Post('npcs/:spawnId/talk')
+  @ApiOperation({ summary: 'NPC 对话（返回对话文案与可选项）' })
+  async talkNpc(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Param('spawnId') spawnId: string,
+  ) {
+    return this.worldService.talkNpc(player.playerId, spawnId);
+  }
+
   @Post('triggers/:id/activate')
   @ApiOperation({ summary: '机关配合解锁' })
   async activateTrigger(

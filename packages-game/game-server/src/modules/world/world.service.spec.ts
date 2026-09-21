@@ -25,6 +25,7 @@ import {
   InteractType,
   TriggerType,
   GameSessionStatus,
+  NpcInteractType,
 } from '@constants/enums';
 import { ErrorCodes } from '@constants/error-codes';
 import { EconomyService } from '../economy/economy.service';
@@ -44,6 +45,7 @@ describe('WorldService', () => {
   let gameRepo: jest.Mocked<Repository<StreetGame>>;
   let sessionRepo: jest.Mocked<Repository<GameSession>>;
   let landmarkMsgRepo: jest.Mocked<Repository<LandmarkMessage>>;
+  let npcRepo: jest.Mocked<Repository<NpcTemplate>>;
 
   beforeEach(async () => {
     const createMockRepo = () => ({
@@ -140,6 +142,7 @@ describe('WorldService', () => {
     gameRepo = module.get(getRepositoryToken(StreetGame));
     sessionRepo = module.get(getRepositoryToken(GameSession));
     landmarkMsgRepo = module.get(getRepositoryToken(LandmarkMessage));
+    npcRepo = module.get(getRepositoryToken(NpcTemplate));
   });
 
   const makeScene = (overrides: Partial<Scene> = {}): Scene =>
@@ -422,6 +425,51 @@ describe('WorldService', () => {
       await expect(
         service.leaveLandmarkMessage('1', '1', 'x'.repeat(101)),
       ).rejects.toMatchObject({
+        response: { code: ErrorCodes.PARAM_INVALID },
+      });
+    });
+  });
+
+  describe('talkNpc', () => {
+    it('返回 NPC 模板 attr.greeting 作为对话文案', async () => {
+      spawnRepo.findOne.mockResolvedValue({
+        id: '21',
+        entityType: EntityType.NPC,
+        templateId: '5',
+      } as any);
+      npcRepo.findOne.mockResolvedValue({
+        id: '5',
+        name: '村长',
+        interactType: NpcInteractType.TALK,
+        dialogueId: 3,
+        attr: { greeting: '远来的客人，先四处看看吧。' },
+      } as any);
+
+      const result = await service.talkNpc('2', '21');
+
+      expect(result.spawnId).toBe('21');
+      expect(result.npcTemplateId).toBe('5');
+      expect(result.name).toBe('村长');
+      expect(result.dialogueId).toBe(3);
+      expect(result.text).toBe('远来的客人，先四处看看吧。');
+    });
+
+    it('对非 NPC 的 spawn 抛 PARAM_INVALID', async () => {
+      spawnRepo.findOne.mockResolvedValue({
+        id: '22',
+        entityType: EntityType.OBJECT,
+        templateId: '5',
+      } as any);
+
+      await expect(service.talkNpc('2', '22')).rejects.toMatchObject({
+        response: { code: ErrorCodes.PARAM_INVALID },
+      });
+    });
+
+    it('spawn 不存在时抛 PARAM_INVALID', async () => {
+      spawnRepo.findOne.mockResolvedValue(null);
+
+      await expect(service.talkNpc('2', '99')).rejects.toMatchObject({
         response: { code: ErrorCodes.PARAM_INVALID },
       });
     });

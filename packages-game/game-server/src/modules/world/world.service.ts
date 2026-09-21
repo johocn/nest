@@ -26,6 +26,8 @@ import {
   TriggerType,
   GameSessionStatus,
   CurrencyType,
+  EntityType,
+  NpcInteractType,
 } from '@constants/enums';
 import { EconomyService } from '../economy/economy.service';
 import { ResourceBalancePolicy } from './resource-balance.policy';
@@ -34,6 +36,16 @@ export interface SceneEnterResult {
   scene: Scene;
   spawns: SceneEntitySpawn[];
   triggers: SceneTrigger[];
+}
+
+export interface NpcTalkResult {
+  spawnId: string;
+  npcTemplateId: string;
+  name: string;
+  talkType: NpcInteractType;
+  dialogueId: number | null;
+  text: string;
+  options: Array<{ text: string; next: string | null }>;
 }
 
 @Injectable()
@@ -161,6 +173,42 @@ export class WorldService {
 
   async getObjectTemplate(id: string): Promise<ObjectTemplate | null> {
     return this.objRepo.findOne({ where: { id } });
+  }
+
+  /**
+   * NPC 对话（S1 最小实现）：
+   * - spawnId 是 scene_entity_spawns.id
+   * - 文案先取 npc_templates.attr.greeting；S5 接入 dialogues 表后改为按 dialogueId 返回节点树
+   * - playerId 目前仅用于后续「按任务状态过滤/对话 CD」，S1 不产生副作用
+   */
+  async talkNpc(playerId: string, spawnId: string): Promise<NpcTalkResult> {
+    const spawn = await this.spawnRepo.findOne({ where: { id: spawnId } });
+    if (!spawn || spawn.entityType !== EntityType.NPC) {
+      throw new GameException(ErrorCodes.PARAM_INVALID, 'NPC 不存在');
+    }
+
+    const template = await this.npcRepo.findOne({
+      where: { id: spawn.templateId },
+    });
+    if (!template) {
+      throw new GameException(ErrorCodes.PARAM_INVALID, 'NPC 模板不存在');
+    }
+    if (template.interactType !== NpcInteractType.TALK) {
+      throw new GameException(ErrorCodes.PARAM_INVALID, '该 NPC 当前无法对话');
+    }
+
+    const attr = (template.attr ?? {}) as Record<string, any>;
+    const greeting = typeof attr.greeting === 'string' ? attr.greeting : '';
+
+    return {
+      spawnId: spawn.id,
+      npcTemplateId: template.id,
+      name: template.name,
+      talkType: template.interactType,
+      dialogueId: template.dialogueId ?? null,
+      text: greeting || `${template.name}：……`,
+      options: Array.isArray(attr.options) ? attr.options : [],
+    };
   }
 
   async interactObject(

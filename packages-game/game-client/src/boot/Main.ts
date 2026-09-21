@@ -10,6 +10,7 @@ import { Session } from '../net/Session';
 import { WsClient } from '../net/ws';
 import { Platform } from '../platform/Platform';
 import { PlayerControl } from '../world/PlayerControl';
+import { InteractController } from '../world/InteractController';
 import { SceneBuilder } from '../world/SceneBuilder';
 import { Toast } from '../ui/Toast';
 
@@ -81,6 +82,9 @@ async function afterLogin(): Promise<void> {
 
   // ⑦ 本地移动 → 10Hz 上报
   new PlayerControl(me, ws, { width: cfg.scene.mapWidth, height: cfg.scene.mapHeight }).attach();
+
+  // ⑧ 就近交互（F 键）
+  new InteractController(me).attach();
 
   Laya.timer.frameLoop(10, null, () => SceneBuilder.resort());
   console.log(`[S1] 客户端版本 ${AppConfig.clientVersion}，配置包 v${cfg.version}`);
