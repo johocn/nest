@@ -7,7 +7,7 @@ import { io } from 'socket.io-client';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const API = process.env.SMOKE_API || 'http://localhost:3000';
-const CONFIG_DIR = join(here, '..', '..', 'game-client', 'assets', 'config');
+const CONFIG_DIR = join(here, '..', 'gamedata');
 const USER_A = { username: 'spike01', password: 'spike123456', nickname: 'spike01', deviceId: 'smoke-s1-a' };
 const USER_B = { username: 'spike02', password: 'spike123456', nickname: 'spike02', deviceId: 'smoke-s1-b' };
 
