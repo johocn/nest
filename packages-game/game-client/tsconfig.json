@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "module": "ES2015",
+    "moduleResolution": "node",
+    "lib": ["ES2017", "DOM"],
+    "types": [],
+    "strict": false,
+    "strictNullChecks": false,
+    "noImplicitAny": false,
+    "experimentalDecorators": true,
+    "skipLibCheck": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "bin/js",
+    "rootDir": "src",
+    "sourceMap": false,
+    "declaration": false,
+    "removeComments": false,
+    "noEmitOnError": true
+  },
+  "include": ["src/**/*.ts"]
+}
