@@ -243,6 +243,10 @@ export const ErrorCodes = {
   ENCOUNTER_ALREADY_RESOLVED: 94102, // 奇遇已结算（幂等防重复）
   ENCOUNTER_CHOICE_INVALID: 94103, // 不合法的选项
   ENCOUNTER_TEMPLATE_NOT_FOUND: 94104, // 奇遇模板不存在
+  // 对话系统 43001-43999
+  DIALOGUE_NOT_FOUND: 43001, // 对话不存在或已停用
+  DIALOGUE_CONDITION_NOT_MET: 43002, // 节点/选项条件不满足
+  DIALOGUE_NODE_INVALID: 43003, // 节点或选项非法（越界/不在该树内/动作未白名单）
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
