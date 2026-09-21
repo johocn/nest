@@ -20,8 +20,9 @@ export const AppConfig = {
   /** 移动上报间隔（毫秒）与最小位移阈值（像素） */
   moveReportIntervalMs: 100,
   moveReportThreshold: 4,
-  /** 就近交互半径（像素） */
-  interactRadius: 120,
+  /** 就近交互半径（像素）：按目标类型取值，人（NPC）比物远一点，避免「隔老远也能交互」 */
+  interactRadiusNpc: 90,
+  interactRadiusObject: 70,
   /** 设备标识：后端 DTO 未标 @IsOptional，不传会 400（见 §1.2） */
   deviceId: 'laya2d-s1',
   /**

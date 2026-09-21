@@ -1,80 +1,77 @@
 import { AppConfig } from '../config/AppConfig';
 import type { Entity } from '../entity/Entity';
 import { EntityRegistry } from '../entity/EntityRegistry';
-import { Api } from '../net/api';
-import { ApiError } from '../net/http';
+import { pickTarget } from '../entity/targeting';
+import type { PickedTarget, RadiusOf } from '../entity/targeting';
 import { Session } from '../net/Session';
-import { Toast } from '../ui/Toast';
+import { Hud } from '../ui/Hud';
 
-/** 交互键：Laya 的 KEY_DOWN 事件只代理 nativeEvent.key，故用小写 'f' 判定 */
+/** 交互键：Laya 的 KEY_DOWN 事件只代理 nativeEvent.key（不带 keyCode），故用归一化小写 'f' 判定 */
 const KEY_INTERACT = 'f';
+/** 目标重选节流：每 6 帧（≈100ms）一次，跟手且无谓开销可忽略 */
+const PICK_FRAME_INTERVAL = 6;
 
+/**
+ * 交互控制（D5：退化为**选择器**）：只做「就近选中 → 高亮/提示 → 把上下文交给选中组件的 interact()」。
+ * 本类**不含任何按 kind 的业务分支**；新增一种交互 = 加一个组件 + 在 registry 注册一行。
+ * 选择规则本身在纯模块 `entity/targeting.ts`（可被 node 直接断言）。
+ */
 export class InteractController {
+  /** 互斥：一次交互未完成时不重复触发 */
   private busy = false;
+  /** 上一次已提示的目标 id：提示条只在选中目标变化时重绘 */
   private lastHintId: string | null = null;
 
   constructor(private readonly me: Entity) {}
 
   attach(): void {
     Laya.stage.on(Laya.Event.KEY_DOWN, this, this.onKeyDown);
-    Laya.timer.frameLoop(6, this, this.updateHint);
+    Laya.timer.frameLoop(PICK_FRAME_INTERVAL, this, this.pickAndHighlight);
     console.log(
-      `[S1] 交互控制就绪：靠近 ${AppConfig.interactRadius}px 内按 F（NPC → npcs/:spawnId/talk；物件 → objects/:id/interact）`,
+      `[S3] 交互选择器就绪：半径 NPC ${AppConfig.interactRadiusNpc}px / 物件 ${AppConfig.interactRadiusObject}px，按 F 由选中组件自行派发`,
     );
   }
 
-  nearest(): Entity | null {
-    let best: Entity | null = null;
-    let bestDist = AppConfig.interactRadius;
-    for (const e of EntityRegistry.all()) {
-      if (e.kind === 'player') continue;
-      const d = this.me.distanceTo(e);
-      if (d <= bestDist) {
-        best = e;
-        bestDist = d;
-      }
-    }
-    return best;
+  /**
+   * 每帧重选：高亮跟随当前目标；提示条仅在目标变化时改写。
+   * （不每帧重写 hint：组件可能正用 hint 展示长文本，如 ReadComponent 的阅读文案。）
+   */
+  private pickAndHighlight(): void {
+    const picked = this.pick();
+    Hud.highlight(picked ? picked.entity : null);
+
+    const id = picked ? picked.entity.entityId : null;
+    if (id === this.lastHintId) return;
+    this.lastHintId = id;
+    Hud.hint(picked ? `按 F 交互：${picked.entity.entityId}` : null);
   }
 
-  private updateHint(): void {
-    const target = this.nearest();
-    const id = target ? target.entityId : null;
-    if (id !== this.lastHintId) {
-      this.lastHintId = id;
-      if (target) Toast.info(`按 F 交互：${target.entityId}`);
-    }
+  private pick(): PickedTarget | null {
+    return pickTarget(EntityRegistry.all(), this.me, InteractController.radiusOf, Session.token ?? '');
   }
+
+  /** 交互半径按目标类型取值：人（NPC）90 / 物（object）70 */
+  private static radiusOf: RadiusOf = (e) =>
+    e.kind === 'npc' ? AppConfig.interactRadiusNpc : AppConfig.interactRadiusObject;
 
   private async onKeyDown(e: Laya.Event): Promise<void> {
     const key = String((e as unknown as { key?: string }).key ?? '').toLowerCase();
     if (key !== KEY_INTERACT || this.busy) return;
 
-    const target = this.nearest();
-    if (!target) {
-      Toast.info('附近没有可交互目标');
+    // 按键时按同一规则重选一次，避免用上一次节流的结果
+    const picked = this.pick();
+    if (!picked) {
+      Hud.toast('附近没有可交互目标');
       return;
     }
 
     this.busy = true;
     try {
-      if (target.kind === 'npc') {
-        const res = await Api.talkNpc(target.spawnId!, Session.token);
-        Toast.info(`${res.name}：${res.text}`);
-        console.log(`[S1] 对话返回 ${JSON.stringify(res)}`);
-      } else {
-        // S3 Task 1：Entity.interactType 已删除，物件交互类型暂以 'collect' 兜底；
-        // 真正的 kind 派发在 Task 4/5 由 InteractComponent 承载（本 Task 不改派发逻辑）。
-        const res = await Api.interactObject(target.templateId!, 'collect', Session.token);
-        const amount = res?.reward?.amount;
-        Toast.info(
-          amount ? `采集成功，获得 ${amount} ${res.reward?.currencyType ?? ''}` : '交互成功',
-        );
-        console.log(`[S1] 采集返回 ${JSON.stringify(res)}`);
-      }
-    } catch (err) {
-      const msg = err instanceof ApiError ? `${err.message}（code=${err.code}）` : String(err);
-      Toast.error(msg);
+      await picked.component.interact({
+        me: this.me,
+        target: picked.entity,
+        token: Session.token ?? '',
+      });
     } finally {
       this.busy = false;
     }
