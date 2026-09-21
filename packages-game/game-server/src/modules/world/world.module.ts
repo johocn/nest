@@ -21,6 +21,7 @@ import {
   TriggerUnlock,
   NpcSpawnRule,
   NpcPatrolRoute,
+  Dialogue,
 } from './entities';
 import { SceneConfigVersion } from './config/entities/scene-config-version.entity';
 import { SceneConfigService } from './config/scene-config.service';
@@ -47,6 +48,7 @@ import { NpcTickService } from './npc/npc-tick.service';
       NpcSpawnRule,
       NpcPatrolRoute,
       PlayerQuest,
+      Dialogue,
     ]),
     EconomyModule,
     CharacterModule,

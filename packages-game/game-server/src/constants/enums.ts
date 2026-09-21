@@ -229,6 +229,16 @@ export enum NpcPatrolLoopMode {
   ONCE = 'once',
 }
 
+// 对话动作类型（取值与动作字符串一致）
+export enum DialogueActionType {
+  ACCEPT_QUEST = 'accept_quest',
+  SUBMIT_QUEST = 'submit_quest',
+  GIVE_ITEM = 'give_item',
+  TAKE_ITEM = 'take_item',
+  ADD_CURRENCY = 'add_currency',
+  SET_FLAG = 'set_flag',
+}
+
 export enum ObjectType {
   CHEST = 'chest',
   COLLECT = 'collect',
