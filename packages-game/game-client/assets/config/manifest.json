@@ -1,0 +1,11 @@
+{
+  "generatedAt": "2026-09-21T11:57:51.430Z",
+  "scenes": [
+    {
+      "sceneId": 1,
+      "version": 1,
+      "hash": "sha256:2a2e0f802f48c58ee2ae654143211e0744440a222fe5787f932693a14079dcb4",
+      "file": "scene-1-v1.json"
+    }
+  ]
+}

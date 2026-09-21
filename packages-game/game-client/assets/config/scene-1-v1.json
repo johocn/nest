@@ -1,0 +1,214 @@
+{
+  "schemaVersion": 1,
+  "sceneId": 1,
+  "version": 1,
+  "scene": {
+    "name": "新手村（Spike）",
+    "mapResKey": "map/town_spike_01",
+    "mapWidth": 1280,
+    "mapHeight": 960,
+    "minLevel": 1,
+    "maxPlayers": 50,
+    "sceneType": "town",
+    "entry": {
+      "x": 640,
+      "y": 480
+    }
+  },
+  "layers": {},
+  "staticEntities": [
+    {
+      "kind": "object",
+      "spawnId": 1,
+      "templateId": 1,
+      "resKey": "obj/plant_01",
+      "x": 560,
+      "y": 480,
+      "rotation": 0,
+      "interact": {
+        "type": "collect",
+        "cd": 10,
+        "oneTime": false
+      }
+    },
+    {
+      "kind": "object",
+      "spawnId": 2,
+      "templateId": 2,
+      "resKey": "obj/stone_01",
+      "x": 720,
+      "y": 400,
+      "rotation": 0,
+      "interact": {
+        "type": "collect",
+        "cd": 20,
+        "oneTime": false
+      }
+    },
+    {
+      "kind": "object",
+      "spawnId": 3,
+      "templateId": 3,
+      "resKey": "obj/chest_01",
+      "x": 420,
+      "y": 600,
+      "rotation": 0,
+      "interact": {
+        "type": "collect",
+        "cd": 0,
+        "oneTime": true
+      }
+    },
+    {
+      "kind": "object",
+      "spawnId": 4,
+      "templateId": 4,
+      "resKey": "obj/landmark_01",
+      "x": 860,
+      "y": 620,
+      "rotation": 0,
+      "interact": {
+        "type": "read",
+        "cd": 0,
+        "oneTime": false
+      }
+    },
+    {
+      "kind": "object",
+      "spawnId": 5,
+      "templateId": 1,
+      "resKey": "obj/plant_01",
+      "x": 300,
+      "y": 380,
+      "rotation": 0,
+      "interact": {
+        "type": "collect",
+        "cd": 10,
+        "oneTime": false
+      }
+    },
+    {
+      "kind": "object",
+      "spawnId": 6,
+      "templateId": 2,
+      "resKey": "obj/stone_01",
+      "x": 640,
+      "y": 300,
+      "rotation": 0,
+      "interact": {
+        "type": "collect",
+        "cd": 20,
+        "oneTime": false
+      }
+    },
+    {
+      "kind": "object",
+      "spawnId": 7,
+      "templateId": 3,
+      "resKey": "obj/chest_01",
+      "x": 980,
+      "y": 420,
+      "rotation": 0,
+      "interact": {
+        "type": "collect",
+        "cd": 0,
+        "oneTime": true
+      }
+    },
+    {
+      "kind": "object",
+      "spawnId": 8,
+      "templateId": 4,
+      "resKey": "obj/landmark_01",
+      "x": 520,
+      "y": 760,
+      "rotation": 0,
+      "interact": {
+        "type": "read",
+        "cd": 0,
+        "oneTime": false
+      }
+    },
+    {
+      "kind": "object",
+      "spawnId": 9,
+      "templateId": 1,
+      "resKey": "obj/plant_01",
+      "x": 760,
+      "y": 820,
+      "rotation": 0,
+      "interact": {
+        "type": "collect",
+        "cd": 10,
+        "oneTime": false
+      }
+    },
+    {
+      "kind": "object",
+      "spawnId": 10,
+      "templateId": 2,
+      "resKey": "obj/stone_01",
+      "x": 380,
+      "y": 200,
+      "rotation": 0,
+      "interact": {
+        "type": "collect",
+        "cd": 20,
+        "oneTime": false
+      }
+    }
+  ],
+  "fixedNpcs": [
+    {
+      "spawnId": 11,
+      "npcTemplateId": 1,
+      "resKey": "npc/elder_01",
+      "x": 600,
+      "y": 380,
+      "anim": "idle"
+    },
+    {
+      "spawnId": 12,
+      "npcTemplateId": 2,
+      "resKey": "npc_smith_01",
+      "x": 700,
+      "y": 520,
+      "anim": "idle"
+    },
+    {
+      "spawnId": 13,
+      "npcTemplateId": 3,
+      "resKey": "npc/peddler_01",
+      "x": 500,
+      "y": 560,
+      "anim": "idle"
+    }
+  ],
+  "triggers": [
+    {
+      "id": 1,
+      "type": "transport",
+      "area": {
+        "x": 0,
+        "y": 0,
+        "w": 120,
+        "h": 120
+      },
+      "targetSceneId": 1,
+      "onceOnly": false
+    },
+    {
+      "id": 2,
+      "type": "story",
+      "area": {
+        "x": 600,
+        "y": 200,
+        "w": 160,
+        "h": 120
+      },
+      "targetSceneId": null,
+      "onceOnly": true
+    }
+  ],
+  "hash": "sha256:5c7dc9a09484e26dea2b19c46c28c78ca2820c8e54af5a4f67ce755dba1f275c"
+}
