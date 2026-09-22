@@ -117,16 +117,25 @@ const server = net.createServer((socket) => {
         writeResp(socket, 'MAP', { server: 'mock-redis', version: '6.0.0', proto: 3, id: 1, mode: 'standalone', role: 'master' });
       }
       else if (op === 'SET' && args.length >= 3) {
-        // 注意：SET key value [EX n|PX n ...] —— 值只取第 3 个参数，选项要单独解析，
+        // 注意：SET key value [NX|XX] [EX n|PX n ...] —— 值只取第 3 个参数，选项要单独解析，
         // 否则 value 会被拼成 "1 EX 60" 且永不过期（曾导致限流计数永久累积）。
         const key = args[1];
+        // NX：键已存在时不写、返回 nil（acquireLock 依赖该语义，缺失会让锁恒成功）
+        const hasNx = args.some((a) => String(a).toUpperCase() === 'NX');
+        if (hasNx && store.has(key)) {
+          writeResp(socket, 'NULL');
+          continue;
+        }
         store.set(key, args[2]);
         for (let i = 3; i < args.length; i++) {
           const o = args[i]?.toUpperCase();
           if ((o === 'EX' || o === 'PX') && args[i + 1] !== undefined) {
             const n = parseInt(args[i + 1], 10);
             if (!isNaN(n)) {
-              setTimeout(() => store.delete(key), o === 'EX' ? n * 1000 : n);
+              // setTimeout 上限约 24.8 天（32 位），超出会被静默改成 1ms 而立即删键
+              // （曾导致一年期的一次性锁/剧情锁瞬间失效），此处做上界钳制。
+              const ms = o === 'EX' ? n * 1000 : n;
+              setTimeout(() => store.delete(key), Math.min(ms, 2147483647));
             }
             i++;
           }
