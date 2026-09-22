@@ -62,6 +62,85 @@ export interface MountResult {
   ok: boolean;
 }
 
+// ===== S6 建造（字段名与后端视图逐字一致，勿改）=====
+
+/** 建造模式（后端 `BuildMode`） */
+export type BuildMode = 'solo' | 'coop' | 'forbidden';
+
+/** 建筑状态（后端 `BuildingState`） */
+export type BuildingState = 'building' | 'built' | 'demolishing';
+
+/** 保留区（**格点**坐标，半开矩形 [x,x+w) × [y,y+h)） */
+export interface BuildReservedZone {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** 场景建造规则视图（`GET /world/scenes/:sceneId/build-rule`；无规则行 → mode='forbidden'） */
+export interface BuildRuleView {
+  id: string | null;
+  sceneId: string;
+  mode: BuildMode;
+  /** 每格边长（像素） */
+  landGridSize: number;
+  maxBuildingsPerPlayer: number;
+  allowDemolish: boolean;
+  coopMinContributors: number;
+  coopExpireHours: number;
+  reservedZones: BuildReservedZone[];
+}
+
+/** 建筑实例视图（`x/y` = 锚点格中心像素，`w/h` = 占地格数） */
+export interface BuildingView {
+  id: string;
+  sceneId: string;
+  templateId: string;
+  ownerId: string;
+  state: BuildingState;
+  finishAt: string | null;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** 建造消耗单项（与后端 `building_templates.build_cost` 元素同形） */
+export interface BuildCostEntry {
+  itemTemplateId?: string;
+  currencyType?: string;
+  amount: number;
+}
+
+/** 建筑蓝图（`GET /world/building-templates`，只返回启用中的蓝图） */
+export interface BuildingTemplate {
+  id: string;
+  name: string;
+  resKey: string;
+  category: string;
+  footprintW: number;
+  footprintH: number;
+  buildCost: BuildCostEntry[];
+  buildSeconds: number;
+  durability: number;
+  effect: Record<string, unknown>;
+  isActive: boolean;
+}
+
+/** 共建投料结果 */
+export interface ContributeResult {
+  building: BuildingView;
+  reached: boolean;
+  contributors: number;
+}
+
+/** 拆除结果（`refunded` 恒为 false：D7 不退款） */
+export interface DemolishResult {
+  building: BuildingView;
+  refunded: boolean;
+}
+
 export const Api = {
   /** login 不能带 nickname（DTO 无该字段，forbidNonWhitelisted 会 400） */
   login(username: string, password: string): Promise<AuthResult> {
@@ -138,5 +217,79 @@ export const Api = {
       token,
       body: { mountId, ride: true },
     });
+  },
+
+  // ===== S6 建造（路径与后端 world.client.controller 逐字一致）=====
+
+  /** 场景建造规则；无规则行的场景返回 mode='forbidden' 的默认视图（服务端权威） */
+  getBuildRule(sceneId: string, token: string | null): Promise<BuildRuleView> {
+    return httpJson<BuildRuleView>(
+      'GET',
+      `/api/client/v1/world/scenes/${sceneId}/build-rule`,
+      { token },
+    );
+  },
+
+  /** 场景建筑列表（ownerId 可选过滤） */
+  listBuildings(
+    sceneId: string,
+    ownerId: string | null,
+    token: string | null,
+  ): Promise<BuildingView[]> {
+    const query = ownerId ? `?ownerId=${encodeURIComponent(ownerId)}` : '';
+    return httpJson<BuildingView[]>(
+      'GET',
+      `/api/client/v1/world/scenes/${sceneId}/buildings${query}`,
+      { token },
+    );
+  },
+
+  /**
+   * 建筑蓝图列表。⚠️ **计划外补充的只读接口**（计划 Task 6 的 5 个接口未含蓝图），
+   * 服务端只返回 `isActive=true` 的蓝图；category 可选过滤。
+   */
+  listBuildingTemplates(
+    category: string | null,
+    token: string | null,
+  ): Promise<BuildingTemplate[]> {
+    const query = category ? `?category=${encodeURIComponent(category)}` : '';
+    return httpJson<BuildingTemplate[]>(
+      'GET',
+      `/api/client/v1/world/building-templates${query}`,
+      { token },
+    );
+  },
+
+  /** 建造建筑（sceneId 随 body 下发；solo/coop 由服务端按规则模式分派） */
+  createBuilding(
+    req: { sceneId: string; templateId: string; gx: number; gy: number },
+    token: string | null,
+  ): Promise<BuildingView> {
+    return httpJson<BuildingView>('POST', '/api/client/v1/world/buildings', {
+      token,
+      body: req,
+    });
+  },
+
+  /** 共建投料（items 形状与蓝图 buildCost 一致） */
+  contributeBuilding(
+    buildingId: string,
+    items: BuildCostEntry[],
+    token: string | null,
+  ): Promise<ContributeResult> {
+    return httpJson<ContributeResult>(
+      'POST',
+      `/api/client/v1/world/buildings/${buildingId}/contribute`,
+      { token, body: { items } },
+    );
+  },
+
+  /** 拆除建筑（仅所有者；不退款） */
+  demolishBuilding(buildingId: string, token: string | null): Promise<DemolishResult> {
+    return httpJson<DemolishResult>(
+      'POST',
+      `/api/client/v1/world/buildings/${buildingId}/demolish`,
+      { token, body: {} },
+    );
   },
 };

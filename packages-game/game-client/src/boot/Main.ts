@@ -4,15 +4,20 @@ import { AppConfig } from '../config/AppConfig';
 import { ConfigLoader } from '../config/loader';
 import type { NpcInstanceConfig, SceneConfig, ServerSpawn } from '../config/schema';
 import { AiComponent } from '../entity/components/AiComponent';
+import { BuildingViewComponent } from '../entity/components/BuildComponent';
 import { Entity } from '../entity/Entity';
 import { EntityFactory } from '../entity/EntityFactory';
 import { EntityRegistry } from '../entity/EntityRegistry';
+import { Api } from '../net/api';
+import type { BuildRuleView, BuildingTemplate, BuildingView } from '../net/api';
 import { Session } from '../net/Session';
 import { WsClient } from '../net/ws';
 import { Platform } from '../platform/Platform';
 import { PlayerControl } from '../world/PlayerControl';
 import { InteractController } from '../world/InteractController';
 import { SceneBuilder } from '../world/SceneBuilder';
+import { BuildPanel } from '../world/BuildPanel';
+import { toBuildingSpawn, upsertBuildingEntity, viewToSpawn } from '../world/build-logic';
 import { Toast } from '../ui/Toast';
 import { Hud } from '../ui/Hud';
 import { DialogueView } from '../ui/DialogueView';
@@ -21,6 +26,7 @@ const state = {
   cfg: null as SceneConfig | null,
   ws: null as WsClient | null,
   me: null as Entity | null,
+  buildRule: null as BuildRuleView | null,
 };
 
 interface EnterSceneSync {
@@ -113,6 +119,22 @@ async function afterLogin(): Promise<void> {
       SceneBuilder.addEntity(
         EntityFactory.createFromNpcUpdate(String(d.entityId), String(d.npcTemplateId ?? ''), pos.x, pos.y),
       );
+      return;
+    }
+
+    // S6：建筑状态广播（建造/落成/拆除）→ 复用 EntityRegistry.upsert 语义，不新增推送机制
+    if (d.entityType === 'building') {
+      const res = upsertBuildingEntity(d, (u) =>
+        EntityFactory.createFromBuilding(
+          toBuildingSpawn(u, BuildPanel.templateOf(u.templateId)),
+          state.buildRule,
+        ),
+      );
+      if (!res) return;
+      SceneBuilder.addEntity(res.entity);
+      // 广播帧不带 finishAt（落成/拆除只需状态）；applyState 缺省保留既有 finishAt，进度条继续可用
+      res.entity.getComponent(BuildingViewComponent)?.applyState(res.update.state);
+      if (res.update.state === 'demolishing') BuildPanel.removeBuilding(res.update.buildingId);
     }
   });
 
@@ -122,10 +144,85 @@ async function afterLogin(): Promise<void> {
   // ⑧ 就近交互（F 键）
   new InteractController(me).attach();
 
+  // ⑧b S6 建造（规则/蓝图/建筑列表走服务端权威接口；面板为引擎内自绘）
+  await attachBuild(me, cfg);
+
   // ⑨ 组件逐帧驱动（AiComponent 的路点插值按 Laya.timer.delta 推进）
   Laya.timer.frameLoop(1, null, () => EntityRegistry.updateAll(Laya.timer.delta));
   Laya.timer.frameLoop(10, null, () => SceneBuilder.resort());
   console.log(`[S1] 客户端版本 ${AppConfig.clientVersion}，配置包 v${cfg.version}`);
+}
+
+/** 无规则行的兜底视图（与后端 `BuildRuleService.getRule` 的 forbidden 默认视图同口径，宁可禁用不可误建） */
+function forbiddenRule(sceneId: string): BuildRuleView {
+  return {
+    id: null,
+    sceneId,
+    mode: 'forbidden',
+    landGridSize: 64,
+    maxBuildingsPerPlayer: 0,
+    allowDemolish: false,
+    coopMinContributors: 2,
+    coopExpireHours: 24,
+    reservedZones: [],
+  };
+}
+
+/** 建筑视图 → 实体（已存在则只更新状态与位置；HTTP 视图是 finishAt 的唯一来源） */
+function syncBuilding(view: BuildingView): void {
+  const spawn = viewToSpawn(view, BuildPanel.templateOf(view.templateId));
+  const existing = EntityRegistry.get(spawn.entityId);
+  if (existing) {
+    existing.setPos(spawn.x, spawn.y);
+    existing.getComponent(BuildingViewComponent)?.applyState(view.state, view.finishAt);
+    return;
+  }
+  SceneBuilder.addEntity(EntityFactory.createFromBuilding(spawn, state.buildRule));
+}
+
+/**
+ * S6 建造接线（计划 Task 7 Step 2/4）：规则/蓝图/建筑列表全部走服务端接口
+ * （蓝图接口是**计划外的必要补充**：Task 6 的 5 个客户端接口未含蓝图，客户端面板需要成本/耗时/占地）。
+ * 任一请求失败 → 按 forbidden 兜底并记日志，不阻断进场景。
+ */
+async function attachBuild(me: Entity, cfg: SceneConfig): Promise<void> {
+  const sceneId = String(cfg.sceneId);
+  const token = Session.token ?? '';
+  let rule = forbiddenRule(sceneId);
+  let templates: BuildingTemplate[] = [];
+  let buildings: BuildingView[] = [];
+  try {
+    const [ruleView, templateList, buildingList] = await Promise.all([
+      Api.getBuildRule(sceneId, token),
+      Api.listBuildingTemplates(null, token),
+      Api.listBuildings(sceneId, null, token),
+    ]);
+    rule = ruleView;
+    templates = templateList;
+    buildings = buildingList;
+  } catch (err) {
+    console.warn(`[S6] 建造数据加载失败，按 forbidden 兜底：${String(err)}`);
+  }
+
+  state.buildRule = rule;
+  BuildPanel.attach(
+    me,
+    SceneBuilder.layer,
+    {
+      sceneId,
+      mapWidth: cfg.scene.mapWidth,
+      mapHeight: cfg.scene.mapHeight,
+      rule,
+      templates,
+    },
+    syncBuilding,
+  );
+
+  for (const view of buildings) syncBuilding(view);
+  BuildPanel.setBuildings(buildings);
+  console.log(
+    `[S6] 建造接入：模式=${rule.mode} 蓝图=${templates.length} 场景建筑=${buildings.length}（按 B 打开建造面板）`,
+  );
 }
 
 async function main(): Promise<void> {
@@ -134,6 +231,8 @@ async function main(): Promise<void> {
   Hud.init();
   // S5 对话框（同为引擎内自绘，屏幕空间，zOrder 高于 HUD）
   DialogueView.init();
+  // S6 建造面板（引擎内自绘，zOrder 最高）
+  BuildPanel.init();
   Session.load();
 
   if (Session.token) {

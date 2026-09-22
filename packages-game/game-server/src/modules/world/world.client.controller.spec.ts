@@ -18,6 +18,7 @@ describe('WorldClientController building routes', () => {
     contribute: jest.Mock;
     demolish: jest.Mock;
   };
+  let buildingAdminService: { listTemplates: jest.Mock };
 
   const dto = {
     sceneId: '7',
@@ -35,12 +36,14 @@ describe('WorldClientController building routes', () => {
       contribute: jest.fn().mockResolvedValue({ reached: false }),
       demolish: jest.fn().mockResolvedValue({ refunded: false }),
     };
+    buildingAdminService = { listTemplates: jest.fn().mockResolvedValue([]) };
     controller = new WorldClientController(
       {} as any,
       {} as any,
       {} as any,
       buildRuleService as any,
       buildingService as any,
+      buildingAdminService as any,
     );
   });
 
@@ -110,5 +113,24 @@ describe('WorldClientController building routes', () => {
     const rule = { sceneId: '7', mode: BuildMode.SOLO };
     buildRuleService.getRule.mockResolvedValue(rule);
     await expect(controller.getBuildRule('7')).resolves.toBe(rule);
+  });
+
+  it('should pass only isActive:true to listTemplates when no category given', async () => {
+    const templates = [{ id: '55', name: '木屋', isActive: true }];
+    buildingAdminService.listTemplates.mockResolvedValue(templates);
+
+    await expect(controller.listBuildingTemplates()).resolves.toBe(templates);
+    // 客户端接口只暴露启用中的蓝图：无 category 时筛选条件必须恰好是 { isActive: true }
+    expect(buildingAdminService.listTemplates).toHaveBeenCalledWith({
+      isActive: true,
+    });
+  });
+
+  it('should add category to listTemplates filter only when provided', async () => {
+    await controller.listBuildingTemplates('house');
+    expect(buildingAdminService.listTemplates).toHaveBeenCalledWith({
+      isActive: true,
+      category: 'house',
+    });
   });
 });

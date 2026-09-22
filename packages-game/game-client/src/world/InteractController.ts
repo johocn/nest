@@ -1,4 +1,5 @@
 import { AppConfig } from '../config/AppConfig';
+import { BuildComponent } from '../entity/components/BuildComponent';
 import type { Entity, QuestMarkType } from '../entity/Entity';
 import { EntityRegistry } from '../entity/EntityRegistry';
 import { pickTarget } from '../entity/targeting';
@@ -7,12 +8,15 @@ import { Api } from '../net/api';
 import type { DialogueQuestMarks } from '../net/api';
 import { ApiError } from '../net/http';
 import { Session } from '../net/Session';
+import { BuildPanel } from './BuildPanel';
 import { DialogueView, normalizeChoose } from '../ui/DialogueView';
 import type { DialogueNodeView } from '../ui/DialogueView';
 import { Hud } from '../ui/Hud';
 
 /** 交互键：Laya 的 KEY_DOWN 事件只代理 nativeEvent.key（不带 keyCode），故用归一化小写 'f' 判定 */
 const KEY_INTERACT = 'f';
+/** S6 建造键：打开/关闭建造面板（面板内部另用 Q/E 切换蓝图、Enter 建造、G 投料、Del 拆除） */
+const KEY_BUILD = 'b';
 /** 目标重选节流：每 6 帧（≈100ms）一次，跟手且无谓开销可忽略 */
 const PICK_FRAME_INTERVAL = 6;
 
@@ -70,6 +74,14 @@ export class InteractController {
 
   private async onKeyDown(e: Laya.Event): Promise<void> {
     const key = String((e as unknown as { key?: string }).key ?? '').toLowerCase();
+
+    // S6 建造键 B：打开/关闭建造面板。面板自身在 forbidden 场景展示「此场景不允许建造」并禁用操作行
+    if (key === KEY_BUILD) {
+      if (DialogueView.isOpen) return;
+      BuildPanel.toggle();
+      return;
+    }
+
     if (key !== KEY_INTERACT || this.busy) return;
     // 对话打开时屏蔽交互键 F（避免连点重复请求）；移动是 W/A/S/D，不受影响
     if (DialogueView.isOpen) return;
@@ -84,6 +96,18 @@ export class InteractController {
     this.busy = true;
     const target = picked.entity;
     try {
+      /**
+       * S6 建造实体（BuildComponent）的 `canInteract` 分支：`mode==='forbidden'` → 不可交互。
+       * 选择器（`entity/targeting.ts`）本就在选中前检查 `canInteract()`，故这里只是兜底提示，
+       * **选择器逻辑零改动**（S3 语义保持）。
+       * 注：`PickedTarget.component` 声明为 `InteractComponent`，而 BuildComponent 是**结构性契约**
+       * （kind='build' 不在 `InteractType` 联合内），故先按 unknown 收窄再 instanceof 判定。
+       */
+      const buildEntry = picked.component as unknown as BuildComponent;
+      if (buildEntry instanceof BuildComponent && !buildEntry.canInteract()) {
+        Hud.toast('此场景不允许建造');
+        return;
+      }
       await picked.component.interact({
         me: this.me,
         target,

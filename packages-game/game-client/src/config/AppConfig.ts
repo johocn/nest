@@ -91,4 +91,48 @@ export const AppConfig = {
     /** 数字键 1-9 可选的最大选项数 */
     maxOptions: 9,
   },
+  /**
+   * S6 建造面板（引擎内自绘，屏幕空间）与建筑表现常量：与 hud/dialogue 同风格，常量集中避免魔法数字散落。
+   */
+  build: {
+    /** 建造面板根节点 zOrder：须盖在 HUD 与对话框之上 */
+    zOrder: 10001,
+    /** 面板贴右侧：宽度与四周边距 */
+    panelWidth: 320,
+    panelMargin: 12,
+    panelBgColor: 'rgba(0,0,0,0.85)',
+    panelBorderColor: '#4a5568',
+    panelBorderWidth: 2,
+    padX: 12,
+    padY: 10,
+    titleFontSize: 16,
+    titleColor: '#ffd75e',
+    lineFontSize: 13,
+    lineColor: '#e6edf3',
+    dimColor: '#8b949e',
+    lineHeight: 20,
+    /** 蓝图行选中底色 */
+    selectedBgColor: 'rgba(47,129,247,0.35)',
+    /** 合法性红/绿 */
+    legalColor: '#3fb950',
+    illegalColor: '#ff7b72',
+    /** 操作按钮行高与底色 */
+    buttonHeight: 26,
+    buttonBgColor: 'rgba(255,255,255,0.10)',
+    /** 格点预览：半透明填充 + 边框 */
+    previewAlpha: 0.35,
+    previewLineWidth: 2,
+    /** 建筑进度条（世界空间，画在建筑贴图上方） */
+    progressBarWidth: 48,
+    progressBarHeight: 6,
+    progressBarOffsetY: -42,
+    progressBgColor: 'rgba(0,0,0,0.6)',
+    progressFgColor: '#3fb950',
+    /** `finishAt` 缺失（不确定进度）时的中性色 */
+    progressUnknownColor: '#8b949e',
+    /** demolishing 淡出时长（毫秒），到点后从 EntityRegistry 移除 */
+    demolishFadeMs: 400,
+    /** 面板刷新节流：每 6 帧（≈100ms）重绘一次预览与进度 */
+    refreshFrameInterval: 6,
+  },
 };

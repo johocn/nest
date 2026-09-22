@@ -27,6 +27,7 @@ import { ChooseDialogueDto } from './dto/dialogue.dto';
 import { DialogueService } from './dialogue/dialogue.service';
 import { BuildRuleService } from './building/build-rule.service';
 import { BuildingService } from './building/building.service';
+import { BuildingAdminService } from './building/building-admin.service';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { CurrentPlayer } from '@common/decorators/current-player.decorator';
 import type { CurrentPlayerData } from '@common/decorators/current-player.decorator';
@@ -45,6 +46,7 @@ export class WorldClientController {
     private readonly dialogueService: DialogueService,
     private readonly buildRuleService: BuildRuleService,
     private readonly buildingService: BuildingService,
+    private readonly buildingAdminService: BuildingAdminService,
   ) {}
 
   private async resolveCharacterId(playerId: string): Promise<string> {
@@ -201,6 +203,15 @@ export class WorldClientController {
       sceneId,
       ownerId ? { ownerId } : undefined,
     );
+  }
+
+  @Get('building-templates')
+  @ApiOperation({ summary: '建筑蓝图列表（仅启用中的蓝图，可选 category 过滤）' })
+  async listBuildingTemplates(@Query('category') category?: string) {
+    return this.buildingAdminService.listTemplates({
+      isActive: true,
+      ...(category ? { category } : {}),
+    });
   }
 
   @Post('buildings')

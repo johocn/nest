@@ -1,10 +1,13 @@
 import { AppConfig } from '../config/AppConfig';
 import { AiComponent } from './components/AiComponent';
+import { BuildComponent, BuildingViewComponent } from './components/BuildComponent';
 import { Component } from './components/Component';
 import { createInteractComponent } from './components/interact/registry';
 import { TransformComponent } from './components/TransformComponent';
 import { VisualComponent } from './components/VisualComponent';
 import { Entity, type EntityOptions } from './Entity';
+import type { BuildRuleView } from '../net/api';
+import type { BuildingSpawn } from '../world/build-logic';
 import type { FixedNpc, NpcInstanceConfig, ServerSpawn, StaticEntity } from '../config/schema';
 
 const PLACEHOLDER_URL = `${AppConfig.assetBase}resources/placeholder.png`;
@@ -14,6 +17,8 @@ const COLORS: Record<string, string> = {
   npc: '#f5a524',
   object: '#7ee787',
   monster: '#ff7b72',
+  // S6 建筑：与静态物件的绿色区分（木质棕）
+  building: '#a1724a',
 };
 
 export class EntityFactory {
@@ -161,6 +166,39 @@ export class EntityFactory {
   private static spawnIdOf(npcId: string): number | null {
     const m = /^npc:(\d+)$/.exec(String(npcId ?? ''));
     return m ? Number(m[1]) : null;
+  }
+
+  /**
+   * S6 建筑实体（Task 7 Step 3/4）：`building` 态半透明 + 进度条、`built` 态正常贴图 + 耐久、
+   * `demolishing` 态淡出后从 `EntityRegistry` 移除（三态分支在 `BuildingViewComponent` 内，
+   * 判定来源是纯函数 `build-logic.buildingAppearance`）。
+   *
+   * 零新增资源：贴图复用 S1 占位贴图（`loadPlaceholder` 已加载），半透明与耐久/进度条都用
+   * `Graphics` / `Text` 画，不新增任何图片文件。出生位置用锚点格中心像素（`BuildingSpawn.x/y`）。
+   */
+  static createFromBuilding(spawn: BuildingSpawn, rule: BuildRuleView | null): Entity {
+    return EntityFactory.assemble(
+      {
+        entityId: spawn.entityId,
+        kind: 'building',
+        spawnId: null,
+        templateId: spawn.templateId ? Number(spawn.templateId) : null,
+        displayName: spawn.name,
+        x: spawn.x,
+        y: spawn.y,
+        color: COLORS.building,
+        texture: EntityFactory.texture,
+      },
+      [
+        new BuildComponent(rule),
+        new BuildingViewComponent(
+          spawn.state,
+          spawn.finishAt,
+          spawn.buildSeconds,
+          spawn.durability,
+        ),
+      ],
+    );
   }
 
   /**
