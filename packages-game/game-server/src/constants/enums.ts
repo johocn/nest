@@ -863,3 +863,32 @@ export enum ReconcileType {
   ESCROW = 'ESCROW',
   BOUNTY = 'BOUNTY',
 }
+
+// ===== 建造系统枚举（S6）=====
+
+// 建造模式（solo 单独建造 / coop 共同建造 / forbidden 不允许建造）
+export enum BuildMode {
+  SOLO = 'solo',
+  COOP = 'coop',
+  FORBIDDEN = 'forbidden',
+}
+
+// 建筑状态（building 建造中 / built 已落成 / demolishing 拆除中）
+export enum BuildingState {
+  BUILDING = 'building',
+  BUILT = 'built',
+  DEMOLISHING = 'demolishing',
+}
+
+// 建筑所有者类型（player 玩家 / guild 帮派）
+export enum BuildingOwnerType {
+  PLAYER = 'player',
+  GUILD = 'guild',
+}
+
+// 地块状态（empty 空闲 / occupied 已占用 / locked 锁定）
+export enum PlotState {
+  EMPTY = 'empty',
+  OCCUPIED = 'occupied',
+  LOCKED = 'locked',
+}

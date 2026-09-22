@@ -12,3 +12,8 @@ export { TriggerUnlock } from './trigger-unlock.entity';
 export { NpcSpawnRule } from './npc-spawn-rule.entity';
 export { NpcPatrolRoute } from './npc-patrol-route.entity';
 export { Dialogue } from './dialogue.entity';
+export { SceneBuildRule } from './scene-build-rule.entity';
+export { BuildingTemplate } from './building-template.entity';
+export { SceneLandPlot } from './scene-land-plot.entity';
+export { BuildingInstance } from './building-instance.entity';
+export { BuildingCoopContribution } from './building-coop-contribution.entity';

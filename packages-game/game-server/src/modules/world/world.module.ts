@@ -23,6 +23,11 @@ import {
   NpcSpawnRule,
   NpcPatrolRoute,
   Dialogue,
+  SceneBuildRule,
+  BuildingTemplate,
+  SceneLandPlot,
+  BuildingInstance,
+  BuildingCoopContribution,
 } from './entities';
 import { SceneConfigVersion } from './config/entities/scene-config-version.entity';
 import { SceneConfigService } from './config/scene-config.service';
@@ -57,6 +62,11 @@ import { DialogueService } from './dialogue/dialogue.service';
       QuestTemplate,
       InventoryItem,
       Dialogue,
+      SceneBuildRule,
+      BuildingTemplate,
+      SceneLandPlot,
+      BuildingInstance,
+      BuildingCoopContribution,
     ]),
     EconomyModule,
     CharacterModule,

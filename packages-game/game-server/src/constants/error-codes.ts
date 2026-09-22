@@ -247,6 +247,13 @@ export const ErrorCodes = {
   DIALOGUE_NOT_FOUND: 43001, // 对话不存在或已停用
   DIALOGUE_CONDITION_NOT_MET: 43002, // 节点/选项条件不满足
   DIALOGUE_NODE_INVALID: 43003, // 节点或选项非法（越界/不在该树内/动作未白名单）
+  // 建造系统 44001-44999
+  BUILD_FORBIDDEN: 44001, // 该场景不允许建造（无规则或 mode=forbidden）
+  PLOT_OCCUPIED: 44002, // 目标地块已被占用
+  BUILD_LIMIT_REACHED: 44003, // 玩家在该场景的建造数量已达上限
+  BUILD_NOT_FOUND: 44004, // 建筑实例不存在或不可操作
+  COOP_NOT_READY: 44005, // 共建未达人数/投料门槛
+  COOP_EXPIRED: 44006, // 共建已超时
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
