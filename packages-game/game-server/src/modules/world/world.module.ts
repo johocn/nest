@@ -40,6 +40,7 @@ import { InventoryModule } from '@modules/inventory/inventory.module';
 import { NpcPresenceService } from './npc/npc-presence.service';
 import { NpcTickService } from './npc/npc-tick.service';
 import { DialogueService } from './dialogue/dialogue.service';
+import { BuildRuleService } from './building/build-rule.service';
 
 @Module({
   imports: [
@@ -87,7 +88,8 @@ import { DialogueService } from './dialogue/dialogue.service';
     NpcPresenceService,
     NpcTickService,
     DialogueService,
+    BuildRuleService,
   ],
-  exports: [WorldService, NpcPresenceService, DialogueService],
+  exports: [WorldService, NpcPresenceService, DialogueService, BuildRuleService],
 })
 export class WorldModule {}
