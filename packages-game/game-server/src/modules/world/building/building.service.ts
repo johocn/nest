@@ -69,8 +69,19 @@ export interface ContributeResult {
   contributors: number;
 }
 
+/** 建筑拆除结果（Task 6 的 demolish 接口直接复用） */
+export interface DemolishResult {
+  /** 拆除后（state=demolishing）的建筑视图 */
+  building: BuildingView;
+  /**
+   * 恒为 false：拆除不退料/不退币（计划 D7）。
+   * 若允许退款，「建 → 拆 → 再建」即可无损刷建造次数/进度，故明确不退款。
+   */
+  refunded: boolean;
+}
+
 /**
- * 单独建造与共同建造服务（S6 / Task 3、Task 4）。
+ * 单独建造与共同建造服务（S6 / Task 3、Task 4、Task 5）。
  *
  * 单独建造执行顺序（硬要求）：全部校验 → 逐项扣料（边扣边记，失败逆向补偿）→ 写实例 → 置地块占用 → 发事件。
  * 共建执行顺序（硬要求）：查实例/规则/超时/达标校验 → 逐项扣料并逐条落流水（失败先删本次流水再逆向补偿）→ 统计达标 → 改写 finishAt。
@@ -565,6 +576,97 @@ export class BuildingService {
       y,
       rotation: 0,
     } satisfies BuildingStateChangedPayload);
+
+    // 终态与 demolish 保持一致：软删实例（TypeORM 默认过滤软删行 → listBuildings 不再返回该残行）
+    await this.buildingRepo.softDelete(building.id);
+  }
+
+  /**
+   * 拆除建筑（S6 / Task 5）。
+   *
+   * 校验顺序固定（测试断言错误码）：
+   *  1. 实例不存在 / 已被软删 → BUILD_NOT_FOUND；
+   *  2. `state !== built` → BUILD_NOT_FOUND（建造中/拆除中不可拆）；
+   *  3. `allow_demolish !== true` → BUILD_FORBIDDEN；
+   *  4. 非 player 所有者 / ownerId 不符 → BUILD_FORBIDDEN。
+   *
+   * 终态：置 `demolishing` + `finish_at=null` → emit（让在线客户端淡出）→ 释放矩形内地块 → 软删实例。
+   * **不退款**（计划 D7）：不调用任何扣料/发料途径，避免「建 → 拆 → 再建」无损刷料。
+   */
+  async demolish(playerId: string, buildingId: string): Promise<DemolishResult> {
+    // 1. 查实例（软删行由 TypeORM 默认过滤 → 视同不存在）
+    const building = await this.buildingRepo.findOne({
+      where: { id: buildingId },
+    });
+    if (!building || building.state !== BuildingState.BUILT) {
+      throw new GameException(ErrorCodes.BUILD_NOT_FOUND, '建筑不存在或不可拆除');
+    }
+
+    // 2. 规则：该场景是否允许拆除
+    const rule = await this.buildRule.getRule(building.sceneId);
+    if (rule.allowDemolish !== true) {
+      throw new GameException(ErrorCodes.BUILD_FORBIDDEN, '该场景不允许拆除');
+    }
+
+    // 3. 所有者校验（仅 player 类型且 owner_id 一致）
+    if (
+      building.ownerType !== BuildingOwnerType.PLAYER ||
+      building.ownerId !== playerId
+    ) {
+      throw new GameException(ErrorCodes.BUILD_FORBIDDEN, '只有建筑所有者可拆除');
+    }
+
+    // 4. 置拆除中（清 finish_at）
+    building.state = BuildingState.DEMOLISHING;
+    building.finishAt = null;
+    await this.buildingRepo.save(building);
+
+    // 5. 广播：让在线客户端淡出
+    const payload = building.payload ?? {};
+    const gx = Number(payload.gx ?? 0);
+    const gy = Number(payload.gy ?? 0);
+    const w = Number(payload.w ?? 1);
+    const h = Number(payload.h ?? 1);
+    const { x, y } = this.buildRule.toCenter(gx, gy, rule.landGridSize);
+    this.eventBus.emit(GameEvents.BUILDING_STATE_CHANGED, {
+      sceneId: building.sceneId,
+      buildingId: building.id,
+      templateId: building.templateId,
+      ownerId: building.ownerId,
+      state: BuildingState.DEMOLISHING,
+      x,
+      y,
+      rotation: 0,
+    } satisfies BuildingStateChangedPayload);
+
+    // 6. 释放矩形内地块（半开区间 [gx, gx+w) × [gy, gy+h)）
+    const plots = await this.plotRepo.find({
+      where: {
+        sceneId: building.sceneId,
+        gx: Between(gx, gx + w - 1),
+        gy: Between(gy, gy + h - 1),
+      },
+    });
+    if (plots.length > 0) {
+      for (const plot of plots) {
+        plot.state = PlotState.EMPTY;
+        plot.w = 1;
+        plot.h = 1;
+      }
+      await this.plotRepo.save(plots);
+    }
+
+    // 7. 软删实例（后续 listBuildings / 地块复用天然不受影响）
+    await this.buildingRepo.softDelete(building.id);
+
+    this.logger.log(
+      `建筑拆除: building=${building.id} scene=${building.sceneId} owner=${building.ownerId} refunded=false（D7 不退款）`,
+    );
+
+    return {
+      building: this.toBuildingView(building, rule.landGridSize),
+      refunded: false,
+    };
   }
 
   /** 场景内建筑列表（Task 6 的 GET 接口复用） */

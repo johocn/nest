@@ -12,7 +12,12 @@ import { InventoryService } from '@modules/inventory/inventory.service';
 import { EconomyService } from '@modules/economy/economy.service';
 import { EventBusService } from '@event-bus/event-bus.service';
 import { GameEvents } from '@event-bus/game-events';
-import { BuildMode, BuildingState, PlotState } from '@constants/enums';
+import {
+  BuildMode,
+  BuildingOwnerType,
+  BuildingState,
+  PlotState,
+} from '@constants/enums';
 import { ErrorCodes } from '@constants/error-codes';
 import { GameException } from '@common/exceptions/game.exception';
 
@@ -43,6 +48,7 @@ describe('BuildingService', () => {
     create: jest.Mock;
     find: jest.Mock;
     findOne: jest.Mock;
+    softDelete: jest.Mock;
   };
   let plotRepo: { save: jest.Mock; find: jest.Mock };
   let contributionRepo: {
@@ -133,6 +139,7 @@ describe('BuildingService', () => {
       save: jest.fn(async (entity: any) => ({ ...entity, id: '999' })),
       find: jest.fn().mockResolvedValue([]),
       findOne: jest.fn().mockResolvedValue(null),
+      softDelete: jest.fn().mockResolvedValue({ affected: 1 }),
     };
     plotRepo = {
       save: jest.fn(async (entity: any) => entity),
@@ -887,15 +894,21 @@ describe('BuildingService', () => {
       expect(evt).toBe(GameEvents.BUILDING_STATE_CHANGED);
       expect(payload).toMatchObject({ state: BuildingState.DEMOLISHING });
 
+      // 终态与 demolish 一致：实例被软删（避免 listBuildings 混入 demolishing 残行）
+      expect(buildingRepo.softDelete).toHaveBeenCalledTimes(1);
+      expect(buildingRepo.softDelete).toHaveBeenCalledWith('900');
+
       // 重复调用：state 已 demolishing → 直接 return，不重复退款
       inventoryService.addItem.mockClear();
       economyService.addCurrency.mockClear();
       eventBus.emit.mockClear();
       buildingRepo.save.mockClear();
+      buildingRepo.softDelete.mockClear();
       await service.refundExpiredCoop('900');
       expect(inventoryService.addItem).not.toHaveBeenCalled();
       expect(economyService.addCurrency).not.toHaveBeenCalled();
       expect(buildingRepo.save).not.toHaveBeenCalled();
+      expect(buildingRepo.softDelete).not.toHaveBeenCalled();
       expect(eventBus.emit).not.toHaveBeenCalled();
     });
 
@@ -972,6 +985,195 @@ describe('BuildingService', () => {
         expect.stringContaining(':refund'),
       );
       expect(building.state).toBe(BuildingState.DEMOLISHING);
+    });
+  });
+
+  // ===== Task 5 Step 3：拆除 =====
+  describe('demolish（拆除）', () => {
+    const makeBuiltBuilding = (overrides: Record<string, any> = {}): any => ({
+      id: '900',
+      sceneId: SCENE_ID,
+      templateId: TEMPLATE_ID,
+      plotId: '1',
+      ownerId: PLAYER_ID,
+      ownerType: BuildingOwnerType.PLAYER,
+      state: BuildingState.BUILT,
+      finishAt: null,
+      durability: 100,
+      payload: { gx: 2, gy: 3, w: 2, h: 1, effect: {} },
+      ...overrides,
+    });
+
+    beforeEach(() => {
+      buildRule.getRule.mockResolvedValue(makeRule({ allowDemolish: true }));
+    });
+
+    it('实例不存在 → BUILD_NOT_FOUND', async () => {
+      buildingRepo.findOne.mockResolvedValue(null);
+      await expectGameCode(
+        service.demolish(PLAYER_ID, '900'),
+        ErrorCodes.BUILD_NOT_FOUND,
+      );
+      expect(buildingRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('state!=built（建造中）→ BUILD_NOT_FOUND，不查规则', async () => {
+      buildingRepo.findOne.mockResolvedValue(
+        makeBuiltBuilding({ state: BuildingState.BUILDING }),
+      );
+      await expectGameCode(
+        service.demolish(PLAYER_ID, '900'),
+        ErrorCodes.BUILD_NOT_FOUND,
+      );
+      expect(buildRule.getRule).not.toHaveBeenCalled();
+      expect(buildingRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('allow_demolish=false → BUILD_FORBIDDEN，不置状态', async () => {
+      buildingRepo.findOne.mockResolvedValue(makeBuiltBuilding());
+      buildRule.getRule.mockResolvedValue(makeRule({ allowDemolish: false }));
+      await expectGameCode(
+        service.demolish(PLAYER_ID, '900'),
+        ErrorCodes.BUILD_FORBIDDEN,
+      );
+      expect(buildingRepo.save).not.toHaveBeenCalled();
+      expect(plotRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('非所有者（ownerId 不符）→ BUILD_FORBIDDEN', async () => {
+      buildingRepo.findOne.mockResolvedValue(
+        makeBuiltBuilding({ ownerId: '2002' }),
+      );
+      await expectGameCode(
+        service.demolish(PLAYER_ID, '900'),
+        ErrorCodes.BUILD_FORBIDDEN,
+      );
+      expect(buildingRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('非玩家所有（guild）→ BUILD_FORBIDDEN', async () => {
+      buildingRepo.findOne.mockResolvedValue(
+        makeBuiltBuilding({ ownerType: BuildingOwnerType.GUILD }),
+      );
+      await expectGameCode(
+        service.demolish(PLAYER_ID, '900'),
+        ErrorCodes.BUILD_FORBIDDEN,
+      );
+      expect(buildingRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('成功：置 demolishing + 清 finish_at + 释放地块 + emit + 软删 + 不退款 + refunded=false', async () => {
+      const building = makeBuiltBuilding();
+      buildingRepo.findOne.mockResolvedValue(building);
+      const plotRows = [
+        {
+          id: '1',
+          sceneId: SCENE_ID,
+          gx: 2,
+          gy: 3,
+          w: 2,
+          h: 1,
+          state: PlotState.OCCUPIED,
+        },
+        {
+          id: '2',
+          sceneId: SCENE_ID,
+          gx: 3,
+          gy: 3,
+          w: 1,
+          h: 1,
+          state: PlotState.OCCUPIED,
+        },
+      ];
+      plotRepo.find.mockResolvedValue(plotRows);
+
+      const res = await service.demolish(PLAYER_ID, '900');
+
+      // 状态与 save
+      expect(building.state).toBe(BuildingState.DEMOLISHING);
+      expect(building.finishAt).toBeNull();
+      expect(buildingRepo.save).toHaveBeenCalledTimes(1);
+      expect(buildingRepo.save.mock.calls[0][0]).toBe(building);
+
+      // 地块释放
+      expect(plotRepo.save).toHaveBeenCalledTimes(1);
+      expect(
+        plotRows.every(
+          (p) => p.state === PlotState.EMPTY && p.w === 1 && p.h === 1,
+        ),
+      ).toBe(true);
+
+      // 事件
+      expect(eventBus.emit).toHaveBeenCalledTimes(1);
+      const [evt, payload] = eventBus.emit.mock.calls[0];
+      expect(evt).toBe(GameEvents.BUILDING_STATE_CHANGED);
+      expect(payload).toMatchObject({
+        sceneId: SCENE_ID,
+        buildingId: '900',
+        templateId: TEMPLATE_ID,
+        ownerId: PLAYER_ID,
+        state: BuildingState.DEMOLISHING,
+        rotation: 0,
+      });
+      expect(payload.x).toBe((2 + 0.5) * GRID_SIZE);
+      expect(payload.y).toBe((3 + 0.5) * GRID_SIZE);
+
+      // 软删
+      expect(buildingRepo.softDelete).toHaveBeenCalledTimes(1);
+      expect(buildingRepo.softDelete).toHaveBeenCalledWith('900');
+
+      // 不退款（D7）：任何扣料/发料途径均未被调用
+      expect(inventoryService.removeItem).not.toHaveBeenCalled();
+      expect(inventoryService.addItem).not.toHaveBeenCalled();
+      expect(economyService.deductCurrency).not.toHaveBeenCalled();
+      expect(economyService.addCurrency).not.toHaveBeenCalled();
+
+      // 返回体
+      expect(res.refunded).toBe(false);
+      expect(res.building).toMatchObject({
+        id: '900',
+        sceneId: SCENE_ID,
+        templateId: TEMPLATE_ID,
+        ownerId: PLAYER_ID,
+        state: BuildingState.DEMOLISHING,
+        finishAt: null,
+        x: (2 + 0.5) * GRID_SIZE,
+        y: (3 + 0.5) * GRID_SIZE,
+        w: 2,
+        h: 1,
+      });
+    });
+
+    it('拆除后地块置 empty → 同一格可再次建造', async () => {
+      // 先建一栋（1×1）：地块 (4,5) 被 lazy 创建并置 occupied
+      plots.set('4|5', {
+        id: '11',
+        sceneId: SCENE_ID,
+        gx: 4,
+        gy: 5,
+        w: 1,
+        h: 1,
+        state: PlotState.OCCUPIED,
+      });
+      const building = makeBuiltBuilding({
+        payload: { gx: 4, gy: 5, w: 1, h: 1, effect: {} },
+      });
+      buildingRepo.findOne.mockResolvedValue(building);
+      plotRepo.find.mockResolvedValue([plots.get('4|5')]);
+
+      await service.demolish(PLAYER_ID, '900');
+      expect(plots.get('4|5').state).toBe(PlotState.EMPTY);
+
+      // 同一格再次建造成功（ensurePlot 不再抛 PLOT_OCCUPIED）
+      buildingRepo.save.mockClear();
+      const view = await service.createBuilding(PLAYER_ID, SCENE_ID, {
+        templateId: TEMPLATE_ID,
+        gx: 4,
+        gy: 5,
+      });
+      expect(buildingRepo.save).toHaveBeenCalledTimes(1);
+      expect(view.state).toBe(BuildingState.BUILDING);
+      expect(plots.get('4|5').state).toBe(PlotState.OCCUPIED);
     });
   });
 });
