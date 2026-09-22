@@ -1,11 +1,17 @@
 import { Component } from '../Component';
 import type { Entity } from '../../Entity';
+import type { DialogueNodeView } from '../../../ui/DialogueView';
 
 /** 交互上下文：me = 发起者（本地玩家），target = 被交互实体，token = 登录态 */
 export interface InteractContext {
   me: Entity;
   target: Entity;
   token: string;
+  /**
+   * S5：talk 成功时把归一化后的对话视图交回控制器（由 InteractController 注入，可选）。
+   * 视图的打开与后续 choose 编排都在控制器里（组件不直接驱动 UI，也不本地推进对话）。
+   */
+  onDialogue?: (view: DialogueNodeView) => void;
 }
 
 /**

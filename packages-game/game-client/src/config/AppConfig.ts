@@ -56,4 +56,39 @@ export const AppConfig = {
     highlightColor: '#ffd75e',
     highlightLineWidth: 2,
   },
+  /**
+   * S5 对话框（引擎内自绘，屏幕空间）：与 hud 同风格，常量集中在此避免魔法数字散落。
+   * 面板宽度与位置按 stage 尺寸计算，`layoutDialogue` 是消费这些常量的纯函数（可被断言脚本 import）。
+   */
+  dialogue: {
+    /** 对话框根节点 zOrder：须盖在 HUD 之上 */
+    zOrder: 10000,
+    panelMaxWidth: 640,
+    panelMarginX: 40,
+    panelBottomOffset: 24,
+    panelBgColor: 'rgba(0,0,0,0.88)',
+    panelBorderColor: '#4a5568',
+    panelBorderWidth: 2,
+    padX: 16,
+    padY: 12,
+    /** 说话人一行与正文之间的间距 */
+    gapAfterSpeaker: 6,
+    /** 正文与选项（或错误行）之间的间距 */
+    gapBeforeOptions: 8,
+    speakerFontSize: 15,
+    speakerColor: '#ffd75e',
+    bodyFontSize: 14,
+    bodyColor: '#e6edf3',
+    bodyLineHeight: 20,
+    optionFontSize: 14,
+    optionColor: '#8ecdf7',
+    optionHeight: 22,
+    optionGap: 4,
+    optionBgColor: 'rgba(255,255,255,0.06)',
+    optionPadX: 8,
+    errorFontSize: 14,
+    errorColor: '#ff7b72',
+    /** 数字键 1-9 可选的最大选项数 */
+    maxOptions: 9,
+  },
 };

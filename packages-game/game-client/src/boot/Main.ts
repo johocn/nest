@@ -15,6 +15,7 @@ import { InteractController } from '../world/InteractController';
 import { SceneBuilder } from '../world/SceneBuilder';
 import { Toast } from '../ui/Toast';
 import { Hud } from '../ui/Hud';
+import { DialogueView } from '../ui/DialogueView';
 
 const state = {
   cfg: null as SceneConfig | null,
@@ -131,6 +132,8 @@ async function main(): Promise<void> {
   await Boot.start();
   // 引擎内自绘 HUD 挂到舞台顶层（须在 Laya.init 之后），此后所有提示走 Hud
   Hud.init();
+  // S5 对话框（同为引擎内自绘，屏幕空间，zOrder 高于 HUD）
+  DialogueView.init();
   Session.load();
 
   if (Session.token) {

@@ -7,6 +7,12 @@ export interface AuthResult {
   playerId: string;
 }
 
+/** D8：NPC 头顶任务标记（服务端权威计算，客户端不得自行推断） */
+export interface DialogueQuestMarks {
+  available: string[];
+  submittable: string[];
+}
+
 export interface NpcTalkResult {
   spawnId: string;
   npcTemplateId: string;
@@ -15,6 +21,30 @@ export interface NpcTalkResult {
   dialogueId: number | null;
   text: string;
   options: Array<{ text: string; next: string | null }>;
+  // ===== S5 增量字段（旧字段零变更，S1 冒烟不回归）=====
+  /** 对话编码；未接入对话树（走 attr.greeting 兜底）时为 undefined */
+  code?: string;
+  /** 当前节点 key；未接入对话树时为 undefined */
+  nodeKey?: string;
+  /** 当前节点**可见**选项的原始下标（与 options 一一对应，choose 必须回传它） */
+  optionIndexes?: number[];
+  questMarks?: DialogueQuestMarks;
+}
+
+/** 服务端解析后的对话节点（choose / story 返回） */
+export interface DialogueNodeResult {
+  key: string;
+  speaker?: string;
+  text: string;
+  options: Array<{ index: number; text: string; action?: string; next?: string }>;
+}
+
+/** choose / story 的返回：服务端权威的下一节点视图（node 为空且 finished 为真即结束） */
+export interface DialogueStepResult {
+  code: string;
+  nodeKey: string | null;
+  node: DialogueNodeResult | null;
+  finished: boolean;
 }
 
 export interface InteractResult {
@@ -64,6 +94,32 @@ export const Api = {
       'POST',
       `/api/client/v1/world/npcs/${spawnId}/talk`,
       { token },
+    );
+  },
+
+  /**
+   * 对话推进：`optionIndex` 必须是 `optionIndexes[i]`（服务端原始下标），
+   * 不是本地列表下标（选项级条件过滤后两者会错位）。
+   */
+  chooseDialogue(
+    code: string,
+    nodeKey: string,
+    optionIndex: number,
+    token: string | null,
+  ): Promise<DialogueStepResult> {
+    return httpJson<DialogueStepResult>(
+      'POST',
+      '/api/client/v1/world/dialogue/choose',
+      { token, body: { code, nodeKey, optionIndex } },
+    );
+  },
+
+  /** 剧情触发（scene_triggers.story_id → 对话首节点）；返回形状同 choose 的首节点 */
+  triggerStory(triggerId: number, token: string | null): Promise<DialogueStepResult> {
+    return httpJson<DialogueStepResult>(
+      'POST',
+      `/api/client/v1/world/triggers/${triggerId}/story`,
+      { token, body: {} },
     );
   },
 
