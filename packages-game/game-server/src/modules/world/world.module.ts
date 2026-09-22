@@ -42,6 +42,7 @@ import { NpcTickService } from './npc/npc-tick.service';
 import { DialogueService } from './dialogue/dialogue.service';
 import { BuildRuleService } from './building/build-rule.service';
 import { BuildingService } from './building/building.service';
+import { BuildingAdminService } from './building/building-admin.service';
 import { BuildingScheduler } from './building/building.scheduler';
 
 @Module({
@@ -92,6 +93,7 @@ import { BuildingScheduler } from './building/building.scheduler';
     DialogueService,
     BuildRuleService,
     BuildingService,
+    BuildingAdminService,
     BuildingScheduler,
   ],
   exports: [
@@ -100,6 +102,7 @@ import { BuildingScheduler } from './building/building.scheduler';
     DialogueService,
     BuildRuleService,
     BuildingService,
+    BuildingAdminService,
   ],
 })
 export class WorldModule {}

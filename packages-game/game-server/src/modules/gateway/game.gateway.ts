@@ -20,6 +20,7 @@ import { GameEvents } from '@event-bus/game-events';
 import { ChatService } from '@modules/chat/chat.service';
 import { ChatChannel } from '@constants/enums';
 import type { JwtPayload } from '@modules/auth/auth.service';
+import type { BuildingStateChangedPayload } from '@modules/world/building/building.service';
 
 @WebSocketGateway({
   namespace: '/game',
@@ -170,6 +171,35 @@ export class GameGateway
         },
       });
     }
+  }
+
+  /**
+   * 建筑状态变更（S6 / Task 6）：建造/达标/拆除 → 向场景房间广播 world.entity_update。
+   * 沿用 world.move / NPC 校正的同一 cmd 与事件名 'message'，仅 entityType 用 'building'。
+   */
+  @OnEvent(GameEvents.BUILDING_STATE_CHANGED)
+  handleBuildingStateChanged(payload: BuildingStateChangedPayload) {
+    // 空房间直接返回（A6：无人在场不广播），与 handleNpcPositions 同判据
+    const namespace = this.server as unknown as Namespace;
+    const room = namespace?.adapter?.rooms?.get(`scene:${payload.sceneId}`);
+    if (!room || room.size === 0) return;
+
+    this.server.to(`scene:${payload.sceneId}`).emit('message', {
+      cmd: 'world.entity_update',
+      seq: 0,
+      code: 0,
+      msg: 'success',
+      data: {
+        entityId: `building:${payload.buildingId}`,
+        entityType: 'building',
+        buildingId: payload.buildingId,
+        templateId: payload.templateId,
+        playerId: null,
+        pos: { x: payload.x, y: payload.y },
+        rotation: payload.rotation ?? 0,
+        state: payload.state,
+      },
+    });
   }
 
   onApplicationShutdown(signal?: string) {

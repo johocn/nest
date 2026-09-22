@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { WorldService } from './world.service';
 import { CharacterService } from '@modules/character/character.service';
@@ -11,13 +19,20 @@ import {
   FinishGameDto,
   LandmarkMessageDto,
 } from './dto/object-interact.dto';
+import {
+  ContributeDto,
+  CreateBuildingRequestDto,
+} from './dto/building.dto';
 import { ChooseDialogueDto } from './dto/dialogue.dto';
 import { DialogueService } from './dialogue/dialogue.service';
+import { BuildRuleService } from './building/build-rule.service';
+import { BuildingService } from './building/building.service';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { CurrentPlayer } from '@common/decorators/current-player.decorator';
 import type { CurrentPlayerData } from '@common/decorators/current-player.decorator';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
+import { BuildMode } from '@constants/enums';
 
 @ApiTags('World')
 @ApiBearerAuth()
@@ -28,6 +43,8 @@ export class WorldClientController {
     private readonly worldService: WorldService,
     private readonly characterService: CharacterService,
     private readonly dialogueService: DialogueService,
+    private readonly buildRuleService: BuildRuleService,
+    private readonly buildingService: BuildingService,
   ) {}
 
   private async resolveCharacterId(playerId: string): Promise<string> {
@@ -166,5 +183,60 @@ export class WorldClientController {
   @ApiOperation({ summary: '地标留言列表（最近50条）' })
   async listLandmarkMessages(@Param('id') objectId: string) {
     return this.worldService.listLandmarkMessages(objectId);
+  }
+
+  @Get('scenes/:sceneId/build-rule')
+  @ApiOperation({ summary: '场景建造规则（无规则行返回 forbidden 默认视图）' })
+  async getBuildRule(@Param('sceneId') sceneId: string) {
+    return this.buildRuleService.getRule(sceneId);
+  }
+
+  @Get('scenes/:sceneId/buildings')
+  @ApiOperation({ summary: '场景建筑列表（可选 ownerId 过滤）' })
+  async listBuildings(
+    @Param('sceneId') sceneId: string,
+    @Query('ownerId') ownerId?: string,
+  ) {
+    return this.buildingService.listBuildings(
+      sceneId,
+      ownerId ? { ownerId } : undefined,
+    );
+  }
+
+  @Post('buildings')
+  @ApiOperation({ summary: '建造建筑（按场景规则模式分派单独/共同建造）' })
+  async createBuilding(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Body() dto: CreateBuildingRequestDto,
+  ) {
+    const rule = await this.buildRuleService.getRule(dto.sceneId);
+    if (rule.mode === BuildMode.COOP) {
+      return this.buildingService.createCoopBuilding(
+        player.playerId,
+        dto.sceneId,
+        dto,
+      );
+    }
+    // SOLO / FORBIDDEN 均走单独建造入口，由 assertCanBuild 抛 BUILD_FORBIDDEN
+    return this.buildingService.createBuilding(player.playerId, dto.sceneId, dto);
+  }
+
+  @Post('buildings/:id/contribute')
+  @ApiOperation({ summary: '共建投料（达标即改写落成时刻）' })
+  async contributeToBuilding(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Param('id') buildingId: string,
+    @Body() dto: ContributeDto,
+  ) {
+    return this.buildingService.contribute(player.playerId, buildingId, dto.items);
+  }
+
+  @Post('buildings/:id/demolish')
+  @ApiOperation({ summary: '拆除建筑（仅所有者，不退款）' })
+  async demolishBuilding(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Param('id') buildingId: string,
+  ) {
+    return this.buildingService.demolish(player.playerId, buildingId);
   }
 }

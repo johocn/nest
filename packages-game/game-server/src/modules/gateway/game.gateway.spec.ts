@@ -5,6 +5,7 @@ import { AuthService } from '@modules/auth/auth.service';
 import { WorldService } from '@modules/world/world.service';
 import { ChatService } from '@modules/chat/chat.service';
 import { JwtService } from '@nestjs/jwt';
+import { BuildingState } from '@constants/enums';
 
 describe('GameGateway', () => {
   let gateway: GameGateway;
@@ -220,6 +221,142 @@ describe('GameGateway', () => {
           }),
         }),
       );
+    });
+  });
+
+  describe('handleBuildingStateChanged', () => {
+    /** 假命名空间：房间表挂在 adapter.rooms（与 @WebSocketServer() 实为 Namespace 一致） */
+    const mockServerWithRooms = (rooms: Map<string, { size: number }>) => {
+      const toEmit = jest.fn();
+      const server = {
+        to: jest.fn().mockReturnValue({ emit: toEmit }),
+        adapter: { rooms },
+      } as any;
+      return { server, toEmit };
+    };
+
+    const payload = (overrides: Record<string, any> = {}) => ({
+      sceneId: '1',
+      buildingId: '77',
+      templateId: '55',
+      ownerId: '1001',
+      state: BuildingState.BUILDING,
+      x: 96,
+      y: 160,
+      rotation: 0,
+      ...overrides,
+    });
+
+    it('should emit entity_update frame identical in shape to NPC precedent', () => {
+      const { server, toEmit } = mockServerWithRooms(
+        new Map([['scene:1', { size: 2 }]]),
+      );
+      gateway.setServer(server);
+
+      gateway.handleBuildingStateChanged(payload());
+
+      expect(server.to).toHaveBeenCalledWith('scene:1');
+      expect(toEmit).toHaveBeenCalledTimes(1);
+      expect(toEmit).toHaveBeenCalledWith('message', {
+        cmd: 'world.entity_update',
+        seq: 0,
+        code: 0,
+        msg: 'success',
+        data: {
+          entityId: 'building:77',
+          entityType: 'building',
+          buildingId: '77',
+          templateId: '55',
+          playerId: null,
+          pos: { x: 96, y: 160 },
+          rotation: 0,
+          state: 'building',
+        },
+      });
+    });
+
+    it('should share frame envelope and field names with handleNpcPositions', () => {
+      const { server, toEmit } = mockServerWithRooms(
+        new Map([['scene:1', { size: 1 }]]),
+      );
+      gateway.setServer(server);
+
+      gateway.handleNpcPositions({
+        sceneId: '1',
+        npcs: [{ npcId: 'npc:5', npcTemplateId: '9', x: 10, y: 20 }],
+      });
+      const npcFrame = toEmit.mock.calls[0][1];
+      toEmit.mockClear();
+
+      gateway.handleBuildingStateChanged(payload());
+      const buildingFrame = toEmit.mock.calls[0][1];
+
+      expect(Object.keys(buildingFrame).sort()).toEqual(
+        Object.keys(npcFrame).sort(),
+      );
+      expect(buildingFrame.cmd).toBe(npcFrame.cmd);
+      expect(buildingFrame.seq).toBe(npcFrame.seq);
+      expect(buildingFrame.code).toBe(npcFrame.code);
+      expect(buildingFrame.msg).toBe(npcFrame.msg);
+      // 与 NPC 先例共有的 data 字段名逐字一致，仅多带 buildingId/templateId
+      expect(Object.keys(buildingFrame.data).sort()).toEqual([
+        'buildingId',
+        'entityId',
+        'entityType',
+        'playerId',
+        'pos',
+        'rotation',
+        'state',
+        'templateId',
+      ]);
+      expect(buildingFrame.data.playerId).toBeNull();
+      expect(Object.keys(npcFrame.data)).toEqual(
+        expect.arrayContaining(['entityId', 'entityType', 'pos', 'rotation', 'state']),
+      );
+    });
+
+    it('should not emit when room is missing', () => {
+      const { server, toEmit } = mockServerWithRooms(new Map());
+      gateway.setServer(server);
+
+      gateway.handleBuildingStateChanged(payload());
+
+      expect(server.to).not.toHaveBeenCalled();
+      expect(toEmit).not.toHaveBeenCalled();
+    });
+
+    it('should not emit when room is empty', () => {
+      const { server, toEmit } = mockServerWithRooms(
+        new Map([['scene:1', { size: 0 }]]),
+      );
+      gateway.setServer(server);
+
+      gateway.handleBuildingStateChanged(payload());
+
+      expect(server.to).not.toHaveBeenCalled();
+      expect(toEmit).not.toHaveBeenCalled();
+    });
+
+    it('should broadcast all three building states', () => {
+      const { server, toEmit } = mockServerWithRooms(
+        new Map([['scene:1', { size: 1 }]]),
+      );
+      gateway.setServer(server);
+
+      for (const state of [
+        BuildingState.BUILDING,
+        BuildingState.BUILT,
+        BuildingState.DEMOLISHING,
+      ]) {
+        gateway.handleBuildingStateChanged(payload({ state }));
+      }
+
+      expect(toEmit).toHaveBeenCalledTimes(3);
+      expect(toEmit.mock.calls.map((call) => call[1].data.state)).toEqual([
+        'building',
+        'built',
+        'demolishing',
+      ]);
     });
   });
 });
