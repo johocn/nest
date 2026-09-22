@@ -8,14 +8,16 @@ import { EventBusService } from '@event-bus/event-bus.service';
 import { GameEvents } from '@event-bus/game-events';
 import { BuildingInstance } from '../entities/building-instance.entity';
 import { BuildRuleService } from './build-rule.service';
-import { BuildingStateChangedPayload } from './building.service';
+import { BuildingService, BuildingStateChangedPayload } from './building.service';
 
 /**
- * 建筑结算定时器（S6 / Task 3）。
+ * 建筑结算定时器（S6 / Task 3、Task 4）。
  *
- * 每分钟扫描 state='building' 且 finish_at<=now 的实例，
- * 逐行加锁后**重新读取**并二次判定状态，幂等落成并发事件。
- * 单行失败不影响其余行；Task 4 将在同一 tick 顺序挂载共建超时退款步骤。
+ * 每分钟扫描 state='building' 且 finish_at<=now 的实例，顺序执行两步：
+ *  1. 落成结算：跳过「共建未达标」行（payload.coop && !payload.reached），
+ *     其余逐行加锁后**重新读取**并二次判定状态，幂等落成并发事件；
+ *  2. 共建超时退款：对「共建未达标且已超时」行逐行加锁调 BuildingService.refundExpiredCoop。
+ * 单行失败不影响其余行；退款失败由 service 抛出，本处仅记日志（下一 tick 重试）。
  */
 @Injectable()
 export class BuildingScheduler {
@@ -30,6 +32,7 @@ export class BuildingScheduler {
     private readonly cacheService: CacheService,
     private readonly eventBus: EventBusService,
     private readonly buildRule: BuildRuleService,
+    private readonly buildingService: BuildingService,
   ) {}
 
   @Cron(CronExpression.EVERY_MINUTE)
@@ -41,7 +44,8 @@ export class BuildingScheduler {
     this.running = true;
     try {
       await this.settleFinishedBuildings();
-      // Task 4 将在此处顺序追加共建超时退款步骤
+      // 第二步：共建超时退款（与落成结算同一 tick，避免 2G 服务器被定时任务压垮）
+      await this.refundExpiredCoopBuildings();
     } catch (err) {
       this.logger.error('建筑结算执行失败', (err as Error).message);
     } finally {
@@ -49,7 +53,7 @@ export class BuildingScheduler {
     }
   }
 
-  /** 步骤一：把已到期的 building 置为 built（幂等） */
+  /** 步骤一：把已到期的 building 置为 built（幂等）；共建未达标行跳过 */
   private async settleFinishedBuildings(): Promise<void> {
     const rows = await this.buildingRepo.find({
       where: {
@@ -58,6 +62,11 @@ export class BuildingScheduler {
       },
     });
     for (const row of rows) {
+      // 共建未达标：finish_at 为「超时时刻」而非落成时刻，交由步骤二退款，禁止误落成
+      const payload = row.payload ?? {};
+      if (payload.coop === true && payload.reached !== true) {
+        continue;
+      }
       try {
         await this.cacheService.withLock(
           `lock:building:${row.id}`,
@@ -70,6 +79,40 @@ export class BuildingScheduler {
         // 单行失败（含抢锁失败）不影响其余行
         this.logger.error(
           `建筑 ${row.id} 落成结算失败`,
+          (err as Error).message,
+        );
+      }
+    }
+  }
+
+  /**
+   * 步骤二：共建未达标且已超时 → 逐行加锁退款。
+   * 锁内由 service 重读并二次判定（幂等）；退款失败记日志，下一 tick 重试。
+   */
+  private async refundExpiredCoopBuildings(): Promise<void> {
+    const rows = await this.buildingRepo.find({
+      where: {
+        state: BuildingState.BUILDING,
+        finishAt: LessThanOrEqual(new Date()),
+      },
+    });
+    for (const row of rows) {
+      const payload = row.payload ?? {};
+      if (payload.coop !== true || payload.reached === true) {
+        continue;
+      }
+      try {
+        await this.cacheService.withLock(
+          `lock:building:${row.id}`,
+          async () => {
+            await this.buildingService.refundExpiredCoop(row.id);
+          },
+          { ttl: 10, retry: 2, retryDelay: 100 },
+        );
+      } catch (err) {
+        // 退款失败（如 BAG_FULL）：记 error，不吞异常，下一 tick 重试
+        this.logger.error(
+          `共建 ${row.id} 超时退款失败`,
           (err as Error).message,
         );
       }

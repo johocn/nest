@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BuildingService } from './building.service';
@@ -5,6 +6,7 @@ import { BuildRuleService } from './build-rule.service';
 import { Scene } from '../entities/scene.entity';
 import { BuildingTemplate } from '../entities/building-template.entity';
 import { BuildingInstance } from '../entities/building-instance.entity';
+import { BuildingCoopContribution } from '../entities/building-coop-contribution.entity';
 import { SceneLandPlot } from '../entities/scene-land-plot.entity';
 import { InventoryService } from '@modules/inventory/inventory.service';
 import { EconomyService } from '@modules/economy/economy.service';
@@ -42,12 +44,21 @@ describe('BuildingService', () => {
     find: jest.Mock;
     findOne: jest.Mock;
   };
-  let plotRepo: { save: jest.Mock };
+  let plotRepo: { save: jest.Mock; find: jest.Mock };
+  let contributionRepo: {
+    create: jest.Mock;
+    save: jest.Mock;
+    find: jest.Mock;
+    remove: jest.Mock;
+  };
   let inventoryService: { removeItem: jest.Mock; addItem: jest.Mock };
   let economyService: { deductCurrency: jest.Mock; addCurrency: jest.Mock };
   let eventBus: { emit: jest.Mock };
   /** 假地块表：同一 (gx,gy) 返回同一行，反映真实懒创建语义 */
   let plots: Map<string, any>;
+  /** 假共建流水表：save 幂等（同一对象不重复入表），find 按 buildingInstanceId+refunded 过滤 */
+  let contributions: any[];
+  let loggerErrorSpy: jest.SpyInstance;
 
   const makeRule = (overrides: Record<string, any> = {}): any => ({
     id: '9',
@@ -80,6 +91,10 @@ describe('BuildingService', () => {
 
   beforeEach(async () => {
     plots = new Map();
+    contributions = [];
+    loggerErrorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
     buildRule = {
       assertCanBuild: jest.fn().mockResolvedValue(makeRule()),
       ensurePlot: jest.fn(async (sceneId: string, gx: number, gy: number) => {
@@ -119,7 +134,37 @@ describe('BuildingService', () => {
       find: jest.fn().mockResolvedValue([]),
       findOne: jest.fn().mockResolvedValue(null),
     };
-    plotRepo = { save: jest.fn(async (entity: any) => entity) };
+    plotRepo = {
+      save: jest.fn(async (entity: any) => entity),
+      find: jest.fn().mockResolvedValue([]),
+    };
+    contributionRepo = {
+      create: jest.fn((entity: any) => entity),
+      save: jest.fn(async (entity: any) => {
+        if (!contributions.includes(entity)) {
+          if (entity.id === undefined) {
+            entity.id = String(contributions.length + 1);
+          }
+          contributions.push(entity);
+        }
+        return entity;
+      }),
+      find: jest.fn(
+        async ({ where }: any = {}) =>
+          contributions.filter(
+            (row) =>
+              (where?.buildingInstanceId === undefined ||
+                row.buildingInstanceId === where.buildingInstanceId) &&
+              (where?.refunded === undefined || row.refunded === where.refunded),
+          ),
+      ),
+      remove: jest.fn(async (rows: any[]) => {
+        for (const row of rows) {
+          const idx = contributions.indexOf(row);
+          if (idx >= 0) contributions.splice(idx, 1);
+        }
+      }),
+    };
     inventoryService = {
       removeItem: jest.fn().mockResolvedValue({}),
       addItem: jest.fn().mockResolvedValue({}),
@@ -143,6 +188,10 @@ describe('BuildingService', () => {
           useValue: buildingRepo,
         },
         { provide: getRepositoryToken(SceneLandPlot), useValue: plotRepo },
+        {
+          provide: getRepositoryToken(BuildingCoopContribution),
+          useValue: contributionRepo,
+        },
         { provide: BuildRuleService, useValue: buildRule },
         { provide: InventoryService, useValue: inventoryService },
         { provide: EconomyService, useValue: economyService },
@@ -154,6 +203,7 @@ describe('BuildingService', () => {
   });
 
   afterEach(() => {
+    loggerErrorSpy.mockRestore();
     jest.useRealTimers();
   });
 
@@ -426,6 +476,502 @@ describe('BuildingService', () => {
       );
       expect(inventoryService.removeItem).not.toHaveBeenCalled();
       expect(buildingRepo.save).not.toHaveBeenCalled();
+    });
+  });
+
+  // ===== Task 4 Step 1：共建创建 =====
+  describe('createCoopBuilding', () => {
+    it('solo 场景调 createCoopBuilding 抛 BUILD_FORBIDDEN（不写实例）', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+
+      await expectGameCode(
+        service.createCoopBuilding(PLAYER_ID, SCENE_ID, {
+          templateId: TEMPLATE_ID,
+          gx: 1,
+          gy: 1,
+        }),
+        ErrorCodes.BUILD_FORBIDDEN,
+      );
+      expect(buildingRepo.save).not.toHaveBeenCalled();
+      expect(templateRepo.findOne).not.toHaveBeenCalled();
+    });
+
+    it('coop 成功：finish_at = now + coopExpireHours*3600s，payload.coop=true/reached=false', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+      buildRule.assertCanBuild.mockResolvedValue(
+        makeRule({ mode: BuildMode.COOP, coopExpireHours: 24 }),
+      );
+      templateRepo.findOne.mockResolvedValue(
+        makeTemplate({ buildCost: [{ itemTemplateId: '10', amount: 5 }] }),
+      );
+
+      const view = await service.createCoopBuilding(PLAYER_ID, SCENE_ID, {
+        templateId: TEMPLATE_ID,
+        gx: 3,
+        gy: 4,
+      });
+
+      const saved = buildingRepo.save.mock.calls[0][0];
+      expect(saved.state).toBe(BuildingState.BUILDING);
+      expect(saved.finishAt.getTime()).toBe(Date.now() + 24 * 3600_000);
+      expect(saved.payload).toMatchObject({
+        gx: 3,
+        gy: 4,
+        w: 1,
+        h: 1,
+        coop: true,
+        reached: false,
+      });
+      expect(view.finishAt).toBe(
+        new Date(Date.now() + 24 * 3600_000).toISOString(),
+      );
+      expect(eventBus.emit).toHaveBeenCalledTimes(1);
+      expect(eventBus.emit.mock.calls[0][1]).toMatchObject({
+        state: BuildingState.BUILDING,
+        buildingId: '999',
+      });
+    });
+  });
+
+  // ===== Task 4 Step 2：共建投料 =====
+  describe('contribute（共建投料）', () => {
+    const makeCoopBuilding = (overrides: Record<string, any> = {}): any => ({
+      id: '900',
+      sceneId: SCENE_ID,
+      templateId: TEMPLATE_ID,
+      plotId: '1',
+      ownerId: PLAYER_ID,
+      ownerType: 'player',
+      state: BuildingState.BUILDING,
+      finishAt: new Date(Date.now() + 3600_000),
+      durability: 100,
+      payload: {
+        gx: 1,
+        gy: 1,
+        w: 1,
+        h: 1,
+        effect: {},
+        coop: true,
+        reached: false,
+      },
+      ...overrides,
+    });
+
+    const seedContribution = (overrides: Record<string, any> = {}): any => {
+      const row = {
+        id: String(contributions.length + 1),
+        buildingInstanceId: '900',
+        playerId: PLAYER_ID,
+        itemId: null,
+        currencyType: null,
+        amount: 1,
+        refunded: false,
+        ...overrides,
+      };
+      contributions.push(row);
+      return row;
+    };
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-06-01T00:00:00.000Z'));
+      buildRule.getRule.mockResolvedValue(
+        makeRule({ mode: BuildMode.COOP, coopMinContributors: 2 }),
+      );
+      templateRepo.findOne.mockResolvedValue(
+        makeTemplate({
+          buildSeconds: 60,
+          buildCost: [
+            { itemTemplateId: '10', amount: 5 },
+            { currencyType: 'gold', amount: 100 },
+          ],
+        }),
+      );
+    });
+
+    it('单实例不存在 → BUILD_NOT_FOUND', async () => {
+      buildingRepo.findOne.mockResolvedValue(null);
+      await expectGameCode(
+        service.contribute(PLAYER_ID, '900', [
+          { itemTemplateId: '10', amount: 5 },
+        ]),
+        ErrorCodes.BUILD_NOT_FOUND,
+      );
+    });
+
+    it('实例非 building（已 built）→ BUILD_NOT_FOUND', async () => {
+      buildingRepo.findOne.mockResolvedValue(
+        makeCoopBuilding({ state: BuildingState.BUILT }),
+      );
+      await expectGameCode(
+        service.contribute(PLAYER_ID, '900', [
+          { itemTemplateId: '10', amount: 5 },
+        ]),
+        ErrorCodes.BUILD_NOT_FOUND,
+      );
+      expect(inventoryService.removeItem).not.toHaveBeenCalled();
+    });
+
+    it('solo 场景投料 → BUILD_FORBIDDEN', async () => {
+      buildingRepo.findOne.mockResolvedValue(makeCoopBuilding());
+      buildRule.getRule.mockResolvedValue(makeRule({ mode: BuildMode.SOLO }));
+      await expectGameCode(
+        service.contribute(PLAYER_ID, '900', [
+          { itemTemplateId: '10', amount: 5 },
+        ]),
+        ErrorCodes.BUILD_FORBIDDEN,
+      );
+      expect(inventoryService.removeItem).not.toHaveBeenCalled();
+    });
+
+    it('已超时（finish_at<=now）→ COOP_EXPIRED，不扣料', async () => {
+      buildingRepo.findOne.mockResolvedValue(
+        makeCoopBuilding({ finishAt: new Date(Date.now() - 1000) }),
+      );
+      await expectGameCode(
+        service.contribute(PLAYER_ID, '900', [
+          { itemTemplateId: '10', amount: 5 },
+        ]),
+        ErrorCodes.COOP_EXPIRED,
+      );
+      expect(inventoryService.removeItem).not.toHaveBeenCalled();
+    });
+
+    it('已达标（payload.reached=true）再投料 → COOP_NOT_READY，不扣料', async () => {
+      buildingRepo.findOne.mockResolvedValue(
+        makeCoopBuilding({
+          payload: { gx: 1, gy: 1, w: 1, h: 1, coop: true, reached: true },
+        }),
+      );
+      await expectGameCode(
+        service.contribute(PLAYER_ID, '900', [
+          { itemTemplateId: '10', amount: 5 },
+        ]),
+        ErrorCodes.COOP_NOT_READY,
+      );
+      expect(inventoryService.removeItem).not.toHaveBeenCalled();
+    });
+
+    it('空投料列表 → PARAM_INVALID', async () => {
+      buildingRepo.findOne.mockResolvedValue(makeCoopBuilding());
+      await expectGameCode(
+        service.contribute(PLAYER_ID, '900', []),
+        ErrorCodes.PARAM_INVALID,
+      );
+      expect(inventoryService.removeItem).not.toHaveBeenCalled();
+    });
+
+    it('投料未达标：落流水但 state 仍 building、不改写 finish_at、不发事件', async () => {
+      const building = makeCoopBuilding();
+      buildingRepo.findOne.mockResolvedValue(building);
+      const originalFinish = building.finishAt.getTime();
+
+      const res = await service.contribute(PLAYER_ID, '900', [
+        { itemTemplateId: '10', amount: 5 },
+      ]);
+
+      expect(res.reached).toBe(false);
+      expect(res.contributors).toBe(1);
+      expect(res.building.state).toBe(BuildingState.BUILDING);
+      expect(building.state).toBe(BuildingState.BUILDING);
+      expect(building.finishAt.getTime()).toBe(originalFinish);
+      expect(buildingRepo.save).not.toHaveBeenCalled();
+      expect(eventBus.emit).not.toHaveBeenCalled();
+      // 流水落库：item 侧有值、currency 侧为 null
+      expect(contributions).toHaveLength(1);
+      expect(contributions[0]).toMatchObject({
+        buildingInstanceId: '900',
+        playerId: PLAYER_ID,
+        itemId: '10',
+        currencyType: null,
+        amount: 5,
+        refunded: false,
+      });
+      expect(inventoryService.removeItem).toHaveBeenCalledWith(
+        PLAYER_ID,
+        '10',
+        5,
+        expect.stringContaining(':contribute'),
+      );
+    });
+
+    it('达标（去重参与者≥门槛 且 逐项合计≥成本）→ 改写 finish_at=now+build_seconds 并发事件', async () => {
+      const building = makeCoopBuilding();
+      buildingRepo.findOne.mockResolvedValue(building);
+      // 参与者 A 已投满道具
+      seedContribution({ playerId: '1001', itemId: '10', amount: 5 });
+
+      // 参与者 B 补满货币 → 人数 2、两项均达标
+      const res = await service.contribute('1002', '900', [
+        { currencyType: 'gold', amount: 100 },
+      ]);
+
+      expect(res.reached).toBe(true);
+      expect(res.contributors).toBe(2);
+      expect(building.payload.reached).toBe(true);
+      expect(typeof building.payload.coopReachedAt).toBe('string');
+      expect(building.finishAt.getTime()).toBe(Date.now() + 60 * 1000);
+      expect(buildingRepo.save).toHaveBeenCalledTimes(1);
+      expect(buildingRepo.save.mock.calls[0][0].finishAt.getTime()).toBe(
+        Date.now() + 60 * 1000,
+      );
+      expect(eventBus.emit).toHaveBeenCalledTimes(1);
+      const [evt, payload] = eventBus.emit.mock.calls[0];
+      expect(evt).toBe(GameEvents.BUILDING_STATE_CHANGED);
+      expect(payload).toMatchObject({ state: BuildingState.BUILDING });
+      expect(res.building.finishAt).toBe(
+        new Date(Date.now() + 60 * 1000).toISOString(),
+      );
+    });
+
+    it('逐项口径：人数达标但缺成本项时不达标（总额掩盖不了缺项）', async () => {
+      const building = makeCoopBuilding();
+      buildingRepo.findOne.mockResolvedValue(building);
+      seedContribution({ playerId: '1001', currencyType: 'gold', amount: 200 });
+
+      // 人数 2、货币远超，但道具项 0 < 5 → 不达标
+      const res = await service.contribute('1002', '900', [
+        { currencyType: 'gold', amount: 200 },
+      ]);
+
+      expect(res.reached).toBe(false);
+      expect(building.payload.reached).toBe(false);
+      expect(buildingRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('第二项扣料失败 → 本次已插流水被删除、第一项逆向补偿、抛原错误', async () => {
+      buildingRepo.findOne.mockResolvedValue(makeCoopBuilding());
+      economyService.deductCurrency.mockRejectedValue(
+        new GameException(ErrorCodes.CURRENCY_NOT_ENOUGH, '货币不足'),
+      );
+
+      await expectGameCode(
+        service.contribute(PLAYER_ID, '900', [
+          { itemTemplateId: '10', amount: 5 },
+          { currencyType: 'gold', amount: 100 },
+        ]),
+        ErrorCodes.CURRENCY_NOT_ENOUGH,
+      );
+
+      // 本次流水不残留
+      expect(contributions).toHaveLength(0);
+      expect(contributionRepo.remove).toHaveBeenCalledTimes(1);
+      expect(contributionRepo.remove.mock.calls[0][0]).toHaveLength(1);
+      // 第一项（道具）被逆向补偿
+      expect(inventoryService.addItem).toHaveBeenCalledWith(
+        PLAYER_ID,
+        '10',
+        5,
+        expect.stringContaining(':refund'),
+      );
+      expect(economyService.addCurrency).not.toHaveBeenCalled();
+      expect(buildingRepo.save).not.toHaveBeenCalled();
+    });
+  });
+
+  // ===== Task 4 Step 3：共建超时退款 =====
+  describe('refundExpiredCoop（超时退款）', () => {
+    const makeExpiredCoop = (overrides: Record<string, any> = {}): any => ({
+      id: '900',
+      sceneId: SCENE_ID,
+      templateId: TEMPLATE_ID,
+      plotId: '1',
+      ownerId: PLAYER_ID,
+      ownerType: 'player',
+      state: BuildingState.BUILDING,
+      finishAt: new Date(Date.now() - 1000),
+      durability: 100,
+      payload: { gx: 2, gy: 3, w: 2, h: 1, coop: true, reached: false },
+      ...overrides,
+    });
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-06-01T00:00:00.000Z'));
+      buildRule.getRule.mockResolvedValue(makeRule({ mode: BuildMode.COOP }));
+    });
+
+    it('未超时 → 不退款', async () => {
+      buildingRepo.findOne.mockResolvedValue(
+        makeExpiredCoop({ finishAt: new Date(Date.now() + 3600_000) }),
+      );
+      await service.refundExpiredCoop('900');
+      expect(inventoryService.addItem).not.toHaveBeenCalled();
+      expect(buildingRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('已达标（reached=true）超时也不退款（幂等 return）', async () => {
+      buildingRepo.findOne.mockResolvedValue(
+        makeExpiredCoop({
+          payload: { gx: 2, gy: 3, w: 1, h: 1, coop: true, reached: true },
+        }),
+      );
+      await service.refundExpiredCoop('900');
+      expect(inventoryService.addItem).not.toHaveBeenCalled();
+      expect(buildingRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('超时退款：逐条原路退款 → refunded=true → demolishing → 释放地块 → 发事件；重复调用不重复退', async () => {
+      const building = makeExpiredCoop();
+      buildingRepo.findOne.mockResolvedValue(building);
+      contributions.push(
+        {
+          id: '1',
+          buildingInstanceId: '900',
+          playerId: '1001',
+          itemId: '10',
+          currencyType: null,
+          amount: 5,
+          refunded: false,
+        },
+        {
+          id: '2',
+          buildingInstanceId: '900',
+          playerId: '1002',
+          currencyType: 'gold',
+          itemId: null,
+          amount: 100,
+          refunded: false,
+        },
+      );
+      const plotRows = [
+        {
+          id: '1',
+          sceneId: SCENE_ID,
+          gx: 2,
+          gy: 3,
+          w: 2,
+          h: 1,
+          state: PlotState.OCCUPIED,
+        },
+        {
+          id: '2',
+          sceneId: SCENE_ID,
+          gx: 3,
+          gy: 3,
+          w: 1,
+          h: 1,
+          state: PlotState.OCCUPIED,
+        },
+      ];
+      plotRepo.find.mockResolvedValue(plotRows);
+
+      await service.refundExpiredCoop('900');
+
+      expect(inventoryService.addItem).toHaveBeenCalledWith(
+        '1001',
+        '10',
+        5,
+        expect.stringContaining(':refund'),
+      );
+      expect(economyService.addCurrency).toHaveBeenCalledWith(
+        '1002',
+        'gold',
+        100,
+        'building',
+        expect.stringContaining(':refund'),
+        TEMPLATE_ID,
+      );
+      expect(contributions.every((row) => row.refunded)).toBe(true);
+      expect(building.state).toBe(BuildingState.DEMOLISHING);
+      expect(plotRepo.save).toHaveBeenCalledTimes(1);
+      expect(
+        plotRows.every(
+          (p) => p.state === PlotState.EMPTY && p.w === 1 && p.h === 1,
+        ),
+      ).toBe(true);
+      expect(eventBus.emit).toHaveBeenCalledTimes(1);
+      const [evt, payload] = eventBus.emit.mock.calls[0];
+      expect(evt).toBe(GameEvents.BUILDING_STATE_CHANGED);
+      expect(payload).toMatchObject({ state: BuildingState.DEMOLISHING });
+
+      // 重复调用：state 已 demolishing → 直接 return，不重复退款
+      inventoryService.addItem.mockClear();
+      economyService.addCurrency.mockClear();
+      eventBus.emit.mockClear();
+      buildingRepo.save.mockClear();
+      await service.refundExpiredCoop('900');
+      expect(inventoryService.addItem).not.toHaveBeenCalled();
+      expect(economyService.addCurrency).not.toHaveBeenCalled();
+      expect(buildingRepo.save).not.toHaveBeenCalled();
+      expect(eventBus.emit).not.toHaveBeenCalled();
+    });
+
+    it('退款失败（背包满）：记 error、抛异常、不标 refunded、state 仍 building、不释放地块；下一 tick 重试成功', async () => {
+      const building = makeExpiredCoop();
+      buildingRepo.findOne.mockResolvedValue(building);
+      contributions.push({
+        id: '1',
+        buildingInstanceId: '900',
+        playerId: '1001',
+        itemId: '10',
+        currencyType: null,
+        amount: 5,
+        refunded: false,
+      });
+      inventoryService.addItem.mockRejectedValueOnce(new Error('背包已满'));
+
+      await expect(service.refundExpiredCoop('900')).rejects.toThrow('背包已满');
+
+      expect(loggerErrorSpy).toHaveBeenCalled();
+      expect(contributions[0].refunded).toBe(false);
+      expect(building.state).toBe(BuildingState.BUILDING);
+      expect(plotRepo.save).not.toHaveBeenCalled();
+      expect(eventBus.emit).not.toHaveBeenCalled();
+
+      // 重试：本次成功，退款只发生一次
+      await service.refundExpiredCoop('900');
+      expect(inventoryService.addItem).toHaveBeenCalledTimes(2);
+      expect(contributions[0].refunded).toBe(true);
+      expect(building.state).toBe(BuildingState.DEMOLISHING);
+    });
+
+    it('部分成功部分失败：已成功的流水保持 refunded=true，重试不重复退', async () => {
+      const building = makeExpiredCoop();
+      buildingRepo.findOne.mockResolvedValue(building);
+      contributions.push(
+        {
+          id: '1',
+          buildingInstanceId: '900',
+          playerId: '1001',
+          itemId: '10',
+          currencyType: null,
+          amount: 5,
+          refunded: false,
+        },
+        {
+          id: '2',
+          buildingInstanceId: '900',
+          playerId: '1002',
+          itemId: '11',
+          currencyType: null,
+          amount: 2,
+          refunded: false,
+        },
+      );
+      inventoryService.addItem
+        .mockResolvedValueOnce({})
+        .mockRejectedValueOnce(new Error('背包已满'))
+        .mockResolvedValueOnce({});
+
+      await expect(service.refundExpiredCoop('900')).rejects.toThrow('背包已满');
+      expect(contributions[0].refunded).toBe(true);
+      expect(contributions[1].refunded).toBe(false);
+      expect(building.state).toBe(BuildingState.BUILDING);
+
+      inventoryService.addItem.mockClear();
+      await service.refundExpiredCoop('900');
+      // 只退第二笔（第一笔已 refunded）
+      expect(inventoryService.addItem).toHaveBeenCalledTimes(1);
+      expect(inventoryService.addItem).toHaveBeenCalledWith(
+        '1002',
+        '11',
+        2,
+        expect.stringContaining(':refund'),
+      );
+      expect(building.state).toBe(BuildingState.DEMOLISHING);
     });
   });
 });

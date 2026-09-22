@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BuildingScheduler } from './building.scheduler';
 import { BuildRuleService } from './build-rule.service';
+import { BuildingService } from './building.service';
 import { BuildingInstance } from '../entities/building-instance.entity';
 import { CacheService } from '@cache/cache.service';
 import { EventBusService } from '@event-bus/event-bus.service';
@@ -23,6 +24,7 @@ describe('BuildingScheduler', () => {
   let cacheService: { withLock: jest.Mock };
   let eventBus: { emit: jest.Mock };
   let buildRule: { getRule: jest.Mock; toCenter: jest.Mock };
+  let buildingService: { refundExpiredCoop: jest.Mock };
   let loggerErrorSpy: jest.SpyInstance;
 
   const past = new Date('2026-01-01T00:00:00.000Z');
@@ -73,6 +75,9 @@ describe('BuildingScheduler', () => {
         y: (gy + 0.5) * size,
       })),
     };
+    buildingService = {
+      refundExpiredCoop: jest.fn().mockResolvedValue(undefined),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -84,6 +89,7 @@ describe('BuildingScheduler', () => {
         { provide: CacheService, useValue: cacheService },
         { provide: EventBusService, useValue: eventBus },
         { provide: BuildRuleService, useValue: buildRule },
+        { provide: BuildingService, useValue: buildingService },
       ],
     }).compile();
 
@@ -102,7 +108,8 @@ describe('BuildingScheduler', () => {
 
     await scheduler.reconcile();
 
-    expect(buildingRepo.find).toHaveBeenCalledTimes(1);
+    // 两步各查一次（落成结算 + 共建超时退款）
+    expect(buildingRepo.find).toHaveBeenCalledTimes(2);
     expect(buildingRepo.save).toHaveBeenCalledTimes(1);
     expect(buildingRepo.save.mock.calls[0][0].state).toBe(BuildingState.BUILT);
 
@@ -181,19 +188,96 @@ describe('BuildingScheduler', () => {
   });
 
   it('running 互斥：上一轮未完时跳过本轮', async () => {
-    // 让 find 挂起，制造「上一轮未结束」状态
+    // 首次查询挂起，制造「上一轮未结束」状态
     let release: (v: any) => void = () => undefined;
-    buildingRepo.find.mockReturnValue(
-      new Promise((resolve) => {
-        release = resolve;
-      }),
-    );
+    let calls = 0;
+    buildingRepo.find.mockImplementation(() => {
+      calls += 1;
+      if (calls === 1) {
+        return new Promise((resolve) => {
+          release = resolve;
+        });
+      }
+      return Promise.resolve([]);
+    });
 
     const first = scheduler.reconcile();
     await scheduler.reconcile(); // 第二轮应被跳过
+    expect(calls).toBe(1); // 第二轮未触发任何查询
     release([]);
     await first;
+    expect(calls).toBe(2); // 仅第一轮的第二步（超时退款）再查一次
+  });
 
-    expect(buildingRepo.find).toHaveBeenCalledTimes(1);
+  // ===== Task 4：共建行不误落成 + 超时退款 =====
+  it('共建未达标行：跳过落成，改调 refundExpiredCoop（不误落成）', async () => {
+    const row = makeRow({
+      payload: { gx: 1, gy: 1, w: 1, h: 1, coop: true, reached: false },
+    });
+    buildingRepo.find.mockResolvedValue([row]);
+
+    await scheduler.reconcile();
+
+    expect(buildingRepo.save).not.toHaveBeenCalled();
+    expect(eventBus.emit).not.toHaveBeenCalled();
+    expect(buildingService.refundExpiredCoop).toHaveBeenCalledTimes(1);
+    expect(buildingService.refundExpiredCoop).toHaveBeenCalledWith('1');
+    expect(cacheService.withLock).toHaveBeenCalledWith(
+      'lock:building:1',
+      expect.any(Function),
+      { ttl: 10, retry: 2, retryDelay: 100 },
+    );
+  });
+
+  it('共建已达标行：不退款，按到期正常落成', async () => {
+    const row = makeRow({
+      payload: { gx: 1, gy: 1, w: 1, h: 1, coop: true, reached: true },
+    });
+    buildingRepo.find.mockResolvedValue([row]);
+    buildingRepo.findOne.mockResolvedValue({ ...row });
+
+    await scheduler.reconcile();
+
+    expect(buildingRepo.save).toHaveBeenCalledTimes(1);
+    expect(buildingRepo.save.mock.calls[0][0].state).toBe(BuildingState.BUILT);
+    expect(buildingService.refundExpiredCoop).not.toHaveBeenCalled();
+  });
+
+  it('共建未达标但未到期：既不落成也不退款', async () => {
+    const row = makeRow({
+      finishAt: future,
+      payload: { gx: 1, gy: 1, w: 1, h: 1, coop: true, reached: false },
+    });
+    // 步骤一/二都以 finish_at<=now 查询，故模拟查询返回空
+    buildingRepo.find.mockResolvedValue([]);
+
+    await scheduler.reconcile();
+
+    expect(buildingRepo.save).not.toHaveBeenCalled();
+    expect(buildingService.refundExpiredCoop).not.toHaveBeenCalled();
+    expect(row.payload.reached).toBe(false);
+  });
+
+  it('共建退款失败：记 error 且不影响其余行', async () => {
+    const row1 = makeRow({
+      id: '1',
+      payload: { gx: 1, gy: 1, w: 1, h: 1, coop: true, reached: false },
+    });
+    const row2 = makeRow({
+      id: '2',
+      payload: { gx: 2, gy: 1, w: 1, h: 1, coop: true, reached: false },
+    });
+    buildingRepo.find.mockResolvedValue([row1, row2]);
+    buildingService.refundExpiredCoop.mockImplementation(async (id: string) => {
+      if (id === '1') throw new Error('BAG_FULL');
+    });
+
+    await scheduler.reconcile();
+
+    expect(loggerErrorSpy).toHaveBeenCalled();
+    expect(buildingService.refundExpiredCoop).toHaveBeenCalledTimes(2);
+    expect(buildingService.refundExpiredCoop.mock.calls.map((c) => c[0])).toEqual(
+      ['1', '2'],
+    );
   });
 });
