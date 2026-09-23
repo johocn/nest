@@ -1,4 +1,4 @@
-import { AppConfig } from '../config/AppConfig';
+import { Platform } from '../platform/Platform';
 
 export interface WsMessage {
   cmd: string;
@@ -26,7 +26,7 @@ export class WsClient {
     if (typeof io !== 'function') {
       throw new Error('socket.io 未加载：请确认 index.html 引入了 /vendor/socket.io.min.js');
     }
-    this.socket = io(AppConfig.wsUrl, {
+    this.socket = io(Platform.env.wsUrl(), {
       transports: ['websocket'],
       query: { token },
       reconnection: true,

@@ -1,23 +1,82 @@
+import { AppConfig } from '../config/AppConfig';
+import { Hud } from '../ui/Hud';
+
 /**
  * 平台差异唯一出口：业务代码不得直接访问 document / localStorage / wx。
- * S1 只实现 H5 分支；微信小游戏分支在 S7 补齐。
+ * 存储 / 提示 / 环境地址三域已双端适配（S7 Task 1）；网络与登录页见 S7 后续任务。
  */
+
+/**
+ * 小游戏全局对象。存储分支按「wx 存在且方法为 function」判定，不用 isMiniGame()：
+ * 开发者工具里 document 可能仍存在，按 document 判定会走错分支。
+ */
+function wxApi(): any {
+  const w = (globalThis as any).wx;
+  return w && typeof w === 'object' ? w : null;
+}
+
+/** 构建期注入的环境覆盖（globalThis.__ENV__）：仅当字段是非空字符串时生效 */
+function envValue(key: 'apiBase' | 'wsUrl'): string | null {
+  const env = (globalThis as any).__ENV__;
+  if (!env || typeof env !== 'object') return null;
+  const v = env[key];
+  return typeof v === 'string' && v.length > 0 ? v : null;
+}
+
+/** 接口根地址：注入值优先，否则 AppConfig 默认（dev）；去掉尾部 / 避免拼出 // */
+function resolveApiBase(): string {
+  return (envValue('apiBase') ?? AppConfig.apiBase).replace(/\/+$/, '');
+}
+
+function resolveWsUrl(): string {
+  return envValue('wsUrl') ?? AppConfig.wsUrl;
+}
+
 export const Platform = {
   isMiniGame(): boolean {
     return typeof (globalThis as any).wx !== 'undefined' && typeof document === 'undefined';
   },
 
   storageGet(key: string): string | null {
+    const wx = wxApi();
+    if (wx && typeof wx.getStorageSync === 'function') {
+      try {
+        const v = wx.getStorageSync(key);
+        // wx 用 '' 表示键不存在，与 localStorage.getItem 的 null 对齐
+        return v === '' || v === null || v === undefined ? null : (v as string);
+      } catch (e) {
+        console.warn(`[S7] wx.getStorageSync 失败 ${key}`, e);
+        return null;
+      }
+    }
     if (typeof localStorage === 'undefined') return null;
     return localStorage.getItem(key);
   },
 
   storageSet(key: string, value: string): void {
+    const wx = wxApi();
+    if (wx && typeof wx.setStorageSync === 'function') {
+      try {
+        wx.setStorageSync(key, value);
+      } catch (e) {
+        console.warn(`[S7] wx.setStorageSync 失败 ${key}`, e);
+      }
+      return;
+    }
     if (typeof localStorage === 'undefined') return;
     localStorage.setItem(key, value);
   },
 
   storageRemove(key: string): void {
+    const wx = wxApi();
+    if (wx && typeof wx.removeStorageSync === 'function') {
+      try {
+        wx.removeStorageSync(key);
+      } catch (e) {
+        console.warn(`[S7] wx.removeStorageSync 失败 ${key}`, e);
+      }
+      return;
+    }
     if (typeof localStorage === 'undefined') return;
     localStorage.removeItem(key);
   },
@@ -37,7 +96,32 @@ export const Platform = {
     }
   },
 
-  // 提示出口已迁到引擎内自绘 `ui/Hud.ts`（双端一致），此处不再有 DOM 提示实现。
+  /**
+   * 提示出口：引擎内自绘 `ui/Hud.ts`，双端一致、不依赖 DOM。
+   * Hud 未初始化（引擎未起来）时其自身降级为 console，此处不再重复判断。
+   */
+  ui: {
+    toast(text: string, ms?: number): void {
+      Hud.toast(text, ms ?? AppConfig.hud.toastMs);
+    },
+  },
+
+  /** 环境地址解析：注入值（globalThis.__ENV__）优先，否则 AppConfig 默认（dev） */
+  env: {
+    apiBase(): string {
+      return resolveApiBase();
+    },
+
+    wsUrl(): string {
+      return resolveWsUrl();
+    },
+
+    /** 实际生效的地址（日志/断言用） */
+    raw(): { apiBase: string; wsUrl: string } {
+      return { apiBase: resolveApiBase(), wsUrl: resolveWsUrl() };
+    },
+  },
+
   // `showLoginForm` / `hideLoginForm` 是 H5 特有能力的适配，保留在此。
   showLoginForm(handlers: {
     onSubmit: (username: string, password: string) => Promise<void>;

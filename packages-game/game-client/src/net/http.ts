@@ -1,4 +1,4 @@
-import { AppConfig } from '../config/AppConfig';
+import { Platform } from '../platform/Platform';
 
 export class ApiError extends Error {
   constructor(
@@ -31,13 +31,13 @@ export async function httpJson<T>(
 
   let res: Response;
   try {
-    res = await fetch(`${AppConfig.apiBase}${path}`, {
+    res = await fetch(`${Platform.env.apiBase()}${path}`, {
       method,
       headers,
       body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
     });
   } catch (e) {
-    throw new ApiError(-1, `无法连接后端 ${AppConfig.apiBase}（请确认服务已启动且 CORS 放行）`);
+    throw new ApiError(-1, `无法连接后端 ${Platform.env.apiBase()}（请确认服务已启动且 CORS 放行）`);
   }
 
   const text = await res.text();
