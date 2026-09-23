@@ -323,3 +323,73 @@
 - 移动段 up/s 均值：**9.4**（目标 ≤10）
 - 静止段 up/s 合计：**0**（应 ≈0）
 - 结束档位：**high**
+
+## s9-preview · 2026-09-23T14:12:43.293Z
+
+- commit: `0a173863a`（工作区脏：是）
+- 浏览器: Chromium/151.0.7922.34 · headless=否 · map-localhost-ipv4=否
+- userAgent: `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36`
+- 打开地址: http://localhost:5173/（--quality 未指定（走平台默认））
+- 质量日志: `[S8] quality=high switches=nameLabels=1 gridLines=1 triggerOutline=1 interp=full remoteHz=10 (platform=h5 url=- env=- config=auto)`
+- 背景层: `[S8] 背景层合图：graphics 命令 26 条 → cacheAs=bitmap（quality=high 网格开 描边开）`
+- 场景: [S1] 静态层渲染完成：地形 1280x960，物件 10，NPC 3，触发器 2，出生点 (640,480)
+- 路线: ArrowRight 1.14s → ArrowDown 1.14s → ArrowLeft 1.14s → ArrowUp 1.14s → ArrowRight 1.44s（共 6s），随后静止 6s
+
+### 每秒采样
+
+| 段 | t(s) | fps(自计) | statFps | drawcall | 实体总 | 可见 | up/s | heap(MB) |
+|---|---|---|---|---|---|---|---|---|
+| 移动 | 1 | 60.1 | 60 | 38 | 17 | 17 | 10 | 17.2 |
+| 移动 | 2 | 60 | 60 | 36 | 17 | 17 | 10 | 17.9 |
+| 移动 | 3 | 59.9 | 60 | 34 | 17 | 16 | 9 | 15.5 |
+| 移动 | 4 | 59.9 | 60 | 35 | 17 | 17 | 10 | 16.1 |
+| 移动 | 5 | 60.1 | 60 | 38 | 17 | 17 | 10 | 17 |
+| 移动 | 6 | 60 | 60 | 36 | 17 | 17 | 9 | 17.3 |
+| 静止 | 1 | 60 | 60 | 37 | 17 | 16 | 0 | 17.8 |
+| 静止 | 2 | 60 | 60 | 37 | 17 | 16 | 0 | 18.2 |
+| 静止 | 3 | 60 | 60 | 37 | 17 | 16 | 0 | 18.7 |
+| 静止 | 4 | 60 | 60 | 37 | 17 | 16 | 0 | 16.1 |
+| 静止 | 5.1 | 60 | 60 | 37 | 17 | 16 | 0 | 16.6 |
+| 静止 | 6 | 60 | 60 | 37 | 17 | 16 | 0 | 16.3 |
+
+### 汇总
+
+- 移动段 fps：均值 **60** · 最低 **59.9**（目标 60）
+- 静止段 fps：均值 **60**
+- drawcall 峰值：**38**（目标 ≤60）
+- heap 峰值：**18.7** MB（目标 ≤300MB）
+- 移动段 up/s 均值：**9.7**（目标 ≤10）
+- 静止段 up/s 合计：**0**（应 ≈0）
+- 结束档位：**high**
+
+## s9-preview-low · 2026-09-23T14:13:19.220Z
+
+- commit: `0a173863a`（工作区脏：是）
+- 浏览器: Chromium/151.0.7922.34 · headless=否 · map-localhost-ipv4=否
+- userAgent: `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36`
+- 打开地址: http://localhost:5173/?quality=low（--quality low）
+- 质量日志: `[S8] quality=high switches=nameLabels=1 gridLines=1 triggerOutline=1 interp=full remoteHz=10 (platform=h5 url=- env=- config=auto)`
+- 背景层: `[S8] 背景层合图：graphics 命令 1 条 → cacheAs=bitmap（quality=low 网格关 描边关）`
+- 场景: [S1] 静态层渲染完成：地形 1280x960，物件 10，NPC 3，触发器 2，出生点 (640,480)
+- 路线: ArrowRight 0.57s → ArrowDown 0.57s → ArrowLeft 0.57s → ArrowUp 0.57s → ArrowRight 0.72s（共 3s），随后静止 3s
+
+### 每秒采样
+
+| 段 | t(s) | fps(自计) | statFps | drawcall | 实体总 | 可见 | up/s | heap(MB) |
+|---|---|---|---|---|---|---|---|---|
+| 移动 | 1 | 60 | 60 | 20 | 17 | 17 | 9 | 16.4 |
+| 移动 | 2 | 55.9 | 56 | 18 | 17 | 17 | 9 | 15.1 |
+| 移动 | 3 | 60.1 | 60 | 19 | 17 | 17 | 10 | 15.7 |
+| 静止 | 1 | 60.1 | 60 | 19 | 17 | 17 | 0 | 15.7 |
+| 静止 | 2 | 60.1 | 60 | 19 | 17 | 17 | 0 | 15.7 |
+| 静止 | 3 | 60.1 | 60 | 19 | 17 | 17 | 0 | 15.7 |
+
+### 汇总
+
+- 移动段 fps：均值 **58.7** · 最低 **55.9**（目标 60）
+- 静止段 fps：均值 **60.1**
+- drawcall 峰值：**20**（目标 ≤60）
+- heap 峰值：**16.4** MB（目标 ≤300MB）
+- 移动段 up/s 均值：**9.3**（目标 ≤10）
+- 静止段 up/s 合计：**0**（应 ≈0）
+- 结束档位：**low**

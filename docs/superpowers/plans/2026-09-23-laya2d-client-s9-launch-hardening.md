@@ -165,7 +165,8 @@
 
 ### Task 2: S8 成果发布上线（含线上冒烟）
 
-- [ ] **Step 1** 本地构建：`node tools/build-fallback.mjs` → `node tools/inject-env.mjs --env prod` → `node tools/publish.mjs h5-site --env prod`。
+- [x] **Step 1** 本地构建：`node tools/build-fallback.mjs` → `node tools/inject-env.mjs --env prod` → `node tools/publish.mjs h5-site`（**计划缺陷修正**：原文写成 `publish.mjs h5-site --env prod`，但 `publish.mjs` 只认 `--target/--source/--base`，`--env` 会 exit 1）。→ 已跑通：`release/client` 71 文件 / 2.23MB，index.html 前缀改写与 env-config 顺序自校验通过，gamedata sha256 校验通过；S8 十个模块在 `release/client/js` 全在（新增「预演」口径：本机另装 `release/client-preview`（dev 端点、`--base /client/`）实跑点检，high 档移动段 fps 60/最低 59.9、drawcall 峰 38、heap 峰 18.7MB、上行 9.7/s、静止 0；`?quality=low` 生效，drawcall 峰 20；样本追加进 `docs/perf-sample.md` 的 `s9-preview` / `s9-preview-low`）。
+- [ ] **Step 1 偏差记录**（后续步骤沿用，勿再踩）：① `inject-env.mjs` 的 `--env` 必填，单独传 `--api-base/--ws-url` 会 exit 1，须写 `--env prod --api-base … --ws-url …`（显式值覆盖预设）；② `publish.mjs h5-site --base /` **必然失败**（`BARE_PATH_RESIDUE` 自校验与 base=`/` 语义冲突，见 `tools/publish.mjs:64`），本机预览只能用 `--base /client/` 并按 `/client/` 路径访问；③ 后端 `CORS_ORIGINS` 只含 `3000/5173/127.0.0.1:3000`，预览点检需复用 `perf-sample.mjs --proxy-port`（页面 origin 保持 `localhost:5173`，服务另监听端口）。
 - [ ] **Step 2** 上传 `release/client/` 与 `gamedata/` 到 odoo 站点目录（**服务器零构建**）。
 - [ ] **Step 3** 验证：`/client/index.html` 200；页面可进场景；`F3` 面板出现；`?quality=low` 切档生效。
 - [ ] **Step 4** 线上冒烟：浏览器双窗口互见移动（插值连续无跳变）+ `curl https://game.joho.cn/health`。
