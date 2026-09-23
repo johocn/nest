@@ -14,6 +14,8 @@
 //   4) 成本统一用货币 gold（admin 接口发币），便于断言「扣币差额」，不依赖背包初始道具。
 //   5) 定时器 BuildingScheduler.reconcile() 为 @Cron(EVERY_MINUTE)：落成与超时退款同一 tick，
 //      故「结算后 built」「超时退款」类断言最多轮询 ~75s（脚本内轮询，不盲目固定 sleep）。
+//   6) 共建创建为「零成本」：createCoopBuilding 不扣任何材料/货币（仅占格放地基），全部成本由 contribute
+//      投料凑齐；超时由 refundExpiredCoop 按流水全额原路退投料。故 coop 场景创建前后余额必须相等。
 //
 // 已知偏差（详见运行报告）：`coop_expire_hours=0` 时实例创建即「已超时」，而 contribute 对已超时实例
 //   直接拒绝（COOP_EXPIRED 44006，有 Task 4 单测佐证），因此无法经 HTTP 在超时实例上投料；
@@ -643,17 +645,18 @@ async function main() {
       gy: COOP_GY,
     });
     const refundId = refundBuild.payload?.data?.id;
-    // 共建创建即按蓝图成本扣料，故「投料前」基准取创建之后的余额
+    // 共建创建为「零成本」：创建不扣任何材料/货币，故「投料前」基准与创建前为同一个数
     const goldBeforeContrib = await goldOf(a.token);
     const partialContrib = await contribute(a.token, refundId, [{ currencyType: 'gold', amount: 5 }]);
     const goldAfterContrib = await goldOf(a.token);
     check(
-      '⑬ 前置：共建实例部分投料成功（未达标）且金余额恰减 5',
+      '⑬ 前置：共建创建不扣币（创建前后余额不变）且实例部分投料成功（未达标）、金余额恰减 5',
       refundBuild.payload?.code === 0 &&
+        goldBeforeCreate === goldBeforeContrib &&
         partialContrib.payload?.code === 0 &&
         partialContrib.payload?.data?.reached === false &&
         goldBeforeContrib - goldAfterContrib === 5,
-      `create code=${refundBuild.payload?.code} id=${refundId}（创建扣料 ${goldBeforeCreate - goldBeforeContrib}）；投料 code=${partialContrib.payload?.code} reached=${partialContrib.payload?.data?.reached}；gold ${goldBeforeContrib} → ${goldAfterContrib}（Δ=${goldBeforeContrib - goldAfterContrib}）`,
+      `create code=${refundBuild.payload?.code} id=${refundId}；gold 创建前=${goldBeforeCreate} → 创建后=${goldBeforeContrib}（Δ=${goldBeforeCreate - goldBeforeContrib}，期望 0，创建零成本）；投料 code=${partialContrib.payload?.code} reached=${partialContrib.payload?.data?.reached}；gold ${goldBeforeContrib} → ${goldAfterContrib}（Δ=${goldBeforeContrib - goldAfterContrib}）`,
     );
 
     // 测试专用注入：仅把该实例 finish_at 回拨到过去（不改其它字段），令下一 tick 触发超时退款

@@ -84,7 +84,8 @@ export interface DemolishResult {
  * 单独建造与共同建造服务（S6 / Task 3、Task 4、Task 5）。
  *
  * 单独建造执行顺序（硬要求）：全部校验 → 逐项扣料（边扣边记，失败逆向补偿）→ 写实例 → 置地块占用 → 发事件。
- * 共建执行顺序（硬要求）：查实例/规则/超时/达标校验 → 逐项扣料并逐条落流水（失败先删本次流水再逆向补偿）→ 统计达标 → 改写 finishAt。
+ * 共建创建执行顺序（硬要求）：全部校验 → 逐格占地 → 写实例（**不扣任何材料/货币，创建者零成本**）→ 发事件。
+ * 共建投料执行顺序（硬要求）：查实例/规则/超时/达标校验 → 逐项扣料并逐条落流水（失败先删本次流水再逆向补偿）→ 统计达标 → 改写 finishAt。
  * 多格占地：footprint_w/h 为矩形格数，(gx,gy) 为左上角锚点格，锚点即 building_instances.plot_id。
  *
  * 共建 finish_at 采用【超时时刻】语义：
@@ -226,8 +227,9 @@ export class BuildingService {
   }
 
   /**
-   * 共同建造（coop）：与单独建造同流程，差异仅在模式校验与计时语义。
-   * `finish_at = now + coop_expire_hours * 3600_000`（超时时刻，非落成时刻）；
+   * 共同建造（coop）：**创建者零成本**——只选址占格放地基，不扣任何材料/货币；
+   * 全部成本由后续投料凑齐（contribute 逐项扣料并落流水），超时则由 refundExpiredCoop 按流水全额原路退投料。
+   * 计时语义：`finish_at = now + coop_expire_hours * 3600_000`（超时时刻，非落成时刻）；
    * `payload.coop=true`、`payload.reached=false`：scheduler 据此跳过「到期即落成」，改走超时退款。
    */
   async createCoopBuilding(
@@ -268,10 +270,7 @@ export class BuildingService {
       throw new GameException(ErrorCodes.PARAM_INVALID, '建筑占地超出场景范围');
     }
 
-    // 4. 解析并校验建造消耗
-    const cost = parseBuildCost(template.buildCost);
-
-    // 5. 逐格创建/校验地块
+    // 4. 逐格创建/校验地块（创建者零成本：不解析、不扣 build_cost）
     const cells: Array<{ i: number; j: number; plot: SceneLandPlot }> = [];
     for (let j = 0; j < h; j++) {
       for (let i = 0; i < w; i++) {
@@ -281,22 +280,7 @@ export class BuildingService {
     }
     const anchor = cells[0].plot;
 
-    // 6. 逐项扣料（失败立即逆向补偿并抛出原异常）
-    const plan = planDeductions(cost);
-    const opTrace = `${BUILDING_SOURCE}:${template.id}:build`;
-    const refundTrace = `${BUILDING_SOURCE}:${template.id}:refund`;
-    const done: DeductionPlanItem[] = [];
-    for (const item of plan) {
-      try {
-        await this.applyDeduction(playerId, item, opTrace, template.id);
-      } catch (err) {
-        await this.compensate(playerId, done, refundTrace, template.id);
-        throw err;
-      }
-      done.push(item);
-    }
-
-    // 7. 写建筑实例（finish_at = 超时时刻）
+    // 5. 写建筑实例（finish_at = 超时时刻）
     const saved = await this.buildingRepo.save(
       this.buildingRepo.create({
         sceneId,
@@ -321,7 +305,7 @@ export class BuildingService {
       }),
     );
 
-    // 8. 置矩形内所有地块为 occupied
+    // 6. 置矩形内所有地块为 occupied
     for (const cell of cells) {
       cell.plot.state = PlotState.OCCUPIED;
       if (cell.i === 0 && cell.j === 0) {
@@ -331,7 +315,7 @@ export class BuildingService {
     }
     await this.plotRepo.save(cells.map((cell) => cell.plot));
 
-    // 9. 广播状态变更
+    // 7. 广播状态变更
     const { x, y } = this.buildRule.toCenter(gx, gy, rule.landGridSize);
     this.eventBus.emit(GameEvents.BUILDING_STATE_CHANGED, {
       sceneId,
@@ -344,7 +328,7 @@ export class BuildingService {
       rotation: 0,
     } satisfies BuildingStateChangedPayload);
 
-    // 10. 返回视图
+    // 8. 返回视图
     return this.toBuildingView(saved, rule.landGridSize);
   }
 

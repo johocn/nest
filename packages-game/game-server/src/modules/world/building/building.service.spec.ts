@@ -504,14 +504,20 @@ describe('BuildingService', () => {
       expect(templateRepo.findOne).not.toHaveBeenCalled();
     });
 
-    it('coop 成功：finish_at = now + coopExpireHours*3600s，payload.coop=true/reached=false', async () => {
+    it('coop 成功：**创建者零成本**（不扣材料/货币、无补偿）+ finish_at = now + coopExpireHours*3600s，payload.coop=true/reached=false', async () => {
       jest.useFakeTimers();
       jest.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
       buildRule.assertCanBuild.mockResolvedValue(
         makeRule({ mode: BuildMode.COOP, coopExpireHours: 24 }),
       );
+      // 蓝图含道具 + 货币两项成本：coop 创建一律不扣（成本全部由投料凑齐）
       templateRepo.findOne.mockResolvedValue(
-        makeTemplate({ buildCost: [{ itemTemplateId: '10', amount: 5 }] }),
+        makeTemplate({
+          buildCost: [
+            { itemTemplateId: '10', amount: 5 },
+            { currencyType: 'gold', amount: 100 },
+          ],
+        }),
       );
 
       const view = await service.createCoopBuilding(PLAYER_ID, SCENE_ID, {
@@ -520,8 +526,15 @@ describe('BuildingService', () => {
         gy: 4,
       });
 
+      // 零成本：任何扣料/发料途径都未被调用（既不扣，也不可能有补偿）
+      expect(inventoryService.removeItem).not.toHaveBeenCalled();
+      expect(economyService.deductCurrency).not.toHaveBeenCalled();
+      expect(inventoryService.addItem).not.toHaveBeenCalled();
+      expect(economyService.addCurrency).not.toHaveBeenCalled();
+
       const saved = buildingRepo.save.mock.calls[0][0];
       expect(saved.state).toBe(BuildingState.BUILDING);
+      expect(saved.plotId).toBe('1');
       expect(saved.finishAt.getTime()).toBe(Date.now() + 24 * 3600_000);
       expect(saved.payload).toMatchObject({
         gx: 3,
@@ -531,9 +544,14 @@ describe('BuildingService', () => {
         coop: true,
         reached: false,
       });
+      // 地块占用：地基已占格
+      const savedPlots = plotRepo.save.mock.calls[0][0];
+      expect(savedPlots).toHaveLength(1);
+      expect(savedPlots[0].state).toBe(PlotState.OCCUPIED);
       expect(view.finishAt).toBe(
         new Date(Date.now() + 24 * 3600_000).toISOString(),
       );
+      expect(view.state).toBe(BuildingState.BUILDING);
       expect(eventBus.emit).toHaveBeenCalledTimes(1);
       expect(eventBus.emit.mock.calls[0][1]).toMatchObject({
         state: BuildingState.BUILDING,
