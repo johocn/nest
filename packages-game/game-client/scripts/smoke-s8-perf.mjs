@@ -30,6 +30,8 @@ const ARTIFACTS = {
   entityRegistry: 'bin/js/entity/EntityRegistry.js',
   // S8 Task 3：static-layer 只 import 类型（编译后无运行时 import），node 可直接求值
   staticLayer: 'bin/js/world/static-layer.js',
+  // S8 Task 4：Viewport 只 import 类型（编译后无运行时 import），node 可直接求值
+  viewport: 'bin/js/world/Viewport.js',
 };
 
 const missing = Object.values(ARTIFACTS).filter((p) => !existsSync(join(root, p)));
@@ -46,6 +48,7 @@ const { AppConfig } = await load(ARTIFACTS.appConfig);
 const Pool = await load(ARTIFACTS.entityPool);
 const { EntityRegistry } = await load(ARTIFACTS.entityRegistry);
 const SL = await load(ARTIFACTS.staticLayer);
+const VP = await load(ARTIFACTS.viewport);
 
 let total = 0;
 let failed = 0;
@@ -521,6 +524,154 @@ console.log('— static-layer：背景常量 / 网格坐标 / 名标签 / resort
   check(
     '集合变化（移除实体，长度缩短）→ 重排',
     SL.shouldResort(snap(['a', 'b'], { a: 10, b: 20 }), snap(['a'], { a: 10 }), T) === true,
+  );
+
+  // 6.6 S8 Task 4：可见集合并入快照键（culled）→ 仅可见性变化也需重排；不带 culled 时向后兼容
+  const snapC = (ids, ys, culled) => ({ ids, ys, culled });
+  const three = { a: 10, b: 20, c: 30 };
+  check(
+    '仅可见集合变化（位移与 id 集合都不变）→ 重排',
+    SL.shouldResort(
+      snapC(['a', 'b', 'c'], three, []),
+      snapC(['a', 'b', 'c'], three, ['b']),
+      T,
+    ) === true,
+  );
+  check(
+    '可见集合相同但顺序不同 → 不重排（按集合语义比对）',
+    SL.shouldResort(
+      snapC(['a', 'b', 'c'], three, ['b', 'c']),
+      snapC(['a', 'b', 'c'], three, ['c', 'b']),
+      T,
+    ) === false,
+  );
+  check(
+    '可见集合多裁掉一个 → 重排',
+    SL.shouldResort(
+      snapC(['a', 'b', 'c'], three, ['b']),
+      snapC(['a', 'b', 'c'], three, ['b', 'c']),
+      T,
+    ) === true,
+  );
+  check(
+    '向后兼容：两侧都不带 culled（旧调用方）→ 行为与基线一致，不重排',
+    SL.shouldResort(snap(['a', 'b'], { a: 10, b: 20 }), snap(['a', 'b'], { a: 10, b: 20 }), T) === false,
+  );
+  check(
+    '向后兼容：undefined 视同空集（不带 culled ↔ culled=[] → 不重排）',
+    SL.shouldResort(snap(['a'], { a: 10 }), snapC(['a'], { a: 10 }, []), T) === false,
+  );
+}
+
+// ── 7. Viewport / EntityRegistry 裁剪原语（Task 4，纯逻辑）─────────────────────
+console.log('— Viewport：视口矩形 / 含边界判定 / 排序键 + inRect / visibleCount（Task 4）—');
+
+{
+  // 7.1 视口矩形 = 舞台尺寸 + 两侧各扩 marginPx，以本地玩家为中心（不夹取到地图边界）
+  const r200 = VP.viewportRect(640, 480, 960, 640, 200);
+  check(
+    '视口矩形：960x640 + 200px 边距 → 1360x1040，中心 (640,480) → x=-40 y=-40',
+    r200.w === 1360 && r200.h === 1040 && r200.x === -40 && r200.y === -40,
+    JSON.stringify(r200),
+  );
+  const r0 = VP.viewportRect(640, 480, 960, 640, 0);
+  check(
+    'marginPx=0 → 视口 = 舞台尺寸（x=160 y=160）',
+    r0.w === 960 && r0.h === 640 && r0.x === 160 && r0.y === 160,
+    JSON.stringify(r0),
+  );
+  const rCorner = VP.viewportRect(0, 0, 960, 640, 0);
+  check(
+    '玩家在地图角落 (0,0) → 视口一半落到负坐标（x=-480 y=-320，不夹取）',
+    rCorner.x === -480 && rCorner.y === -320 && rCorner.w === 960 && rCorner.h === 640,
+    JSON.stringify(rCorner),
+  );
+
+  // 7.2 containsPoint / shouldBeVisible：**含四条边界**
+  check(
+    '包含判定含边界：左上 (160,160) 与右下 (1120,800) 都在内',
+    VP.containsPoint(r0, 160, 160) === true && VP.containsPoint(r0, 1120, 800) === true,
+  );
+  check(
+    '包含判定：越界 0.1~0.5px 即不在内',
+    VP.containsPoint(r0, 159.9, 400) === false &&
+      VP.containsPoint(r0, 1120.1, 400) === false &&
+      VP.containsPoint(r0, 400, 800.1) === false,
+  );
+  check(
+    'shouldBeVisible：矩形外 false，但 keepVisible=true（本地玩家）恒 true',
+    VP.shouldBeVisible(r0, 5000, 5000) === false && VP.shouldBeVisible(r0, 5000, 5000, true) === true,
+  );
+  check(
+    'shouldBeVisible 与 containsPoint 同为含边界口径',
+    VP.shouldBeVisible(r0, 160, 800) === true && VP.shouldBeVisible(r0, 159, 800) === false,
+  );
+
+  // 7.3 排序键：可见优先 + 同组按 y 升序（不可见实体被稳定排到末尾）
+  const items = [
+    { id: 'v2', y: 200, visible: true },
+    { id: 'c1', y: 50, visible: false },
+    { id: 'v1', y: 100, visible: true },
+    { id: 'c2', y: 900, visible: false },
+  ];
+  items.sort((a, b) => VP.compareVisibleThenY(a.y, a.visible, b.y, b.visible));
+  check(
+    '排序键：可见组按 y 升序在前、不可见组在后 → v1,v2,c1,c2',
+    items.map((i) => i.id).join(',') === 'v1,v2,c1,c2',
+    items.map((i) => i.id).join(','),
+  );
+  check(
+    '排序键：同组同 y 返回 0（Array.sort 稳定 → 不可见组内部序稳定）',
+    VP.compareVisibleThenY(100, false, 100, false) === 0 &&
+      VP.compareVisibleThenY(100, true, 100, true) === 0,
+  );
+  check(
+    '排序键：可见实体恒排在不可见实体之前（与 y 无关）',
+    VP.compareVisibleThenY(9999, true, 0, false) < 0 && VP.compareVisibleThenY(0, false, 9999, true) > 0,
+  );
+
+  // 7.4 AppConfig.viewport 段（计划默认：1 屏外扩 200px / 每 5 帧一次）
+  check(
+    'AppConfig.viewport：marginPx=200 / tickFrames=5',
+    AppConfig.viewport.marginPx === 200 && AppConfig.viewport.tickFrames === 5,
+    JSON.stringify(AppConfig.viewport),
+  );
+
+  // 7.5 EntityRegistry.inRect（含边界）/ visibleCount（与 PerfPanel 同口径）
+  const fake = (id, x, y, visible = true) => {
+    const e = { entityId: id, kind: 'object', x, y, sprite: { visible, parent: null } };
+    EntityRegistry.add(e);
+    return e;
+  };
+  fake('vp:inside', 160, 800); // 左上角，正好在边界上
+  fake('vp:right', 1120, 400); // 右边界上
+  const outX = fake('vp:outX', 1120.5, 400); // 右边界外 0.5px
+  fake('vp:outY', 400, 159.5); // 上边界外 0.5px
+  const ids = EntityRegistry.inRect(r0).map((e) => e.entityId);
+  check(
+    'inRect：含边界（(160,800) 与 (1120,400) 在内）',
+    ids.includes('vp:inside') && ids.includes('vp:right'),
+    ids.join(','),
+  );
+  check('inRect：边界外 0.5px 即排除', !ids.includes('vp:outX') && !ids.includes('vp:outY'), ids.join(','));
+  check(
+    'inRect：结果逐项复核都在矩形内（与 containsPoint 同口径）',
+    ids.every((id) => {
+      const e = EntityRegistry.get(id);
+      return !!e && VP.containsPoint(r0, e.x, e.y);
+    }),
+  );
+
+  const before = EntityRegistry.visibleCount();
+  const hidden = fake('vp:hidden', 700, 400, false);
+  check('visibleCount 不计 visible=false 的实体', EntityRegistry.visibleCount() === before, `before=${before}`);
+  hidden.sprite.visible = true;
+  check('visibleCount 计回可见实体（+1）', EntityRegistry.visibleCount() === before + 1);
+  outX.sprite.visible = false;
+  check(
+    'visibleCount 随可见性变化（再 -1）',
+    EntityRegistry.visibleCount() === before,
+    `now=${EntityRegistry.visibleCount()}`,
   );
 }
 

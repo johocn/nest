@@ -13,6 +13,7 @@ import {
 } from './static-layer';
 import type { ResortSnapshot } from './static-layer';
 import { mergeServerSpawns as mergeSpawnList } from './spawn-merge';
+import { compareVisibleThenY, shouldBeVisible, viewportRect } from './Viewport';
 
 const BG = AppConfig.sceneBg;
 
@@ -25,8 +26,8 @@ export class SceneBuilder {
   private static cfg: SceneConfig | null = null;
   /** 档位订阅的注销函数（重复 build 时先注销上一次，避免监听器泄漏） */
   private static offQuality: (() => void) | null = null;
-  /** 上一次**真正排序后**的实体快照（D8 增量的比较基准） */
-  private static sortedKey: ResortSnapshot = { ids: [], ys: {} };
+  /** 上一次**真正排序后**的实体快照（D8 增量的比较基准，含裁剪出的不可见集合） */
+  private static sortedKey: ResortSnapshot = { ids: [], ys: {}, culled: [] };
 
   static build(cfg: SceneConfig): Laya.Sprite {
     const layer = new Laya.Sprite();
@@ -149,34 +150,68 @@ export class SceneBuilder {
     return mergeSpawnList(cfg, spawns);
   }
 
-  /** 当前注册表快照（id 集合 + 各实体 y），供 D8 增量比对 */
+  /** 当前状态快照（id 集合 + 各实体 y + 被裁掉的不可见集合），供 D8 增量比对 */
   private static snapshot(): ResortSnapshot {
-    const snap: ResortSnapshot = { ids: [], ys: {} };
+    const snap: ResortSnapshot = { ids: [], ys: {}, culled: [] };
     for (const e of EntityRegistry.all()) {
       snap.ids.push(e.entityId);
       snap.ys[e.entityId] = e.y;
+      if (e.sprite.visible === false) snap.culled!.push(e.entityId);
     }
     return snap;
+  }
+
+  /**
+   * S8 Task 4 Step 3：视口裁剪 tick（由 `Main.ts` 每 `AppConfig.viewport.tickFrames` 帧驱动）。
+   *
+   * - 视口矩形 = 舞台尺寸 + 两侧预加载边距，以本地玩家为中心（`world/Viewport` 纯函数；舞台尺寸在此读取）；
+   * - 线性扫描 `EntityRegistry.all()`，**只在目标值与 `sprite.visible` 现值不同时赋值**（避免每帧标脏）；
+   * - **只改 `visible`，绝不改坐标**（计划风险 #4：S1 验收按配置坐标核对，不看可见性）；
+   * - 本地玩家自身永远可见。
+   *
+   * ⚠️ 裁剪**不作为 release 触发点**：服务端只在玩家移动时中继 `world.entity_update`，没有周期性全量同步 ——
+   * 一个站住不动的远端玩家离开视口后被回收，就再也不会被重建（直到他再动），会出现「远端玩家凭空消失」。
+   * 故本 Task 只做 `visible=false`（保留注册表与实体），release 的触发点留待服务端广播契约确定后单独处理。
+   */
+  static cull(me: Entity | null): void {
+    if (!SceneBuilder.layer) return;
+    const stage = Laya.stage;
+    const rect = viewportRect(
+      me ? me.x : stage.width / 2,
+      me ? me.y : stage.height / 2,
+      stage.width,
+      stage.height,
+      AppConfig.viewport.marginPx,
+    );
+
+    for (const e of EntityRegistry.all()) {
+      const target = shouldBeVisible(rect, e.x, e.y, e === me);
+      if (e.sprite.visible !== target) e.sprite.visible = target;
+    }
   }
 
   /**
    * 每 N 帧按 y 升序重排实体层，实现伪 3D 遮挡。
    * S8 Task 3（D8）增量化：**实体集合未变且无实体位移 ≥ 阈值**时直接返回（零排序、零 setChildIndex）；
    * 判定逻辑见 `world/static-layer.shouldResort`（纯函数，可 node 断言）。
+   *
+   * S8 Task 4：被裁剪（`visible=false`）的实体**稳定地排在可见实体之后**（可见组按 y 升序排 0..k-1，
+   * 不可见组排 k..n-1），保证「第 i 个孩子 = 第 i 个实体」的索引不变量与遮挡关系不被隐藏实体打断；
+   * 可见集合变化也会触发一次重排（快照含 `culled`），否则刚被裁掉的实体会滞留中间层。
    */
   static resort(): void {
     const entityLayer = SceneBuilder.entityLayer();
     if (!entityLayer) return;
 
-    const all = EntityRegistry.all();
-    const cur: ResortSnapshot = { ids: [], ys: {} };
-    for (const e of all) {
-      cur.ids.push(e.entityId);
-      cur.ys[e.entityId] = e.y;
-    }
+    const cur = SceneBuilder.snapshot();
     if (!shouldResort(SceneBuilder.sortedKey, cur, BG.resortMoveThreshold)) return;
 
-    const list = all.slice().sort((a, b) => a.y - b.y);
+    const list = EntityRegistry
+      .all()
+      .slice()
+      .sort((a, b) =>
+        compareVisibleThenY(a.y, a.sprite.visible !== false, b.y, b.sprite.visible !== false),
+      );
     for (let i = 0; i < list.length; i++) {
       if (entityLayer.getChildIndex(list[i].sprite) !== i) {
         entityLayer.setChildIndex(list[i].sprite, i);

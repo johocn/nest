@@ -154,7 +154,17 @@ async function afterLogin(): Promise<void> {
   await attachBuild(me, cfg);
 
   // ⑨ 组件逐帧驱动（AiComponent 的路点插值按 Laya.timer.delta 推进）
-  Laya.timer.frameLoop(1, null, () => EntityRegistry.updateAll(Laya.timer.delta));
+  //    S8 Task 4：谓词「可见才更新」—— 离屏实体不再做逐帧插值/进度计算（缺省无谓词时行为与基线一致）。
+  //    例外：建筑实体始终更新 —— `BuildingViewComponent.update` 不只是视觉插值，还承担**生命周期清理**
+  //    （demolishing 淡出到点后从 EntityRegistry 移除）。若把它也冻结，离屏的拆除中建筑会永不回收。
+  Laya.timer.frameLoop(1, null, () =>
+    EntityRegistry.updateAll(
+      Laya.timer.delta,
+      (e) => e.sprite.visible !== false || e.getComponent(BuildingViewComponent) !== null,
+    ),
+  );
+  // S8 Task 4：裁剪 tick 先于 resort 注册，保证两者同帧触发时 resort 看到最新可见性
+  Laya.timer.frameLoop(AppConfig.viewport.tickFrames, null, () => SceneBuilder.cull(state.me));
   Laya.timer.frameLoop(10, null, () => SceneBuilder.resort());
   console.log(`[S1] 客户端版本 ${AppConfig.clientVersion}，配置包 v${cfg.version}`);
 }

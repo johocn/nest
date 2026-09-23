@@ -258,4 +258,18 @@ export const AppConfig = {
     /** 静态背景合图缓存（`cacheAs='bitmap'`）：小游戏端 GPU 侧收益，关闭则退回逐条重绘 */
     cacheAsBitmap: true,
   },
+  /**
+   * S8 Task 4 视口裁剪（客户端先行，D5）：视口矩形 = 舞台尺寸 + 预加载边距，跟随本地玩家。
+   * **只改 `sprite.visible`，绝不改坐标**（S1 验收按配置坐标核对，不看可见性 —— 计划风险 #4）。
+   *
+   * 事实备注（诚实记录，别当成「已优化」）：本 demo 地图 1280x960 / 舞台 960x640，`marginPx=200`
+   * 时视口为 1360x1040，**覆盖整张地图** → 当前场景内默认裁剪接近 **no-op**；机制有效性由
+   * `scripts/viewport-sample.mjs` 的 C 列（marginPx=0）证明。边距的收益出现在「世界远大于舞台」的场景。
+   */
+  viewport: {
+    /** 舞台四周的预加载边距（像素），两侧各扩这么多：w = stageWidth + 2*marginPx */
+    marginPx: 200,
+    /** 裁剪 tick 间隔（帧）：每 N 帧做一次线性扫描（150 实体量级足够，不引入空间索引） */
+    tickFrames: 5,
+  },
 };

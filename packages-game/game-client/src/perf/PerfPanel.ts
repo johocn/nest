@@ -197,9 +197,7 @@ export class PerfPanel {
 
   private static lines(): string[] {
     const snap = PerfPanel.snapshot();
-    const all = EntityRegistry.all();
-    let visible = 0;
-    for (const e of all) if (e.sprite.visible !== false) visible++;
+    const total = EntityRegistry.all().length;
 
     // 自计 fps 与 Stat.FPS 交叉校验：相差超阈值只在面板上标注，不报错
     const stat = snap.statFps;
@@ -214,7 +212,7 @@ export class PerfPanel {
     return [
       fpsLine,
       `drawcall ${snap.drawcall === null ? 'n/a' : snap.drawcall}`,
-      `实体 ${all.length}/${visible}（总/可见）`,
+      `实体 ${total}/${snap.entityVisible}（总/可见）`,
       `上行 ${MOVE_CMD} ${snap.upPerSec}/s`,
       `quality ${snap.quality} 名标签${s.nameLabels ? '开' : '关'} 网格${s.gridLines ? '开' : '关'} 描边${
         s.triggerOutline ? '开' : '关'
@@ -230,7 +228,7 @@ export class PerfPanel {
       statFps: statFps(),
       drawcall: statDrawCall(),
       entityTotal: EntityRegistry.all().length,
-      entityVisible: EntityRegistry.all().filter((e) => e.sprite.visible !== false).length,
+      entityVisible: EntityRegistry.visibleCount(),
       upPerSec: upPerSec(MOVE_CMD),
       quality: Quality.tier(),
       heapMB: heapMB(),

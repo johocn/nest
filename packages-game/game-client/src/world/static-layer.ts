@@ -56,15 +56,35 @@ export function shouldShowNameLabel(kind: EntityKind, switches: NameLabelSwitche
   return kind === 'player' || kind === 'npc';
 }
 
-/** resort 增量比对用的快照：集合签名（ids）＋ 各实体 y */
+/** resort 增量比对用的快照：集合签名（ids）＋ 各实体 y ＋ 视口裁剪出的不可见集合 */
 export interface ResortSnapshot {
   ids: string[];
   ys: Record<string, number>;
+  /**
+   * 当前**不可见**（被视口裁掉）的实体 id（S8 Task 4）。
+   * 缺省 = 未启用裁剪；此时不做可见性比对（**向后兼容**：旧调用方只传 ids/ys，行为与基线一致）。
+   */
+  culled?: string[];
+}
+
+/** 两组 id 是否表示同一集合；`undefined` 视同空集（旧调用方不带 culled 时行为不变） */
+const EMPTY_IDS: readonly string[] = [];
+
+function sameIdSet(a: readonly string[] | undefined, b: readonly string[] | undefined): boolean {
+  const x = a ?? EMPTY_IDS;
+  const y = b ?? EMPTY_IDS;
+  if (x.length !== y.length) return false;
+  const set = new Set(y);
+  for (const id of x) if (!set.has(id)) return false;
+  return true;
 }
 
 /**
- * D8 增量判定：**有实体位移 ≥ threshold** 或 **实体集合发生变化** 才需要重排，否则零排序零 setChildIndex。
+ * D8 增量判定：**有实体位移 ≥ threshold**、**实体集合发生变化**、或**可见集合发生变化**才需要重排，
+ * 否则零排序零 setChildIndex。
  * `prev` 是「上一次真正排序后」的快照，故阈值是**累计**位移：逐帧小碎步累到阈值也会触发一次重排。
+ *
+ * S8 Task 4：可见集合差异必须触发重排 —— 否则刚被裁掉的实体会滞留在实体层中间层。
  */
 export function shouldResort(prev: ResortSnapshot, cur: ResortSnapshot, threshold: number): boolean {
   if (prev.ids.length !== cur.ids.length) return true;
@@ -72,5 +92,6 @@ export function shouldResort(prev: ResortSnapshot, cur: ResortSnapshot, threshol
     if (!(id in prev.ys)) return true; // 有新增实体（等长但换人：新增的那个必然不在 prev）
     if (Math.abs(cur.ys[id] - prev.ys[id]) >= threshold) return true;
   }
+  if (!sameIdSet(prev.culled, cur.culled)) return true;
   return false;
 }
