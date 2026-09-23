@@ -10,6 +10,9 @@
 // Task 2 追加：E `Platform.request`（wx.request / fetch 双分支）、F `createWxWebSocket`（纯逻辑，假 wx.connectSocket）。
 // Task 3 追加：G 引擎内登录页 —— G-1 `login-logic` 纯逻辑、G-2 `ui.showKeyboard` 小游戏分支、
 // G-3 能力缺失分支、G-4 场景 D 静态扫描仍通过、G-5 H5 仍走 DOM 表单（回归）。
+// Task 4 追加：H 配置包随包分发与校验 —— H-1 小游戏分支读包内 config/ 且 fetch 0 次、
+// H-2 hash 口径 = 场景文件原始字节 sha256、H-3 `tools/publish.mjs` 产物（只发 manifest 指向的版本）、
+// H-4 hash 不符即 exit 1（临时副本，不碰仓库 gamedata/）、H-5 包内缺文件 → 明确报错且仍不 fetch。
 // 断言失败 → exit 1。
 //
 // 注：`bin/js/*.js` 最近的 package.json（仓库根）没有 "type" 字段，node 会先按 CJS 解析失败、
@@ -18,6 +21,11 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+// S7 Task 4（场景 H）新增：publish.mjs 产物断言需要起子进程 + 临时目录 + node:crypto 口径核对
+import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -31,6 +39,7 @@ const ARTIFACTS = {
   loginLogic: 'bin/js/ui/login-logic.js',
   bootLogin: 'bin/js/boot/LoginView.js',
   uiLoginView: 'bin/js/ui/LoginView.js',
+  configLoader: 'bin/js/config/loader.js',
 };
 
 const missing = Object.values(ARTIFACTS).filter((p) => !existsSync(join(root, p)));
@@ -1001,6 +1010,178 @@ check(
     !bootLoginJs.includes('hideLoginForm'),
   `uiShowLogin=${bootLoginJs.includes('Platform.ui.showLogin')} showLoginForm=${bootLoginJs.includes('showLoginForm')}`,
 );
+
+// ── 场景 H：配置包随包分发与校验（S7 Task 4）───────────────────────────────
+// H-1 小游戏分支 loader 读包内 config/（假 wx 文件系统指向真实 gamedata），且 fetch 调用 0 次
+// H-2 hash 口径：场景文件**原始字节** sha256 === manifest.hash（publish.mjs 的校验口径，双层语义不混用）
+// H-3 tools/publish.mjs wxgame-config 产物：只发 manifest 指向的版本、字节一致、hash 一致、幂等
+// H-4 hash 不符 → exit 非 0（临时副本篡改一字节；仓库 gamedata/ 原文件必须不变）
+// H-5 包内缺文件 → 明确报「小游戏包内缺少 config/」且仍不 fetch
+console.log('— 场景 H：配置包随包分发与校验 —');
+
+const GAMEDATA = join(root, '..', 'game-server', 'gamedata');
+const sha256FileH = (p) => `sha256:${createHash('sha256').update(readFileSync(p)).digest('hex')}`;
+
+const hReads = [];
+let hFsMode = 'ok'; // ok = 路径映射到真实 gamedata；missing = 一律抛错（H-5）
+globalThis.wx = {
+  getFileSystemManager() {
+    return {
+      readFileSync(p, enc) {
+        hReads.push([String(p), enc]);
+        if (hFsMode === 'missing') throw new Error(`no such file: ${p}`);
+        const abs = join(GAMEDATA, String(p).replace(/^config\//, ''));
+        if (!existsSync(abs)) throw new Error(`no such file: ${abs}`);
+        return readFileSync(abs, 'utf8');
+      },
+    };
+  },
+};
+const docBeforeH = globalThis.document;
+delete globalThis.document;
+
+const hFetchCalls = [];
+const fetchBeforeH = globalThis.fetch;
+globalThis.fetch = (url) => {
+  hFetchCalls.push({ url });
+  return Promise.reject(new Error(`H: 小游戏分支不应发起网络请求（${url}）`));
+};
+
+const { ConfigLoader } = await load(ARTIFACTS.configLoader);
+
+// H-1 小游戏分支：loadScene 全程只读包内文件
+const origLogH = console.log;
+let rH1 = { ok: false, error: 'not-run' };
+try {
+  console.log = () => {};
+  rH1 = await attemptAsync(() => ConfigLoader.loadScene());
+} finally {
+  console.log = origLogH;
+}
+check(
+  'H-1: 小游戏分支 loadScene 成功返回场景配置（sceneId=1、静态物件>0）',
+  rH1.ok && rH1.value.sceneId === 1 && rH1.value.version === 1 && rH1.value.staticEntities.length > 0,
+  rH1.ok
+    ? `sceneId=${rH1.value.sceneId} v${rH1.value.version} 静态物件=${rH1.value.staticEntities.length} NPC=${rH1.value.fixedNpcs.length}`
+    : String(rH1.error),
+);
+check(
+  'H-1: 小游戏分支 fetch 调用 0 次（配置包随包分发，不发网络请求）',
+  hFetchCalls.length === 0,
+  `fetchCalls=${hFetchCalls.length}${hFetchCalls.length > 0 ? ` url=${hFetchCalls[0].url}` : ''}`,
+);
+const hReadPaths = hReads.map(([p]) => p);
+check(
+  'H-1: 读取路径全部落在 config/ 下（manifest.json + manifest 指向的版本）',
+  hReadPaths.length === 2 &&
+    hReadPaths.every((p) => p.startsWith('config/')) &&
+    hReadPaths.includes('config/manifest.json') &&
+    hReadPaths.includes('config/scene-1-v1.json'),
+  `reads=${JSON.stringify(hReadPaths)}`,
+);
+
+// H-2 hash 口径（与 tools/publish.mjs / tools/check-config.mjs 同源）
+const gdManifest = JSON.parse(readFileSync(join(GAMEDATA, 'manifest.json'), 'utf8'));
+const gdScene0 = gdManifest.scenes[0];
+const h2Actual = sha256FileH(join(GAMEDATA, gdScene0.file));
+check(
+  'H-2: gamedata 场景文件原始字节 sha256 === manifest.hash（唯一校验口径）',
+  h2Actual === gdScene0.hash,
+  `recomputed=${h2Actual.slice(0, 20)}… manifest=${gdScene0.hash.slice(0, 20)}…`,
+);
+
+// H-3 / H-4：publish.mjs 产物与失败语义（全部在临时目录，不写仓库）
+const tmpRoot = mkdtempSync(join(tmpdir(), 's7-publish-'));
+const publishScript = join(root, 'tools', 'publish.mjs');
+const outDir = join(tmpRoot, 'config');
+const publishedFiles = ['manifest.json', gdScene0.file];
+try {
+  // 预置陈旧配置包（历史版本）+ 一个无关文件：验证「只清配置包、不动别处」
+  mkdirSync(outDir, { recursive: true });
+  writeFileSync(join(outDir, 'scene-1-v2.json'), '{"stale":true}', 'utf8');
+  writeFileSync(join(outDir, 'keep-me.txt'), 'keep', 'utf8');
+
+  const runPublish = () =>
+    spawnSync(process.execPath, [publishScript, 'wxgame-config', '--target', tmpRoot], {
+      cwd: root,
+      encoding: 'utf8',
+    });
+  const listingOf = () =>
+    publishedFiles.map((f) => `${f}:${statSync(join(outDir, f)).size}:${sha256FileH(join(outDir, f))}`).join(' | ');
+
+  const rH3 = runPublish();
+  check(
+    'H-3: publish.mjs wxgame-config 退出码 0',
+    rH3.status === 0,
+    `status=${rH3.status} stdout=${JSON.stringify((rH3.stdout || '').trim().split(/\r?\n/).pop())}`,
+  );
+  check(
+    'H-3: 产物含 manifest.json + manifest 指向的版本，且字节数与源文件一致',
+    publishedFiles.every(
+      (f) => existsSync(join(outDir, f)) && statSync(join(outDir, f)).size === statSync(join(GAMEDATA, f)).size,
+    ),
+    `files=${publishedFiles.map((f) => `${f}:${existsSync(join(outDir, f)) ? statSync(join(outDir, f)).size : 'missing'}`).join(' ')}`,
+  );
+  const staleLeft = ['scene-1-v2.json', 'scene-1-v3.json', 'scene-1-v4.json'].filter((f) =>
+    existsSync(join(outDir, f)),
+  );
+  check(
+    'H-3: 未指向的历史版本（v2/v3/v4）不随包发出（陈旧配置包被清理）',
+    staleLeft.length === 0 && existsSync(join(outDir, 'keep-me.txt')),
+    `残留=${staleLeft.join(',') || '无'} keep-me.txt=${existsSync(join(outDir, 'keep-me.txt'))}`,
+  );
+  check(
+    'H-3: 产物逐个重算 sha256 === manifest.hash',
+    publishedFiles.every((f) => f === 'manifest.json' || sha256FileH(join(outDir, f)) === gdScene0.hash),
+    `scene=${sha256FileH(join(outDir, gdScene0.file)).slice(0, 20)}…`,
+  );
+  const listingA = listingOf();
+  const rH3b = runPublish();
+  check(
+    'H-3: 连续两次发布清单（文件名/字节数/sha256）完全一致（幂等，A9 本地部分）',
+    rH3b.status === 0 && listingA === listingOf(),
+    `run1=${listingA.slice(0, 60)}… run2=${listingOf().slice(0, 60)}…`,
+  );
+
+  // H-4：临时副本篡改一字节（不碰仓库 gamedata/），要求 exit 非 0 + 打印失败明细
+  const badSrc = join(tmpRoot, 'bad-gamedata');
+  mkdirSync(badSrc, { recursive: true });
+  for (const f of publishedFiles) copyFileSync(join(GAMEDATA, f), join(badSrc, f));
+  const badFile = join(badSrc, gdScene0.file);
+  writeFileSync(badFile, `${readFileSync(badFile, 'utf8')}\n`, 'utf8');
+  const rH4 = spawnSync(
+    process.execPath,
+    [publishScript, 'wxgame-config', '--target', join(tmpRoot, 'bad-out'), '--source', badSrc],
+    { cwd: root, encoding: 'utf8' },
+  );
+  const h4Text = `${rH4.stdout || ''}${rH4.stderr || ''}`;
+  check(
+    'H-4: 复制后 hash 与 manifest 不符 → exit 非 0 且打印失败明细',
+    rH4.status !== 0 && h4Text.includes('与 manifest.hash 不一致') && h4Text.includes(gdScene0.file),
+    `status=${rH4.status} 明细=${JSON.stringify(h4Text.trim().split(/\r?\n/).filter((l) => l.includes(gdScene0.file))[0] || '')}`,
+  );
+  check(
+    'H-4: 失败用例未触碰仓库 gamedata/ 原文件（篡改只发生在临时副本）',
+    sha256FileH(join(GAMEDATA, gdScene0.file)) === gdScene0.hash,
+    `repo=${sha256FileH(join(GAMEDATA, gdScene0.file)).slice(0, 20)}… manifest=${gdScene0.hash.slice(0, 20)}…`,
+  );
+} finally {
+  rmSync(tmpRoot, { recursive: true, force: true });
+}
+
+// H-5 包内缺文件：仍走小游戏分支（不 fetch），错误信息指明补文件位置
+hFsMode = 'missing';
+const rH5 = await attemptAsync(() => ConfigLoader.loadScene());
+check(
+  'H-5: 包内缺 config/ → 报「小游戏包内缺少 config/」且仍未 fetch',
+  !rH5.ok && String(rH5.error.message).includes('小游戏包内缺少 config/') && hFetchCalls.length === 0,
+  rH5.ok ? `意外成功：${JSON.stringify(rH5.value.sceneId)}` : `error=${String(rH5.error.message)} fetchCalls=${hFetchCalls.length}`,
+);
+
+globalThis.fetch = fetchBeforeH;
+if (docBeforeH === undefined) delete globalThis.document;
+else globalThis.document = docBeforeH;
+delete globalThis.wx;
 
 console.log(
   failed === 0
