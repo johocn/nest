@@ -238,4 +238,24 @@ export const AppConfig = {
     /** 每个 kind 桶的容量上限：超限的 release 直接丢弃并计入 discarded，防止长时间运行内存无界增长 */
     maxPerKind: 32,
   },
+  /**
+   * S8 Task 3 静态背景层（世界空间）：地块 + 网格 + 触发区描边 + 增量排序阈值集中在此，避免魔法数字散落。
+   * **取值全部 = 优化前的字面量原值**（`'#2f6b3a'` / `'#3d7a4a'` / 1px / 100px / `'#f5c542'` / 2px），
+   * 保证 `quality='high'` 与基线**表现逐字一致**（风险 #1 表现不回退）。
+   */
+  sceneBg: {
+    /** 地块底色（原 `drawRect` 填充色） */
+    groundColor: '#2f6b3a',
+    /** 网格线：颜色 / 间隔 / 线宽（原 `drawLine` 三个参数） */
+    gridColor: '#3d7a4a',
+    gridInterval: 100,
+    gridLineWidth: 1,
+    /** 触发区描边：颜色 / 线宽（原 `drawRect(..., null, color, 2)` 的无填充描边） */
+    triggerOutlineColor: '#f5c542',
+    triggerOutlineWidth: 2,
+    /** `resort()` 增量阈值（像素）：任一实体 y 位移 ≥ 该值才重排；越小越灵敏、越大越省 */
+    resortMoveThreshold: 8,
+    /** 静态背景合图缓存（`cacheAs='bitmap'`）：小游戏端 GPU 侧收益，关闭则退回逐条重绘 */
+    cacheAsBitmap: true,
+  },
 };

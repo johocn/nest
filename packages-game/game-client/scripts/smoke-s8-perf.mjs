@@ -28,6 +28,8 @@ const ARTIFACTS = {
   // S8 Task 2 池：EntityPool 运行时只 import AppConfig 与 EntityRegistry（皆 Laya-free），故 node 可直接求值
   entityPool: 'bin/js/entity/EntityPool.js',
   entityRegistry: 'bin/js/entity/EntityRegistry.js',
+  // S8 Task 3：static-layer 只 import 类型（编译后无运行时 import），node 可直接求值
+  staticLayer: 'bin/js/world/static-layer.js',
 };
 
 const missing = Object.values(ARTIFACTS).filter((p) => !existsSync(join(root, p)));
@@ -43,6 +45,7 @@ const { bumpUp, upPerSec, reset, snapshot, UP_WINDOW_MS } = await load(ARTIFACTS
 const { AppConfig } = await load(ARTIFACTS.appConfig);
 const Pool = await load(ARTIFACTS.entityPool);
 const { EntityRegistry } = await load(ARTIFACTS.entityRegistry);
+const SL = await load(ARTIFACTS.staticLayer);
 
 let total = 0;
 let failed = 0;
@@ -404,6 +407,121 @@ console.log('— EntityPool：acquire/release 纯逻辑（假实体，node 内�
 
   Pool.clear();
   Pool.resetStats();
+}
+
+// ── 6. static-layer：网格坐标 / 档位开关 / resort 增量（纯函数，Task 3）──────────
+console.log('— static-layer：背景常量 / 网格坐标 / 名标签 / resort 增量 —');
+
+{
+  const bg = AppConfig.sceneBg;
+
+  // 6.1 背景常量 = 优化前字面量原值（high 档「表现逐字一致」的可断言锚点，风险 #1）
+  check(
+    '背景常量原值：地块 #2f6b3a / 网格 #3d7a4a / 1px / 100px / 描边 #f5c542 / 2px',
+    bg.groundColor === '#2f6b3a' &&
+      bg.gridColor === '#3d7a4a' &&
+      bg.gridInterval === 100 &&
+      bg.gridLineWidth === 1 &&
+      bg.triggerOutlineColor === '#f5c542' &&
+      bg.triggerOutlineWidth === 2,
+    `ground=${bg.groundColor} grid=${bg.gridColor}@${bg.gridInterval}px/${bg.gridLineWidth}px outline=${bg.triggerOutlineColor}/${bg.triggerOutlineWidth}px`,
+  );
+  check(
+    'resort 阈值与合图开关有初值（阈值 > 0，cacheAs 为布尔）',
+    typeof bg.resortMoveThreshold === 'number' &&
+      bg.resortMoveThreshold > 0 &&
+      typeof bg.cacheAsBitmap === 'boolean',
+    `threshold=${bg.resortMoveThreshold} cacheAsBitmap=${bg.cacheAsBitmap}`,
+  );
+
+  // 6.2 网格坐标与基线循环逐字等价（1280x960 / 100px → 13 竖 + 10 横 = 基线 23 条 drawLine）
+  const g = SL.gridLinePositions(1280, 960, 100);
+  check(
+    '网格坐标：1280x960/100px → 13 竖 + 10 横（= 基线 23 条 drawLine）',
+    g.verticals.length === 13 && g.horizontals.length === 10,
+    `v=${g.verticals.length} h=${g.horizontals.length}`,
+  );
+  check(
+    '网格坐标含边界点：v[0]=0 v[12]=1200 / h[0]=0 h[9]=900',
+    g.verticals[0] === 0 && g.verticals[12] === 1200 && g.horizontals[0] === 0 && g.horizontals[9] === 900,
+  );
+  const g2 = SL.gridLinePositions(2000, 2000, 100);
+  check(
+    '网格坐标随尺寸缩放：2000x2000/100px → 21 竖 + 21 横',
+    g2.verticals.length === 21 && g2.horizontals.length === 21,
+    `v=${g2.verticals.length} h=${g2.horizontals.length}`,
+  );
+  const gBad = SL.gridLinePositions(1280, 960, 0);
+  check(
+    '非法间隔（0）返回空集而非死循环',
+    gBad.verticals.length === 0 && gBad.horizontals.length === 0,
+  );
+
+  // 6.3 开关判定：high 全开 / low 关网格与描边（D3-②③）
+  const hi = Quality.switches();
+  Quality.setTier('low');
+  const lo = Quality.switches();
+  check(
+    'low 档不画网格（shouldDrawGrid）',
+    SL.shouldDrawGrid(hi) === true && SL.shouldDrawGrid(lo) === false,
+    `high=${SL.shouldDrawGrid(hi)} low=${SL.shouldDrawGrid(lo)}`,
+  );
+  check(
+    'low 档不画触发区描边（shouldDrawTriggerOutline）',
+    SL.shouldDrawTriggerOutline(hi) === true && SL.shouldDrawTriggerOutline(lo) === false,
+    `high=${SL.shouldDrawTriggerOutline(hi)} low=${SL.shouldDrawTriggerOutline(lo)}`,
+  );
+
+  // 6.4 名标签：high 全显（=基线）/ low 只留 player+npc（D3-①）
+  const kinds = ['player', 'npc', 'object', 'building'];
+  check(
+    'high 档全部名标签显示（与基线表现一致）',
+    kinds.every((k) => SL.shouldShowNameLabel(k, hi) === true),
+  );
+  check(
+    'low 档玩家/NPC 名保留、物件/建筑名关闭',
+    SL.shouldShowNameLabel('player', lo) === true &&
+      SL.shouldShowNameLabel('npc', lo) === true &&
+      SL.shouldShowNameLabel('object', lo) === false &&
+      SL.shouldShowNameLabel('building', lo) === false,
+    `player=${SL.shouldShowNameLabel('player', lo)} npc=${SL.shouldShowNameLabel('npc', lo)} object=${SL.shouldShowNameLabel('object', lo)} building=${SL.shouldShowNameLabel('building', lo)}`,
+  );
+  check(
+    '名标签判定走 Quality 实档：low 档物件名关、恢复 high 后开',
+    (() => {
+      const lowOff = SL.shouldShowNameLabel('object', Quality.switches()) === false;
+      Quality.setTier('high');
+      return lowOff && SL.shouldShowNameLabel('object', Quality.switches()) === true;
+    })(),
+  );
+
+  // 6.5 shouldResort 增量化（D8）：集合不变 + 未超阈值 → 不排；超阈值/集合变化 → 排
+  const T = bg.resortMoveThreshold;
+  const snap = (ids, ys) => ({ ids, ys });
+  check(
+    '静止（集合与坐标都不变）→ 不重排',
+    SL.shouldResort(snap(['a', 'b'], { a: 10, b: 20 }), snap(['a', 'b'], { a: 10, b: 20 }), T) === false,
+  );
+  check(
+    `位移不足阈值（<${T}px）→ 不重排`,
+    SL.shouldResort(snap(['a', 'b'], { a: 10, b: 20 }), snap(['a', 'b'], { a: 10 + T - 1, b: 20 }), T) === false,
+  );
+  check(
+    `位移恰达阈值（=${T}px）→ 重排`,
+    SL.shouldResort(snap(['a', 'b'], { a: 10, b: 20 }), snap(['a', 'b'], { a: 10 + T, b: 20 }), T) === true,
+  );
+  check(
+    '集合变化（新增实体）→ 重排',
+    SL.shouldResort(snap(['a'], { a: 10 }), snap(['a', 'b'], { a: 10, b: 20 }), T) === true,
+  );
+  check(
+    '集合变化（等长换人：移除 a 新增 c）→ 重排',
+    SL.shouldResort(snap(['a', 'b'], { a: 10, b: 20 }), snap(['b', 'c'], { b: 20, c: 30 }), T) === true,
+  );
+  check(
+    '集合变化（移除实体，长度缩短）→ 重排',
+    SL.shouldResort(snap(['a', 'b'], { a: 10, b: 20 }), snap(['a'], { a: 10 }), T) === true,
+  );
 }
 
 console.log(

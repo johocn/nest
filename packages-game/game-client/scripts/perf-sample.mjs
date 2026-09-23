@@ -159,6 +159,8 @@ try {
   const browserVersion = browser.version();
   const sceneLine = consoleLines.find((l) => l.includes('静态层渲染完成')) ?? '(未捕获到静态层日志)';
   const qualityLine = consoleLines.find((l) => l.includes('[S8] quality=')) ?? '(未捕获到质量日志)';
+  // S8 Task 3：背景层合图命令数（合图前 1+23+2=26 条 → cacheAs=bitmap 后 1 个缓存位图）
+  const bgLine = consoleLines.find((l) => l.includes('[S8] 背景层')) ?? '(未捕获到背景层日志)';
   const finalSnapshot = (await sampleOnce(page)) ?? {};
 
   record = {
@@ -173,6 +175,7 @@ try {
     url: urlWithQuality,
     quality,
     qualityLine,
+    bgLine,
     sceneLine,
     route: KEY_PLAN.map(([k, f]) => `${k} ${round(f * moveMs / 1000, 2)}s`).join(' → '),
     moveMs,
@@ -227,6 +230,7 @@ const md = [
   `- userAgent: \`${record.userAgent}\``,
   `- 打开地址: ${record.url}（--quality ${record.quality ?? '未指定（走平台默认）'}）`,
   `- 质量日志: \`${record.qualityLine}\``,
+  `- 背景层: \`${record.bgLine}\``,
   `- 场景: ${record.sceneLine}`,
   `- 路线: ${record.route}（共 ${record.moveMs / 1000}s），随后静止 ${record.idleMs / 1000}s`,
   '',
