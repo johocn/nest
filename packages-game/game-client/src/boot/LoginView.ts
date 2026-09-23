@@ -7,7 +7,7 @@ import { Toast } from '../ui/Toast';
 
 export class LoginView {
   static show(onLoggedIn: () => void): void {
-    Platform.showLoginForm({
+    Platform.ui.showLogin({
       onSubmit: async (username, password) => {
         let result: AuthResult | null = null;
 
@@ -25,7 +25,7 @@ export class LoginView {
         }
 
         Session.save(result);
-        Platform.hideLoginForm();
+        Platform.ui.hideLogin();
         Toast.info(`登录成功：playerId=${result.playerId}`);
         onLoggedIn();
       },

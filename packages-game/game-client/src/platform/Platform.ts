@@ -1,9 +1,13 @@
 import { AppConfig } from '../config/AppConfig';
 import { Hud } from '../ui/Hud';
+import { LoginView } from '../ui/LoginView';
 
 /**
  * 平台差异唯一出口：业务代码不得直接访问 document / localStorage / wx。
- * 存储 / 提示 / 环境地址三域已双端适配（S7 Task 1）；网络与登录页见 S7 后续任务。
+ * 存储 / 提示 / 网络 / 环境地址已双端适配（S7 Task 1-2）；登录页与软键盘见 S7 Task 3。
+ *
+ * 顶层只允许 import `AppConfig` / `Hud` / `ui/LoginView`：三者顶层都不触碰宿主 API，
+ * 故本模块可被 node 直接 import 做断言（场景 D 会静态校验平台 API 只出现在本目录）。
  */
 
 /** Platform.request 入参：只暴露业务代码真正需要的最小集 */
@@ -27,6 +31,29 @@ export interface PlatformResponse {
 function wxApi(): any {
   const w = (globalThis as any).wx;
   return w && typeof w === 'object' ? w : null;
+}
+
+/** 软键盘回调一律 try/catch：视图回调抛错不得抛回 wx 的事件队列 */
+function safeCall(fn: any, arg?: any): void {
+  if (typeof fn !== 'function') return;
+  try {
+    fn(arg);
+  } catch (e) {
+    console.warn('[S7] 软键盘回调抛错（已吞掉，避免污染 wx 事件队列）', e);
+  }
+}
+
+/** 清掉上一次注册的软键盘监听：off* 在小游戏基础库/假 wx 里可能缺失，缺失即跳过、不抛 */
+function offWxKeyboard(wx: any): void {
+  for (const name of ['offKeyboardInput', 'offKeyboardConfirm', 'offKeyboardComplete']) {
+    const fn = wx[name];
+    if (typeof fn !== 'function') continue;
+    try {
+      fn.call(wx);
+    } catch (e) {
+      console.warn(`[S7] wx.${name} 失败（已忽略）`, e);
+    }
+  }
 }
 
 /** 构建期注入的环境覆盖（globalThis.__ENV__）：仅当字段是非空字符串时生效 */
@@ -152,6 +179,76 @@ export const Platform = {
   ui: {
     toast(text: string, ms?: number): void {
       Hud.toast(text, ms ?? AppConfig.hud.toastMs);
+    },
+
+    /**
+     * 登录页双端分派：小游戏端走引擎内自绘 `ui/LoginView`（无 DOM），H5 走既有 DOM 表单。
+     * 定好「对象字面量内不自引用」：这里一律用 `Platform.xxx` 延迟到调用期取值。
+     */
+    showLogin(handlers: { onSubmit: (username: string, password: string) => Promise<void> }): void {
+      if (Platform.isMiniGame()) LoginView.show(handlers);
+      else Platform.showLoginForm(handlers);
+    },
+
+    hideLogin(): void {
+      if (Platform.isMiniGame()) LoginView.hide();
+      else Platform.hideLoginForm();
+    },
+
+    /**
+     * 打开平台软键盘：小游戏无物理键盘，登录输入只能靠 `wx.showKeyboard` 接管。
+     * 返回 true = 平台已接管输入（视图不再订阅引擎键盘事件）；H5 / 能力缺失 = false，由视图兜底。
+     */
+    showKeyboard(opts: {
+      defaultValue: string;
+      maxLength: number;
+      /** 当前编辑的字段名（软键盘本身不需要，供日志与断言辨识） */
+      field: string;
+      handlers: {
+        onInput: (value: string) => void;
+        onConfirm: () => void;
+        onComplete: () => void;
+      };
+    }): boolean {
+      const wx = wxApi();
+      if (!wx || typeof wx.showKeyboard !== 'function' || typeof wx.onKeyboardInput !== 'function') {
+        return false;
+      }
+      try {
+        // 每次打开前先清掉上一次的监听：否则重复打开会叠加回调
+        offWxKeyboard(wx);
+        wx.onKeyboardInput((res: any) => safeCall(opts.handlers.onInput, res?.value));
+        if (typeof wx.onKeyboardConfirm === 'function') {
+          wx.onKeyboardConfirm((res: any) => {
+            if (res && typeof res.value === 'string') safeCall(opts.handlers.onInput, res.value);
+            safeCall(opts.handlers.onConfirm);
+          });
+        }
+        if (typeof wx.onKeyboardComplete === 'function') {
+          wx.onKeyboardComplete(() => safeCall(opts.handlers.onComplete));
+        }
+        wx.showKeyboard({
+          defaultValue: opts.defaultValue,
+          maxLength: opts.maxLength,
+          multiple: false,
+          confirmType: 'done',
+        });
+        return true;
+      } catch (e) {
+        console.warn(`[S7] wx.showKeyboard 失败（field=${opts.field}），回落引擎键盘事件`, e);
+        return false;
+      }
+    },
+
+    /** 收软键盘：能调就调，异常吞掉（收键盘失败不阻断登录流程） */
+    hideKeyboard(): void {
+      const wx = wxApi();
+      if (!wx || typeof wx.hideKeyboard !== 'function') return;
+      try {
+        wx.hideKeyboard();
+      } catch (e) {
+        console.warn('[S7] wx.hideKeyboard 失败（已忽略）', e);
+      }
     },
   },
 

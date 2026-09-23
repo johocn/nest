@@ -135,4 +135,65 @@ export const AppConfig = {
     /** 面板刷新节流：每 6 帧（≈100ms）重绘一次预览与进度 */
     refreshFrameInterval: 6,
   },
+  /**
+   * S7 登录页（引擎内自绘，屏幕空间；小游戏端无 DOM）：与 hud/dialogue/build 同风格，常量集中避免魔法数字散落。
+   * `loginLayout` 是消费这些常量的纯函数（可被零依赖断言脚本 import）。
+   */
+  login: {
+    /** 登录页根节点 zOrder：须盖在 hud(9999) / dialogue(10000) / build(10001) 之上 */
+    zOrder: 10002,
+    /** 面板：宽度上限与四周边距（窄屏按边距收窄），水平居中、垂直居中 */
+    panelMaxWidth: 420,
+    panelMarginX: 40,
+    panelMarginY: 20,
+    panelWidthMin: 200,
+    panelBgColor: 'rgba(0,0,0,0.92)',
+    panelBorderColor: '#4a5568',
+    panelBorderWidth: 2,
+    padX: 24,
+    padY: 20,
+    /** 标题 */
+    titleFontSize: 20,
+    titleColor: '#ffd75e',
+    titleHeight: 30,
+    gapAfterTitle: 12,
+    /** 字段标签（画在输入框上方） */
+    labelFontSize: 13,
+    labelColor: '#8b949e',
+    labelHeight: 18,
+    gapAfterLabel: 4,
+    /** 输入框 */
+    inputHeight: 34,
+    inputFontSize: 15,
+    inputTextColor: '#e6edf3',
+    inputBgColor: 'rgba(255,255,255,0.10)',
+    inputFocusBgColor: 'rgba(47,129,247,0.25)',
+    inputBorderColor: '#4a5568',
+    inputFocusBorderColor: '#2f81f7',
+    inputBorderWidth: 1,
+    inputPadX: 8,
+    /** 两个字段之间的行距 */
+    gapBetweenFields: 12,
+    /** 密码掩码与光标（引擎内无输入法，光标以竖线表示） */
+    maskChar: '•',
+    caretChar: '|',
+    /** 提交按钮 */
+    gapBeforeButton: 16,
+    buttonHeight: 36,
+    buttonFontSize: 16,
+    buttonColor: '#ffffff',
+    buttonBgColor: '#2f81f7',
+    buttonDisabledBgColor: '#4a5568',
+    buttonDisabledColor: '#8b949e',
+    buttonIdleText: '登录 / 自动注册',
+    buttonBusyText: '登录中…',
+    /** 错误行（校验失败 / 提交异常） */
+    gapBeforeError: 10,
+    errorHeight: 18,
+    errorFontSize: 13,
+    errorColor: '#ff7b72',
+    /** 输入长度上限（与 H5 表单标签口径一致：账号 3-32、密码 6-64） */
+    maxUserLen: 32,
+    maxPassLen: 64,
+  },
 };

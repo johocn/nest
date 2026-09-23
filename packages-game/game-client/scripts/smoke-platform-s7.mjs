@@ -8,6 +8,8 @@
 // 三个运行环境场景都在 node 里伪造：A 小游戏（注入假 wx + 删 document）、B H5（删 wx + 假 localStorage/document）、
 // C __ENV__ 优先级；D 是验收项 A2 的不变量：`src/**/*.ts` 里 document|localStorage|wx. 只允许命中 `src/platform/`。
 // Task 2 追加：E `Platform.request`（wx.request / fetch 双分支）、F `createWxWebSocket`（纯逻辑，假 wx.connectSocket）。
+// Task 3 追加：G 引擎内登录页 —— G-1 `login-logic` 纯逻辑、G-2 `ui.showKeyboard` 小游戏分支、
+// G-3 能力缺失分支、G-4 场景 D 静态扫描仍通过、G-5 H5 仍走 DOM 表单（回归）。
 // 断言失败 → exit 1。
 //
 // 注：`bin/js/*.js` 最近的 package.json（仓库根）没有 "type" 字段，node 会先按 CJS 解析失败、
@@ -26,6 +28,9 @@ const ARTIFACTS = {
   http: 'bin/js/net/http.js',
   ws: 'bin/js/net/ws.js',
   wxSocket: 'bin/js/platform/wx-socket.js',
+  loginLogic: 'bin/js/ui/login-logic.js',
+  bootLogin: 'bin/js/boot/LoginView.js',
+  uiLoginView: 'bin/js/ui/LoginView.js',
 };
 
 const missing = Object.values(ARTIFACTS).filter((p) => !existsSync(join(root, p)));
@@ -574,6 +579,427 @@ check(
     typeof globalThis.__S7_WX_SOCKET__.ensureWxWebSocket === 'function' &&
     typeof globalThis.__S7_WX_SOCKET__.createWxWebSocket === 'function',
   `keys=${Object.keys(globalThis.__S7_WX_SOCKET__ || {}).join(',')}`,
+);
+
+// ── 场景 G：登录页（引擎内）+ 软键盘（S7 Task 3）──────────────────────────
+// G-1 login-logic 纯逻辑（状态归约 / 校验文案 / 布局矩形 / 键盘 token 映射）
+// G-2 小游戏分支 Platform.ui.showKeyboard（假 wx 软键盘接管）
+// G-3 能力缺失分支（H5 / wx 无 showKeyboard）→ 返回 false 且不抛
+// G-4 场景 D 的静态扫描仍通过（新增文件不得出现 document|localStorage|wx.）
+// G-5 H5 仍走既有 DOM 表单（showLogin/hideLogin 分派 + 提交/异常文案 + 按钮恢复）
+console.log('— 场景 G：登录页（引擎内）与软键盘 —');
+
+const {
+  createLoginState,
+  applyKey,
+  setFieldText,
+  validateLogin,
+  loginLayout,
+  keyTokenFromEvent,
+} = await load(ARTIFACTS.loginLogic);
+
+check(
+  'G: Platform.ui 暴露 showLogin/hideLogin/showKeyboard/hideKeyboard 四方法',
+  ['showLogin', 'hideLogin', 'showKeyboard', 'hideKeyboard'].every(
+    (k) => typeof Platform.ui[k] === 'function',
+  ),
+  `keys=${Object.keys(Platform.ui).join(',')}`,
+);
+
+// ── G-1 纯逻辑 ────────────────────────────────────────────────────────────
+const st0 = createLoginState();
+check(
+  'G-1: 初始状态为空且焦点在账号',
+  st0.username === '' && st0.password === '' && st0.focus === 'username' && st0.error === '',
+  JSON.stringify(st0),
+);
+
+let st = createLoginState();
+for (const ch of 'abc') st = applyKey(st, ch).state;
+check(
+  'G-1: 逐字符输入按 length 追加到账号字段',
+  st.username === 'abc' && st.password === '',
+  `username=${st.username}`,
+);
+
+let stCn = createLoginState();
+for (const ch of ['张', '@', '_']) stCn = applyKey(stCn, ch).state;
+check(
+  'G-1: 中文/@/下划线等可见字符均可输入',
+  stCn.username === '张@_',
+  `username=${stCn.username}`,
+);
+
+check(
+  'G-1: backspace 退格删除末字符',
+  applyKey(st, 'backspace').state.username === 'ab' &&
+    applyKey(applyKey(st, 'backspace').state, 'backspace').state.username === 'a',
+  `after=${applyKey(st, 'backspace').state.username}`,
+);
+
+check(
+  'G-1: escape 清空当前焦点字段',
+  applyKey(st, 'escape').state.username === '' &&
+    applyKey({ ...st, focus: 'password', password: 'p' }, 'escape').state.password === '',
+);
+
+let stNa = createLoginState();
+stNa = applyKey(stNa, keyTokenFromEvent(16, 'Shift', false) || '').state;
+stNa = applyKey(stNa, keyTokenFromEvent(112, 'F1', false) || '').state;
+stNa = applyKey(stNa, keyTokenFromEvent(8, 'Backspace', false) || '').state;
+check(
+  'G-1: 不可见键（Shift/F1）不产生字符（退格可用的 keyCode 映射）',
+  stNa.username === '' && stNa.password === '',
+  `username=${stNa.username}`,
+);
+
+check(
+  'G-1: Tab/方向键切换焦点字段',
+  applyKey(createLoginState(), 'tab').state.focus === 'password' &&
+    applyKey(applyKey(createLoginState(), 'arrowdown').state, 'arrowdown').state.focus === 'username',
+  `focus=${applyKey(createLoginState(), 'tab').state.focus}`,
+);
+
+const enter = applyKey(st, 'enter');
+check(
+  'G-1: Enter 返回 submit 意图且不改动字段',
+  enter.intent === 'submit' && enter.state.username === 'abc',
+  `intent=${enter.intent} username=${enter.state.username}`,
+);
+
+const base = createLoginState();
+applyKey(base, 'a');
+applyKey(base, 'backspace');
+applyKey(base, 'enter');
+setFieldText(base, 'password', 'x');
+check(
+  'G-1: applyKey/setFieldText 为纯函数（不改入参）',
+  base.username === '' && base.password === '' && base.focus === 'username' && base.error === '',
+  JSON.stringify(base),
+);
+
+let longUser = createLoginState();
+for (let i = 0; i < 40; i++) longUser = applyKey(longUser, 'a').state;
+let longPass = { ...createLoginState(), focus: 'password' };
+for (let i = 0; i < 70; i++) longPass = applyKey(longPass, 'a').state;
+check(
+  'G-1: 账号输入受 maxUserLen=32 截断，密码受 maxPassLen=64 截断',
+  longUser.username.length === 32 && longPass.password.length === 64,
+  `user=${longUser.username.length} pass=${longPass.password.length}`,
+);
+
+check(
+  'G-1: validateLogin 空账号 → 文案',
+  validateLogin(createLoginState()) === '账号不能为空',
+  String(validateLogin(createLoginState())),
+);
+check(
+  'G-1: validateLogin 账号过短 / 非法字符 → 文案',
+  validateLogin({ ...createLoginState(), username: 'ab' }) === '账号需 3-32 位字母/数字/下划线' &&
+    validateLogin({ ...createLoginState(), username: 'ab-cd' }) === '账号只能包含字母/数字/下划线',
+  String(validateLogin({ ...createLoginState(), username: 'ab' })),
+);
+check(
+  'G-1: validateLogin 密码过短 → 文案',
+  validateLogin({ username: 'spike01', password: '12345', focus: 'username', error: '' }) ===
+    '密码需 6-64 位',
+  String(validateLogin({ username: 'spike01', password: '12345', focus: 'username', error: '' })),
+);
+check(
+  'G-1: validateLogin 合法账号密码 → null（与 H5 表单口径一致）',
+  validateLogin({
+    username: 'spike01',
+    password: 'spike123456',
+    focus: 'username',
+    error: '',
+  }) === null,
+  String(
+    validateLogin({ username: 'spike01', password: 'spike123456', focus: 'username', error: '' }),
+  ),
+);
+
+const lay = loginLayout(960, 640);
+const layPanel = lay.panel;
+const layControls = [
+  lay.title,
+  lay.userLabel,
+  lay.userBox,
+  lay.passLabel,
+  lay.passBox,
+  lay.button,
+  lay.error,
+];
+check(
+  'G-1: loginLayout(960,640) 各矩形均在舞台内且宽高为正',
+  [layPanel, ...layControls].every(
+    (r) => r.w > 0 && r.h > 0 && r.x >= 0 && r.y >= 0 && r.x + r.w <= 960 && r.y + r.h <= 640,
+  ),
+  `panel=${JSON.stringify(layPanel)} button=${JSON.stringify(lay.button)}`,
+);
+check(
+  'G-1: loginLayout 各控件都在面板内（不越界）',
+  layControls.every(
+    (r) =>
+      r.x >= layPanel.x &&
+      r.y >= layPanel.y &&
+      r.x + r.w <= layPanel.x + layPanel.w &&
+      r.y + r.h <= layPanel.y + layPanel.h,
+  ),
+  `panel=${JSON.stringify(layPanel)}`,
+);
+const layOverlaps = [];
+for (let i = 0; i < layControls.length; i++) {
+  for (let j = i + 1; j < layControls.length; j++) {
+    const a = layControls[i];
+    const b = layControls[j];
+    if (a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h) {
+      layOverlaps.push(`${i}-${j}`);
+    }
+  }
+}
+check(
+  'G-1: loginLayout 各控件互不重叠',
+  layOverlaps.length === 0,
+  `overlaps=${layOverlaps.join(',') || '无'}`,
+);
+
+// ── G-2 小游戏分支：wx 软键盘接管 ─────────────────────────────────────────
+delete globalThis.document;
+const kb = { show: [], offInput: 0, offConfirm: 0, offComplete: 0, hide: 0 };
+const kbHandlers = {};
+globalThis.wx = {
+  showKeyboard(opts) {
+    kb.show.push(opts);
+  },
+  onKeyboardInput(fn) {
+    kbHandlers.input = fn;
+  },
+  onKeyboardConfirm(fn) {
+    kbHandlers.confirm = fn;
+  },
+  onKeyboardComplete(fn) {
+    kbHandlers.complete = fn;
+  },
+  offKeyboardInput() {
+    kb.offInput++;
+  },
+  offKeyboardConfirm() {
+    kb.offConfirm++;
+  },
+  offKeyboardComplete() {
+    kb.offComplete++;
+  },
+  hideKeyboard() {
+    kb.hide++;
+  },
+};
+const kbSeen = { input: [], confirm: 0, complete: 0 };
+const kbOpts = () => ({
+  defaultValue: 'spike01',
+  maxLength: 32,
+  field: 'username',
+  handlers: {
+    onInput: (v) => kbSeen.input.push(v),
+    onConfirm: () => kbSeen.confirm++,
+    onComplete: () => kbSeen.complete++,
+  },
+});
+const kbOpen = attempt(() => Platform.ui.showKeyboard(kbOpts()));
+check(
+  'G-2: 小游戏端 showKeyboard 返回 true，且 wx.showKeyboard 收到 defaultValue/maxLength/confirmType',
+  kbOpen.ok &&
+    kbOpen.value === true &&
+    kb.show.length === 1 &&
+    kb.show[0].defaultValue === 'spike01' &&
+    kb.show[0].maxLength === 32 &&
+    kb.show[0].multiple === false &&
+    kb.show[0].confirmType === 'done',
+  kbOpen.ok ? `ret=${kbOpen.value} opts=${JSON.stringify(kb.show[0])}` : String(kbOpen.error),
+);
+check(
+  'G-2: 注册监听前先清掉上一次（offKeyboard* 各被调用一次，避免回调叠加）',
+  kb.offInput === 1 && kb.offConfirm === 1 && kb.offComplete === 1,
+  `off=${kb.offInput}/${kb.offConfirm}/${kb.offComplete}`,
+);
+
+kbHandlers.input({ value: 'abc' });
+check(
+  'G-2: onKeyboardInput({value:"abc"}) → handlers.onInput("abc")',
+  kbSeen.input[0] === 'abc',
+  `input=${JSON.stringify(kbSeen.input)}`,
+);
+kbHandlers.confirm({ value: 'abcd' });
+kbHandlers.complete();
+check(
+  'G-2: onKeyboardConfirm → 同步末值 + onConfirm；onKeyboardComplete → onComplete',
+  kbSeen.confirm === 1 && kbSeen.complete === 1 && kbSeen.input[1] === 'abcd',
+  `confirm=${kbSeen.confirm} complete=${kbSeen.complete} input=${JSON.stringify(kbSeen.input)}`,
+);
+
+const kbHide = attempt(() => Platform.ui.hideKeyboard());
+check(
+  'G-2: hideKeyboard 不抛且命中 wx.hideKeyboard',
+  kbHide.ok && kb.hide === 1,
+  kbHide.ok ? `hide=${kb.hide}` : String(kbHide.error),
+);
+
+const kbReopen = attempt(() => Platform.ui.showKeyboard(kbOpts()));
+check(
+  'G-2: 二次打开仍先清理监听（off* 计数递增到 2）',
+  kbReopen.ok && kbReopen.value === true && kb.offInput === 2 && kb.offConfirm === 2,
+  kbReopen.ok ? `off=${kb.offInput}/${kb.offConfirm}` : String(kbReopen.error),
+);
+
+let miniLogin = { ok: false, error: 'not-run' };
+const miniLoginLogs = captureLog(() => {
+  miniLogin = attempt(() => Platform.ui.showLogin({ onSubmit: async () => {} }));
+});
+check(
+  'G-2: 小游戏端 showLogin 分派到引擎内 LoginView（无 document、引擎未初始化也不抛）',
+  miniLogin.ok && miniLoginLogs.some((l) => l.includes('LoginView')),
+  miniLogin.ok ? `logs=${JSON.stringify(miniLoginLogs)}` : String(miniLogin.error),
+);
+
+// ── G-3 能力缺失分支 ─────────────────────────────────────────────────────
+delete globalThis.wx;
+const noWx = attempt(() => Platform.ui.showKeyboard(kbOpts()));
+check(
+  'G-3: 无 wx（H5）→ showKeyboard 返回 false 且不抛（由视图走引擎键盘事件）',
+  noWx.ok && noWx.value === false,
+  noWx.ok ? `ret=${noWx.value}` : String(noWx.error),
+);
+
+globalThis.wx = { getStorageSync() {} };
+const noApi = attempt(() => Platform.ui.showKeyboard(kbOpts()));
+check(
+  'G-3: wx 存在但无 showKeyboard → 同样返回 false 且不抛',
+  noApi.ok && noApi.value === false,
+  noApi.ok ? `ret=${noApi.value}` : String(noApi.error),
+);
+const noApiHide = attempt(() => Platform.ui.hideKeyboard());
+check(
+  'G-3: wx 无 hideKeyboard → hideKeyboard 不抛',
+  noApiHide.ok,
+  noApiHide.ok ? 'ok' : String(noApiHide.error),
+);
+delete globalThis.wx;
+
+// ── G-4 场景 D 的静态扫描仍通过 ───────────────────────────────────────────
+check(
+  'G-4: 场景 D 静态扫描仍 0 命中（平台 API 只在 src/platform/）',
+  violations.length === 0,
+  violations.length > 0 ? `越界命中：${violations.length} 处` : '仅 src/platform/Platform.ts 命中',
+);
+const newFiles = ['src/ui/login-logic.ts', 'src/ui/LoginView.ts'];
+const newHits = newFiles.flatMap((f) =>
+  readFileSync(join(root, f), 'utf8')
+    .split(/\r?\n/)
+    .filter((line) => PLATFORM_API.test(line))
+    .map((line) => `${f}: ${line.trim()}`),
+);
+check(
+  'G-4: 新增 login-logic.ts / LoginView.ts 文本内无 document|localStorage|wx. 命中',
+  newHits.length === 0,
+  newHits.length > 0 ? newHits.join(' | ') : '无命中',
+);
+
+// ── G-5 H5 仍走既有 DOM 表单（回归：分派 + 提交流程不变）──────────────────
+const dom = { appended: 0, removed: 0, createElement: 0, getById: 0 };
+const domParts = {
+  '#s1-user': { value: '  spike01  ' },
+  '#s1-pass': { value: 'spike123456' },
+  '#s1-err': { textContent: '' },
+  '#s1-submit': {
+    disabled: false,
+    listeners: {},
+    addEventListener(type, fn) {
+      this.listeners[type] = fn;
+    },
+  },
+};
+const domBox = {
+  id: '',
+  innerHTML: '',
+  parentNode: null,
+  querySelector(sel) {
+    return domParts[sel] || null;
+  },
+};
+const domBody = {
+  appendChild(el) {
+    dom.appended++;
+    el.parentNode = domBody;
+  },
+  removeChild(el) {
+    dom.removed++;
+    el.parentNode = null;
+  },
+};
+globalThis.document = {
+  body: domBody,
+  createElement() {
+    dom.createElement++;
+    return domBox;
+  },
+  getElementById(id) {
+    dom.getById++;
+    return id === 's1-login' ? domBox : null;
+  },
+};
+
+let h5Submitted = null;
+Platform.ui.showLogin({
+  onSubmit: async (username, password) => {
+    h5Submitted = [username, password];
+  },
+});
+check(
+  'G-5: H5 分支 showLogin 仍建 DOM 表单（#s1-login 含四个控件并挂到 body）',
+  dom.createElement === 1 &&
+    dom.appended === 1 &&
+    domBox.id === 's1-login' &&
+    domBox.parentNode === domBody &&
+    ['s1-user', 's1-pass', 's1-submit', 's1-err'].every((id) => domBox.innerHTML.includes(id)),
+  `create=${dom.createElement} appended=${dom.appended} id=${domBox.id}`,
+);
+
+domParts['#s1-submit'].listeners.click();
+await new Promise((r) => setTimeout(r, 0));
+check(
+  'G-5: H5 点击提交把 trim 后的账号/密码交给 onSubmit（H5 行为不变）',
+  h5Submitted !== null && h5Submitted[0] === 'spike01' && h5Submitted[1] === 'spike123456',
+  `submitted=${JSON.stringify(h5Submitted)}`,
+);
+
+domParts['#s1-err'].textContent = '';
+Platform.ui.showLogin({
+  onSubmit: async () => {
+    throw new Error('测试提交失败');
+  },
+});
+domParts['#s1-submit'].listeners.click();
+await new Promise((r) => setTimeout(r, 0));
+check(
+  'G-5: H5 提交异常写入 .err 文案且按钮恢复可用',
+  domParts['#s1-err'].textContent === '测试提交失败' && domParts['#s1-submit'].disabled === false,
+  `err=${domParts['#s1-err'].textContent} disabled=${domParts['#s1-submit'].disabled}`,
+);
+
+Platform.ui.hideLogin();
+check(
+  'G-5: H5 hideLogin 移除 DOM 表单',
+  dom.removed === 2 && domBox.parentNode === null,
+  `removed=${dom.removed}`,
+);
+
+const bootLoginJs = readFileSync(join(root, ARTIFACTS.bootLogin), 'utf8');
+check(
+  'G-5: boot/LoginView 只经 Platform.ui.showLogin/hideLogin 接线（不再直触 DOM 表单）',
+  bootLoginJs.includes('Platform.ui.showLogin') &&
+    bootLoginJs.includes('Platform.ui.hideLogin') &&
+    !bootLoginJs.includes('showLoginForm') &&
+    !bootLoginJs.includes('hideLoginForm'),
+  `uiShowLogin=${bootLoginJs.includes('Platform.ui.showLogin')} showLoginForm=${bootLoginJs.includes('showLoginForm')}`,
 );
 
 console.log(
