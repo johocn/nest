@@ -155,13 +155,25 @@
 
 ### Task 1: 生产证书链修复（公共 CA）—— 硬前置
 
-- [ ] **Step 1** 现状留证：`openssl s_client -showcerts -connect game.joho.cn:443 -servername game.joho.cn`，记录当前自建链（`JOHO Enterprise Root CA`）。
+- [x] **Step 1** 现状留证：`openssl s_client -showcerts -connect game.joho.cn:443 -servername game.joho.cn`，记录当前自建链（`JOHO Enterprise Root CA`）。→ 已核实（2026-09-23 只读侦察，未动生产）：链 subject `C=CN, O=JOHO Enterprise, OU=IT, CN=game.joho.cn` / issuer `…, CN=JOHO Enterprise Root CA`（自建，链深 2）；`notBefore=2026-09-21 00:30:04Z`、`notAfter=2036-09-18 00:30:04Z`；证书目录内另有自建 CA 的 `joho-ca.crt/.key/.srl`（2026-09-21 08:30）。
 - [ ] **Step 2** 备份：odoo 上备份 OpenResty 该站点 conf 与现有证书文件（`.crt/.key`）到带时间戳目录。
 - [ ] **Step 3** 申请/上传**公共 CA** 证书（阿里云免费证书或 Let's Encrypt，按 §4 待确认 1 选定），替换证书文件 + nginx 证书指令（**不改反代规则**）。
 - [ ] **Step 4** 重载 OpenResty → 验证：`openssl s_client` 无 `unable to verify`；浏览器无告警；`https://game.joho.cn/health` 200。
 - [ ] **Step 5** `wss` 验证：H5 生产页用 `wss://game.joho.cn/game` 跑通「进场景 + 互见」。
 - [ ] **Step 6** 记录证书到期日与续期方式（写进 README 运维节，避免再次「不知何时过期」）。
 - [ ] **Step 7** commit（文档/脚本）：`docs(game-ops): 生产证书链改用公共 CA`
+
+> **Task 1 执行预案（Step 1 已核实；凭据到位后一次执行，全部路径已用只读命令验证）**
+>
+> - **部署形态（关键）**：OpenResty 跑在 Docker 容器 `1Panel-openresty-cFrx`（`1panel/openresty:1.21.4.3-3-3-focal`）；**容器的 `/www` ← 宿主 `/opt/1panel/apps/openresty/openresty/www`**（已用 ssl 目录内 6 个文件的 size/mtime 逐一对齐证实），站点 conf 在宿主 `/opt/1panel/apps/openresty/openresty/conf/conf.d/`。
+> - **⚠️ 陷阱**：宿主另有 `/www/sites/game.joho.cn/`（只有 `log/`、`tour/`，**没有 `ssl/`**）——这是更早原生 nginx 时期的遗留目录，**容器不读它**。改这个路径 = 静默无效（改了内容也不生效，且不会报错）。
+> - **现网证书文件**（宿主，容器内为 `/www/sites/game.joho.cn/ssl/`）：`game.joho.cn.fullchain.crt` / `.crt` / `.key` / `.csr` / `.ext` + `joho-ca.*`；conf 第 4/5 行 `ssl_certificate(_key)` 即指向这两个文件。
+> - **ACME 可行性**：80 端口站点 conf 已含 `location ^~ /.well-known/acme-challenge { root /usr/share/nginx/html; }`，该目录在容器内存在（2026-03-24）→ **HTTP-01 验证路径可行，不需要域名 DNS API 权限**（风险 #2 降级）。
+> - **备份**：`ts=$(date +%s); bk=/opt/1panel/apps/openresty/openresty/backup-cert-$ts; mkdir -p $bk; cp /opt/1panel/apps/openresty/openresty/conf/conf.d/game.joho.cn-ssl.conf $bk/; cp -a /opt/1panel/apps/openresty/openresty/www/sites/game.joho.cn/ssl $bk/ssl`
+> - **申请**：1Panel 面板（v1.10.34-lts）→ 证书 → Let's Encrypt（HTTP-01）→ 应用到 `game.joho.cn`；面板会自行重写该站点 conf 的 `ssl_certificate` 指令并落新证书文件（**不改** `location /tour/ /manual/ /client/ /assets/` 与 `proxy_pass` 反代规则）。
+> - **重载 / 回滚**：重载 `docker exec 1Panel-openresty-cFrx openresty -s reload`；回滚 = 还原备份的 conf + `ssl/` 目录后重新 reload（备份里 `joho-ca.*` 一并保留，可整目录还原）。
+> - **验证**：`openssl s_client -showcerts -connect game.joho.cn:443 -servername game.joho.cn </dev/null` 无 `unable to verify` 且 issuer 非 `JOHO Enterprise`；`curl -I https://game.joho.cn/health` → 200；H5 页 `wss://game.joho.cn/game` 进场景 + 双窗互见。
+> - **续期**：面板 ACME 自动续期（保持开启），到期日与续期入口写进 `game-client/README.md` 运维节（Step 6）。
 
 ### Task 2: S8 成果发布上线（含线上冒烟）
 
