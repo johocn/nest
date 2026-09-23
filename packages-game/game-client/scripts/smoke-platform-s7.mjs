@@ -13,6 +13,9 @@
 // Task 4 追加：H 配置包随包分发与校验 —— H-1 小游戏分支读包内 config/ 且 fetch 0 次、
 // H-2 hash 口径 = 场景文件原始字节 sha256、H-3 `tools/publish.mjs` 产物（只发 manifest 指向的版本）、
 // H-4 hash 不符即 exit 1（临时副本，不碰仓库 gamedata/）、H-5 包内缺文件 → 明确报错且仍不 fetch。
+// Task 5 追加：I 生产环境注入与 H5 站点装配 —— I-1 `tools/inject-env.mjs`（--env prod 预设 / --api-base 覆盖 /
+// 未知 --env 与缺值 exit 1）、I-2 `tools/publish.mjs h5-site`（产物齐全、index.html 加 /client/ 前缀、
+// env-config 在 Main.js 之前、/assets/ 与 /gamedata 未改写、--base 归一化）、I-3 幂等、I-4 坏输入拦截。
 // 断言失败 → exit 1。
 //
 // 注：`bin/js/*.js` 最近的 package.json（仓库根）没有 "type" 字段，node 会先按 CJS 解析失败、
@@ -1182,6 +1185,240 @@ globalThis.fetch = fetchBeforeH;
 if (docBeforeH === undefined) delete globalThis.document;
 else globalThis.document = docBeforeH;
 delete globalThis.wx;
+
+// ── 场景 I：生产环境注入 + H5 站点装配（S7 Task 5）─────────────────────────
+// I-1 tools/inject-env.mjs：--env prod 预设 / --api-base 覆盖 / 未知 --env 与缺值一律 exit 1；
+//     产出的 env-config.js 文本在**伪造的 globalThis** 里求值（不污染真实全局），再经 Platform.env 读回。
+// I-2 tools/publish.mjs h5-site：站点装配产物齐全、index.html 前缀改写正确、
+//     env-config 在 Main.js 之前、/assets/ 与 /gamedata 未被改写、--base 归一化。
+// I-3 连续两次 h5-site 到同一目标 → 文件清单 + 逐文件 sha256 完全一致（幂等）。
+// I-4 坏输入必须被拦：--base / 归一化边界被自校验拒绝（未产出 index.html）；
+//     并断言 publish.mjs 源码内确实存在该自校验关键字。
+console.log('— 场景 I：生产环境注入与 H5 站点装配 —');
+
+const injectScript = join(root, 'tools', 'inject-env.mjs');
+const runNodeI = (script, args) => spawnSync(process.execPath, [script, ...args], { cwd: root, encoding: 'utf8' });
+const sha256FileI = (p) => `sha256:${createHash('sha256').update(readFileSync(p)).digest('hex')}`;
+const readIfI = (p) => (existsSync(p) ? readFileSync(p, 'utf8') : '');
+const lastLineI = (r) => ((r.stdout || '').trim().split(/\r?\n/).pop() || '');
+
+const tmpI = mkdtempSync(join(tmpdir(), 's7-h5site-'));
+try {
+  // ── I-1 ────────────────────────────────────────────────────────────────
+  const envOut = join(tmpI, 'inject');
+  const envFile = join(envOut, 'env-config.js');
+  const rI1 = runNodeI(injectScript, ['--env', 'prod', '--out', envOut]);
+  check(
+    'I-1: inject-env.mjs --env prod 退出码 0，生成 env-config.js 且打印写入路径',
+    rI1.status === 0 && existsSync(envFile) && (rI1.stdout || '').includes(envFile),
+    `status=${rI1.status} stdout=${JSON.stringify((rI1.stdout || '').trim())}`,
+  );
+  const envText = readIfI(envFile);
+  check(
+    'I-1: env-config.js 是普通脚本（无 import/export；用 globalThis 兜底 window）',
+    envText.includes('globalThis') && !/^\s*(?:import|export)\s/m.test(envText),
+    `len=${envText.length}`,
+  );
+  check(
+    'I-1: env-config.js 文件头写明「必须早于 js/boot/Main.js 加载」',
+    /必须早于.*Main\.js/.test(envText),
+    `head=${JSON.stringify(envText.slice(0, 40))}`,
+  );
+
+  const sandboxI = {};
+  let evalErrI = null;
+  try {
+    new Function('globalThis', 'window', `${envText}\nreturn globalThis;`)(sandboxI, sandboxI);
+  } catch (e) {
+    evalErrI = e;
+  }
+  check(
+    'I-1: 伪造 globalThis 求值后 __ENV__ === prod 预设（不污染真实全局）',
+    evalErrI === null &&
+      sandboxI.__ENV__?.apiBase === 'https://game.joho.cn' &&
+      sandboxI.__ENV__?.wsUrl === 'wss://game.joho.cn/game',
+    evalErrI ? String(evalErrI) : `__ENV__=${JSON.stringify(sandboxI.__ENV__)}`,
+  );
+
+  const savedEnvI = globalThis.__ENV__;
+  let envApiBase = null;
+  let envWsUrl = null;
+  try {
+    globalThis.__ENV__ = sandboxI.__ENV__;
+    envApiBase = Platform.env.apiBase();
+    envWsUrl = Platform.env.wsUrl();
+  } finally {
+    if (savedEnvI === undefined) delete globalThis.__ENV__;
+    else globalThis.__ENV__ = savedEnvI;
+  }
+  check(
+    'I-1: Platform.env.apiBase()/wsUrl() 读到注入值',
+    envApiBase === 'https://game.joho.cn' && envWsUrl === 'wss://game.joho.cn/game',
+    `apiBase=${envApiBase} wsUrl=${envWsUrl}`,
+  );
+  check(
+    'I-1: 断言后真实全局 __ENV__ 已还原（未被污染）',
+    globalThis.__ENV__ === savedEnvI,
+    `restored=${globalThis.__ENV__ === savedEnvI}`,
+  );
+
+  const overrideOut = join(tmpI, 'inject-override');
+  const rI1b = runNodeI(injectScript, [
+    '--env',
+    'prod',
+    '--api-base',
+    'https://api.example.com/',
+    '--ws-url',
+    'wss://api.example.com/game',
+    '--out',
+    overrideOut,
+  ]);
+  const overrideText = readIfI(join(overrideOut, 'env-config.js'));
+  check(
+    'I-1: --api-base / --ws-url 覆盖预设（只改被覆盖字段）',
+    rI1b.status === 0 &&
+      overrideText.includes('"https://api.example.com/"') &&
+      overrideText.includes('"wss://api.example.com/game"') &&
+      !overrideText.includes('game.joho.cn'),
+    `status=${rI1b.status} has=${overrideText.includes('api.example.com')}`,
+  );
+
+  const rBadEnv = runNodeI(injectScript, ['--env', 'staging', '--out', join(tmpI, 'inject-bad')]);
+  const rNoVal = runNodeI(injectScript, ['--env']);
+  const rNoEnv = runNodeI(injectScript, ['--out', join(tmpI, 'inject-noenv')]);
+  check(
+    'I-1: 未知 --env / --env 缺取值 / 缺 --env → exit 1 且给出明确错误',
+    rBadEnv.status === 1 &&
+      /未知 --env/.test(rBadEnv.stderr || '') &&
+      rNoVal.status === 1 &&
+      /缺少取值/.test(rNoVal.stderr || '') &&
+      rNoEnv.status === 1 &&
+      /缺少 --env/.test(rNoEnv.stderr || ''),
+    `badEnv=${rBadEnv.status} noVal=${rNoVal.status} noEnv=${rNoEnv.status}`,
+  );
+
+  const rI1d = runNodeI(injectScript, ['--env', 'prod']);
+  const realEnvFile = join(root, 'bin', 'js', 'env-config.js');
+  check(
+    'I-1: --env prod（默认 out）写出 bin/js/env-config.js（h5-site 的硬前置）',
+    rI1d.status === 0 && existsSync(realEnvFile),
+    `status=${rI1d.status} file=${existsSync(realEnvFile)}`,
+  );
+
+  // ── I-2 ────────────────────────────────────────────────────────────────
+  const siteDir = join(tmpI, 'site');
+  const rI2 = runNodeI(publishScript, ['h5-site', '--target', siteDir]);
+  const siteRel = [
+    'index.html',
+    'js/boot/Main.js',
+    'js/env-config.js',
+    'js/player-config.js',
+    'libs/laya.core.js',
+    'libs/laya.webgl_2D.js',
+    'libs/laya.ui2.js',
+    'vendor/socket.io.min.js',
+    'assets/resources/placeholder.png',
+    'assets/Scene.ls',
+    'gamedata/manifest.json',
+    'gamedata/scene-1-v1.json',
+  ];
+  const missingSite = siteRel.filter((rel) => !existsSync(join(siteDir, rel)));
+  check(
+    'I-2: publish.mjs h5-site 退出码 0 且产物齐全（index/js/libs/vendor/assets/gamedata）',
+    rI2.status === 0 && missingSite.length === 0,
+    `status=${rI2.status} missing=${missingSite.join('、') || '无'} last=${JSON.stringify(lastLineI(rI2))}`,
+  );
+  check(
+    'I-2: 结尾打印 summary: h5-site 装配 N 个文件到 <dir>',
+    /^summary: h5-site 装配 \d+ 个文件到 /.test(lastLineI(rI2)),
+    JSON.stringify(lastLineI(rI2)),
+  );
+
+  const siteHtml = readIfI(join(siteDir, 'index.html'));
+  check(
+    'I-2: index.html 的 /js/ /libs/ /vendor/ 全部带 /client/ 前缀，且无裸 src="/js/ 残留',
+    siteHtml.includes('src="/client/js/boot/Main.js') &&
+      siteHtml.includes('src="/client/js/player-config.js') &&
+      siteHtml.includes('src="/client/libs/laya.core.js') &&
+      siteHtml.includes('src="/client/vendor/socket.io.min.js') &&
+      ['src="/js/', 'src="/libs/', 'src="/vendor/'].every((p) => !siteHtml.includes(p)),
+    `main=${siteHtml.includes('src="/client/js/boot/Main.js')} residue=${['src="/js/', 'src="/libs/', 'src="/vendor/'].filter((p) => siteHtml.includes(p)).join('、') || '无'}`,
+  );
+  check(
+    'I-2: env-config.js 的 script 标签在 Main.js 之前',
+    siteHtml.indexOf('js/env-config.js') !== -1 &&
+      siteHtml.indexOf('js/env-config.js') < siteHtml.indexOf('js/boot/Main.js'),
+    `env@${siteHtml.indexOf('js/env-config.js')} main@${siteHtml.indexOf('js/boot/Main.js')}`,
+  );
+  check(
+    'I-2: /assets/ 与 /gamedata 未被改写（保持同源根绝对路径）',
+    !siteHtml.includes('/client/assets/') && !siteHtml.includes('/client/gamedata'),
+    `assets=${siteHtml.includes('/client/assets/')} gamedata=${siteHtml.includes('/client/gamedata')}`,
+  );
+
+  const siteDirBase = join(tmpI, 'site-base');
+  const rI2b = runNodeI(publishScript, ['h5-site', '--target', siteDirBase, '--base', 'client']);
+  const htmlBase = readIfI(join(siteDirBase, 'index.html'));
+  check(
+    'I-2: --base client（缺前导与尾斜杠）归一化为 /client/，产物与默认一致',
+    rI2b.status === 0 && htmlBase.length > 0 && htmlBase === siteHtml,
+    `status=${rI2b.status} same=${htmlBase === siteHtml}`,
+  );
+
+  // ── I-3 幂等 ───────────────────────────────────────────────────────────
+  const listingSite = () => {
+    const out = [];
+    const stack = [''];
+    while (stack.length > 0) {
+      const rel = stack.pop();
+      for (const ent of readdirSync(join(siteDir, rel), { withFileTypes: true })) {
+        const r = rel ? `${rel}/${ent.name}` : ent.name;
+        if (ent.isDirectory()) stack.push(r);
+        else out.push(`${r}:${statSync(join(siteDir, r)).size}:${sha256FileI(join(siteDir, r))}`);
+      }
+    }
+    return out.sort().join('\n');
+  };
+  const listingI3a = listingSite();
+  const rI3 = runNodeI(publishScript, ['h5-site', '--target', siteDir]);
+  const listingI3b = listingSite();
+  check(
+    'I-3: 连续两次 h5-site 到同一目标 → 文件清单 + 逐文件 sha256 完全一致（幂等）',
+    rI3.status === 0 && listingI3a.length > 0 && listingI3a === listingI3b,
+    `files=${listingI3a.split('\n').length} same=${listingI3a === listingI3b} status=${rI3.status}`,
+  );
+
+  // ── I-4 坏输入拦截 ─────────────────────────────────────────────────────
+  // base=/ 时"/js/→/js/"是空改写，裸路径必然残留 → 自校验必须拦下，且不得产出 index.html。
+  const badBaseDir = join(tmpI, 'site-badbase');
+  const rI4 = runNodeI(publishScript, ['h5-site', '--target', badBaseDir, '--base', '/']);
+  check(
+    'I-4: --base / 归一化边界被自校验拒绝（exit 1、无 index.html、且装配前即失败）',
+    rI4.status === 1 &&
+      !existsSync(join(badBaseDir, 'index.html')) &&
+      !existsSync(join(badBaseDir, 'js')) &&
+      /自校验失败/.test(rI4.stderr || ''),
+    `status=${rI4.status} html=${existsSync(join(badBaseDir, 'index.html'))} js=${existsSync(join(badBaseDir, 'js'))} err=${JSON.stringify((rI4.stderr || '').trim())}`,
+  );
+
+  const publishSrcI = readIfI(publishScript);
+  check(
+    'I-4: publish.mjs 源码含自校验关键字（裸路径残留 + env-config 顺序）—— 退化断言',
+    publishSrcI.includes('BARE_PATH_RESIDUE') &&
+      publishSrcI.includes('src="/js/') &&
+      publishSrcI.includes('src="/libs/') &&
+      publishSrcI.includes('src="/vendor/') &&
+      publishSrcI.includes('env-config.js 的 script 标签必须在 Main.js 之前'),
+    `residue=${publishSrcI.includes('BARE_PATH_RESIDUE')} order=${publishSrcI.includes('env-config.js 的 script 标签必须在 Main.js 之前')}`,
+  );
+  check(
+    'I-4: publish.mjs 源码不含 ssh/scp/curl/npm run build（S7 风险 7：脚本只做本地文件操作）',
+    !/\bssh\b|\bscp\b|\bcurl\b|npm run build/.test(publishSrcI),
+    `ssh=${/\bssh\b/.test(publishSrcI)} scp=${/\bscp\b/.test(publishSrcI)}`,
+  );
+} finally {
+  rmSync(tmpI, { recursive: true, force: true });
+}
 
 console.log(
   failed === 0
