@@ -69,24 +69,36 @@ node scripts/loadtest-gate.mjs --run --bots 50 --seconds 25 --hz 10
 
 ---
 
-## 4. 上线后对照（PENDING / 挂账）
+## 4. 上线后对照（2026-09-24 生产冒烟）
+
+数据源：`loadtest-gate.mjs --run`（5 bot / 10s / 10Hz，`--base https://game.joho.cn`），run `label=5bots`、`generatedAt=2026-09-23T23:13:20.883Z`。原始 JSON 落在工作区外（`%TEMP%\s9-loadtest-prod-smoke.json`，**不入库**，避免覆盖 §3 的 S8 基线）。
 
 | 指标 | 硬指标 | 生产实测 | 判定 | 余量 |
 |---|---|---|---|---|
-| P95 延迟 | ≤ 200 ms | PENDING | PENDING | — |
-| 下行投递 | ≤ 25,000 条/秒 | PENDING | PENDING | — |
-| 上行 | ≤ 10 次/秒/人 | PENDING | PENDING | — |
-| 服务端 RSS 增量 | ≤ 50 MB | PENDING | PENDING | — |
-| 掉线 | 0 | PENDING | PENDING | — |
+| P95 延迟 | ≤ 200 ms | 33.08 ms（P50 27.9ms，样本 460） | PASS | 6.05× |
+| 下行投递 | ≤ 25,000 条/秒 | 234 条/秒（entity_update 2340 条：player 2300 / 其它 40） | PASS | 不构成容量结论（5 bot） |
+| 上行 | ≤ 10 次/秒/人 | 9.2 次/秒/人（world.move 460 条） | PASS | 1.09× |
+| 服务端 RSS 增量 | ≤ 50 MB | **n/a（无法度量）** | FAIL | — |
+| 掉线 | 0 | 0 | PASS | 达标 |
+| 连接错误 | 0 | 0 | PASS | 达标 |
 
-**挂账原因：Task 2（H5 发布上线）未执行**，当前线上跑的还是 S7 时期产物，生产指标无意义。
+**门禁结论：FAIL（exit 1），唯一失败项 =「服务端 RSS 增量：n/a → 无法度量」。**
 
-上线后补测要求（计划 §1.7 风险 #9：2G 服务器，**只允许 ≤5 bot / ≤10s 冒烟，禁止高压测**）：
+原因：`loadtest-s8.mjs` 的服务端进程探针在本机按 `Get-NetTCPConnection -LocalPort <port> -State Listen` 找监听进程；`--base` 指向远端时必然取不到 PID（本次输出 `服务端 CPU = null%  RSS = nullMB`）。这是**度量手段缺失，不是指标超限** —— 生产内存结论仍以本机 50 bot 的 RSS Δ +10.71MB 为准（§3）。
+
+### 4.1 生产冒烟暴露的两处脚本缺陷（记录，勿再踩）
+
+1. **`--label` 与 `--bots` 互斥**：`loadtest-gate.mjs` 里 `--label` 同时承担「选 run」与「透传给压测命名」两个语义，`--run --bots 5 --label prod-5bot` 会直接 exit 2。正确写法是只给 `--bots`（run 名由压测脚本自取 `5bots`）。
+2. **`--run` 不传 `--out` 会覆盖 S8 基线**：`runOut = outPath ?? DEFAULT_IN`，而 `DEFAULT_IN = scripts/loadtest-s8-result.json`。生产冒烟必须显式 `--out` 到工作区外。
+
+### 4.2 生产冒烟正确命令
 
 ```powershell
-# 生产冒烟：5 bot / 10s，允许远端（--allow-remote 显式开启，压测脚本会打警告）
-node scripts/loadtest-gate.mjs --run --bots 5 --seconds 10 --hz 10 --base https://game.joho.cn --allow-remote --label prod-5bot --write-json scripts/loadtest-prod-smoke.json
+# cwd = packages-game/game-server；结果写工作区外，避免覆盖 S8 基线
+node scripts/loadtest-gate.mjs --run --bots 5 --seconds 10 --hz 10 --base https://game.joho.cn --allow-remote --out "$env:TEMP\s9-loadtest-prod-smoke.json"
 ```
+
+补充观测：5 个 bot 登录阶段被限流 4 次、耗时 84.7s（生产鉴权限流生效的正常表现），进场景 5/5 成功。
 
 注意：生产冒烟是**连通性与稳定性**验证，不是并发容量验证（5 bot 的下行量远达不到 25k/s 门限）；容量结论仍以本机 50 bot 为准。
 
