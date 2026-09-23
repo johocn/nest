@@ -50,3 +50,39 @@
 - 移动段 up/s 均值：**9.7**（目标 ≤10）
 - 静止段 up/s 合计：**0**（应 ≈0）
 - 结束档位：**high**
+
+## pool · 2026-09-23T07:20:35.008Z
+
+- commit: `42028b28c`（工作区脏：是）
+- 浏览器: Chromium/151.0.7922.34 · headless=否 · map-localhost-ipv4=是
+- 打开地址: http://localhost:5173/
+- 参数: cycles=100（A/B 各 1 组；页内驱动构建产物 /js/entity/EntityPool.js + /js/world/entity-pool-adapter.js）
+- userAgent: `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36`
+
+### A 组（池化：acquire → release × 100）
+
+- stats(player): `{"created":1,"reused":99,"pooled":1,"live":0,"discarded":0}`（期望 created=1 / reused=99 / pooled=1 / live=0 / discarded=0）
+- 第 1 次与第 100 次 sprite 引用相同：**是**
+- drawcall：前 **37** → A 后 **37**
+- heap 中位：18.7 MB → 19.1 MB（Δ=0.4 MB）
+
+### B 组（对照：create 且保留引用 × 100）
+
+- heap 中位：19.4 MB → 20.4 MB（Δ=1 MB）
+- drawcall：B 后 37（新实体未入场景层，故不变）
+
+> heap 为**参考值**：app 自身仍在运行、GC 时机不定；读数取「前后各让出若干帧 + 5 次采样中位」，不代表精确分配量。
+
+### reset 字段断言（风险 #2：幽灵实体）
+
+- 复用同一实例：**是**
+- 弄脏时的值：name="GHOST" pos=(9999,9999) rotation=45 visible=false 任务标记可见=true
+- reset 后的值：name="玩家ghostLoop" pos=(5,6) rotation=0 visible=true 任务标记可见=false
+- 期望值：name="玩家ghostLoop" pos=(5,6) rotation=0 visible=true 任务标记可见=false
+- sprite 子节点数：脏态 2，8 轮「弄脏→release→acquire」后记录 = [2,2,2,2,2,2,2,2]（不增长=**是**）
+- graphics 命令数：基线 2 → 脏 1 → reset 后 2
+
+### 结论
+
+- 全部断言通过（共 15 项）
+- 池化把 100 次「进出视野」从 100 次分配压到 1 次（created=1 / reused=99），sprite/Text 全程同一引用，无幽灵状态残留。

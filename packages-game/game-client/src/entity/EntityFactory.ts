@@ -45,8 +45,12 @@ export class EntityFactory {
     });
   }
 
-  static createOtherPlayer(playerId: string, x: number, y: number): Entity {
-    return EntityFactory.assemble({
+  /**
+   * 远端玩家的实体描述（S8 Task 2）：对象池的 `create` 与 `reset` 必须来自**同一份**初值，
+   * 故把描述抽成唯一来源，`createOtherPlayer` 与池适配器都走这里（避免重置与创建字段漂移）。
+   */
+  static otherPlayerOptions(playerId: string, x: number, y: number): EntityOptions {
+    return {
       entityId: `player:${playerId}`,
       kind: 'player',
       spawnId: null,
@@ -56,7 +60,11 @@ export class EntityFactory {
       y,
       color: COLORS.player,
       texture: EntityFactory.texture,
-    });
+    };
+  }
+
+  static createOtherPlayer(playerId: string, x: number, y: number): Entity {
+    return EntityFactory.assemble(EntityFactory.otherPlayerOptions(playerId, x, y));
   }
 
   static createFromStatic(e: StaticEntity): Entity {

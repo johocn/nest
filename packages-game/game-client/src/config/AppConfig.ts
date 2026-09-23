@@ -230,4 +230,12 @@ export const AppConfig = {
     degradeRatio: 0.8,
     sustainMs: 3000,
   },
+  /**
+   * S8 实体对象池（Task 2）：与 hud/dialogue/build/login/perf 同风格，常量集中避免魔法数字散落。
+   * 只池化**高频增删**实体（远端玩家 / 动态 NPC / 掉落物，D4）；静态物件与固定 NPC 不进池。
+   */
+  pool: {
+    /** 每个 kind 桶的容量上限：超限的 release 直接丢弃并计入 discarded，防止长时间运行内存无界增长 */
+    maxPerKind: 32,
+  },
 };

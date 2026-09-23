@@ -1,5 +1,6 @@
 import { Component } from './components/Component';
 import { TransformComponent } from './components/TransformComponent';
+import { VisualComponent } from './components/VisualComponent';
 
 /** `building` 为 S6 建造预留的类型占位，当前无任何实现 */
 export type EntityKind = 'player' | 'npc' | 'object' | 'building';
@@ -34,10 +35,11 @@ export interface EntityOptions {
  * 原点在「脚底中心」：贴图绘制在 (x-16, y-32)，与后端 spawn_x/spawn_y 直接对齐，不做坐标换算。
  */
 export class Entity {
-  readonly entityId: string;
+  /** 身份字段：对外只读（getter），但内部可被 `reset` 重设 —— 池化复用会换 entityId/spawnId/templateId */
+  private _entityId: string;
   readonly kind: EntityKind;
-  readonly spawnId: number | null;
-  readonly templateId: number | null;
+  private _spawnId: number | null;
+  private _templateId: number | null;
   /** 实体唯一的显示节点：位置由 TransformComponent 写，外观由 VisualComponent 画 */
   readonly sprite: Laya.Sprite;
   readonly components = new Map<string, Component>();
@@ -46,12 +48,24 @@ export class Entity {
   private questMark: QuestMarkType | null = null;
 
   constructor(opts: EntityOptions) {
-    this.entityId = opts.entityId;
+    this._entityId = opts.entityId;
     this.kind = opts.kind;
-    this.spawnId = opts.spawnId;
-    this.templateId = opts.templateId;
+    this._spawnId = opts.spawnId;
+    this._templateId = opts.templateId;
 
     this.sprite = new Laya.Sprite();
+  }
+
+  get entityId(): string {
+    return this._entityId;
+  }
+
+  get spawnId(): number | null {
+    return this._spawnId;
+  }
+
+  get templateId(): number | null {
+    return this._templateId;
   }
 
   attach(component: Component): void {
@@ -116,5 +130,33 @@ export class Entity {
     this.markText.color = mark === 'submittable' ? '#3fb950' : '#ffd75e';
     this.markText.pos(-Math.round(this.markText.textWidth / 2), QUEST_MARK_Y);
     this.markText.visible = true;
+  }
+
+  /**
+   * 对象池复用入口（S8 Task 2）：把**已有的** sprite 与文本节点重置为 opts 描述的状态。
+   * 本方法内**不得 new 任何 Laya 对象** —— 重置靠复用既有节点，否则池化没有收益。
+   *
+   * 幽灵实体防护（计划风险 #2）：显式重置**全部可见状态**（位置、旋转、可见性、绘制命令、名字文本、
+   * 任务标记）；配合 `EntityPool.acquire` 对新建与复用实体**一律**调用本方法，残留状态不可能被带出池。
+   *
+   * `kind` 不参与重置（由池按 kind 分桶保证同 kind 复用）；kind 不符直接抛错 ——
+   * `VisualComponent` 的绘制尺寸规则依赖 kind，静默接受会画出错误尺寸的实体。
+   */
+  reset(opts: EntityOptions): void {
+    if (opts.kind !== this.kind) {
+      throw new Error(`Entity.reset kind 不符：实体 ${this.kind} ≠ 传入 ${opts.kind}`);
+    }
+    this._entityId = opts.entityId;
+    this._spawnId = opts.spawnId;
+    this._templateId = opts.templateId;
+
+    this.getComponent(TransformComponent)?.reset(opts.x, opts.y);
+    this.getComponent(VisualComponent)?.reset(opts.kind, opts.displayName, opts.color, opts.texture);
+
+    // 任务标记：清状态并隐藏既有 markText（复用节点，不 new、不 removeChild）
+    this.questMark = null;
+    if (this.markText) this.markText.visible = false;
+
+    this.sprite.visible = true;
   }
 }

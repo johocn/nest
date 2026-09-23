@@ -5,6 +5,9 @@
 // （Quality 只 import 常量与 Platform，counters 零依赖），故 node 可直接求值（同 S3-S6 的 smoke 脚本）：
 //   - perf/Quality.js    档位解析优先级 / 降级项开关 / 自动降级判定（纯逻辑）
 //   - perf/counters.js   上行计数的 1 秒滑窗语义
+//   - entity/EntityPool.js（Task 2）kind 分桶 / 复用 / **无条件 reset** / 幂等 / 桶上限丢弃
+//     —— 池是 Laya-free 纯逻辑，node 内用「假实体」断言（不 import Entity，它会 new Laya.Sprite）；
+//        真正的 reset 字段复位由浏览器脚本 `scripts/pool-sample.mjs` 断言（node 里没有 Laya）。
 // 这是 S8 新增的回归门禁：计划 §1.7 说「客户端无单测框架、以面板数据代替」，本脚本把
 // Task 2-5 将要消费的开关与阈值钉成可自动断言的契约（偏离项，已在 Task 1 报告中说明）。
 // 断言失败 → exit 1。
@@ -22,6 +25,9 @@ const ARTIFACTS = {
   quality: 'bin/js/perf/Quality.js',
   counters: 'bin/js/perf/counters.js',
   appConfig: 'bin/js/config/AppConfig.js',
+  // S8 Task 2 池：EntityPool 运行时只 import AppConfig 与 EntityRegistry（皆 Laya-free），故 node 可直接求值
+  entityPool: 'bin/js/entity/EntityPool.js',
+  entityRegistry: 'bin/js/entity/EntityRegistry.js',
 };
 
 const missing = Object.values(ARTIFACTS).filter((p) => !existsSync(join(root, p)));
@@ -35,6 +41,8 @@ const load = (rel) => import(pathToFileURL(join(root, rel)).href);
 const { Quality, createFpsWatcher, resolveTier } = await load(ARTIFACTS.quality);
 const { bumpUp, upPerSec, reset, snapshot, UP_WINDOW_MS } = await load(ARTIFACTS.counters);
 const { AppConfig } = await load(ARTIFACTS.appConfig);
+const Pool = await load(ARTIFACTS.entityPool);
+const { EntityRegistry } = await load(ARTIFACTS.entityRegistry);
 
 let total = 0;
 let failed = 0;
@@ -237,6 +245,165 @@ console.log('— counters：bumpUp / upPerSec 滑窗 —');
   }
   check('缺省时间参数（Date.now）路径不抛错', defOk);
   reset();
+}
+
+// ── 5. EntityPool：分桶 / 复用 / 无条件 reset / 幂等 / 上限（假实体）──────────────
+// 假实体形状兼容池与 EntityRegistry.remove 所需的最小字段；**不 import Entity**（它会 new Laya.Sprite）。
+console.log('— EntityPool：acquire/release 纯逻辑（假实体，node 内无 Laya）—');
+
+{
+  function fakeEntity(kind, id) {
+    const removed = [];
+    const entity = {
+      entityId: id,
+      kind,
+      sprite: { parent: { removeChild: (s) => removed.push(s) }, visible: true },
+      __removed: removed,
+    };
+    EntityRegistry.add(entity);
+    return entity;
+  }
+
+  function makeAdapter() {
+    const calls = { create: 0, reset: 0 };
+    return {
+      calls,
+      create(spec) {
+        calls.create++;
+        return fakeEntity(spec.kind, spec.id);
+      },
+      reset(entity, spec) {
+        calls.reset++;
+        entity.__spec = spec;
+      },
+    };
+  }
+
+  check(
+    'AppConfig.pool.maxPerKind 为正整数',
+    Number.isInteger(AppConfig.pool.maxPerKind) && AppConfig.pool.maxPerKind > 0,
+    `maxPerKind=${AppConfig.pool.maxPerKind}`,
+  );
+
+  // 5.1 同 kind 复用；新建也走 reset；release 摘除/隐藏/入桶
+  Pool.clear();
+  Pool.resetStats();
+  {
+    const a = makeAdapter();
+    const e1 = Pool.acquire('player', { id: 'p1', kind: 'player' }, a);
+    check('新建实体同样调用 reset（幽灵状态结构性防护）', a.calls.create === 1 && a.calls.reset === 1, `create=${a.calls.create} reset=${a.calls.reset}`);
+    check('acquire 把 spec 原样交给 reset', !!e1.__spec && e1.__spec.id === 'p1');
+    check('acquire 后计入 live（live=1）', Pool.stats().player.live === 1, JSON.stringify(Pool.stats().player));
+
+    Pool.release(e1);
+    check('release 后从注册表摘除', EntityRegistry.get('p1') === undefined);
+    check('release 后 sprite.visible=false（不销毁）', e1.sprite.visible === false);
+    check('release 后从父节点摘除（removeChild 调用 1 次）', e1.__removed.length === 1, `n=${e1.__removed.length}`);
+    check('release 后进入桶（pooled=1 / live=0）', Pool.stats().player.pooled === 1 && Pool.stats().player.live === 0, JSON.stringify(Pool.stats().player));
+
+    const e2 = Pool.acquire('player', { id: 'p2', kind: 'player' }, a);
+    check('同 kind 复用同一实例（含同一 sprite 引用）', e2 === e1 && e2.sprite === e1.sprite);
+    check('复用不再新建（create 仍 1 次）', a.calls.create === 1, `create=${a.calls.create}`);
+    check('复用也走 reset（reset 共 2 次）', a.calls.reset === 2, `reset=${a.calls.reset}`);
+    check('复用后 reset 收到的是本次 spec（id=p2）', e1.__spec.id === 'p2', `id=${e1.__spec.id}`);
+    const s = Pool.stats().player;
+    check(
+      'stats: created=1 reused=1 pooled=0 live=1 discarded=0',
+      s.created === 1 && s.reused === 1 && s.pooled === 0 && s.live === 1 && s.discarded === 0,
+      JSON.stringify(s),
+    );
+    Pool.release(e2);
+  }
+
+  // 5.2 100 次往返 → created=1 / reused=99 / pooled=1
+  Pool.clear();
+  Pool.resetStats();
+  {
+    const a = makeAdapter();
+    const spec = { id: 'loop', kind: 'player' };
+    let firstSprite = null;
+    let sameSprite = true;
+    for (let i = 0; i < 100; i++) {
+      const e = Pool.acquire('player', spec, a);
+      if (i === 0) firstSprite = e.sprite;
+      else if (e.sprite !== firstSprite) sameSprite = false;
+      Pool.release(e);
+    }
+    const s = Pool.stats().player;
+    check(
+      '100 次往返：created=1 / reused=99 / pooled=1 / live=0 / discarded=0',
+      s.created === 1 && s.reused === 99 && s.pooled === 1 && s.live === 0 && s.discarded === 0,
+      JSON.stringify(s),
+    );
+    check('100 次往返始终复用同一 sprite 引用', sameSprite === true);
+    check('created 计数不随复用增长（恒为 1）', s.created === 1, `created=${s.created}`);
+    check('create 仅调用 1 次', a.calls.create === 1, `create=${a.calls.create}`);
+    check('reset 调用次数 = acquire 次数（100）', a.calls.reset === 100, `reset=${a.calls.reset}`);
+  }
+
+  // 5.3 跨 kind 不混用；stats 形状稳定
+  Pool.clear();
+  Pool.resetStats();
+  {
+    const a = makeAdapter();
+    const p = Pool.acquire('player', { id: 'p', kind: 'player' }, a);
+    Pool.release(p);
+    const n = Pool.acquire('npc', { id: 'n', kind: 'npc' }, a);
+    check('跨 kind 不复用（npc 为新建实例）', n !== p && a.calls.create === 2, `create=${a.calls.create}`);
+    check('分桶计数独立（player.pooled=1 / npc.live=1）', Pool.stats().player.pooled === 1 && Pool.stats().npc.live === 1, JSON.stringify(Pool.stats()));
+    check(
+      'stats() 覆盖四个 kind（形状稳定）',
+      ['player', 'npc', 'object', 'building'].every((k) => typeof Pool.stats()[k]?.created === 'number'),
+    );
+    Pool.release(n);
+  }
+
+  // 5.4 桶上限：超限丢弃并计入 discarded
+  Pool.clear();
+  Pool.resetStats();
+  {
+    const max = AppConfig.pool.maxPerKind;
+    AppConfig.pool.maxPerKind = 2;
+    try {
+      const a = makeAdapter();
+      const ents = [0, 1, 2].map((i) => Pool.acquire('object', { id: `o${i}`, kind: 'object' }, a));
+      for (const e of ents) Pool.release(e);
+      const s = Pool.stats().object;
+      check('桶上限 2 → 第 3 个 release 被丢弃（pooled=2 / discarded=1）', s.pooled === 2 && s.discarded === 1, JSON.stringify(s));
+      check('丢弃不影响 live（3 acquire / 3 release → live=0）', s.live === 0, `live=${s.live}`);
+    } finally {
+      AppConfig.pool.maxPerKind = max;
+    }
+  }
+
+  // 5.5 重复 release 幂等
+  Pool.clear();
+  Pool.resetStats();
+  {
+    const a = makeAdapter();
+    const e = Pool.acquire('player', { id: 'idem', kind: 'player' }, a);
+    Pool.release(e);
+    Pool.release(e);
+    Pool.release(e);
+    const s = Pool.stats().player;
+    check('重复 release 幂等（桶内仍 1 个 / discarded=0）', s.pooled === 1 && s.discarded === 0, JSON.stringify(s));
+    check('重复 release 不重复摘除（removeChild 仅 1 次）', e.__removed.length === 1, `n=${e.__removed.length}`);
+    check('重复 release 不污染 live（live=0）', s.live === 0, `live=${s.live}`);
+  }
+
+  // 5.6 「同 kind 必然复用」是池的核心契约：跨 kind 建、跨 kind 归，桶内 shape 一致
+  Pool.clear();
+  Pool.resetStats();
+  {
+    const a = makeAdapter();
+    const e = Pool.acquire('player', { id: 'x', kind: 'player' }, a);
+    Pool.release(e);
+    const back = Pool.acquire('player', { id: 'y', kind: 'player' }, a);
+    check('release 以 entity.kind 入桶（同 kind 必然复用同一实例）', back === e);
+  }
+
+  Pool.clear();
+  Pool.resetStats();
 }
 
 console.log(

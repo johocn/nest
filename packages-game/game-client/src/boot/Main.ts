@@ -7,6 +7,7 @@ import { AiComponent } from '../entity/components/AiComponent';
 import { BuildingViewComponent } from '../entity/components/BuildComponent';
 import { Entity } from '../entity/Entity';
 import { EntityFactory } from '../entity/EntityFactory';
+import { acquire } from '../entity/EntityPool';
 import { EntityRegistry } from '../entity/EntityRegistry';
 import { Api } from '../net/api';
 import type { BuildRuleView, BuildingTemplate, BuildingView } from '../net/api';
@@ -20,6 +21,7 @@ import { InteractController } from '../world/InteractController';
 import { SceneBuilder } from '../world/SceneBuilder';
 import { BuildPanel } from '../world/BuildPanel';
 import { toBuildingSpawn, upsertBuildingEntity, viewToSpawn } from '../world/build-logic';
+import { remotePlayerAdapter } from '../world/entity-pool-adapter';
 import { Toast } from '../ui/Toast';
 import { Hud } from '../ui/Hud';
 import { DialogueView } from '../ui/DialogueView';
@@ -100,8 +102,10 @@ async function afterLogin(): Promise<void> {
       if (String(d.playerId) === String(Session.playerId)) return;
 
       const pos = d.pos ?? { x: 0, y: 0 };
+      // S8 Task 2：仅「不存在 → 创建」这条路径改走对象池（upsert 的已存在语义零变更）；
+      // 实体由池负责 reset，addEntity 负责登记注册表与挂进实体层
       const entity = EntityRegistry.upsert(d.entityId, pos, () =>
-        EntityFactory.createOtherPlayer(String(d.playerId), pos.x, pos.y),
+        acquire('player', { playerId: String(d.playerId), x: pos.x, y: pos.y }, remotePlayerAdapter),
       );
       SceneBuilder.addEntity(entity);
       return;
