@@ -9,6 +9,7 @@ LayaAir 3.x 工程，零新增 npm 依赖：模板、引擎类型、运行时都
 - `tools/build-fallback.mjs` —— 不依赖 IDE 的兜底构建：借用 `../game-server/node_modules/typescript` 编译 `src/` 到 `bin/js`，重写产物导入扩展名，生成 `bin/js/player-config.js` 与 `bin/index.html`。
 - `tools/serve.mjs` —— 零依赖静态服务器（默认 5173），把 `/assets`、`/vendor`、`/libs`、`/js`、`/` 映射到统一 URL 空间，并把 `/gamedata` 反向代理到后端（同源，规避静态响应无 CORS 头）。
 - `tools/check-config.mjs` —— 校验服务端导出目录 `../game-server/gamedata` 的配置包与 manifest 的 hash 一致性。
+- `docs/art-handover.md` —— 美术素材交接清单（目录/命名/尺寸/`@2x`/透明通道契约，S9 Task 3 Step 1）。
 
 ## S1 工具链实证
 

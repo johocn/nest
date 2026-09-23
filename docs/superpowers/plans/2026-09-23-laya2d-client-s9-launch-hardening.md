@@ -174,7 +174,7 @@
 
 ### Task 3: 美术素材入库 + 图集（先量后做）
 
-- [ ] **Step 1** 素材交接清单（D8）：分层图 / 摆件 / 图标 的尺寸、透明通道、命名、`@2x` 约定、放置目录 `assets/resources/**`；清单写入 README 或素材文档。
+- [x] **Step 1** 素材交接清单（D8）：分层图 / 摆件 / 图标 的尺寸、透明通道、命名、`@2x` 约定、放置目录 `assets/resources/**`；清单写入 README 或素材文档。→ 已落地 `game-client/docs/art-handover.md`（README 目录约定加 1 行链接）；尺寸逐项附代码出处，3 处待主程确认（建筑贴图尺寸口径 / 玩家朝向与动态 NPC 命名 / 图集页命名与 `@2x` 自动识别），待确认项**不阻塞** Step 2 入库。
 - [ ] **Step 2** 素材入库：放入 `assets/resources/**`，由 IDE 生成 `.meta`（**不得手工塞文件**）；`smoke-s9-atlas.mjs` 断言命名与清单一致。
 - [ ] **Step 3** **接入原始素材并量基线**：静态层与实体改贴图（无素材时回退 `graphics`），记录 drawcall / heap / 包体。
 - [ ] **Step 4** 图集导出（IDE 自带工具）→ `assets/resources/atlas/**`；`atlas-manifest.mjs` 校验清单与产物一致。
