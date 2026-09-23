@@ -210,12 +210,12 @@
 
 ### Task 7: 后端广播硬指标门禁（不改广播）
 
-- [ ] **Step 1** `scripts/loadtest-gate.mjs`：复用 `loadtest-s8.mjs` 运行 50 bot，断言 §1.2 的 5 个阈值（P95 ≤200ms、投递 ≤25k/s、上行 ≤10/s/人、RSS Δ ≤50MB、掉线 0），任一超限 exit 1。
-- [ ] **Step 2** 用 S8 的历史数据（`loadtest-s8-result.json`）验证门禁脚本能正确判定（含一次「故意把阈值调到不可能满足」的失败路径验证）。
-- [ ] **Step 3** 监控固化：记录 pm2/systemd 的 RSS/CPU 观测命令与「超标看什么」的排查顺序（不引入监控组件）。
-- [ ] **Step 4** 明确触发条件：**目标并发 >50 人** 或门禁连续失败 → 重新评估后端视口裁剪/分线（需单独确认，属广播行为变更）。
-- [ ] **Step 5** `scripts/loadtest-s9-report.md`：上线前/后指标对照 + 门禁结论。
-- [ ] **Step 6** commit：`test(game-perf): 广播硬指标门禁与上线报告`
+- [x] **Step 1** `scripts/loadtest-gate.mjs`：复用 `loadtest-s8.mjs` 运行 50 bot，断言 §1.2 的 5 个阈值（P95 ≤200ms、投递 ≤25k/s、上行 ≤10/s/人、RSS Δ ≤50MB、掉线 0），任一超限 exit 1。→ 已落地（零依赖，`--in` 判历史数据 / `--run` 现场压测；退出码 0/1/2）。
+- [x] **Step 2** 用 S8 的历史数据（`loadtest-s8-result.json`）验证门禁脚本能正确判定（含一次「故意把阈值调到不可能满足」的失败路径验证）。→ 50bot 历史数据 PASS/exit 0；5 条阈值各自单独调到不可能满足均 exit 1（断言彼此独立）；`--run` 布线用 1 bot/8s 实测 PASS（输出隔离到临时文件，S8 数据文件 SHA256 未变）。
+- [x] **Step 3** 监控固化：记录 pm2/systemd 的 RSS/CPU 观测命令与「超标看什么」的排查顺序（不引入监控组件）。→ 报告 §6。
+- [x] **Step 4** 明确触发条件：**目标并发 >50 人** 或门禁连续失败 → 重新评估后端视口裁剪/分线（需单独确认，属广播行为变更）。→ 报告 §7（含 N² 外推表：100 人 ≈100k/s、200 人 ≈400k/s）。
+- [x] **Step 5** `scripts/loadtest-s9-report.md`：上线前/后指标对照 + 门禁结论。→ 上线后一列 **PENDING**（Task 2 未执行，挂账）。
+- [x] **Step 6** commit：`test(game-perf): 广播硬指标门禁与上线报告`
 
 ### Task 8: S9 验收与文档结清
 
