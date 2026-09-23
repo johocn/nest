@@ -1,4 +1,5 @@
 import { EntityFactory } from '../entity/EntityFactory';
+import { RemoteInterp } from '../entity/components/RemoteInterp';
 import type { Entity } from '../entity/Entity';
 import type { PoolAdapter } from '../entity/EntityPool';
 
@@ -26,5 +27,9 @@ export const remotePlayerAdapter: PoolAdapter<RemotePlayerSpec> = {
   reset(entity: Entity, spec: RemotePlayerSpec): void {
     // 唯一初值来源是 EntityFactory.otherPlayerOptions：创建与重置共用同一描述，杜绝字段漂移
     entity.reset(EntityFactory.otherPlayerOptions(spec.playerId, spec.x, spec.y));
+    // S8 Task 5：`Entity.reset` 只重置 Transform/Visual/任务标记，**不碰 extras 组件** ——
+    // 复用实体必须显式清掉上一个玩家的插值目标，否则新玩家会从旧目标点插值过来（幽灵位移，风险 #2/#5）。
+    // 这一行是「复用安全」的结构性防护：所有出池路径都经过本 reset。
+    entity.getComponent(RemoteInterp)?.snapTo(spec.x, spec.y);
   },
 };

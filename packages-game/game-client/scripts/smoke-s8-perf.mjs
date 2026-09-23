@@ -32,6 +32,12 @@ const ARTIFACTS = {
   staticLayer: 'bin/js/world/static-layer.js',
   // S8 Task 4：Viewport 只 import 类型（编译后无运行时 import），node 可直接求值
   viewport: 'bin/js/world/Viewport.js',
+  // S8 Task 5：interp 只 import 类型；move-step 只 import interp 的**类型** → 两者产物均无运行时依赖
+  interp: 'bin/js/entity/interp.js',
+  moveStep: 'bin/js/world/move-step.js',
+  // S8 Task 5：RemoteInterp 组件的运行时依赖（AppConfig/Quality/interp/Component）全部 Laya-free
+  // （Component 只 import 类型 Entity），故 node 内可用「假 owner」直接断言组件行为（节流/对齐/逼近）
+  remoteInterp: 'bin/js/entity/components/RemoteInterp.js',
 };
 
 const missing = Object.values(ARTIFACTS).filter((p) => !existsSync(join(root, p)));
@@ -49,6 +55,11 @@ const Pool = await load(ARTIFACTS.entityPool);
 const { EntityRegistry } = await load(ARTIFACTS.entityRegistry);
 const SL = await load(ARTIFACTS.staticLayer);
 const VP = await load(ARTIFACTS.viewport);
+const IN = await load(ARTIFACTS.interp);
+const MS = await load(ARTIFACTS.moveStep);
+const { RemoteInterp } = await load(ARTIFACTS.remoteInterp);
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let total = 0;
 let failed = 0;
@@ -672,6 +683,308 @@ console.log('— Viewport：视口矩形 / 含边界判定 / 排序键 + inRect 
     'visibleCount 随可见性变化（再 -1）',
     EntityRegistry.visibleCount() === before,
     `now=${EntityRegistry.visibleCount()}`,
+  );
+}
+
+// ── 8. interp / move-step / RemoteInterp（Task 5，插值与时间基移动）────────────
+console.log('— interp：平滑系数 / 逼近 / snap / 量化 + RemoteInterp 节流（Task 5）—');
+
+{
+  // 8.1 配置段（数值集中处；A9 的「H5 表现不回退」由 0.24px/ms 的等价关系保证）
+  check(
+    'AppConfig.moveSpeedPxPerMs = 0.24（= 4px/帧 ÷ 16.667ms，等价 240px/s）',
+    AppConfig.moveSpeedPxPerMs === 0.24,
+    `speed=${AppConfig.moveSpeedPxPerMs}px/ms → ${AppConfig.moveSpeedPxPerMs * 1000}px/s`,
+  );
+  check(
+    'AppConfig.remote：interpBufferMs=120 / snapPx=96 / 松弛比例 ∈ (0,1]',
+    AppConfig.remote.interpBufferMs === 120 &&
+      AppConfig.remote.snapPx === 96 &&
+      AppConfig.remote.throttleSlackRatio > 0 &&
+      AppConfig.remote.throttleSlackRatio <= 1,
+    JSON.stringify(AppConfig.remote),
+  );
+
+  // 8.2 interpAlpha：边界与单调性
+  check('alpha(buffer=0) = 1（关闭插值 → 立即到位）', IN.interpAlpha(1000 / 60, 0) === 1);
+  check('alpha(buffer=负) = 1（非法缓冲同样退化为立即到位）', IN.interpAlpha(1000 / 60, -5) === 1);
+  check('alpha(dt=0) = 0（不前进，不产生 NaN）', IN.interpAlpha(0, 120) === 0);
+  const a1 = IN.interpAlpha(1000 / 60, 120);
+  check(
+    'alpha(16.67ms, 120ms) ≈ 0.1297 且 ∈ (0,1)（永不越过目标）',
+    a1 > 0.12 && a1 < 0.14 && a1 < 1,
+    `alpha=${a1.toFixed(4)}`,
+  );
+  check(
+    'alpha 单调：dt 越大越大、buffer 越大越小',
+    IN.interpAlpha(33.33, 120) > a1 && IN.interpAlpha(1000 / 60, 240) < a1,
+  );
+
+  // 8.3 stepInterp：snap 分支 / buffer=0 退化 / 收敛 / 阈值边界
+  // lim 显式传入：既覆盖真实默认（AppConfig.remote.snapPx），也用于「只看平滑数学」的收敛测试
+  const snap = (cur, target, dt, buf, lim = AppConfig.remote.snapPx) =>
+    IN.stepInterp(cur, target, dt, buf, lim);
+  {
+    const p = snap({ x: 0, y: 0 }, { x: 240, y: 0 }, 1000 / 60, 0);
+    check('bufferMs=0（插值关）→ 一帧直接落到目标（等价基线）', p.x === 240 && p.y === 0);
+  }
+  {
+    const p = snap({ x: 0, y: 0 }, { x: 500, y: 0 }, 1000 / 60, 120);
+    check('距离 > snapPx → 直接对齐（冻结后重入不缓慢爬行，风险 #5）', p.x === 500 && p.y === 0);
+  }
+  {
+    const lim = AppConfig.remote.snapPx;
+    const atLimit = snap({ x: 0, y: 0 }, { x: lim, y: 0 }, 1000 / 60, 120);
+    const overLimit = snap({ x: 0, y: 0 }, { x: lim + 0.5, y: 0 }, 1000 / 60, 120);
+    check(
+      'snap 阈值取严格大于：dist == snapPx 仍插值，超出即 snap',
+      atLimit.x > 0 && atLimit.x < lim && overLimit.x === lim + 0.5,
+      `at=${atLimit.x.toFixed(2)} over=${overLimit.x}`,
+    );
+  }
+  {
+    // 收敛（只看平滑数学，故 lim 取极大值以排除 snap 分支）：
+    // 从 (0,0) 追 (240,0)，每帧 16.67ms buffer 120ms → 应在 1 秒内收敛到 <1px
+    const target = { x: 240, y: 0 };
+    let cur = { x: 0, y: 0 };
+    let convergedAt = -1;
+    let monotone = true;
+    let overshoot = false;
+    let prevDist = Math.hypot(target.x - cur.x, target.y - cur.y);
+    for (let i = 0; i < 200; i++) {
+      const next = snap(cur, target, 1000 / 60, 120, 1e9);
+      const d = Math.hypot(target.x - next.x, target.y - next.y);
+      if (d > prevDist) monotone = false;
+      if (next.x > target.x) overshoot = true;
+      prevDist = d;
+      cur = next;
+      if (convergedAt < 0 && d < 1) convergedAt = i + 1;
+    }
+    check('逼近收敛：≤60 帧（1s）内追到 1px 内', convergedAt > 0 && convergedAt <= 60, `frames=${convergedAt}`);
+    check('逼近单调且不越过目标（alpha<1 → 无振荡）', monotone === true && overshoot === false);
+  }
+  check(
+    'dt=0 / 目标 NaN → 原地不动（不污染位置）',
+    (() => {
+      const z = IN.stepInterp({ x: 10, y: 20 }, { x: 30, y: 40 }, 0, 120, 96);
+      const n = IN.stepInterp({ x: 10, y: 20 }, { x: NaN, y: 40 }, 1000 / 60, 120, 96);
+      return z.x === 10 && z.y === 20 && n.x === 10 && n.y === 20;
+    })(),
+  );
+  check(
+    'cur == target → 返回目标（无 NaN/无抖动）',
+    (() => {
+      const p = IN.stepInterp({ x: 7, y: 8 }, { x: 7, y: 8 }, 1000 / 60, 120, 96);
+      return p.x === 7 && p.y === 8;
+    })(),
+  );
+
+  // 8.4 quantizeTarget：full 保留亚像素 / reduced 取整（D3-④ 的消费点）
+  const qf = IN.quantizeTarget(10.4, 20.6, 'full');
+  const qr = IN.quantizeTarget(10.4, 20.6, 'reduced');
+  const qrHalf = IN.quantizeTarget(10.5, 20.5, 'reduced');
+  check('full 档保留亚像素（10.4 / 20.6 原样）', qf.x === 10.4 && qf.y === 20.6);
+  check('reduced 档取整到整数像素（10.4 / 20.6 → 10 / 21）', qr.x === 10 && qr.y === 21);
+  check('reduced 档用 Math.round（10.5 / 20.5 → 11 / 21）', qrHalf.x === 11 && qrHalf.y === 21);
+  check(
+    '量化精度取自 Quality 实档：high=full / low=reduced',
+    IN.quantizeTarget(1.5, 1.5, Quality.switches().interpPrecision).x === 1.5 &&
+      (() => {
+        Quality.forceTier('low');
+        const low = IN.quantizeTarget(1.5, 1.5, Quality.switches().interpPrecision);
+        Quality.forceTier('high');
+        return low.x === 2;
+      })(),
+    `high=${Quality.switches().interpPrecision} low=reduced`,
+  );
+
+  // 8.5 moveDelta + clampToMapBounds：时间基等价性与边界夹取
+  {
+    const per = MS.moveDelta(1, 0, AppConfig.moveSpeedPxPerMs, 1000 / 60);
+    check(
+      '60fps 单帧位移 = 4px（与基线帧基 4px 逐字等价）',
+      Math.abs(per.x - 4) < 1e-9 && per.y === 0,
+      `dx=${per.x}`,
+    );
+    const per30 = MS.moveDelta(1, 0, AppConfig.moveSpeedPxPerMs, 1000 / 30);
+    check('30fps 单帧位移 = 8px（两帧追上 60fps 的两帧）', Math.abs(per30.x - 8) < 1e-9, `dx=${per30.x}`);
+  }
+  {
+    // 同一路径：60 帧 × 16.67ms 与 30 帧 × 33.33ms 的总位移必须相等（容差 < 1px）
+    const total = (frames, dt, dx, dy) => {
+      let x = 0;
+      let y = 0;
+      for (let i = 0; i < frames; i++) {
+        const s = MS.moveDelta(dx, dy, AppConfig.moveSpeedPxPerMs, dt);
+        x += s.x;
+        y += s.y;
+      }
+      return { x, y };
+    };
+    const straight60 = total(60, 1000 / 60, 1, 0);
+    const straight30 = total(30, 1000 / 30, 1, 0);
+    const diag60 = total(60, 1000 / 60, 1, 1);
+    const diag30 = total(30, 1000 / 30, 1, 1);
+    const dStraight = Math.hypot(straight60.x - straight30.x, straight60.y - straight30.y);
+    const dDiag = Math.hypot(diag60.x - diag30.x, diag60.y - diag30.y);
+    check(
+      `60/30fps 等价（直线 1s）：总位移差 ${dStraight.toExponential(2)}px < 1px`,
+      dStraight < 1,
+      `60fps=${straight60.x.toFixed(2)} 30fps=${straight30.x.toFixed(2)}`,
+    );
+    check(
+      `60/30fps 等价（对角 1s）：总位移差 ${dDiag.toExponential(2)}px < 1px`,
+      dDiag < 1,
+      `60fps=(${diag60.x.toFixed(2)},${diag60.y.toFixed(2)}) 30fps=(${diag30.x.toFixed(2)},${diag30.y.toFixed(2)})`,
+    );
+    check('1s 总位移 = 240px（= 4px/帧 @60fps）', Math.abs(straight60.x - 240) < 1e-9, `d=${straight60.x}`);
+  }
+  check(
+    '对角方向按归一化前进：单帧位移长度与方向无关',
+    (() => {
+      const s = MS.moveDelta(1, 1, AppConfig.moveSpeedPxPerMs, 1000 / 60);
+      return Math.abs(Math.hypot(s.x, s.y) - 4) < 1e-9;
+    })(),
+  );
+  check(
+    '非法入参（dt≤0 / 速度≤0 / 方向 0）→ 位移 0',
+    MS.moveDelta(1, 0, 0.24, 0).x === 0 &&
+      MS.moveDelta(1, 0, 0, 16.67).x === 0 &&
+      MS.moveDelta(0, 0, 0.24, 16.67).x === 0,
+  );
+  {
+    const w = 1280;
+    const h = 960;
+    check(
+      '边界字面量 = 基线原值：x∈[8, w-8] / y∈[16, h-8]',
+      MS.BOUND_LEFT === 8 && MS.BOUND_TOP === 16 && MS.BOUND_RIGHT === 8 && MS.BOUND_BOTTOM === 8,
+      `left=${MS.BOUND_LEFT} top=${MS.BOUND_TOP} right=${MS.BOUND_RIGHT} bottom=${MS.BOUND_BOTTOM}`,
+    );
+    const inb = MS.clampToMapBounds(640, 480, w, h);
+    const lo = MS.clampToMapBounds(-50, -50, w, h);
+    const hi = MS.clampToMapBounds(99999, 99999, w, h);
+    check('界内不变', inb.x === 640 && inb.y === 480);
+    check('越左/越上 → 夹到 8 / 16', lo.x === 8 && lo.y === 16, `(${lo.x},${lo.y})`);
+    check('越右/越下 → 夹到 1272 / 952', hi.x === 1272 && hi.y === 952, `(${hi.x},${hi.y})`);
+    check(
+      '退化地图（宽 < 16）：与基线 min(max(v,lo),hi) 同序 → 取上界（不崩）',
+      MS.clampToMapBounds(50, 50, 12, 12).x === 4 && MS.clampToMapBounds(50, 50, 12, 12).y === 4,
+      JSON.stringify(MS.clampToMapBounds(50, 50, 12, 12)),
+    );
+  }
+
+  // 8.6 RemoteInterp 组件级（node 内用**假 owner**：组件只通过 owner.setPos 写位置，不触碰 Laya）
+  const fakeOwner = () => ({
+    x: null,
+    y: null,
+    setPos(x, y) {
+      this.x = x;
+      this.y = y;
+    },
+  });
+  const attach = () => {
+    const owner = fakeOwner();
+    const c = new RemoteInterp();
+    c.onAttach(owner);
+    return { owner, c };
+  };
+
+  {
+    Quality.forceTier('high');
+    const { owner, c } = attach();
+    c.setTarget(100, 50);
+    check(
+      '首包（尚未对齐）直接对齐，不从原点爬过来',
+      owner.x === 100 && owner.y === 50 && c.snapshot().active === true,
+      JSON.stringify(c.snapshot()),
+    );
+    c.setTarget(200, 50);
+    check(
+      '节流：同 tick 内第二包被丢弃（high 档 10Hz → 80ms 生效间隔）',
+      c.snapshot().targetX === 100,
+      `targetX=${c.snapshot().targetX}`,
+    );
+  }
+  {
+    // 真实一包的量级：远端满速 240px/s @10Hz 广播 → 每包 24px（< snapPx 96，故走平滑分支）
+    const { owner, c } = attach();
+    c.snapTo(0, 0);
+    c.setTarget(24, 0);
+    c.update(1000 / 60);
+    check(
+      'update 向目标平滑逼近：一帧只走 alpha 比例（不瞬移）',
+      owner.x > 0 && owner.x < 12,
+      `x=${owner.x}（目标 24 = 单包位移）`,
+    );
+    for (let i = 0; i < 60; i++) c.update(1000 / 60);
+    check(
+      '持续 update 后追到目标（<0.05px；真机上由 TransformComponent 取整到 24）',
+      Math.abs(c.snapshot().x - 24) < 0.05,
+      `float=${c.snapshot().x.toFixed(4)}`,
+    );
+  }
+  {
+    const saved = AppConfig.remote.interpBufferMs;
+    AppConfig.remote.interpBufferMs = 0;
+    try {
+      const { owner, c } = attach();
+      c.snapTo(0, 0);
+      c.setTarget(300, 0);
+      c.update(1000 / 60);
+      check('interpBufferMs=0（关闭插值，A/B 对照基线）→ 一帧直接到位', owner.x === 300, `x=${owner.x}`);
+    } finally {
+      AppConfig.remote.interpBufferMs = saved;
+    }
+  }
+  {
+    const { owner, c } = attach();
+    c.snapTo(0, 0);
+    c.setTarget(500, 0); // dist 500 > snapPx 96
+    c.update(1000 / 60);
+    check('越界（冻结后重入）→ update 直接对齐目标', owner.x === 500, `x=${owner.x}`);
+  }
+  {
+    const { owner, c } = attach();
+    c.snapTo(0, 0);
+    c.setTarget(50, 0);
+    c.update(1000 / 60);
+    c.snapTo(800, 600); // 池复用复位
+    const after = c.snapshot();
+    c.update(1000 / 60);
+    check(
+      'snapTo 清旧目标并立即对齐（池复用不会从上一个玩家的目标插值 = 幽灵位移防护）',
+      after.x === 800 && after.y === 600 && after.targetX === 800 && after.targetY === 600 && owner.x === 800,
+      JSON.stringify(after),
+    );
+  }
+  {
+    Quality.forceTier('low');
+    const { c } = attach();
+    c.snapTo(0, 0);
+    c.setTarget(100.4, 20.6);
+    check(
+      'low 档：目标点取整（interpPrecision=reduced）',
+      c.snapshot().targetX === 100 && c.snapshot().targetY === 21,
+      JSON.stringify(c.snapshot()),
+    );
+    c.setTarget(200, 40);
+    check('low 档 5Hz 节流：同 tick 第二包被丢弃（有效更新率降半）', c.snapshot().targetX === 100);
+    await sleep(220); // > 1000/5 × 0.8 = 160ms
+    c.setTarget(200.5, 40.5);
+    check(
+      'low 档：超过 160ms 后新包被采纳（节流不影响权威值，只降表现更新率）',
+      c.snapshot().targetX === 201 && c.snapshot().targetY === 41,
+      JSON.stringify(c.snapshot()),
+    );
+    Quality.forceTier('high');
+    check('low 档断言结束后恢复 high（本脚本后续与验收不受影响）', Quality.tier() === 'high');
+    Quality.forceTier(null);
+  }
+  check(
+    'high 档节流间隔（1000/10×0.8=80ms）严格小于服务端广播间隔 100ms → 常态零丢弃',
+    (1000 / 10) * AppConfig.remote.throttleSlackRatio < 100 &&
+      (1000 / 5) * AppConfig.remote.throttleSlackRatio >= 100,
+    `high=${(1000 / 10) * AppConfig.remote.throttleSlackRatio}ms low=${(1000 / 5) * AppConfig.remote.throttleSlackRatio}ms`,
   );
 }
 

@@ -1,6 +1,7 @@
 import { AppConfig } from '../config/AppConfig';
 import type { Entity } from '../entity/Entity';
 import type { WsClient } from '../net/ws';
+import { clampToMapBounds, moveDelta } from './move-step';
 
 // Laya 的 KEY_DOWN/KEY_UP 事件对象不携带 keyCode，只代理 nativeEvent.key（见引擎 Event.key 定义），
 // 故用归一化后的小写字符串判定按键。
@@ -12,7 +13,6 @@ const KEY_ARROW_LEFT = 'arrowleft';
 const KEY_ARROW_RIGHT = 'arrowright';
 const KEY_ARROW_UP = 'arrowup';
 const KEY_ARROW_DOWN = 'arrowdown';
-const SPEED_PX_PER_FRAME = 4;
 
 export class PlayerControl {
   private readonly pressed = new Set<string>();
@@ -47,6 +47,11 @@ export class PlayerControl {
     return String((e as unknown as { key?: string }).key ?? '').toLowerCase();
   }
 
+  /**
+   * S8 Task 5（D7）：改**时间基** —— 位移 = `speedPxPerMs × Laya.timer.delta`（毫秒），
+   * 60fps 与 30fps 手感一致（等价性由纯函数 `world/move-step` 的断言证明）。
+   * 上报口径（`moveReportIntervalMs` / `moveReportThreshold`）与上报时机**逐字未改**。
+   */
   private onFrame(): void {
     const p = this.pressed;
     let dx = 0;
@@ -57,13 +62,14 @@ export class PlayerControl {
     if (p.has(KEY_DOWN) || p.has(KEY_ARROW_DOWN)) dy += 1;
     if (!dx && !dy) return;
 
-    const len = Math.hypot(dx, dy);
-    const nx = this.me.x + (dx / len) * SPEED_PX_PER_FRAME;
-    const ny = this.me.y + (dy / len) * SPEED_PX_PER_FRAME;
-    this.me.setPos(
-      Math.min(Math.max(nx, 8), this.bounds.width - 8),
-      Math.min(Math.max(ny, 16), this.bounds.height - 8),
+    const step = moveDelta(dx, dy, AppConfig.moveSpeedPxPerMs, Laya.timer.delta);
+    const next = clampToMapBounds(
+      this.me.x + step.x,
+      this.me.y + step.y,
+      this.bounds.width,
+      this.bounds.height,
     );
+    this.me.setPos(next.x, next.y);
 
     const now = Date.now();
     const moved = Math.hypot(this.me.x - this.lastX, this.me.y - this.lastY);

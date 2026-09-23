@@ -42,6 +42,12 @@ const headless = argv.includes('--headless');
  * 页面 origin 仍保持 `http://localhost:5173`（后端 CORS 白名单认这个），只是解析走 IPv4。
  */
 const mapLocalhostIpv4 = argv.includes('--map-localhost-ipv4');
+/**
+ * 环境特例（可选）：本机 5173 被别的项目（`jianghu-client/shells/h5` 的 vite）占用，而后端 CORS
+ * 白名单只认 `http://localhost:5173`。此时把 `tools/serve.mjs` 另起在别的端口（如 `S1_PORT=5180`），
+ * 用本参数把发往 5173 的连接目标改到该端口 —— 页面 origin 仍是 `http://localhost:5173`，CORS 照常通过。
+ */
+const proxyPort = argOf('proxy-port', null);
 const stabilizeMs = 3000;
 const USER = { user: 'spike01', pass: 'spike123456' };
 
@@ -100,6 +106,7 @@ const consoleLines = [];
 
 const launchArgs = ['--enable-precise-memory-info'];
 if (mapLocalhostIpv4) launchArgs.push('--host-resolver-rules=MAP localhost 127.0.0.1');
+if (proxyPort) launchArgs.push(`--host-resolver-rules=MAP localhost:5173 127.0.0.1:${proxyPort}`);
 
 const browser = await chromium.launch({
   headless,

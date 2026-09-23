@@ -8,6 +8,7 @@ import { BuildingViewComponent } from '../entity/components/BuildComponent';
 import { Entity } from '../entity/Entity';
 import { EntityFactory } from '../entity/EntityFactory';
 import { acquire } from '../entity/EntityPool';
+import { RemoteInterp } from '../entity/components/RemoteInterp';
 import { EntityRegistry } from '../entity/EntityRegistry';
 import { Api } from '../net/api';
 import type { BuildRuleView, BuildingTemplate, BuildingView } from '../net/api';
@@ -102,12 +103,20 @@ async function afterLogin(): Promise<void> {
       if (String(d.playerId) === String(Session.playerId)) return;
 
       const pos = d.pos ?? { x: 0, y: 0 };
-      // S8 Task 2：仅「不存在 → 创建」这条路径改走对象池（upsert 的已存在语义零变更）；
-      // 实体由池负责 reset，addEntity 负责登记注册表与挂进实体层
-      const entity = EntityRegistry.upsert(d.entityId, pos, () =>
-        acquire('player', { playerId: String(d.playerId), x: pos.x, y: pos.y }, remotePlayerAdapter),
-      );
+      // S8 Task 5：远端玩家**不再直接 setPos**（那是位置跳变的来源），只覆盖插值目标，
+      // 由 RemoteInterp 逐帧平滑逼近。`EntityRegistry.upsert`（已存在即 setPos）语义零变更，
+      // 继续服务建筑（S6）与 NPC（S4）路径；本地玩家在上面已提前 return，保持即时表现零变更。
+      const existing = EntityRegistry.get(d.entityId);
+      if (existing) {
+        existing.getComponent(RemoteInterp)?.setTarget(pos.x, pos.y);
+        return;
+      }
+
+      // 不存在 → 仅此路径走对象池；acquire 内部已 reset + snapTo（池适配器），此处再对齐一次
+      // 保证「新建」与「复用」都从权威位置出发（不插值队列、不排队）
+      const entity = acquire('player', { playerId: String(d.playerId), x: pos.x, y: pos.y }, remotePlayerAdapter);
       SceneBuilder.addEntity(entity);
+      entity.getComponent(RemoteInterp)?.snapTo(pos.x, pos.y);
       return;
     }
 

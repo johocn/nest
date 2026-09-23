@@ -3,6 +3,7 @@ import { AiComponent } from './components/AiComponent';
 import { BuildComponent, BuildingViewComponent } from './components/BuildComponent';
 import { Component } from './components/Component';
 import { createInteractComponent } from './components/interact/registry';
+import { RemoteInterp } from './components/RemoteInterp';
 import { TransformComponent } from './components/TransformComponent';
 import { VisualComponent } from './components/VisualComponent';
 import { Entity, type EntityOptions } from './Entity';
@@ -63,8 +64,16 @@ export class EntityFactory {
     };
   }
 
+  /**
+   * 远端玩家：与本地玩家同一份描述（`otherPlayerOptions`），额外挂 `RemoteInterp`
+   * （S8 Task 5：位置只在收到广播时更新**插值目标**，由组件逐帧平滑逼近）。
+   * 初始位置以构造值为目标并对齐（`RemoteInterp.active=false` 时 `update` 不动作；
+   * 装配后由 `Main` / 池适配器调 `snapTo` 显式对齐）。
+   */
   static createOtherPlayer(playerId: string, x: number, y: number): Entity {
-    return EntityFactory.assemble(EntityFactory.otherPlayerOptions(playerId, x, y));
+    return EntityFactory.assemble(EntityFactory.otherPlayerOptions(playerId, x, y), [
+      new RemoteInterp(),
+    ]);
   }
 
   static createFromStatic(e: StaticEntity): Entity {
