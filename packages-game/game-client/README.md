@@ -11,6 +11,32 @@ LayaAir 3.x 工程，零新增 npm 依赖：模板、引擎类型、运行时都
 - `tools/check-config.mjs` —— 校验服务端导出目录 `../game-server/gamedata` 的配置包与 manifest 的 hash 一致性。
 - `docs/art-handover.md` —— 美术素材交接清单（目录/命名/尺寸/`@2x`/透明通道契约，S9 Task 3 Step 1）。
 
+## 生产运维（game.joho.cn）
+
+站点 `game.joho.cn` 在 odoo（`39.106.99.9`）；OpenResty 跑在 Docker 容器 `1Panel-openresty-cFrx`，站点 conf 与证书都在宿主 `/opt/1panel/apps/openresty/openresty/` 下（容器把 `conf/conf.d`、`www`、`root` 分别挂到 `/usr/local/openresty/nginx/conf/conf.d`、`/www`、`/usr/share/nginx/html`）。
+
+**⚠️ 路径陷阱**：宿主 `/www/sites/game.joho.cn/` 是更早原生 nginx 时期的遗留目录（**无 `ssl/`**），容器不读它 —— 在那里改证书/配置**静默无效**。
+
+**TLS 证书（2026-09-23 起为公共 CA）**：Let's Encrypt（`issuer=CN=YE2`），面板证书 `id=1`，申请方式 **HTTP-01 文件验证**（80 端口站点 conf 已含 `.well-known/acme-challenge`，root 映射宿主 `.../openresty/root/`，**不需要 DNS API**），**自动续期已开启**。
+
+| 项 | 值 |
+|---|---|
+| 当前证书 | `notBefore=2026-09-23`、**`notAfter=2026-12-22`** |
+| 证书文件 | `.../openresty/www/sites/game.joho.cn/ssl/game.joho.cn.fullchain.crt` + `.key`（站点 conf 引用的就是这两个名字，**换证不改 conf**） |
+| 续期落地 | 面板「推送证书到本地目录」→ `/opt/1panel/cert-stage/game.joho.cn/{fullchain.pem,privkey.pem}`；「申请证书之后执行脚本」把两者 `cp` 成上面两个文件名、`chmod 600`，再 `docker exec 1Panel-openresty-cFrx openresty -s reload`（续期后自动复用） |
+| 备份 | `/opt/1panel/game-site-backup/`（换证前的 conf + 自建 CA 证书；回滚：还原 conf 与 `ssl/` 后 reload） |
+
+**验证命令**（换证/续期后必跑）：
+
+```
+openssl s_client -verify_return_error -connect game.joho.cn:443 -servername game.joho.cn </dev/null 2>&1 | grep 'Verify return code'   # 期望 0 (ok)
+curl -sI https://game.joho.cn/health | head -1                                                                                      # 期望 200
+curl -s -i -N --http1.1 -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' \
+  -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' 'https://game.joho.cn/socket.io/?EIO=4&transport=websocket' | head -1            # 期望 101
+```
+
+> WS 注意：socket.io 的 namespace 是 `/game`，**握手 HTTP 路径是 `/socket.io`** —— 直接请求 `/game/` 返回 404 属正常。
+
 ## S1 工具链实证
 
 环境：LayaAir IDE **3.4.1**（`D:\Program Files\LayaAirIDE`），工程 `e:\code\nest\packages-game\game-client`。
