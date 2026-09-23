@@ -1,4 +1,5 @@
 import { Platform } from '../platform/Platform';
+import { ensureWxWebSocket } from '../platform/wx-socket';
 
 export interface WsMessage {
   cmd: string;
@@ -26,6 +27,7 @@ export class WsClient {
     if (typeof io !== 'function') {
       throw new Error('socket.io 未加载：请确认 index.html 引入了 /vendor/socket.io.min.js');
     }
+    if (Platform.isMiniGame()) ensureWxWebSocket();
     this.socket = io(Platform.env.wsUrl(), {
       transports: ['websocket'],
       query: { token },

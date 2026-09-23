@@ -7,6 +7,7 @@
 //   - bin/js/config/AppConfig.js
 // 三个运行环境场景都在 node 里伪造：A 小游戏（注入假 wx + 删 document）、B H5（删 wx + 假 localStorage/document）、
 // C __ENV__ 优先级；D 是验收项 A2 的不变量：`src/**/*.ts` 里 document|localStorage|wx. 只允许命中 `src/platform/`。
+// Task 2 追加：E `Platform.request`（wx.request / fetch 双分支）、F `createWxWebSocket`（纯逻辑，假 wx.connectSocket）。
 // 断言失败 → exit 1。
 //
 // 注：`bin/js/*.js` 最近的 package.json（仓库根）没有 "type" 字段，node 会先按 CJS 解析失败、
@@ -24,6 +25,7 @@ const ARTIFACTS = {
   appConfig: 'bin/js/config/AppConfig.js',
   http: 'bin/js/net/http.js',
   ws: 'bin/js/net/ws.js',
+  wxSocket: 'bin/js/platform/wx-socket.js',
 };
 
 const missing = Object.values(ARTIFACTS).filter((p) => !existsSync(join(root, p)));
@@ -313,6 +315,265 @@ check(
   `D: 扫描 ${scanned} 个 src/**/*.ts，平台 API 命中只在 src/platform/ 内`,
   violations.length === 0,
   violations.length > 0 ? `越界命中：\n  ${violations.join('\n  ')}` : '仅 src/platform/Platform.ts 命中',
+);
+
+// ── 场景 E：Platform.request（S7 Task 2 Step 1）────────────────────────────
+console.log('— 场景 E：Platform.request（wx.request / fetch 双分支）—');
+
+/** attempt 的异步版：失败同样记 FAIL，不中断脚本 */
+async function attemptAsync(fn) {
+  try {
+    return { ok: true, value: await fn() };
+  } catch (e) {
+    return { ok: false, error: e };
+  }
+}
+
+const reqCalls = [];
+let reqBehavior = () => ({});
+globalThis.wx = {
+  request(opts) {
+    reqCalls.push(opts);
+    const r = reqBehavior(opts);
+    if (r.fail) opts.fail(r.fail);
+    else opts.success(r);
+  },
+};
+
+const JSON_BODY = '{"code":0,"msg":"ok","data":{"token":"t"}}';
+reqBehavior = () => ({ statusCode: 200, data: JSON_BODY });
+const rE1 = await attemptAsync(() =>
+  Platform.request({
+    method: 'POST',
+    url: 'https://game.joho.cn/api/auth/login',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer tk' },
+    body: '{"username":"spike01"}',
+  }),
+);
+const cE1 = reqCalls[0] || {};
+check(
+  'E: wx 分支返回 {status,text}，dataType=text 且 header/method/url/data 原样透传',
+  rE1.ok &&
+    rE1.value.status === 200 &&
+    rE1.value.text === JSON_BODY &&
+    cE1.dataType === 'text' &&
+    cE1.method === 'POST' &&
+    cE1.url === 'https://game.joho.cn/api/auth/login' &&
+    cE1.data === '{"username":"spike01"}' &&
+    cE1.header.Authorization === 'Bearer tk' &&
+    cE1.header['Content-Type'] === 'application/json',
+  rE1.ok ? `ret=${JSON.stringify(rE1.value)} req=${JSON.stringify(cE1)}` : String(rE1.error),
+);
+
+reqCalls.length = 0;
+reqBehavior = () => ({ statusCode: 500, data: { code: 7, msg: 'x' } });
+const rE2 = await attemptAsync(() => Platform.request({ method: 'GET', url: 'https://game.joho.cn/api/x' }));
+check(
+  'E: statusCode=500 保留，data 非字符串时 text 用 JSON.stringify 兜底',
+  rE2.ok && rE2.value.status === 500 && rE2.value.text === '{"code":7,"msg":"x"}',
+  rE2.ok ? `ret=${JSON.stringify(rE2.value)}` : String(rE2.error),
+);
+
+reqCalls.length = 0;
+reqBehavior = () => ({ fail: { errMsg: 'request:fail timeout' } });
+const rE3 = await attemptAsync(() => Platform.request({ method: 'GET', url: 'https://game.joho.cn/api/y' }));
+check(
+  'E: wx.request fail → reject（Promise 拒绝并携带 errMsg，而非返回空值）',
+  !rE3.ok && rE3.error instanceof Error && String(rE3.error.message).includes('request:fail timeout'),
+  rE3.ok ? `意外 resolve：${JSON.stringify(rE3.value)}` : `rejected=${String(rE3.error.message)}`,
+);
+
+const origFetch = globalThis.fetch;
+const fetchCalls = [];
+globalThis.fetch = async (url, init) => {
+  fetchCalls.push({ url, init });
+  return { status: 201, text: async () => JSON_BODY };
+};
+
+globalThis.wx = { request: 'not-a-function' };
+const rE4 = await attemptAsync(() => Platform.request({ method: 'GET', url: 'https://h5.test/api/a' }));
+check(
+  'E: wx 存在但 request 非 function → 回落 fetch',
+  rE4.ok && rE4.value.status === 201 && rE4.value.text === JSON_BODY && fetchCalls.length === 1,
+  rE4.ok ? `ret=${JSON.stringify(rE4.value)} fetch=${fetchCalls.length}` : String(rE4.error),
+);
+
+delete globalThis.wx;
+const rE5 = await attemptAsync(() =>
+  Platform.request({
+    method: 'POST',
+    url: 'https://h5.test/api/b',
+    headers: { Authorization: 'Bearer h5' },
+    body: '{"a":1}',
+  }),
+);
+const fE5 = fetchCalls[1] || { init: {} };
+check(
+  'E: H5（无 wx）走 fetch 且 method/headers/body 透传',
+  rE5.ok &&
+    rE5.value.status === 201 &&
+    fetchCalls.length === 2 &&
+    fE5.url === 'https://h5.test/api/b' &&
+    fE5.init.method === 'POST' &&
+    fE5.init.headers.Authorization === 'Bearer h5' &&
+    fE5.init.body === '{"a":1}',
+  rE5.ok ? `ret=${JSON.stringify(rE5.value)} init=${JSON.stringify(fE5.init)}` : String(rE5.error),
+);
+globalThis.fetch = origFetch;
+
+// ── 场景 F：wx-socket 适配（S7 Task 2 Step 2）──────────────────────────────
+console.log('— 场景 F：createWxWebSocket（假 wx.connectSocket + 可控 SocketTask）—');
+
+const { createWxWebSocket, ensureWxWebSocket } = await load(ARTIFACTS.wxSocket);
+
+const connectCalls = [];
+const tasks = [];
+globalThis.wx = {
+  connectSocket(opts) {
+    connectCalls.push(opts);
+    const task = {
+      sent: [],
+      closed: [],
+      onOpen(fn) {
+        task._open = fn;
+      },
+      onMessage(fn) {
+        task._msg = fn;
+      },
+      onClose(fn) {
+        task._close = fn;
+      },
+      onError(fn) {
+        task._err = fn;
+      },
+      send(o) {
+        task.sent.push(o);
+      },
+      close(o) {
+        task.closed.push(o);
+      },
+    };
+    tasks.push(task);
+    return task;
+  },
+};
+
+const WxWS = createWxWebSocket();
+const s1 = new WxWS('wss://game.joho.cn/game', ['websocket']);
+check(
+  'F: 构造后 readyState=CONNECTING，常量与浏览器一致，wx.connectSocket 收到 url/protocols',
+  s1.readyState === 0 &&
+    WxWS.CONNECTING === 0 &&
+    WxWS.OPEN === 1 &&
+    WxWS.CLOSING === 2 &&
+    WxWS.CLOSED === 3 &&
+    s1.CONNECTING === 0 &&
+    s1.OPEN === 1 &&
+    connectCalls[0].url === 'wss://game.joho.cn/game' &&
+    JSON.stringify(connectCalls[0].protocols) === '["websocket"]',
+  `readyState=${s1.readyState} connect=${JSON.stringify(connectCalls[0])}`,
+);
+
+const rF2 = attempt(() => s1.send('early'));
+check(
+  'F: 未 OPEN 时 send 不抛且不落到 wx（丢弃 + 警告）',
+  rF2.ok && tasks[0].sent.length === 0,
+  rF2.ok ? `sent=${tasks[0].sent.length}` : String(rF2.error),
+);
+
+let openedProp = 0;
+let openedListener = 0;
+const msgs = [];
+const msgsRemoved = [];
+let closeEvent = null;
+s1.onopen = () => openedProp++;
+s1.addEventListener('open', () => openedListener++);
+s1.addEventListener('message', (ev) => msgs.push(ev.data));
+const removedFn = (ev) => msgsRemoved.push(ev.data);
+s1.addEventListener('message', removedFn);
+s1.removeEventListener('message', removedFn);
+s1.onclose = (ev) => {
+  closeEvent = ev;
+};
+tasks[0]._open();
+check(
+  'F: onOpen → readyState=OPEN，属性式回调与 addEventListener 都被调用',
+  s1.readyState === 1 && openedProp === 1 && openedListener === 1,
+  `readyState=${s1.readyState} onopen=${openedProp} listener=${openedListener}`,
+);
+
+tasks[0]._msg({ data: '{"a":1}' });
+check(
+  'F: onMessage 字符串透传（未解析成对象），removeEventListener 生效',
+  msgs.length === 1 && msgs[0] === '{"a":1}' && typeof msgs[0] === 'string' && msgsRemoved.length === 0,
+  `msgs=${JSON.stringify(msgs)} removed=${msgsRemoved.length}`,
+);
+
+s1.send('hello');
+check(
+  'F: send 的字符串原样进入 SocketTask.send',
+  tasks[0].sent.length === 1 && tasks[0].sent[0].data === 'hello',
+  `sent=${JSON.stringify(tasks[0].sent)}`,
+);
+
+tasks[0]._close({ code: 1000, reason: 'x' });
+check(
+  'F: onClose → readyState=CLOSED，close 事件含 code/reason/wasClean',
+  s1.readyState === 3 &&
+    closeEvent &&
+    closeEvent.code === 1000 &&
+    closeEvent.reason === 'x' &&
+    closeEvent.wasClean === true,
+  `readyState=${s1.readyState} close=${JSON.stringify(closeEvent)}`,
+);
+
+const s2 = new WxWS('wss://game.joho.cn/game');
+let errEvent = null;
+s2.onerror = (ev) => {
+  errEvent = ev;
+};
+s2.addEventListener('error', () => {});
+tasks[1]._err({ errMsg: 'boom' });
+check(
+  'F: onError → error 监听收到 Error（errMsg 放进 message）',
+  errEvent instanceof Error && errEvent.message === 'boom',
+  `err=${errEvent instanceof Error ? errEvent.message : String(errEvent)}`,
+);
+
+const s3 = new WxWS('wss://game.joho.cn/game');
+const rF7 = attempt(() => {
+  s3.close();
+  s3.close();
+});
+check(
+  'F: close() 后再 close() 不抛，未连接时直接切 CLOSED',
+  rF7.ok && s3.readyState === 3 && tasks[2].closed.length === 1,
+  rF7.ok ? `readyState=${s3.readyState} closed=${JSON.stringify(tasks[2].closed)}` : String(rF7.error),
+);
+
+const beforeWS = globalThis.WebSocket;
+ensureWxWebSocket();
+const injectedWS = globalThis.WebSocket;
+const keepWS = function ExistingWS() {};
+globalThis.WebSocket = keepWS;
+ensureWxWebSocket();
+check(
+  'F: ensureWxWebSocket 注入生效、幂等且不覆盖已存在的 WebSocket',
+  typeof injectedWS === 'function' && globalThis.WebSocket === keepWS && typeof s1.removeEventListener === 'function',
+  `before=${typeof beforeWS} injected=${typeof injectedWS} after=${
+    globalThis.WebSocket === keepWS ? 'unchanged' : 'overwritten'
+  }`,
+);
+if (beforeWS === undefined) delete globalThis.WebSocket;
+else globalThis.WebSocket = beforeWS;
+delete globalThis.wx;
+
+check(
+  'F: 暴露全局兜底名 __S7_WX_SOCKET__（供早于 socket.io 的入口脚本调用）',
+  typeof globalThis.__S7_WX_SOCKET__ === 'object' &&
+    typeof globalThis.__S7_WX_SOCKET__.ensureWxWebSocket === 'function' &&
+    typeof globalThis.__S7_WX_SOCKET__.createWxWebSocket === 'function',
+  `keys=${Object.keys(globalThis.__S7_WX_SOCKET__ || {}).join(',')}`,
 );
 
 console.log(

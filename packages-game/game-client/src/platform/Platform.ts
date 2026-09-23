@@ -6,6 +6,20 @@ import { Hud } from '../ui/Hud';
  * 存储 / 提示 / 环境地址三域已双端适配（S7 Task 1）；网络与登录页见 S7 后续任务。
  */
 
+/** Platform.request 入参：只暴露业务代码真正需要的最小集 */
+export interface PlatformRequestOptions {
+  method: 'GET' | 'POST';
+  url: string;
+  headers?: Record<string, string>;
+  body?: string;
+}
+
+/** Platform.request 出参：不解析 JSON，交给 http.ts 沿用既有解析与错误语义 */
+export interface PlatformResponse {
+  status: number;
+  text: string;
+}
+
 /**
  * 小游戏全局对象。存储分支按「wx 存在且方法为 function」判定，不用 isMiniGame()：
  * 开发者工具里 document 可能仍存在，按 document 判定会走错分支。
@@ -94,6 +108,41 @@ export const Platform = {
       console.warn(`[S1] 读取包内文件失败 ${relPath}`, e);
       return null;
     }
+  },
+
+  /**
+   * 网络出口：H5 用 fetch，小游戏用 wx.request，统一返回 { status, text }。
+   * 只做传输差异适配，不解析响应体 —— 业务错误约定（body.code 优先）仍由 net/http.ts 负责。
+   *
+   * wx 分支必须显式 dataType:'text'：否则 wx 会把 JSON 响应体预解析成对象，text 就不是原文。
+   * 分支判定与存储一致（wx 存在且 request 为 function），wx 不可用时回落 fetch。
+   */
+  async request(opts: PlatformRequestOptions): Promise<PlatformResponse> {
+    const wx = wxApi();
+    if (wx && typeof wx.request === 'function') {
+      return new Promise<PlatformResponse>((resolve, reject) => {
+        wx.request({
+          url: opts.url,
+          method: opts.method,
+          header: opts.headers,
+          data: opts.body,
+          dataType: 'text',
+          success(res: any) {
+            resolve({
+              status: res.statusCode,
+              // 非字符串只是兜底（dataType:'text' 生效时 data 必为 string）
+              text: typeof res.data === 'string' ? res.data : JSON.stringify(res.data),
+            });
+          },
+          fail(err: any) {
+            reject(new Error(`wx.request 失败：${(err && err.errMsg) || JSON.stringify(err)}`));
+          },
+        });
+      });
+    }
+
+    const res = await fetch(opts.url, { method: opts.method, headers: opts.headers, body: opts.body });
+    return { status: res.status, text: await res.text() };
   },
 
   /**

@@ -1,4 +1,4 @@
-import { Platform } from '../platform/Platform';
+import { Platform, PlatformResponse } from '../platform/Platform';
 
 export class ApiError extends Error {
   constructor(
@@ -29,10 +29,11 @@ export async function httpJson<T>(
   if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
   if (opts.token) headers['Authorization'] = `Bearer ${opts.token}`;
 
-  let res: Response;
+  let res: PlatformResponse;
   try {
-    res = await fetch(`${Platform.env.apiBase()}${path}`, {
+    res = await Platform.request({
       method,
+      url: `${Platform.env.apiBase()}${path}`,
       headers,
       body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
     });
@@ -40,7 +41,7 @@ export async function httpJson<T>(
     throw new ApiError(-1, `无法连接后端 ${Platform.env.apiBase()}（请确认服务已启动且 CORS 放行）`);
   }
 
-  const text = await res.text();
+  const text = res.text;
   let payload: any = null;
   try {
     payload = text ? JSON.parse(text) : null;
@@ -52,6 +53,6 @@ export async function httpJson<T>(
     if (payload.code !== 0) throw new ApiError(payload.code, payload.msg || '请求失败');
     return payload.data as T;
   }
-  if (!res.ok) throw new ApiError(res.status, `HTTP ${res.status}`);
+  if (res.status < 200 || res.status >= 300) throw new ApiError(res.status, `HTTP ${res.status}`);
   return payload as T;
 }
