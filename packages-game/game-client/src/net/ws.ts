@@ -1,5 +1,6 @@
 import { Platform } from '../platform/Platform';
 import { ensureWxWebSocket } from '../platform/wx-socket';
+import { bumpUp } from '../perf/counters';
 
 export interface WsMessage {
   cmd: string;
@@ -74,6 +75,8 @@ export class WsClient {
    */
   send<T = any>(cmd: string, data: unknown, expectAck = true): Promise<WsMessage & { data: T }> {
     if (!this.socket) throw new Error('WS 未连接');
+    // S8：上行计数（只计数，零行为变更）—— 两条路径共用此处，均会统计到
+    bumpUp(cmd);
     const seq = ++this.seq;
     return new Promise((resolve, reject) => {
       if (!expectAck) {

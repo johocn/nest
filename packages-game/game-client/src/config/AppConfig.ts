@@ -1,6 +1,13 @@
 export const AppConfig = {
   /** 客户端版本（展示用） */
   clientVersion: '0.1.0-s1',
+  /**
+   * S8 质量档位默认值：`auto` = 交给 `perf/Quality.resolveTier` 按平台解析
+   * （小游戏 low、H5 high）。这里不直接写 `isMiniGame()? 'low':'high'`：
+   * AppConfig 是纯常量字面量、被 Platform 反向 import，import Platform 会成环（S8 Task 1 已确认的合理偏离）。
+   * 运行期覆盖优先级：URL `?quality=` > `__ENV__.quality` > 本字段（非 auto）> 平台默认。
+   */
+  quality: 'auto' as 'auto' | 'high' | 'low',
   /** HTTP 接口根地址（后端无 global prefix） */
   apiBase: 'http://localhost:3000',
   /** socket.io 地址：namespace /game */
@@ -195,5 +202,32 @@ export const AppConfig = {
     /** 输入长度上限（与 H5 表单标签口径一致：账号 3-32、密码 6-64） */
     maxUserLen: 32,
     maxPassLen: 64,
+  },
+  /**
+   * S8 性能面板（引擎内自绘，屏幕空间）与质量分级参数：与 hud/dialogue/build/login 同风格，常量集中避免魔法数字散落。
+   * 指标口径沿用总纲 §12：H5 60fps / ≤60 drawcall、小游戏 30fps / ≤40 drawcall、内存 ≤300MB、上行 ≤10 次/秒/人。
+   */
+  perf: {
+    /** 面板根节点 zOrder：须高于 hud(9999)/dialogue(10000)/build(10001)/login(10002) */
+    zOrder: 10003,
+    /** 面板左上角位置与内边距（屏幕坐标） */
+    x: 8,
+    y: 8,
+    padX: 8,
+    padY: 6,
+    fontSize: 13,
+    bgColor: 'rgba(0,0,0,0.72)',
+    textColor: '#e6edf3',
+    /** 校验偏差超阈值时的标注色 */
+    warnColor: '#ff7b72',
+    /** 面板文本刷新间隔（毫秒）＝ fps 采样窗口；每帧只累加计数，不做重绘 */
+    refreshMs: 1000,
+    /** 自计 fps 与 `Laya.Stat.FPS` 的允许偏差：超过则在面板上标注（不报错） */
+    statFpsTolerance: 3,
+    /** 自动降级：目标帧率（按档位取）＋连续低于目标 ratio 的时长（D2 / 风险 #8） */
+    targetFpsHigh: 60,
+    targetFpsLow: 30,
+    degradeRatio: 0.8,
+    sustainMs: 3000,
   },
 };

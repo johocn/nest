@@ -1,0 +1,247 @@
+// S8 性能纯逻辑零依赖断言脚本（不引入任何测试框架：只用 node + 自写 check）
+// 用法：node tools/build-fallback.mjs ; node scripts/smoke-s8-perf.mjs
+//
+// 断言对象取自**构建产物** `bin/js/perf/*.js`（构建输出，不入库）——这两个模块顶层不触碰 Laya
+// （Quality 只 import 常量与 Platform，counters 零依赖），故 node 可直接求值（同 S3-S6 的 smoke 脚本）：
+//   - perf/Quality.js    档位解析优先级 / 降级项开关 / 自动降级判定（纯逻辑）
+//   - perf/counters.js   上行计数的 1 秒滑窗语义
+// 这是 S8 新增的回归门禁：计划 §1.7 说「客户端无单测框架、以面板数据代替」，本脚本把
+// Task 2-5 将要消费的开关与阈值钉成可自动断言的契约（偏离项，已在 Task 1 报告中说明）。
+// 断言失败 → exit 1。
+//
+// 注：`bin/js/*.js` 最近的 package.json（仓库根）没有 "type" 字段，node 会先按 CJS 解析失败、
+// 再按「检测到模块语法」回退为 ES module 求值，并打印一条 MODULE_TYPELESS_PACKAGE_JSON 警告 —— 属预期噪音。
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+/** 需要存在的构建产物：缺任一则提示先构建，不静默失败 */
+const ARTIFACTS = {
+  quality: 'bin/js/perf/Quality.js',
+  counters: 'bin/js/perf/counters.js',
+  appConfig: 'bin/js/config/AppConfig.js',
+};
+
+const missing = Object.values(ARTIFACTS).filter((p) => !existsSync(join(root, p)));
+if (missing.length > 0) {
+  console.error(`缺少构建产物：${missing.join('、')}`);
+  console.error('请先执行 node tools/build-fallback.mjs');
+  process.exit(1);
+}
+
+const load = (rel) => import(pathToFileURL(join(root, rel)).href);
+const { Quality, createFpsWatcher, resolveTier } = await load(ARTIFACTS.quality);
+const { bumpUp, upPerSec, reset, snapshot, UP_WINDOW_MS } = await load(ARTIFACTS.counters);
+const { AppConfig } = await load(ARTIFACTS.appConfig);
+
+let total = 0;
+let failed = 0;
+function check(name, cond, extra = '') {
+  total++;
+  console.log(`${cond ? 'PASS' : 'FAIL'} ${name}${extra ? ` :: ${extra}` : ''}`);
+  if (!cond) failed++;
+}
+
+// ── 1. resolveTier 优先级（URL > ENV > config 非 auto > 平台默认）──────────────
+console.log('— resolveTier：覆盖优先级（纯函数）—');
+
+{
+  check(
+    'URL 覆盖优先于 ENV/config/平台（url=low 胜出）',
+    resolveTier({ platform: 'h5', config: 'high', urlOverride: 'low', envOverride: 'high' }) === 'low',
+    `tier=${resolveTier({ platform: 'h5', config: 'high', urlOverride: 'low', envOverride: 'high' })}`,
+  );
+  check(
+    'ENV 覆盖优先于 config/平台（env=low 胜出）',
+    resolveTier({ platform: 'h5', config: 'high', urlOverride: null, envOverride: 'low' }) === 'low',
+  );
+  check(
+    'config 非 auto 优先于平台默（minigame + high → high）',
+    resolveTier({ platform: 'minigame', config: 'high', urlOverride: null, envOverride: null }) === 'high',
+  );
+  check(
+    'config=auto → 取平台默认（H5 high）',
+    resolveTier({ platform: 'h5', config: 'auto', urlOverride: null, envOverride: null }) === 'high',
+  );
+  check(
+    'config=auto → 取平台默认（小游戏 low）',
+    resolveTier({ platform: 'minigame', config: 'auto', urlOverride: null, envOverride: null }) === 'low',
+  );
+  check(
+    'config 缺省（undefined）→ 等同 auto，取平台默认',
+    resolveTier({ platform: 'minigame' }) === 'low' && resolveTier({ platform: 'h5' }) === 'high',
+  );
+  check(
+    '非法覆盖值被忽略（url=weird → 落到 ENV）',
+    resolveTier({ platform: 'h5', urlOverride: 'weird', envOverride: 'low' }) === 'low',
+  );
+  check(
+    '非法覆盖值被忽略（env=WOW → 落到 config 非 auto）',
+    resolveTier({ platform: 'h5', config: 'low', envOverride: 'WOW' }) === 'low',
+  );
+  check(
+    'AppConfig.quality 默认 auto（解析交 Quality.init 按平台）',
+    AppConfig.quality === 'auto',
+    `quality=${AppConfig.quality}`,
+  );
+}
+
+// ── 2. low 档五个降级项与 high 不同（D3 五项，只在开关层）─────────────────────
+console.log('— 降级项开关：high / low 两档取值表 —');
+
+{
+  const high = Quality.switches();
+  check('未 init 时 tier() 有缺省值且 switches() 可取（不抛错）', typeof Quality.tier() === 'string' && !!high);
+
+  Quality.forceTier('high');
+  const h = Quality.switches();
+  Quality.setTier('low');
+  const l = Quality.switches();
+  Quality.setTier('high');
+
+  // 五项逐项比对
+  check(
+    'D3-① 名标签：high 开 / low 关',
+    h.nameLabels === true && l.nameLabels === false,
+    `high=${h.nameLabels} low=${l.nameLabels}`,
+  );
+  check(
+    'D3-② 网格线：high 开 / low 关',
+    h.gridLines === true && l.gridLines === false,
+    `high=${h.gridLines} low=${l.gridLines}`,
+  );
+  check(
+    'D3-③ 触发区描边：high 开 / low 关',
+    h.triggerOutline === true && l.triggerOutline === false,
+    `high=${h.triggerOutline} low=${l.triggerOutline}`,
+  );
+  check(
+    'D3-④ 插值精度：high=full / low=reduced',
+    h.interpPrecision === 'full' && l.interpPrecision === 'reduced',
+    `high=${h.interpPrecision} low=${l.interpPrecision}`,
+  );
+  check(
+    'D3-⑤ 远端更新频率：low 低于 high 且均为正数',
+    typeof h.remoteUpdateHz === 'number' && typeof l.remoteUpdateHz === 'number' && l.remoteUpdateHz < h.remoteUpdateHz && l.remoteUpdateHz > 0,
+    `high=${h.remoteUpdateHz}Hz low=${l.remoteUpdateHz}Hz`,
+  );
+  check(
+    'switches() 返回副本（外部改动不回写内部表）',
+    (() => {
+      const s = Quality.switches();
+      s.gridLines = false;
+      return Quality.switches().gridLines === true;
+    })(),
+  );
+
+  // onChange / forceTier / override 语义
+  let notified = 0;
+  const off = Quality.onChange(() => notified++);
+  Quality.setTier('low');
+  check('setTier 变化触发 onChange 一次', notified === 1 && Quality.tier() === 'low', `notified=${notified}`);
+  Quality.setTier('low');
+  check('setTier 同值不触发 onChange（幂等）', notified === 1, `notified=${notified}`);
+  off();
+  Quality.forceTier('high');
+  check('forceTier 直接改档且 onChange 已注销后不再通知', Quality.tier() === 'high' && notified === 1, `notified=${notified}`);
+  check('override() 反映强制档位（自动降级前须检查）', Quality.override() === 'high', `override=${Quality.override()}`);
+  Quality.forceTier(null);
+  check('forceTier(null) 解除覆盖但保留当前档', Quality.override() === null && Quality.tier() === 'high');
+}
+
+// ── 3. 自动降级判定（连续 3 秒低帧才降；单次抖动不触发；只降不升）────────────
+console.log('— createFpsWatcher：抖动 / 连续低帧 / 不重复降 —');
+
+{
+  const w = createFpsWatcher({ targetFps: 60, ratio: 0.8, sustainMs: 3000 });
+  // 单次抖动：一帧低、立刻恢复 → 永远不触发
+  let fired = false;
+  fired = w.push(10, 0) || fired;
+  fired = w.push(60, 1000) || fired;
+  fired = w.push(60, 2000) || fired;
+  fired = w.push(59, 3000) || fired;
+  fired = w.push(61, 4000) || fired;
+  check('单次抖动（低一帧后恢复）不触发降级', fired === false && w.degraded() === false, `fired=${fired}`);
+  check('阈值取严格小于：fps 恰等于 target×ratio 不算低帧', w.push(48, 5000) === false && w.degraded() === false);
+}
+
+{
+  const w = createFpsWatcher({ targetFps: 60, ratio: 0.8, sustainMs: 3000 });
+  const seq = [];
+  seq.push(w.push(30, 0)); // 低帧起点
+  seq.push(w.push(30, 1000));
+  seq.push(w.push(30, 2000));
+  check('连续低帧不足 3 秒 → 暂不降级', seq.every((v) => v === false), `seq=${seq.join(',')}`);
+  check('连续低帧满 3 秒 → 触发降级一次', w.push(30, 3000) === true && w.degraded() === true);
+  check(
+    '降级后持续低帧不再重复降（本 Task 只降不升）',
+    w.push(20, 4000) === false && w.push(5, 9000) === false && w.push(1, 60000) === false,
+  );
+}
+
+{
+  // 中间恢复一帧必须重置计时：否则「断续低帧」会误降（风险 #8）
+  const w = createFpsWatcher({ targetFps: 60, ratio: 0.8, sustainMs: 3000 });
+  w.push(30, 0);
+  w.push(30, 2000);
+  w.push(60, 2500); // 恢复 → 计时重置（若未重置，3000ms 就该降级）
+  const a = w.push(30, 4000); // 重置后重新起算
+  check('低帧中途恢复一帧 → 计时重置（4000ms 未降级）', a === false, `a=${a}`);
+  check('重置后重新连续 3 秒（4000→7000）才降级', w.push(30, 6000) === false && w.push(30, 7000) === true);
+}
+
+// ── 4. counters：1 秒滑窗语义（含静止 → 0）──────────────────────────────────
+console.log('— counters：bumpUp / upPerSec 滑窗 —');
+
+{
+  check('滑窗常量 = 1000ms（口径：本秒上行次数）', UP_WINDOW_MS === 1000, `window=${UP_WINDOW_MS}`);
+
+  reset();
+  check('静止（无上行）→ upPerSec 为 0', upPerSec('world.move', 10_000) === 0);
+  check('未计数过的 cmd → 0', upPerSec('never.sent', 10_000) === 0);
+
+  bumpUp('world.move', 0);
+  bumpUp('world.move', 0);
+  bumpUp('world.move', 0);
+  check('同秒 3 次上行 → 3', upPerSec('world.move', 500) === 3, `n=${upPerSec('world.move', 500)}`);
+  check('滑窗右边界：窗口内仍计 3', upPerSec('world.move', 999) === 3);
+  check('滑窗右边界：超出 1 秒 → 归零', upPerSec('world.move', 1001) === 0);
+
+  reset('world.move');
+  bumpUp('world.move', 0);
+  bumpUp('world.move', 2000);
+  check('只有窗口内的那 1 次被计入（旧时间戳被裁掉）', upPerSec('world.move', 2000) === 1, `n=${upPerSec('world.move', 2000)}`);
+
+  reset();
+  bumpUp('world.move', 0);
+  bumpUp('world.enter-scene', 0);
+  const snap = snapshot(0);
+  check(
+    'snapshot 按 cmd 分别计数',
+    snap['world.move'] === 1 && snap['world.enter-scene'] === 1,
+    JSON.stringify(snap),
+  );
+  reset();
+  check('reset() 清空全部计数', JSON.stringify(snapshot(0)) === '{}', JSON.stringify(snapshot(0)));
+
+  // 默认时间参数（不传 nowMs）走 Date.now()，不抛错
+  let defOk = true;
+  try {
+    bumpUp('world.move');
+    upPerSec('world.move');
+    snapshot();
+  } catch {
+    defOk = false;
+  }
+  check('缺省时间参数（Date.now）路径不抛错', defOk);
+  reset();
+}
+
+console.log(
+  failed === 0
+    ? `\nS8 性能纯逻辑断言全部通过（共 ${total} 项）`
+    : `\nS8 性能纯逻辑断言失败 ${failed}/${total} 项`,
+);
+process.exit(failed === 0 ? 0 : 1);

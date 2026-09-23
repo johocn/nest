@@ -13,6 +13,8 @@ import type { BuildRuleView, BuildingTemplate, BuildingView } from '../net/api';
 import { Session } from '../net/Session';
 import { WsClient } from '../net/ws';
 import { Platform } from '../platform/Platform';
+import { PerfPanel } from '../perf/PerfPanel';
+import { Quality } from '../perf/Quality';
 import { PlayerControl } from '../world/PlayerControl';
 import { InteractController } from '../world/InteractController';
 import { SceneBuilder } from '../world/SceneBuilder';
@@ -231,8 +233,11 @@ async function main(): Promise<void> {
   Hud.init();
   // S5 对话框（同为引擎内自绘，屏幕空间，zOrder 高于 HUD）
   DialogueView.init();
-  // S6 建造面板（引擎内自绘，zOrder 最高）
+  // S6 建造面板（引擎内自绘，zOrder 高于 HUD/对话框）
   BuildPanel.init();
+  // S8 质量分级 + 性能面板（面板 zOrder 须高于 login；F3 开关）
+  Quality.init();
+  PerfPanel.init();
   Session.load();
 
   if (Session.token) {
