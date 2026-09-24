@@ -1,6 +1,6 @@
 # LayaAir 2D 客户端 · S9 上线硬化批（真机性能 / 图集 / 生产证书 / 正式提审）实施计划
 
-> **状态：已规划，未执行。** 本文件只做规划，不动代码、不动生产。等待 S7 收尾 + 用户对 §4 待确认项答复后再进入执行。
+> **状态：执行中，范围收敛为 H5-only（2026-09-24）。** 微信小游戏侧**缺 AppID**，Task 6（正式提审）**阻塞**，Task 5 的产物链**代码已交付**，真实 `release/wxgame` 导出的复核随小游戏上线解阻后再补。本文件只做规划与记录，不动代码、不动生产。
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development（沿用 S2–S8 的既定方式：每 Task 派新 subagent，Task 间两阶段评审）。
 
 **Goal:** 把「能在开发者工具与本机跑通」的客户端变成**可正式上线**的游戏端：修掉生产证书链、把 S8 性能成果发布上线、接入已定稿美术并做图集、在**真机低端机型**上验收帧率与内存、建立包体与后端广播的**硬指标门禁**，最终通过**微信小游戏正式提审**并上线 H5。
@@ -185,7 +185,8 @@
 - [x] **Step 3** 验证：`/client/index.html` 200；页面可进场景；`F3` 面板出现；`?quality=low` 切档生效。→ `/client/index.html` 200 且 md5 `533b098c0b116ff136ae6d04836aeb95` 与本机一致；关键 URL（`/client/js/entity/EntityPool.js`、`/client/js/perf/{PerfPanel,Quality}.js`、`/client/js/world/Viewport.js`、`/client/js/entity/components/RemoteInterp.js`、`/gamedata/manifest.json`、`/health`）全 200；线上进场景 `[S1] 进场景应答 … 服务端 spawns=13 triggers=2`；F3 **真实按键** 关→开→关（`__PERF__.panel()` 连调两次取第二次返回值才是「读」，不传参是切换）；`?quality=low` → `finalQuality=low`、drawcall 峰 34→15。
 - [x] **Step 4** 线上冒烟：浏览器双窗口互见移动（插值连续无跳变）+ `curl https://game.joho.cn/health`。→ 双窗（spike01 / spike02）线上同场景：B 端稳定看到 A 位移 556px、`miss=0`、远端实体挂 `RemoteInterp`；**插值连续**逐帧位移 maxΔ=**6px**（中位 4px），关插值基线对照 maxΔ=**28px**（证明插值确在起作用，非 no-op）；`/health` 200（本机 `curl.exe` 受沙箱线程限制无法 DNS，用 `--resolve game.joho.cn:443:39.106.99.9` 后 `ssl_verify_result=0`）。临时冒烟脚本落在 `%TEMP%`，**不入库**。
 - [x] **Step 5** 线上指标：跑一次 `perf-sample.mjs`（prod 地址），记录 fps/drawcall/上行 → 写入 S9 报告。→ 线上跑三次写入 `docs/perf-sample.md`：`prod-s9`（headless，54.2fps —— 软件渲染口径，仅留证）、`prod-s9-gpu`（非 headless，**60fps**/最低 59.9、drawcall 峰 34、heap 峰 17MB、上行 9.4/s、静止 0，与本地 preview 口径一致）、`prod-s9-low`（60fps、drawcall 峰 15）。后端生产冒烟（5 bot/10s）写入 `loadtest-s9-report.md` §4：P95 33.08ms、上行 9.2/s/人、掉线 0、进场景 5/5，门禁 exit 1 仅因远端 RSS 无法度量（已记录两处脚本缺陷）。
-- [ ] **Step 6** commit：`chore(game-client): 发布 S8 性能成果到 H5 生产`
+- [x] **复现复核（补测，2026-09-24）**：按 Step 1 的三步命令（`build-fallback` → `inject-env --env prod` → `publish.mjs h5-site`）全部重跑一遍并逐文件比对 → 重建后仍是 71 文件；与重建前快照比对 **70/71 文件 sha256 完全一致**，唯一差异是 `index.html` 的缓存戳 `?v=`（重建 `mueu1br1` vs 线上 `mue6f1cn`），来源为 `tools/build-fallback.mjs:34` 的 `const BUILD_ID = Date.now().toString(36)` —— **按设计每次构建必变**，被引用的 7 个资源内容逐字节相同，故属预期行为而非缺陷。**结论：H5 发布链语义可复现**，线上 `release/client` 可用 README 记录的流程重现（字节级差异仅缓存戳）。
+- [x] **Step 6** commit：`chore(game-client): 发布 S8 性能成果到 H5 生产`（`e4454c907`）
 
 ### Task 3: 美术素材入库 + 图集（先量后做）
 
@@ -208,15 +209,17 @@
 
 ### Task 5: 包体门禁与产物链
 
-- [ ] **Step 1** `tools/check-package.mjs`：检查（a）主包 ≤4MB、（b）总包 ≤20MB、（c）`config/manifest.json` 与场景文件存在且 hash 匹配、（d）入口引擎脚本顺序 `laya.core.js → laya.webgl_2D.js → laya.ui2.js`、（e）`js/player-config.js` 在 init 前加载、（f）产物新鲜度（对比 `src/` 最近提交时间）。
-- [ ] **Step 2** 接入 `publish.mjs wxgame`：GUI 导出后补齐 `config/` + 注入 prod env + 自动跑 `check-package.mjs`。
-- [ ] **Step 3** 记录 GUI 手工步骤（IDE → 构建/发布 → 微信小游戏 → 产物目录），写入 README。
-- [ ] **Step 4** 连续两次发布产物清单与 hash 一致（幂等）。
-- [ ] **Step 5** commit：`feat(game-client): 包体检查与 wxgame 产物链`
+- [x] **Step 1** `tools/check-package.mjs`：检查（a）主包 ≤4MB、（b）总包 ≤20MB、（c）`config/manifest.json` 与场景文件存在且 hash 匹配、（d）入口引擎脚本顺序 `laya.core.js → laya.webgl_2D.js → laya.ui2.js`、（e）`js/player-config.js` 在 init 前加载、（f）产物新鲜度（对比 `src/` 最近提交时间）。→ 已落地（零依赖，只用 `node:` 内置模块；退出码 0/1/2；`--target/--entry/--src/--main-max-mb/--total-max-mb/--no-freshness`）。自检用 `release/client` 装配的 TEMP fixture（72 文件 / 2.23MB）：通过路径 **6/6 PASS, exit 0**；6 条失败路径各自独立命中——主包超限、总包超限、场景文件 hash 篡改、缺 `config/manifest.json`、交换 `laya.core.js`/`laya.ui2.js` 使顺序倒挂、把 `player-config` 的 `<script>` 移到 `Main.js` 之后（后两者 `FAIL` 单点 + exit 1）；`--entry nope.js` / `--target nope` / `--main-max-mb abc` → exit 2。**注**：入口候选表（`index.html`/`game.js`…、`js/boot/Main.js`…）为布局假设，Step 2 拿到 IDE 真实 `release/wxgame` 导出后需复核；主包口径 = 总包 − `game.json` 的 `subpackages[].root`。**Step 2 已修正两处口径**：(e) 由「`js/player-config.js` 在业务入口前」泛化为「配置注入时机」——H5 仍按独立文件位置判，小游戏改判入口 `require` 的脚本内 `Laya.PlayerConfig` 是否早于 `Laya.init`（IDE 的 `common/index.js` 把两者内联在同一文件，真实产物无 `js/player-config.js`）；(f) 新鲜度只统计**每次导出都会重写的构建产物**，排除 `config/ assets/ libs/ vendor/` —— Windows 的 `CopyFileW` 保留源 mtime，把它们计入会让 (f) 恒 FAIL（实测踩到）。修正后 H5 布局（`release/client` 71 文件）与小游戏布局（fixture）双双 6/6 PASS。**另修正 (d) 误判**：核对 IDE 的 `resources/app.asar` 构建代码后确认——`_insertEnginePluginRequire` 与 `addHashToFileName` 表明 IDE「版本管理」开关（`enableVersion`，默认 `false`）会把 hash 插在扩展名前（`laya.core.js` → `laya.core-a1b2c.js`），原 `text.indexOf('laya.core.js')` 会未命中而误 FAIL；改用 `findScript()`（主干 + 可选 `-<hash>` + 扩展名）后实测：无 hash 顺序正常 PASS、带 hash 顺序正常 PASS（修正前误 FAIL）、带 hash 顺序倒挂 FAIL、缺 `laya.ui2.js` FAIL（报「入口未引用」），exit 码均正确。**(e) 复核结论（修正上一版误判）**：`addHashToFileName` 是**重命名磁盘文件**，开版本管理后 `game.js` 引用什么磁盘就叫什么，故 (e) 小游戏分支的**字面量路径解析本来就命中**——上一版据「引用带 hash 而磁盘不带」的合成 fixture 判定 (e) 有同类缺陷**不成立**，已撤掉多余的 `resolveMaybeHashed` 兜底。真正需要 hash 容忍的只有**纯文本子串匹配**的两处：(d) 与小游戏布局判定用的 `text.indexOf(PLAYER_CONFIG)`；后者即 (e) 的 H5 分支，已同步改走 `findScript`（开版本管理时引用名带 `-<hash>`，纯 indexOf 会落空后误判为小游戏布局 → 再找不到 `require` → FAIL）。实测 H5 hash-on（引用与磁盘同步改名）PASS、hash-on 下 PlayerConfig 倒挂仍 FAIL 单点。(e) 小游戏分支实测：无 hash 基线 PASS、真实 hash-on（磁盘同步改名）PASS、hash-on 下倒挂 FAIL 单点。注：本仓 H5 走 `bin/` 的 `?v=` query 版本化，H5 这处属预防性对齐，当前并不触发。
+- [x] **Step 2** 接入 `publish.mjs wxgame`：GUI 导出后补齐 `config/` + 注入 prod env + 自动跑 `check-package.mjs`。→ 已落地子命令 `wxgame`（三件事串行，任一失败 exit 1）：复用 `publishConfigBundle` 补 `config/`；`spawnSync` 调 `inject-env.mjs --env prod --out <target>` 生成 `env-config.js` 并在 `game.js` 的 `require("weapp-adapter.js")` 之后插入 `require("env-config.js")`（幂等，重跑不重复插入）；`spawnSync` 调 `check-package.mjs`（`stdio: inherit`）。产物结构依据 IDE 安装目录模板 `resources/template/release/wxgame/game.js` + `release/common/index.js`（已直读源码核实）。**自检**（仿真实结构 fixture，10 文件 / 1.24MB）：全通过 6/6 exit 0；幂等两跑清单 + 逐文件 sha256 完全一致；`--target` 无 `game.js` → exit 1 并给出 IDE 导出提示；`PlayerConfig` 移到 `Laya.init` 之后 → 单点 `FAIL 配置注入时机` exit 1。**复核状态**：入口固定 `game.js`、引擎脚本落在 `libs/`、`common/index.js` 内联 PlayerConfig 三项均取自 IDE 安装目录模板 + `resources/app.asar` 源码直读（**非真实产物**）；**无微信 AppID 暂不导出** `release/wxgame`，真实产物复核随小游戏上线（Task 6 解阻）再补。
+- [x] **Step 3** 记录 GUI 手工步骤（IDE → 构建/发布 → 微信小游戏 → 产物目录），写入 README。→ README 新增「发布（双端，本地装配 → 上传由部署环节做）」节（H5 / 小游戏两行命令表 + GUI 三步 + 收尾命令的三件事说明）。
+- [x] **Step 4** 连续两次发布产物清单与 hash 一致（幂等）。→ 见 Step 2 自检：两次 `publish.mjs wxgame` 后 10 个文件的相对路径 / 字节数 / sha256 逐项一致；`game.js` 内 `require("env-config.js")` 只出现 1 次。
+- [x] **Step 5** commit：`feat(game-client): 包体检查与 wxgame 产物链`（含 `tools/check-package.mjs`、`tools/publish.mjs`、`README.md`、本文件）
 
 ### Task 6: 微信小游戏正式提审上线
 
-- [ ] **Step 1** 材料清单（技术项自查 + 业务项待提供）：AppID、备案域名白名单（含 `wss`）、类目资质、隐私政策、用户协议、内容合规说明。
+> **⚠️ 阻塞（2026-09-24）：无微信小游戏 AppID，无法上传/提审。** Step 1 的业务项材料（AppID、类目资质、隐私政策、用户协议、内容合规说明）由业务侧提供；AppID 到位前本 Task 全部 Step 不启动，S9 记为 **H5-only** 交付。
+
+- [ ] **Step 1** 材料清单（技术项自查 + 业务项待提供）：AppID、备案域名白名单（含 `wss`）、类目资质、隐私政策、用户协议、内容合规说明。→ **技术项自查可先做**（域名白名单 = `game.joho.cn`，证书链已由 Task 1 修复）；AppID 与合规材料**待业务侧提供**。
 - [ ] **Step 2** 产物上传体验版：`check-package` 通过 → 上传 → 生成体验版二维码。
 - [ ] **Step 3** 体验版内部验收：登录 → 进场景 → 移动互见 → 交互/对话 → 建造（覆盖 S3–S6 主链路）+ A4 真机项。
 - [ ] **Step 4** 提交审核 → 跟踪审核意见 → 修复重提（记录每次驳回原因）。
@@ -235,7 +238,7 @@
 ### Task 8: S9 验收与文档结清
 
 - [ ] **Step 1** 全量回归：`npm test`（≥1176）、`smoke-laya2d-s1` 9/9、S3/S4/S5/S6/S8/S7 六个客户端冒烟全 PASS。
-- [ ] **Step 2** `README.md`：S1 #8 → PASS（附体验版/线上证据）+ 双端发布手册 + 真机矩阵 + 证书续期说明。
+- [ ] **Step 2** `README.md`：S1 #8 → PASS（**H5-only**：附线上 `/client/` 证据；小游戏体验版证据随 Task 6 解阻再补）+ 双端发布手册 + 真机矩阵 + 证书续期说明。
 - [ ] **Step 3** 把 A1–A10 的实测值填进本文件的执行记录节（沿用 S5–S8 的写法规格）。
 - [ ] **Step 4** commit：`docs(game-client): S9 上线硬化验收记录`
 
@@ -277,6 +280,8 @@
 **任务依赖（串行主线）**：
 
 Task 1（证书，硬前置）→ Task 2（H5 发布）→ Task 3（素材/图集）→ Task 4（真机）→ Task 5（包体）→ Task 6（提审）→ Task 8（验收）；**Task 7 可与 Task 4/5 并行**。
+
+**范围收敛（2026-09-24）**：微信小游戏侧缺 AppID，**Task 6 阻塞**，S9 按 **H5-only** 交付；Task 5 产出照常落地（产物链代码已交付，真实 `release/wxgame` 复核随小游戏上线再补），Task 8 验收不含小游戏证据。
 
 **前置门禁**：S7 未验收前，不得启动 Task 5 / Task 6（小游戏产物链与 `check-package.mjs` 依赖 S7 收尾）。
 

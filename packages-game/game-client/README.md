@@ -37,6 +37,31 @@ curl -s -i -N --http1.1 -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec
 
 > WS 注意：socket.io 的 namespace 是 `/game`，**握手 HTTP 路径是 `/socket.io`** —— 直接请求 `/game/` 返回 404 属正常。
 
+## 发布（双端，本地装配 → 上传由部署环节做）
+
+`tools/publish.mjs` 只做**本地文件操作**，不含 ssh/scp/curl/`npm run build`（2G 服务器禁止构建）。
+
+| 端 | 命令（cwd = `packages-game/game-client`） | 产物 |
+|---|---|---|
+| H5 站点 | `node tools/build-fallback.mjs` → `node tools/inject-env.mjs --env prod` → `node tools/publish.mjs h5-site` | `release/client/`（挂载前缀 `/client/`） |
+| 微信小游戏 | **IDE GUI 导出** → `node tools/publish.mjs wxgame` | `release/wxgame/` |
+
+**小游戏端的前置是 GUI 手工导出，不可自动化**（S1 已实证 IDE 命令行不可用，见「#8 未完成项」）：
+
+1. LayaAir IDE 打开工程 `packages-game/game-client`；
+2. 「构建/发布」→ 平台选**微信小游戏** → 执行；
+3. 产物目录固定为 `release/wxgame/`（入口 `game.js`；结构依据 IDE 模板 `resources/template/release/wxgame/game.js`，脚本按此识别入口）。
+
+导出后一条命令收尾，三件事串行且任一失败即退出（非 0 不该上传）：
+
+```
+node tools/publish.mjs wxgame          # 1) 补 config/（清陈旧 + 重算 sha256 比对）
+                                       # 2) 注入 prod env（生成 env-config.js 并在 game.js 中 require，重跑不重复插入）
+                                       # 3) 跑 tools/check-package.mjs（体积/hash/引擎脚本顺序/配置注入时机/新鲜度）
+```
+
+导入微信开发者工具时用产物根目录 `release/wxgame/`，本地设置勾选「不校验合法域名…」即可开发调试。
+
 ## S1 工具链实证
 
 环境：LayaAir IDE **3.4.1**（`D:\Program Files\LayaAirIDE`），工程 `e:\code\nest\packages-game\game-client`。

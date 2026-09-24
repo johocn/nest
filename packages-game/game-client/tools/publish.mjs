@@ -5,12 +5,22 @@
 //   node tools/publish.mjs h5            [--target <dir>] [--source <dir>]              → <target>/gamedata/
 //   node tools/publish.mjs wxgame-config [--target <dir>] [--source <dir>]              → <target>/config/
 //   node tools/publish.mjs h5-site       [--target <dir>] [--source <dir>] [--base <path>] → <target>/（整站装配）
+//   node tools/publish.mjs wxgame        [--target <dir>] [--source <dir>]              → GUI 导出后的整包收尾
 //   --source 仅供断言脚本指向临时副本，日常发布不要传（默认 <repo>/game-server/gamedata）。
 //   --base   仅 h5-site 可用（站点挂载前缀，默认 /client/，会归一化为「以 / 开头且以 / 结尾」）。
 //
 // 目标子目录与客户端读取口径一一对应，不允许自定义：
 //   h5            → AppConfig.configBase='/gamedata'（站点根下的同名子目录）
 //   wxgame-config → src/config/loader.ts 小游戏分支的 `Platform.readLocalText('config/' + file)`
+//
+// wxgame（S9 Task 5 Step 2）：把「GUI 导出」之后的三件事串成一条命令 ——
+//   1) 补齐 config/（复用 h5/wxgame-config 同一实现，含 hash 重算比对）
+//   2) 注入生产环境（调用 tools/inject-env.mjs --env prod，产物根生成 env-config.js，
+//      并在入口 game.js 里 require 它；插在 weapp-adapter 之后、业务脚本之前，重复执行不重复插入）
+//   3) 跑 tools/check-package.mjs（体积 / config hash / 引擎脚本顺序 / 配置注入时机 / 新鲜度），
+//      不通过即 exit 1 —— 门禁不过就不该上传
+//   产物结构依据 IDE 模板 `resources/template/release/wxgame/game.js` + `release/common/index.js`：
+//   入口固定为 `game.js`（内容 = require weapp-adapter → 引擎 libs → 业务 bundles → js/index.js）。
 //
 // 两处硬性保障（h5 / wxgame-config / h5-site 的 gamedata 部分共用同一实现）：
 //   1) 复制前清掉目标子目录里遗留的 manifest.json / scene-*.json —— 历史版本（scene-1-v2.json 等）
@@ -24,6 +34,7 @@
 //   保持原样：/gamedata 走 nginx `location /` 反代到 node，/assets/ 由 nginx alias 到本站点目录）。
 //   env-config.js 的 script 标签会被插到 Main.js **之前**，改写后做断言式自校验，失败即 exit 1。
 import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import {
   copyFileSync,
   existsSync,
@@ -44,6 +55,7 @@ const COMMANDS = {
   h5: { defaultTarget: join('release', 'web'), subdir: 'gamedata', args: ['--target', '--source'] },
   'wxgame-config': { defaultTarget: join('release', 'wxgame'), subdir: 'config', args: ['--target', '--source'] },
   'h5-site': { defaultTarget: join('release', 'client'), args: ['--target', '--source', '--base'] },
+  wxgame: { defaultTarget: join('release', 'wxgame'), subdir: 'config', args: ['--target', '--source'] },
 };
 
 /** h5-site 的装配源（相对 game-client）：与 bin/index.html 里的引用路径一一对应 */
@@ -66,10 +78,11 @@ const DEFAULT_BASE = '/client/';
 
 function usage(message) {
   if (message) console.error(`错误：${message}`);
-  console.error('用法：node tools/publish.mjs <h5|wxgame-config|h5-site> [--target <dir>] [--source <dir>] [--base <path>]');
+  console.error('用法：node tools/publish.mjs <h5|wxgame-config|h5-site|wxgame> [--target <dir>] [--source <dir>] [--base <path>]');
   console.error('  h5              → <target>/gamedata/（默认 target=release/web）');
   console.error('  wxgame-config   → <target>/config/（默认 target=release/wxgame）');
   console.error('  h5-site         → H5 站点装配到 <target>/（默认 target=release/client，base=/client/）');
+  console.error('  wxgame          → GUI 导出后收尾（config/ + prod env 注入 + 包体门禁，默认 target=release/wxgame）');
   console.error('  --source 仅供断言脚本指向临时副本（默认 <repo>/game-server/gamedata）');
   console.error('  --base   仅 h5-site 可用（归一化为以 / 开头且以 / 结尾）');
 }
@@ -383,10 +396,65 @@ function runH5Site({ target, source, base }) {
   console.log(`summary: h5-site 装配 ${counter.n} 个文件到 ${targetDir}`);
 }
 
+// ── wxgame：GUI 导出后的收尾（补 config/ + 注入 prod env + 跑包体门禁）───────
+/** 入口里 env-config.js 的插入锚点：紧跟 weapp-adapter（它是 IDE 模板里 game.js 的第一行） */
+const WEAPP_ADAPTER_REQUIRE = 'require("weapp-adapter.js");';
+const ENV_REQUIRE = 'require("env-config.js");';
+
+function runWxgame({ target, source }) {
+  const targetDir = resolveFromRoot(target ?? COMMANDS.wxgame.defaultTarget);
+  const entry = join(targetDir, 'game.js');
+  if (!existsSync(entry)) {
+    fail(
+      `缺少 ${entry}\n` +
+        `  → 微信小游戏产物无法命令行导出（S1 已实证 CLI 不可用），请在 LayaAir IDE\n` +
+        `     「构建/发布 → 微信小游戏」导出到 ${targetDir}，再重跑本命令`,
+    );
+  }
+
+  console.log(`收尾 wxgame → ${targetDir}`);
+
+  // 1) 补齐 config/（与 h5 / wxgame-config 同一实现：清陈旧 + 复制 + 重算 sha256 比对）
+  const bundle = publishConfigBundle({ cmd: 'wxgame', targetDir, subdir: 'config', source, summarize: false });
+
+  // 2) 注入生产环境：产物根生成 env-config.js，并让入口 require 它（幂等，重跑不重复插入）
+  const injected = spawnSync(
+    process.execPath,
+    [join(root, 'tools', 'inject-env.mjs'), '--env', 'prod', '--out', targetDir],
+    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+  );
+  if (injected.status !== 0) {
+    fail(`注入生产环境失败（inject-env.mjs exit ${injected.status}）：${(injected.stderr || injected.stdout || '').trim()}`);
+  }
+  const envOut = join(targetDir, 'env-config.js');
+  const gameJs = readFileSync(entry, 'utf8');
+  if (gameJs.includes('env-config.js')) {
+    console.log(`  env: ${envOut}（入口已引用，未重复插入）`);
+  } else {
+    const at = gameJs.indexOf(WEAPP_ADAPTER_REQUIRE);
+    const patched =
+      at === -1
+        ? `${ENV_REQUIRE}\n${gameJs}`
+        : `${gameJs.slice(0, at + WEAPP_ADAPTER_REQUIRE.length)}\n${ENV_REQUIRE}${gameJs.slice(at + WEAPP_ADAPTER_REQUIRE.length)}`;
+    writeFileSync(entry, patched, 'utf8');
+    console.log(`  env: 生成 ${envOut}，并在 game.js 插入 ${ENV_REQUIRE}`);
+  }
+
+  // 3) 包体门禁：不过即 exit 1 —— 门禁不过就不该上传
+  const checked = spawnSync(process.execPath, [join(root, 'tools', 'check-package.mjs'), '--target', targetDir], {
+    stdio: 'inherit',
+  });
+  if (checked.status !== 0) fail(`包体门禁未通过（check-package.mjs exit ${checked.status}）`);
+
+  console.log(`summary: wxgame 收尾完成（config/ ${bundle.files.length} 个文件 + prod env 注入 + 包体门禁通过）`);
+}
+
 const { cmd, target, source, base } = parseArgv(process.argv.slice(2));
 
 if (cmd === 'h5-site') {
   runH5Site({ target, source, base });
+} else if (cmd === 'wxgame') {
+  runWxgame({ target, source });
 } else {
   const spec = COMMANDS[cmd];
   publishConfigBundle({
