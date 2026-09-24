@@ -2,6 +2,7 @@ import { AppConfig } from '../config/AppConfig';
 import type { DialogueQuestMarks, DialogueStepResult, NpcTalkResult } from '../net/api';
 
 const D = AppConfig.dialogue;
+const T = AppConfig.touch;
 
 /**
  * S5 对话视图（**引擎内自绘，禁用 DOM**，小游戏端与 H5 行为一致）。
@@ -242,6 +243,12 @@ export type DialogueChooseHandler = (optionIndex: number) => void;
  * 把整个舞台的指针吃掉（`ui/TouchControls` zOrder 9998 在其下 → 按住方向键完全无反应），
  * 于是出现「对话打开时键盘能走、触控走不了」的不一致。现在键盘 W/A/S/D 与触控方向键行为一致：
  * **都能走**；交互键 F 与触控「交互」按钮由 `InteractController.triggerInteract` 统一屏蔽，避免连点重复请求。
+ * **选项行为什么在手机上点不动（S9 第二轮修复）**：与 S6 建造面板同源 ——
+ *  1. 选项行带 `D.optionHeight=22` 舞台像素，`SCALE_SHOWALL` 缩到手机宽度（390 CSS px 时缩放比仅 ~0.41）
+ *     后只有 **9 CSS px 高**，手指落点误差普遍 >4 CSS px；→ 命中区撑到 `touch.minHitHeight`（视觉不变）。
+ *     注意相邻选项都是可点行，物理上无法各自到 44，故只能各吃到行距（`optionGap=4`）的一半（22→26）。
+ *  2. 原来绑 `CLICK`：引擎 `clickTestThreshold=10`（舞台像素 ≈ 手机 4 CSS px），真机手指轻滚即不派发。
+ *     → 改 `MOUSE_DOWN`（按下即响应，与触控层交互按钮同口径）。
  */
 export class DialogueView {
   private static root: Laya.Sprite | null = null;
@@ -384,22 +391,37 @@ export class DialogueView {
       ),
     );
 
-    for (const row of layout.options) {
+    for (let i = 0; i < layout.options.length; i++) {
+      const row = layout.options[i];
+      const prev = layout.options[i - 1];
+      const next = layout.options[i + 1];
+      // 命中区（**视觉不变**）：以行带为中心向上下扩到 touch.minHitHeight，边界夹在相邻选项行的分界
+      // 中点（首/末行不再向外扩，避免把正文区/错误行也变成选项）。相邻行都可点 → 只能各吃半个行距。
+      const half = T.minHitHeight / 2;
+      const center = row.y + row.height / 2;
+      const topBound = prev ? (prev.y + prev.height + row.y) / 2 : row.y;
+      const bottomBound = next ? (row.y + row.height + next.y) / 2 : row.y + row.height;
+      const top = Math.max(topBound, center - half);
+      const bottom = Math.min(bottomBound, center + half);
+
       const button = new Laya.Sprite();
-      button.pos(row.x, row.y);
-      button.size(row.width, row.height);
+      button.pos(row.x, top);
+      button.size(row.width, bottom - top);
       button.mouseEnabled = true;
-      button.graphics.drawRect(0, 0, row.width, row.height, D.optionBgColor);
+      // 底色与文字仍画在行带上（`row.y - top` 是命中区比行带多出来的上边距）→ 视觉零变化
+      button.graphics.drawRect(0, row.y - top, row.width, row.height, D.optionBgColor);
       button.addChild(
         DialogueView.makeText(
           row.label,
           D.optionPadX,
-          Math.round((row.height - D.optionFontSize) / 2),
+          row.y - top + Math.round((row.height - D.optionFontSize) / 2),
           D.optionFontSize,
           D.optionColor,
         ),
       );
-      button.on(Laya.Event.CLICK, null, () => DialogueView.select(row.index));
+      // MOUSE_DOWN 而非 CLICK：CLICK 要求按下→抬起位移小于 clickTestThreshold（10 舞台像素 ≈ 手机 4 CSS px），
+      // 真机手指轻滚就把它判掉（详见类注释）。
+      button.on(Laya.Event.MOUSE_DOWN, null, () => DialogueView.select(row.index));
       root.addChild(button);
     }
 

@@ -20,6 +20,7 @@ import {
 } from './build-logic';
 
 const B = AppConfig.build;
+const T = AppConfig.touch;
 
 /** 面板运行上下文：场景尺寸 + 建造规则 + 蓝图（由 Main 在进场景后注入） */
 export interface BuildPanelContext {
@@ -40,6 +41,19 @@ interface PanelRow {
   button?: boolean;
 }
 
+/** `addRowHit` 入参：一行命中区的几何（行带 + 允许向外扩的上下边界） */
+interface RowHit {
+  x: number;
+  width: number;
+  /** 行带（该行视觉所在的位置） */
+  top: number;
+  height: number;
+  /** 命中区允许向上/向下扩到的边界（由相邻行是否可点决定；面板矩形是硬边界） */
+  minTop: number;
+  maxBottom: number;
+  onClick?: () => void;
+}
+
 /**
  * S6 建造面板（**引擎内自绘，禁用 DOM / HTML**，小游戏端与 H5 行为一致）。
  *
@@ -54,8 +68,21 @@ interface PanelRow {
  *
  * **指针不设遮罩（S9 修复）**：根节点既不 `size()` 也不改 `mouseEnabled` —— 引擎的命中检测是**纯几何**的
  * （`hitTest` 只看自身 `width>0 && height>0` 且包含该点），根节点一旦有边界就会成为最上层命中目标、
- * 吃掉整个舞台的指针（表现为「面板打开后手机摇杆按不动」）。去掉后根节点自身永不命中，行按钮/命中条
- * 作为子节点照常接收点击，空白处点击穿透到下层并**继续冒泡到舞台**，故 `onStageClick`（移动建造光标）不受影响。
+ * 吃掉整个舞台的指针（表现为「面板打开后手机摇杆按不动」）。去掉后根节点自身永不命中，行命中区/进度条
+ * 作为子节点照常接收点击，空白处点击穿透到下层并**继续冒泡到舞台**，故 `onStageDown`（移动建造光标）不受影响。
+ *
+ * **行为什么在手机上点不动（S9 第二轮修复）**：两个原因叠加，都与「遮罩」无关 ——
+ *
+ *  1. **命中区太矮**：`SCALE_SHOWALL` 把 960×640 等比缩到手机宽度，常见机型（390 CSS px 宽）缩放比
+ *     仅 ~0.41 —— 文本行带 `B.lineHeight=20` 落到屏幕上只有 **8 CSS px 高**，手指落点误差普遍 >4 CSS px，
+ *     于是「想点按钮」的那一下多半压在相邻的**信息行**上（信息行没有 `onClick`）→ 看起来就是没反应。
+ *     对照：交互按钮 `interactHeight=88`（≈36 CSS px）在手机上一直好使，正是因为它够高。
+ *     → 处置：所有可点行的命中区撑到 `touch.minHitHeight`（见 `addRowHit`），**视觉尺寸不变**。
+ *  2. **绑的是 CLICK**：引擎 `TouchInfo` 的 `clickTestThreshold = 10`（舞台像素），按下到抬起位移超过它
+ *     （或中途有 `touchmove`、浏览器把手势判定成缩放而发 `touchcancel`）CLICK 就**不派发** ——
+ *     10 舞台像素换算到手机上只有 ~4 CSS px，真实手指抖动轻易超过。而摇杆（`MOUSE_DOWN`/`DRAG`/`UP`）
+ *     与交互按钮（`MOUSE_DOWN`）都不走这层判定，所以在手机上一直正常。
+ *     → 处置：可点行一律改 `MOUSE_DOWN`（与交互按钮同一口径，按下即响应）。
  */
 export class BuildPanel {
   private static root: Laya.Sprite | null = null;
@@ -85,7 +112,7 @@ export class BuildPanel {
     BuildPanel.root = root;
 
     Laya.stage.on(Laya.Event.KEY_DOWN, BuildPanel, BuildPanel.onKeyDown);
-    Laya.stage.on(Laya.Event.CLICK, BuildPanel, BuildPanel.onStageClick);
+    Laya.stage.on(Laya.Event.MOUSE_DOWN, BuildPanel, BuildPanel.onStageDown);
     console.log(`[S6] BuildPanel 就绪：zOrder=${B.zOrder}（引擎内自绘，无 DOM）`);
   }
 
@@ -289,9 +316,11 @@ export class BuildPanel {
     }
   }
 
-  /** 点击世界选格（面板区域内的点击交给按钮行，不移动光标） */
-  private static onStageClick(e: Laya.Event): void {
+  /** 按下世界选格（面板区域内、或触控层上的按下交给它们自己处理，不移动光标） */
+  private static onStageDown(e: Laya.Event): void {
     if (!BuildPanel.opened) return;
+    // 触控层（摇杆激活区/交互按钮）上的按下不算选格 —— 否则「想走路」的那一下会把建造光标甩过去
+    if (BuildPanel.fromTouchLayer(e)) return;
     const x = Number(e.stageX ?? 0);
     const y = Number(e.stageY ?? 0);
     const r = BuildPanel.panelRect;
@@ -299,6 +328,16 @@ export class BuildPanel {
     const { gx, gy } = worldToGrid(x, y, BuildPanel.gridSize());
     BuildPanel.cursor = { gx, gy };
     BuildPanel.rebuild();
+  }
+
+  /** 事件是否来自触控层：沿 `e.target` 的父链找 `s9-touch`（引擎 bubble 会把 `target` 保持为最初命中的节点） */
+  private static fromTouchLayer(e: Laya.Event): boolean {
+    let node = e.target as unknown as { name?: string; parent?: unknown } | null;
+    while (node) {
+      if (node.name === 's9-touch') return true;
+      node = node.parent as never;
+    }
+    return false;
   }
 
   private static cycleTemplate(step: number): void {
@@ -489,13 +528,25 @@ export class BuildPanel {
     bg.graphics.drawRect(panelX, panelY, B.panelWidth, B.panelBorderWidth, B.panelBorderColor);
     root.addChild(bg);
 
+    // 行带预排：命中区的加高要按「相邻行是否可点」夹边界，避免加高后误触到相邻的建造/投料/拆除
+    const bands: { top: number; height: number; onClick?: () => void }[] = [];
     let y = panelY + B.padY;
     for (const row of rows) {
+      const h = row.button ? B.buttonHeight : B.lineHeight;
+      bands.push({ top: y, height: h, onClick: row.onClick });
+      y += h + (row.button ? 4 : 0);
+    }
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const band = bands[i];
+      const prev = bands[i - 1];
+      const next = bands[i + 1];
       if (row.button) {
         const button = new Laya.Sprite();
-        button.pos(contentX, y);
+        button.pos(contentX, band.top);
         button.size(contentWidth, B.buttonHeight);
-        button.mouseEnabled = true;
+        button.mouseEnabled = false;
         button.graphics.drawRect(0, 0, contentWidth, B.buttonHeight, row.bg ?? B.buttonBgColor);
         button.addChild(
           BuildPanel.makeText(
@@ -505,29 +556,30 @@ export class BuildPanel {
             row.color,
           ),
         );
-        if (row.onClick) button.on(Laya.Event.CLICK, null, row.onClick);
         root.addChild(button);
-        y += B.buttonHeight + 4;
       } else {
         if (row.bg) {
           const hl = new Laya.Sprite();
           hl.mouseEnabled = false;
-          hl.graphics.drawRect(contentX, y, contentWidth, B.lineHeight, row.bg);
+          hl.graphics.drawRect(contentX, band.top, contentWidth, B.lineHeight, row.bg);
           root.addChild(hl);
         }
-        const text = BuildPanel.makeText(row.text, contentX, y + 3, row.color);
-        root.addChild(text);
-        if (row.onClick) {
-          const hit = new Laya.Sprite();
-          hit.pos(contentX, y);
-          hit.size(contentWidth, B.lineHeight);
-          hit.mouseEnabled = true;
-          hit.graphics.drawRect(0, 0, contentWidth, B.lineHeight, null);
-          hit.on(Laya.Event.CLICK, null, row.onClick);
-          root.addChild(hit);
-        }
-        y += B.lineHeight;
+        root.addChild(BuildPanel.makeText(row.text, contentX, band.top + 3, row.color));
       }
+      BuildPanel.addRowHit(root, {
+        x: contentX,
+        width: contentWidth,
+        top: band.top,
+        height: band.height,
+        // 可扩到相邻的**信息行**上（那行本来就没反应），但不越进相邻的**可点行**（否则会误触）
+        minTop: prev ? (prev.onClick ? band.top : prev.top) : panelY,
+        maxBottom: next
+          ? next.onClick
+            ? band.top + band.height
+            : next.top + next.height
+          : panelY + height,
+        onClick: row.onClick,
+      });
     }
 
     // 光标处建筑的进度条（每帧 refresh 重绘填充）
@@ -623,6 +675,31 @@ export class BuildPanel {
     });
 
     return rows;
+  }
+
+  /**
+   * 追加一行的命中区（**不可见**，视觉尺寸不变）：高度取 `max(行带, touch.minHitHeight)` 并以行带为中心
+   * 上下扩，扩的范围夹在 `minTop..maxBottom`（相邻可点行之间）与面板矩形内。
+   * `onClick` 为空（信息行）则不建节点 —— 信息行本来就没有反应。
+   *
+   * **必须在行视觉之后 addChild**：引擎 `getSpriteUnderPoint` 逆序遍历子节点、取最先命中的那个，
+   * 后加入的命中区因此盖过同行视觉（视觉 sprite 一律 `mouseEnabled=false`，避免两个目标争同一片区域）。
+   * 用 `MOUSE_DOWN` 而非 `CLICK`：CLICK 要求按下到抬起位移小于 `clickTestThreshold`（10 舞台像素 ≈
+   * 手机 4 CSS px），真实手指抖动会把它判掉（详见类注释）。
+   */
+  private static addRowHit(root: Laya.Sprite, spec: RowHit): void {
+    if (!spec.onClick) return;
+    const extra = Math.max(0, T.minHitHeight - spec.height) / 2;
+    const panel = BuildPanel.panelRect;
+    const top = Math.max(panel.y, spec.minTop, spec.top - extra);
+    const bottom = Math.min(panel.y + panel.h, spec.maxBottom, spec.top + spec.height + extra);
+    const hit = new Laya.Sprite();
+    hit.name = 's6-build-hit';
+    hit.pos(spec.x, top);
+    hit.size(spec.width, Math.max(spec.height, bottom - top));
+    hit.mouseEnabled = true;
+    hit.on(Laya.Event.MOUSE_DOWN, null, spec.onClick);
+    root.addChild(hit);
   }
 
   private static makeText(content: string, x: number, y: number, color: string): Laya.Text {
