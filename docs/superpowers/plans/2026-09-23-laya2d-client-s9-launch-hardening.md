@@ -499,9 +499,15 @@ Task 1（证书，硬前置）→ Task 2（H5 发布）→ Task 3（素材/图�
 
 **仍未做**：真机（含 iOS Safari）上的触控手感验收。**⚠️ 2026-09-24 更正**：本行原写「Laya 默认 `multiTouchEnabled=false`，同屏只能按一个按钮」是**错的** —— 引擎 `laya.core.js:25963` 显式 `InputManager.multiTouchEnabled = true`，多点触控默认开启，故「摇杆按住 + 同屏点交互」本身可行；摇杆另按 `touchId` 过滤（只认按下摇杆的那根手指），避免交互按钮抬手时把摇杆一起停掉。
 
-**发布前置**：触控代码**尚未发布到线上** `game.joho.cn/client/`（仍只有本机 `bin/` 产物）——真机验收前必须先走 `publish.mjs h5-site` + 上传（同 Task 2 / Task 3 流程），否则手机上打开的还是没有触控的旧产物。
+**发布记录（2026-09-24 已完成）**：摇杆版触控**已发布**到线上 `game.joho.cn/client/`（原「发布前置」已解除）——真机验收直接开 `https://game.joho.cn/client/` 即可，无需 LAN 通道（§7.4.6 保留作离线验收备用）。
 
-#### 7.4.6 真机验收的 LAN 通道（2026-09-24 用户选择「先不发布」）
+- **装配**（cwd `packages-game/game-client`，服务器零构建）：`node tools/build-fallback.mjs`（42 个产物重写导入扩展名）→ `node tools/inject-env.mjs --env prod`（`apiBase=https://game.joho.cn` / `wsUrl=wss://game.joho.cn/game`）→ `node tools/publish.mjs h5-site` → **97 文件**（js 60 / libs 5 / vendor 1 / assets 28 / gamedata 2 / index.html）；index.html 前缀改写与 env-config 顺序自校验通过、gamedata sha256 校验通过。
+- **上传**：本机 `tar.gz` 1,138,086B，sha256 `7709176d…` 经 `scp` 后服务器比对一致 → 解包到 `client.new` 后**换目录**（非覆盖解包，杜绝残留旧文件）→ `chmod -R u=rwX,go=rX`。
+- **备份（回退用）**：`client.bak_touch_20260924_230714`（发布前 **96 文件 / 2,953,242B**，即 Task 3 美术版现状）；回退 = `mv client client.failed && mv client.bak_touch_20260924_230714 client`。
+- **验证**：站点目录 **97 文件 / 2,967,970B**；`index.html` 线上 md5 **`5a20bce8020ec25cf8e0464c018f1a79`** 与本机逐字节一致；服务器侧 `Host: game.joho.cn` 下 `/client/index.html`、`/client/js/ui/TouchControls.js`、`/client/js/boot/Main.js`、`/client/js/env-config.js`、`/client/assets/resources/bg_scene1.png`、`/gamedata/manifest.json`、`/health` **全 200**；线上 `TouchControls.js` 含 `s9-stick-zone` 且 `AppConfig.js` 为 `stickZoneWidth: 256`（收窄版）；本机 `curl --resolve game.joho.cn:443:39.106.99.9 https://game.joho.cn/client/index.html` → **200 且 `ssl_verify_result=0`**（公共 CA 链合法，与 Task 1 结论一致）。
+- **口径提示**：本次发布用的是**工作区当前 `src/`**（含 `Entity.ts` / `spawn-merge.ts` 等**未提交**改动），与已提交 HEAD（`9d2097fd4`）存在差异 —— 若要「线上产物 = 某次 commit 可字节级重现」，需先处置这几个未提交文件再重发。
+
+#### 7.4.6 真机验收的 LAN 通道（2026-09-24 用户选择「先不发布」；**当晚已发布，本节降为备用通道**）
 
 不发布也能真机验收，前提是让手机直连开发机：
 
@@ -517,7 +523,7 @@ Task 1（证书，硬前置）→ Task 2（H5 发布）→ Task 3（素材/图�
 
 - `__ENV__` 注入生效 → 跨源登录 + 进场景成功（CORS 放行 LAN 源）→ 触控层启用；**全程无控制台错误、无失败请求**（CORS / ws / 静态资源都干净）。
 - 触控位移与上报同 localhost：按住「右」`world.move` 帧 `x: 644 → 952`，`upPerSec` 0 → 6 → 9，抬手回 0。
-- 触控几何：根节点 9 个子节点 = 8 向 + 交互，交互按钮 `88×88 @ (848,512)`。
+- 触控几何：根节点 9 个子节点 = 8 向 + 交互，交互按钮 `88×88 @ (848,512)`。**⚠️ 2026-09-24 更正**：这是**方向键版（8 向 pad）**的几何，摇杆重写后已作废 —— 摇杆版根节点只有 **3 个子节点**（`s9-stick-zone` 激活区 + `s9-stick-base` 底座 + 交互按钮），交互按钮 `88×88 @ (848,512)` 不变；现行几何见 §7.4.5。
 - 触控点按「交互」→ 命中 `POST /api/client/v1/world/npcs/13/talk` 并弹出对话。
 
 **两条与验收有关的实测结论（不是 bug，记录以免误判）**
@@ -527,7 +533,7 @@ Task 1（证书，硬前置）→ Task 2（H5 发布）→ Task 3（素材/图�
 
 **手机端读数（A4 的 F/M）怎么办**：手机无键盘，`F3` 调不出面板。安卓可 USB + PC Chrome `chrome://inspect` → Console 执行 `__PERF__.panel(true)`；iOS 无此路。若不便接线，则 F/M 采用 §7.4.4 的 CPU 限速代理样本（已在 `docs/perf-sample.md`），真机只做**功能与手感**验收。
 
-#### 7.4.7 移动端模拟验收（**非真机**，2026-09-24 用户决策「先不发布，跑完可自动化的部分」）
+#### 7.4.7 移动端模拟验收（**非真机**，2026-09-24 用户决策「先不发布，跑完可自动化的部分」；**当晚已发布**，见 §7.4.5 发布记录）
 
 **口径声明（必读）**：本节数据来自 Chromium 移动端模拟（移动 UA + DPR 1.75 + `isMobile/hasTouch` + 视口 915×412 横屏 + CDP 真实触摸事件），**不是真机**：不反映移动 GPU / 内存带宽 / 机型差异，也**不参与 A4 判定**（§1.2 / §7.4.3 的真机表仍为「待填」）。它的用途是：① 补上「触控通路」的端到端取证；② 把 §7.4.3 里**可自动化**的部分（T1/T2/T3、F/M、D、切档）先跑出基线，真机只需换设备复测；③ 沉淀可复跑的脚本。
 
