@@ -547,6 +547,25 @@ Task 1（证书，硬前置）→ Task 2（H5 发布）→ Task 3（素材/图�
 - **验证（第三轮）**：本机 ⇄ 服务器 md5 逐字节一致 —— `index.html` **`2896d25925abe0b1ce385a4c0b7ccead`**、`js/world/BuildPanel.js` **`086646801a5f970795d32b57bd4272c8`**、`js/ui/TouchControls.js` **`cbb5cca2650fc4a034c017930b041e92`**；线上 `TouchControls.js` 含 `s9-build-btn`、`AppConfig.js` 含 `buildMarginBottom: 152` 与 `minHitHeight: 44`；公网 `index.html` 200。
 - **仍未做**：**真机复验本轮的建造按钮与面板行手感**（需用户手测，机型：中端安卓 + Chrome）。
 
+**S9 第三轮修订（2026-09-25，行带加高到 44 —— 抛出「命中区加高」这条路线）**
+
+- **起因（第二轮方案撞到物理天花板）**：第二轮用的是「视觉不变、只撑大看不见的命中区」。但**面板的行带是连续无缝的**（蓝图行一行紧贴一行，没有间隙），相邻行都可点时，每个可点行最多只能吃「自己的行带 + 半个行距」→ 实测中间那行命中区**仍是 20**（≈8.1 CSS px），真机照样点不准。
+- **被否掉的方案（记录下来，别再走一遍）**：曾考虑「点哪一行就以最近行为准」的兜底命中 —— **对面板无效**：行带连续无缝时，「就近切分」的边界与现在的行带**逐条重合**，结果一模一样。真正有效的只有两条：**把视觉行带本身加高**，或把「点行」拆成「点行高亮 + 另一行确认」两步。用户（AskUserQuestion，2026-09-25）选 **「加高行（视觉变大）」**。
+- **改法（3 文件，不改任何游戏逻辑与交互语义）**：
+
+| 文件 | 改动 |
+|---|---|
+| `src/config/AppConfig.ts` | 新增 `build.touchRowHeight: 44`；`build.buttonHeight` **26 → 44**；`dialogue.optionHeight` **22 → 44**（44 ≈ **18 CSS px**，与触控按钮同量级）；`touch.minHitHeight` 注释更正为「**兜底**」定位（只对「相邻有空隙」的行还有意义） |
+| `src/world/BuildPanel.ts` | 行带高度按**三分**：按钮行 `buttonHeight`、可点行（蓝图）`touchRowHeight`、信息行保持 `lineHeight=20`；可点行文字改**垂直居中**（信息行仍是原来的 `+3`）；选中底色矩形跟随行带高度 |
+| `src/ui/DialogueView.ts` | 注释更新：行带已加高，命中区随之自然等于行带（选项面板自底向上生长，不会溢出屏幕） |
+
+- **面板尺寸影响**：内容高约 **310 → 492**（仍在 640 内，实测底边 492 未溢出）；信息行不变 → 面板变高但不变臃肿。实拍：`docs/perf-shots/panel-taller-rows.png`。
+- **取证（本机 + 生产站点各一次，均为 CDP 真实触摸 390×844）**：7 个可点行的**行带/命中高度全部 44**（此前为 `[32,20,32,35,26,26,35]`）；点第 2 张蓝图行 → **`▸木屋` → `▸石墙`**；点「关闭面板」行 → 子节点 **23 → 0**；点「建造」→ **0 → 23**；摇杆 11 次长按正常、静止段上行 0、`pageErrors=0`、失败请求 0、fps 54.8 / `quality=high`。数据：`docs/perf-shots/taller-rows.json`（本机）、`docs/perf-shots/prod-taller-rows.json`（生产）。
+- **回归**：`build-fallback` 42 产物；S3/S4/S5/S6/S7/S8 冒烟全绿（16/18/27/50/102/146）。
+- **发布记录（第四轮，2026-09-25）**：`build-fallback` → `inject-env --env prod` → `publish h5-site` → **97 文件 / 2,884,142B**；`tar.gz` 1,142,478B，sha256 **`ecd11aaa0e711f7049067aafe377eb0e2900a75fe03df7b0c28b2dabb9c3280a`**（服务器 `sha256sum` 一致）；换目录解法同前（`before: 98 / new: 97 / after: 97`）。**备份（回退用）**：`client.bak_taller_20260925_*`（= 第三轮版本），回退 = `mv client client.failed && mv client.bak_taller_20260925_* client`。
+- **验证（第四轮）**：本机 ⇄ 服务器 md5 逐字节一致 —— `index.html` **`4c7d3ff96a5353c866fd4eaca5d0645c`**、`js/world/BuildPanel.js` **`17d7866e91a2e8a34035d99d44ab288e`**、`js/config/AppConfig.js` **`bca43d2d64df4420309fb1228518aba6`**、`js/ui/DialogueView.js` **`e3ca940083e29092be3e89642cfe7f76`**；公网 200。
+- **仍未做**：真机复验「随手点蓝图行是否跟手」（需用户手测）。若仍要更保险，剩下只有「两步确认」（点行只高亮 + 另一行确认）这条路。
+
 #### 7.4.6 真机验收的 LAN 通道（2026-09-24 用户选择「先不发布」；**当晚已发布，本节降为备用通道**）
 
 不发布也能真机验收，前提是让手机直连开发机：
@@ -625,5 +644,7 @@ node scripts/accept-mobile.mjs --label mobile-sim-quality-low --quality low --ma
     - **摇杆版实测**（移动端模拟 + CDP `touchStart→touchMove→保持→touchEnd`，`accept-mobile.mjs` 已同步改为摇杆口径并刷新 `docs/perf-shots/mobile-sim.json`）：5 段路线 + 闭环走位共 8 次长按，每次 `base` 均为按下点 `(128,440)`、`knob` 偏移逐次为 `(±88,0)`/`(0,±88)`；移动段 **8.7 次/秒**、静止段 **0**；`59.88–60.01 fps` / drawcall 峰 **39** / heap 峰 16.7MB（静止回落 15.4）；`对 stone_01 交互 → 201`、`pageerror=0`。**建造面板打开时摇杆仍可用**（面板 18 子节点下按住 → `upPerSec=9`）、**对话打开时摇杆仍可用**（`upPerSec=9`）且选项点击 `200`。
 
 4. **可点行「绑 CLICK + 行带太矮」导致真机点不动（2026-09-24 第二轮修复，已提交 `ee6b1fea8` 并发布）**：第 3 条只修了「根节点遮罩」，且当轮验证只覆盖「空白处按下选格」，**既没测面板内的行、也没真机验证** → 真机上手测「建造面板仍点不动」。与遮罩无关的两条根因、改法（`touch.minHitHeight=44` + `s6-build-hit` 命中区 + `CLICK`→`MOUSE_DOWN` + `fromTouchLayer` 守卫，BuildPanel/DialogueView 同批，**视觉零变化**）、CDP 取证与第二轮发布记录见 §7.4.5 末节。**教训**：① 触控验证必须**打在真实可点元素上**（空白处选格通过 ≠ 行按钮可用）；② 手机端可点元素一律 `MOUSE_DOWN`，不用 `CLICK`（`clickTestThreshold=10` 舞台像素 ≈ 手机 4 CSS px）。仍待**真机复验**。
+
+5. **「命中区加高」救不了连续无缝的行带（2026-09-25 第三轮修订，已提交 `60f7ac1a0` 并发布）**：第二轮「视觉不变、只撑大命中区」撞到物理天花板 —— 面板行带连续无缝，相邻行都可点时每个可点行最多吃「自己的行带 + 半个行距」，**中间那行仍是 20**。用户选定「加高行」后把可点行的**视觉行带本身**提到 44（`build.touchRowHeight` / `build.buttonHeight` / `dialogue.optionHeight`），命中区退化为兜底。**教训**：判定「命中区是否够大」不能只看脚本报的数组，要看**最小值**（`[32,20,32,...]` 里的 20 就是失败点）；连续排布的相邻可点元素只能靠**行高**，不能靠命中区重叠。
 
 **仍未做（需真机 / 人工）**：真机三档（低端安卓门槛档、中端安卓、iOS Safari）与手感验收、iOS 无法用 `chrome://inspect` 的目视口径。**⚠️ 更正（2026-09-24）**：原写「多点触控（Laya `multiTouchEnabled=false`，同屏只能按一个按钮）」不成立 —— 引擎 `laya.core.js:25963` 显式 `InputManager.multiTouchEnabled = true`，多点触控默认开启，「摇杆按住 + 同屏点交互」可行（摇杆另按 `touchId` 过滤，见第 3 条）。
