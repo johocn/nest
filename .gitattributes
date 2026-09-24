@@ -2,3 +2,5 @@ package-lock.json   -diff -merge
 package-lock.json    linguist-generated=true
 # 客户端配置包的 manifest.hash 按文件原始字节计算，禁止任何换行转换
 packages-game/game-client/assets/config/*.json   -text
+# LayaAir IDE 生成的 .meta（.png/.ts/.ls 等）须与 IDE 产物同格式（140B、LF、无 BOM），禁止换行转换
+packages-game/game-client/**/*.meta   -text
