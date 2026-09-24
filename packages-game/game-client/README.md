@@ -24,7 +24,12 @@ LayaAir 3.x 工程，零新增 npm 依赖：模板、引擎类型、运行时都
 | 当前证书 | `notBefore=2026-09-23`、**`notAfter=2026-12-22`** |
 | 证书文件 | `.../openresty/www/sites/game.joho.cn/ssl/game.joho.cn.fullchain.crt` + `.key`（站点 conf 引用的就是这两个名字，**换证不改 conf**） |
 | 续期落地 | 面板「推送证书到本地目录」→ `/opt/1panel/cert-stage/game.joho.cn/{fullchain.pem,privkey.pem}`；「申请证书之后执行脚本」把两者 `cp` 成上面两个文件名、`chmod 600`，再 `docker exec 1Panel-openresty-cFrx openresty -s reload`（续期后自动复用） |
-| 备份 | `/opt/1panel/game-site-backup/`（换证前的 conf + 自建 CA 证书；回滚：还原 conf 与 `ssl/` 后 reload） |
+| 备份 | `/opt/1panel/game-site-backup/`（`20260923_224154/` = 换证前含**自建 CA 证书**；`post-cert-*/` = 换证后；`fixcert-*/` = 2026-09-24 回退事故的现场备份） |
+
+**⚠️ 证书回退陷阱（2026-09-24 实际踩到）**：换证前的备份里 `ssl/` 存的是**自建 CA 证书**，任何「整目录还原站点/`ssl/`」的操作会把已换成 Let's Encrypt 的证书**覆盖回自建 CA**（现象：`Verify return code: 19 (self signed certificate in certificate chain)`，手机/微信端直接报不受信）。2026-09-24 13:30 前后 `ssl/` 目录被这样还原过一次，当日 18:14 才由「重新 `cp` 面板 cert-stage 的 LE 全链 + 私钥到站点文件名 + reload」修复。
+
+- 回退部署**只还原 `client/` 等产物目录，绝不还原 `ssl/`**；确需回退证书，用 `post-cert-*` 那份备份。
+- 任何站点/证书改动后**必跑上面三条验证命令**，`Verify return code` 必须为 `0 (ok)`；`19` = 自建链又回来了。
 
 **验证命令**（换证/续期后必跑）：
 

@@ -1,7 +1,8 @@
 # LayaAir 2D 客户端 · S9 上线硬化批（真机性能 / 图集 / 生产证书 / 正式提审）实施计划
 
 > **状态：执行中，范围收敛为 H5-only（2026-09-24）。** 微信小游戏侧**缺 AppID**，Task 6（正式提审）**阻塞**，Task 5 的产物链**代码已交付**，真实 `release/wxgame` 导出的复核随小游戏上线解阻后再补。本文件只做规划与记录，不动代码、不动生产。
-> **H5 侧进度快照（2026-09-24）**：Task 1（证书）/ Task 2（S8 上线）/ Task 5（包体门禁）/ Task 7（广播门禁）**已完成**；Task 3 Step 2–3（素材入库 + 贴图接线）**已完成并上线**（落地方式偏离 D8，见 Task 3 Step 2 记录），Step 4–5（图集）**已决策不做**（2026-09-24 确认，见 Task 3 Step 4/5 记录），Step 6（线上点检）**未做**；Task 4（真机验收，唯一需设备的硬缺口）**未做**；Task 8（验收与文档结清）Step 1–4 **已完成**（见 §7，提交 `76c2e8e7f`）。
+> **H5 侧进度快照（2026-09-24）**：Task 1（证书）/ Task 2（S8 上线）/ Task 5（包体门禁）/ Task 7（广播门禁）**已完成**；Task 3 Step 2–3（素材入库 + 贴图接线）**已完成并上线**（落地方式偏离 D8，见 Task 3 Step 2 记录），Step 4–5（图集）**已决策不做**（2026-09-24 确认，见 Task 3 Step 4/5 记录），Step 6（线上点检）**服务器侧已完成、手机端待人工**（见 §7.4.1）；Task 4（真机验收，唯一需设备的硬缺口）**清单与模板已就绪、实测未做**；Task 8（验收与文档结清）Step 1–4 **已完成**（见 §7，提交 `76c2e8e7f`）。
+> **点检轮快照（2026-09-24 晚，「接上文，真机点检」）**：① **P0 已修** —— 线上证书 13:30 被「整目录还原」类操作回退成自建 CA（A1 回归），18:14 用面板 cert-stage 的 LE 全链重铺 + reload 修好（`0 (ok)`），回退陷阱已写进 `game-client/README.md`；② **服务器侧点检完成**（SSH → odoo）：线上产物 md5 与本机一致、S8 五模块/素材/manifest/health 全 200、assets 13 PNG + 13 `.meta`、`wss` 101；③ **本地基线完成**：`s9-art-after` 60fps / drawcall 峰 39 / heap 峰 23.2MB / up 9.5 / high（Task 3 Step 3 + §7.4.2）；④ **真机清单与记录模板已产出**（Task 4 Step 1–6 + §7.4.3），实测待人工持真机执行 —— 本机 Windows 且**出网被拦**，无真机通道。
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development（沿用 S2–S8 的既定方式：每 Task 派新 subagent，Task 间两阶段评审）。
 
 **Goal:** 把「能在开发者工具与本机跑通」的客户端变成**可正式上线**的游戏端：修掉生产证书链、把 S8 性能成果发布上线、接入已定稿美术并做图集、在**真机低端机型**上验收帧率与内存、建立包体与后端广播的**硬指标门禁**，最终通过**微信小游戏正式提审**并上线 H5。
@@ -193,20 +194,61 @@
 
 - [x] **Step 1** 素材交接清单（D8）：分层图 / 摆件 / 图标 的尺寸、透明通道、命名、`@2x` 约定、放置目录 `assets/resources/**`；清单写入 README 或素材文档。→ 已落地 `game-client/docs/art-handover.md`（README 目录约定加 1 行链接）；尺寸逐项附代码出处，3 处待主程确认（建筑贴图尺寸口径 / 玩家朝向与动态 NPC 命名 / 图集页命名与 `@2x` 自动识别），待确认项**不阻塞** Step 2 入库。
 - [x] **Step 2** 素材入库：放入 `assets/resources/**`，由 IDE 生成 `.meta`（**不得手工塞文件**）；`smoke-s9-atlas.mjs` 断言命名与清单一致。→ **已完成，但落地方式偏离 D8（用户 2026-09-24 已批准）**：没有美术真稿来源，改由 **`tools/gen-art.ps1` 程序化生成** 12 张 PNG（11 实体 + 1 背景）并**同时写出同格式 `.meta`**（140B / UTF-8 无 BOM / 无尾随换行 / v4 uuid），视同 IDE 导入产物。零新依赖（仅 Windows 自带 `System.Drawing`）。**AI 文生图通道实测不可用**（`text_to_image` 无鉴权返回 `default.jpeg` 占位图），故背景也一并程序化。原计划的「分层图」未做——背景是**单张整图** `bg_scene1.png`，非分层。交付明细见 `game-client/docs/art-handover.md` §8。**挂账**：`scripts/smoke-s9-atlas.mjs` **未落地**（命名/清单断言缺失）。
-- [ ] **Step 3** **接入原始素材并量基线**：静态层与实体改贴图（无素材时回退 `graphics`），记录 drawcall / heap / 包体。→ **接线已完成并已上线，基线数值未量（未达本 Step 验收）**。接线范围：`SceneBuilder` 背景走 `bgResKey(cfg)` 命中贴图 / 未命中回退底色；实体走 `TextureRegistry`（`resKey` → `resources/<resKey>.png`，404 归一 null → 回退 `placeholder.png`）；建筑绘制尺寸改为 `footprint × 64`（进度条/耐久锚点随高度上移）；**玩家**原 `resKey: ''` 永不生效，改走新常量 `EntityFactory.PLAYER_RES_KEY`；**建筑** resKey 由蓝图 `BuildingTemplate.resKey` 经 `build-logic.toBuildingSpawn` 透传（**未改 WS 契约**）。**缺基线**：进图前后的 drawcall / heap / 包体三项数值未记录。
+- [x] **Step 3** **接入原始素材并量基线**：静态层与实体改贴图（无素材时回退 `graphics`），记录 drawcall / heap / 包体。→ **接线已完成并已上线；基线数值已于 2026-09-24 晚补齐（同口径采样）**。接线范围：`SceneBuilder` 背景走 `bgResKey(cfg)` 命中贴图 / 未命中回退底色；实体走 `TextureRegistry`（`resKey` → `resources/<resKey>.png`，404 归一 null → 回退 `placeholder.png`）；建筑绘制尺寸改为 `footprint × 64`（进度条/耐久锚点随高度上移）；**玩家**原 `resKey: ''` 永不生效，改走新常量 `EntityFactory.PLAYER_RES_KEY`；**建筑** resKey 由蓝图 `BuildingTemplate.resKey` 经 `build-logic.toBuildingSpawn` 透传（**未改 WS 契约**）。
+
+  **进图前 / 进图后（表现，dev 端点 + `tools/serve.mjs`，route 6s 移动 + 6s 静止，`--map-localhost-ipv4`）**：
+
+  | 项 | 进图前 `s9-preview`（2026-09-23） | 进图后 `s9-art-after`（2026-09-24） | 目标 |
+  |---|---|---|---|
+  | 移动段 fps 均值 / 最低 | 60 / 59.9 | **60 / 59.9** | 60 |
+  | drawcall 峰值 | 38 | **39** | ≤60 |
+  | heap 峰值 | 18.7 MB | **23.2 MB** | ≤300MB |
+  | 移动段 up/s 均值 | 9.7 | **9.5** | ≤10 |
+  | 静止段 up/s 合计 | 0 | **0** | ≈0 |
+  | 结束档位 | high | **high** | — |
+
+  **进图前 / 进图后（包体，线上站点目录实测 `du -sb`）**：
+
+  | 项 | 进图前（`client.bak_art_20260924_110638`） | 进图后（`client`，线上现状） |
+  |---|---|---|
+  | 文件数 / 站点字节 | 71 / 2,411,180 | **96 / 2,953,242** |
+  | `assets/` 文件 / 字节 | 4 / 20,356 | **28 / 550,331**（13 PNG + 13 `.meta`，另含 `config/`） |
+  | 最大单文件 | `placeholder.png` 7,731 | **`bg_scene1.png` 491,786** |
+
+  **结论（允许变差但必须记录，§9 风险 #4）**：表现不回退（fps 不变、drawcall +1）；包体 +0.52 MiB（+22%），其中背景整图占 480 KiB、12 张实体素材合计仅 ~21 KiB，属素材本身，且总包 2.8 MiB **远低于主包 4MiB / 总包 20MiB 门禁**；heap +4.5 MB 未隔离单变量（样本间波动），绝对值 23.2 MB 远低于 300MB 上限。
 - [ ] **Step 4** 图集导出（IDE 自带工具）→ `assets/resources/atlas/**`；`atlas-manifest.mjs` 校验清单与产物一致。→ **【本期不做】**（用户 2026-09-24 决策，与 §4 待确认 3 默认口径一致）：`assets/resources/atlas/` 与 `tools/atlas-manifest.mjs` 均不存在，未落地。理由见 Step 5。
 - [ ] **Step 5** 对比：图集前后 drawcall / 包体 / 加载耗时（**允许某项变差，但必须记录并给出结论**）。→ **【本期不做，随 Step 4 一并放弃】** 决策依据：① 收益侧——H5 线上实测 **60fps、drawcall 峰值 34**（S8 / Task 2 口径），**无性能压力**，自动降级在 H5 从未触发；② 包体侧——12 张实体素材合计仅约 21KB，包体主体是背景 **480.3KB 单张整图**（打不进图集），合图仅省几十 KB 文件头，**收益近零**；③ 成本侧——需把 `TextureRegistry` 由「按 URL 逐张加载」改为「加载 `.atlas` + `@img0.png` 按帧名取纹理」，属真实代码改动 + 6 冒烟回归 + 重新构建部署，且计划风险 #4 记有像素错位/模糊风险。**能力澄清**：Step 4 原假设「IDE 工具导出、不可自动化」**不成立**——`library/` 下现成产物表明 `.atlas` 是**纯 JSON 帧表 + PNG**，程序化生成本可行（同 `gen-art.ps1` 的零依赖套路），故本次属**主动取舍而非能力受限**。**后续触发条件**：Task 4 真机（低端安卓）若 <30fps，图集为首选优化项（风险 #6 处置顺序：降级开关项 → 图集 → `degradeRatio` 调参）。
-- [ ] **Step 6** H5 与开发者工具双端点检（表现不回退），跑 S1 冒烟 + S8 断言。→ **未做完整点检**：`tsc --noEmit` 通过、6 个冒烟（S3/S4/S5/S6/S8/S7）全绿、`publish.mjs h5-site` 装配 96 文件（assets 28 文件）已跑；**线上真机/浏览器点检未做**（本机沙箱 DNS 不通，无法解析 `game.joho.cn`），已用「拼版预览图 + 看图自评」替代，并据此修掉 3 个绘制缺陷（缺参 / 两点多边形 / PowerShell 变量名大小写覆盖导致背景只铺局部）。线上校验改用服务器侧 `curl -sI`：`/client/index.html`、`/assets/resources/**` 共 15 个 URL 全 200。
+- [ ] **Step 6** H5 与开发者工具双端点检（表现不回退），跑 S1 冒烟 + S8 断言。→ **未做完整点检**：`tsc --noEmit` 通过、6 个冒烟（S3/S4/S5/S6/S8/S7）全绿、`publish.mjs h5-site` 装配 96 文件（assets 28 文件）已跑；**线上真机/浏览器点检未做**（本机沙箱 DNS 不通，无法解析 `game.joho.cn`），已用「拼版预览图 + 看图自评」替代，并据此修掉 3 个绘制缺陷（缺参 / 两点多边形 / PowerShell 变量名大小写覆盖导致背景只铺局部）。线上校验改用服务器侧 `curl -sI`：`/client/index.html`、`/assets/resources/**` 共 15 个 URL 全 200。→ **补充（2026-09-24 晚）**：① 服务器侧点检升级为「SSH 到 odoo + `Host` 头全量核对」——线上 `index.html` **md5 `8d9d559a232ef842ae2adf4e5c7f05ee` 与本机 `release/client/index.html` 逐字节一致**；`/client/index.html`、S8 五模块（`EntityPool`/`PerfPanel`/`Quality`/`Viewport`/`RemoteInterp`）、`/gamedata/manifest.json`、`/health`、6 个素材 URL 全 200；线上 assets 实测 **13 PNG + 13 `.meta`**（与入库数一致，无丢资源）；`wss` 握手 `101`（注意 curl 需 `--http1.1`，否则走 h2 会得 400）。② 本机浏览器点检改用 **`tools/serve.mjs` + `perf-sample`**（口径与 S8 基线一致，见 Step 3 表），表现不回退。**仍缺**：线上手机浏览器端到端点检（本机出网被拦，见 §7.4）。
 - [x] **Step 7** commit：`feat(game-client): 美术素材入库与图集接入` → 实际提交 `b5d8c19f0`（`feat(game-client): 美术素材入库与贴图接线（S9 Task 3）`，33 files / +844 −44）；另附 `73924cc6a`（`chore(git): .meta 文件禁用换行转换（-text）`）。**部署**：本地 `tar.gz` → `scp` → 服务器先 `cp -a` 备份（`client.bak_art_<时间戳>`）再解压到 `.../game.joho.cn/client/`，**服务器零构建**。**注**：本次提交不含图集（Step 4/5 未做），Step 6 亦未完整达成。
 
 ### Task 4: 真机性能验收（低端机型）
 
-- [ ] **Step 1** 定义机型矩阵（§4 待确认 5）与测量项：冷启动耗时、稳态 fps、内存峰值、场景切换回落。
-- [ ] **Step 2** 真机跑 H5（手机浏览器）与微信开发者工具/真机调试：记录面板数据 + 截图/录屏。
-- [ ] **Step 3** **自动降级验证**：在低端机上确认连续 3s 低于目标 80% → 降 `quality=low`（并记录降级后 fps）。
-- [ ] **Step 4** 若 <30fps：先查 `Quality` 开关项（名标签/网格线/触发区描边）与图集是否生效，再考虑降级阈值调参（**禁止无数据调参**）。
-- [ ] **Step 5** 达标判定：A4 三项（帧率/内存/启动）。
-- [ ] **Step 6** 记录矩阵表 + 结论，commit：`test(game-client): 真机机型矩阵与性能验收记录`
+> **本期范围（用户 2026-09-24 决策）：仅 H5 手机浏览器**。不含微信开发者工具、不含小游戏真机（Task 6 阻塞于缺 AppID）；原 Step 2 的小游戏分支据此移出本期。
+> **执行状态：清单与模板已就绪（本轮产出），实测待人工持真机执行**——本机为 Windows、出网被拦，无真机通道（见 §7.4「为何本机做不了」）。
+
+- [ ] **Step 1** 定义机型矩阵（§4 待确认 5）与测量项：冷启动耗时、稳态 fps、内存峰值、场景切换回落。→ **口径已定义（本轮）**：
+  - **机型矩阵**（§4 待确认 5 的默认口径，三档）：① **低端安卓** —— 门槛档，A4 判定以它为准（如骁龙 4xx/6xx 系、4GB RAM、Android 10±）；② **中端安卓** —— 参考档（如骁龙 7xx 系、8GB RAM）；③ **iOS Safari** —— 参考档。**三档各一台**即可，机型/系统版本如实填进 Step 6 表。
+  - **打开地址与账号**：手机浏览器直接打开 `https://game.joho.cn/client/`（**非** `http://`、**非** PC 地址），用 `spike01` / `spike123456` 登录；需看「互见」时在 PC 另开一窗用 `spike02` 同场景对照（Task 2 Step 4 的线上双窗口径）。
+  - **打点方式（关键约束：手机无键盘，`F3` 不可用）**：
+    - **安卓**：USB 连 PC → PC Chrome 打开 `chrome://inspect` → inspect 手机页面 → Console 执行 `__PERF__.panel(true)`（显形面板，`__PERF__.panel()` 不传参是**切换**，连调两次取第二次返回值才是「读」）或 `__PERF__.snapshot()` 逐秒读数。**面板读数项**：`fps` / `drawcall` / `heapMB` / `upPerSec` / `quality` / `entityTotal`。
+    - **iOS**：无 Mac 则走不了 Safari Web Inspector → **仅目视 + 录屏**，`heapMB` 记 **n/a**（iOS 无 `performance.memory`，`snapshot().heapMB` 本就返回 null），fps 以目视是否卡顿 + 录屏帧计数估算，并在结论里标注「非仪器读数」。
+  - **测量项与判定阈值**（A4 三项 + 降级）：
+
+    | 代号 | 测量项 | 打点方式 | 阈值 |
+    |---|---|---|---|
+    | T1 | 打开 URL → 登录表单可输入 | 秒表（或录屏逐帧） | — |
+    | T2 | 点登录 → 场景首帧出现 | 秒表（或录屏逐帧） | — |
+    | T3 | 冷启动总耗时 = T1 + T2 | T1 + T2 | **≤5s** |
+    | F | 稳态 fps（移动 + 静止，含降级生效后） | `__PERF__.snapshot().fps` 逐秒 | **低端安卓 ≥30** |
+    | M | 内存峰值 / 切场景后 | `snapshot().heapMB` | 峰值 **≤300MB**，切场景后**回落**（安卓）；iOS 记 n/a |
+    | D | 自动降级可复现性 | 控制台日志 + `snapshot().quality` | 出现 `[S8] 连续 3000ms fps 低于目标 80% → 自动降级 quality=low` 或 `quality==='low'`，且**降级后 fps ≥30** |
+
+  - **桌面端已知基线（仅供对照，非真机结论）**：H5 线上 PC 非 headless **60fps** / drawcall 峰 34 / heap 峰 17MB（Task 2 Step 5）；本机 dev `s9-art-after` 60fps / drawcall 峰 39 / heap 峰 23.2MB（Task 3 Step 3）。真机数值**一律实测填入，不预填**。
+- [ ] **Step 2** 真机跑 H5（手机浏览器）：记录面板数据 + 截图/录屏。→ **本期仅 H5 手机浏览器**（小游戏真机随 Task 6 解阻再补）。操作即 Step 1 的「打开地址 + 打点方式」；每档机型产出一份 Step 6 表行 + 至少 1 张面板截图或 1 段录屏。
+- [ ] **Step 3** **自动降级验证**：在低端机上确认连续 3s 低于目标 80% → 降 `quality=low`（并记录降级后 fps）。→ 判据见 Step 1 表 D 行。**若低端安卓本就 ≥30fps 不触发降级**，改由「临时构造」验证：`https://game.joho.cn/client/?quality=low` 强制低档，确认面板 `quality==='low'` 且表现正常（**证明开关链路可用**），并在结论里注明「未触发自动降级，仅验证手动切档」。
+- [ ] **Step 4** 若 <30fps：先查 `Quality` 开关项（名标签/网格线/触发区描边）与图集是否生效，再考虑降级阈值调参（**禁止无数据调参**）。→ 处置顺序（§3 风险 #6）：① 降级开关项（`?quality=low` 或触发自动降级）；② 图集（Task 3 Step 4/5 已决策不做，**真机 <30fps 是它的首选触发条件**）；③ 最后才动 `degradeRatio` 调参。
+- [ ] **Step 5** 达标判定：A4 三项（帧率/内存/启动）。→ 判定表（**逐档机型单独判**，低端安卓为门槛档）：T3 ≤5s、F ≥30（若触发降级，用**降级后**的 F 判定）、M ≤300MB 且切场景后回落（iOS 该项记 n/a 并在结论标注）。三项全过 = 该档 PASS；低端安卓 FAIL 即 A4 FAIL。
+- [ ] **Step 6** 记录矩阵表 + 结论，commit：`test(game-client): 真机机型矩阵与性能验收记录`。→ **模板已就绪（本轮）**，见 §7.4「真机点检记录模板」；实测数据由执行者填入后随本 Step 一起提交（README「真机性能矩阵」节的占位表同步回填）。
 
 ### Task 5: 包体门禁与产物链
 
@@ -322,10 +364,10 @@ Task 1（证书，硬前置）→ Task 2（H5 发布）→ Task 3（素材/图�
 
 | # | 验收项 | 判定方式（命令） | 期望 | 实测 |
 |---|---|---|---|---|
-| A1 | 证书链合法 | `openssl s_client -showcerts -connect game.joho.cn:443` | 链完整、issuer 公共 CA、无 `unable to verify` | **通过**：`Verify return code: 0 (ok)`，issuer `C=US, O=Let's Encrypt, CN=YE2`（链 4 张）；本机 `curl`（系统 CA、不带 `-k`）→ 200 / `ssl_verify_result=0`；Node `https.get` → `authorized=true`（Task 1 Step 4） |
-| A2 | S8 成果上线 | 线上 `/client/` 含 S8 模块、`PerfPanel` 可开、线上 `perf-sample` | 线上产物为 S8 版 | **通过**：线上 `/client/index.html` 200 且 md5 `533b098c…` 与本机一致；S8 十模块 URL 全 200；F3 面板真实按键可开；线上非 headless **60fps**/最低 59.9、drawcall 峰 34、heap 峰 17MB、上行 9.4/s、静止 0；`?quality=low` 生效（drawcall 峰 15）（Task 2 Step 3–5） |
-| A3 | 美术接入 | 素材入库 + `.meta` 完整；drawcall/包体前后数值 | 素材入库 + 数值记录（图集不列入，§4-3 已确认不做） | **部分达成**：12 张 PNG 入库（程序化生成 + 同格式 `.meta`，**偏离 D8 已获批准**）并贴图接线、已上线（`b5d8c19f0`）；图集本期已决策不做（不计入缺口）；**进图前后 drawcall/heap/包体基线未记录**（Task 3 Step 3） |
-| A4 | 真机性能 | 低端安卓机型矩阵实测（面板打点） | ≥30fps / ≤300MB / 冷启动 ≤5s | **未做 / PENDING**：需真实设备，无任何 fps/内存/启动数据（Task 4 未启动） |
+| A1 | 证书链合法 | `openssl s_client -showcerts -connect game.joho.cn:443` | 链完整、issuer 公共 CA、无 `unable to verify` | **通过**：`Verify return code: 0 (ok)`，issuer `C=US, O=Let's Encrypt, CN=YE2`（链 4 张）；本机 `curl`（系统 CA、不带 `-k`）→ 200 / `ssl_verify_result=0`；Node `https.get` → `authorized=true`（Task 1 Step 4）。**⚠️ 2026-09-24 曾回归过一次**：站点 `ssl/` 被「整目录还原」覆盖回自建 CA（`19 self signed certificate`），当日 18:14 已修复并复验 `0 (ok)`；防再发条款见 `game-client/README.md` 与 §7.4.1 |
+| A2 | S8 成果上线 | 线上 `/client/` 含 S8 模块、`PerfPanel` 可开、线上 `perf-sample` | 线上产物为 S8 版 | **通过**：线上 `/client/index.html` 200 且 md5 `533b098c…` 与本机一致；S8 十模块 URL 全 200；F3 面板真实按键可开；线上非 headless **60fps**/最低 59.9、drawcall 峰 34、heap 峰 17MB、上行 9.4/s、静止 0；`?quality=low` 生效（drawcall 峰 15）（Task 2 Step 3–5）。**2026-09-24 晚服务器侧复验**：S8 五模块 URL 仍全 200，`index.html` md5 更新为 `8d9d559a…`（Task 3 素材上线后的重建产物，本机逐字节一致）（§7.4.1） |
+| A3 | 美术接入 | 素材入库 + `.meta` 完整；drawcall/包体前后数值 | 素材入库 + 数值记录（图集不列入，§4-3 已确认不做） | **达成**：12 张 PNG 入库（程序化生成 + 同格式 `.meta`，**偏离 D8 已获批准**）并贴图接线、已上线（`b5d8c19f0`）；图集本期已决策不做（不计入缺口）；**进图前后基线已补齐**（2026-09-24 晚，Task 3 Step 3）：表现不回退（60/59.9、drawcall 38→39、heap 18.7→23.2MB、high），包体 71→96 文件 / 2.41→2.95 MB（+0.52 MiB，远低于门禁） |
+| A4 | 真机性能 | 低端安卓机型矩阵实测（面板打点） | ≥30fps / ≤300MB / 冷启动 ≤5s | **未做 / PENDING（清单已就绪）**：本机 Windows + 出网被拦，无真机通道；**点检清单 + 记录模板本轮已产出**（Task 4 Step 1–6、§7.4.3，H5 手机浏览器口径），实测待人工持真机执行后回填。**无任何真机 fps/内存/启动数据** |
 | A5 | 包体门禁 | `tools/check-package.mjs`（体积/hash/引擎脚本顺序） | exit 0 | **脚本通过**：H5 布局（`release/client` 71 文件 / 2.23MB）与 wxgame 布局 fixture 均 **6/6 PASS, exit 0**；6 条失败路径各自独立命中（exit 1/2 正确）。**真实 `release/wxgame` 复核 PENDING**（缺 AppID 不导出）（Task 5 Step 1/2） |
 | A6 | 正式提审 | 体验版验收 → 提交审核 → 上线 | 审核通过上线 | **未做 / PENDING**：**阻塞于缺微信小游戏 AppID**（Task 6 全部 Step 未启动） |
 | A7 | 广播硬指标 | `scripts/loadtest-gate.mjs` | exit 0（P95 ≤200ms、投递 ≤25k/s、0 掉线、RSS Δ ≤50MB） | **门禁判定正确**：S8 历史 50bot 数据 PASS/exit 0；5 条阈值各自单独调到不可能满足均 exit 1（独立）；生产冒烟（5 bot/10s）**P95 33.08ms**、上行 9.2/s/人、**掉线 0**、进场景 5/5，门禁 exit 1 **仅因远端 RSS 无法度量**（脚本缺陷已记录）（Task 7 Step 2 + Task 2 Step 5） |
@@ -338,9 +380,77 @@ Task 1（证书，硬前置）→ Task 2（H5 发布）→ Task 3（素材/图�
 | 项 | 状态 | 原因与后续 |
 |---|---|---|
 | Task 3 Step 4/5（图集导出 + 前后对比） | **已决策不做** | 用户 2026-09-24 确认按 §4 待确认 3 默认口径执行：线上 60fps / drawcall 峰 34 无性能压力、包体收益近零（实体素材仅 ~21KB）、需改加载路径并回归；后续触发条件见 Task 3 Step 5 |
-| Task 3 基线数值（drawcall/heap/包体） | **未记录** | 贴图接线已上线但未量前后数值（Step 3 未达验收） |
-| Task 3 Step 6 线上浏览器点检 | **部分** | 服务器侧 `curl -sI` 复核 15 个 URL 全 200；浏览器真机点检未做（本机沙箱 DNS 不通） |
-| Task 4（A4 真机性能） | **PENDING** | 需真实设备（低端/中端安卓 + iOS），唯一需设备的硬缺口 |
+| Task 3 基线数值（drawcall/heap/包体） | **已补齐**（2026-09-24 晚） | 同口径采样写入 Task 3 Step 3：表现「60/59.9、drawcall 39、heap 23.2MB、up 9.5、high」不回退；包体 96 文件 / 2,953,242 B（+0.52 MiB，远低于门禁）。单变量未隔离：heap +4.5MB 含样本波动，不作为结论 |
+| Task 3 Step 6 线上点检 | **服务器侧完成 / 手机端待人工** | 服务器侧（SSH 到 odoo）全量核对通过：线上 `index.html` md5 与本机逐字节一致、S8 五模块 + manifest + health + 6 素材 URL 全 200、assets 13 PNG + 13 `.meta`、`wss` 101；**线上手机浏览器端到端点检归入 Task 4，由人工持真机执行**（模板见 §7.4） |
+| **生产证书被回退成自建 CA（P0，2026-09-24 发现）** | **已修复**（2026-09-24 18:14） | 站点 `ssl/` 目录 13:30 被「整目录还原」类操作覆盖回自建 CA（A1 回归，手机/微信端报不受信）。已用面板 cert-stage 的 LE 全链 + 私钥重铺 + `chmod 600` + reload，验证 `Verify return code: 0 (ok)`（链 4 张）；同源事故的**回退陷阱已写进 `game-client/README.md`**（只还原产物目录、绝不还原 `ssl/`）。详见 §7.4 |
+| Task 4（A4 真机性能） | **PENDING（清单已就绪）** | 需真实设备（低端/中端安卓 + iOS）；**点检清单与记录模板本轮已产出**（Task 4 Step 1–6 + §7.4 模板），本机无真机通道（出网被拦），实测待人工执行 |
 | Task 5 真实 `release/wxgame` 复核 | **PENDING** | 缺 AppID 不导出，产物链仅以 fixture 自检 |
 | Task 6（A6 正式提审） | **BLOCKED** | 缺微信小游戏 AppID，S9 记为 H5-only 交付 |
 | Task 8 Step 4（commit） | **已执行** | `76c2e8e7f`（`docs(game-client): S9 上线硬化验收记录`，README.md + 本文件） |
+
+### 7.4 点检记录（服务器侧 / 本机基线 / 真机模板）
+
+> 本节为 2026-09-24「接上文，真机点检」一轮的产出：服务器侧线上点检、本机性能基线、真机点检清单与模板。**真机实测数据待人工填入**。
+
+#### 7.4.1 服务器侧线上点检（已完成，SSH → odoo）
+
+方式：本机沙箱**出网全被拦**（`curl` 连公网均 000、DNS 不通、ICMP 不通），唯一可用通道是 **SSH 到 odoo（39.106.99.9）**，故所有线上核对在服务器侧执行（Windows 下复杂命令经 base64 编码后 `ssh odoo "echo <b64> | base64 -d | bash"`）。
+
+| 项 | 期望 | 实测 |
+|---|---|---|
+| 线上入口产物一致性 | 与本机 `release/client` 逐字节一致 | `/client/index.html` md5 **`8d9d559a232ef842ae2adf4e5c7f05ee`** = 本机同值；200（2082 B） |
+| S8 模块上线 | 五模块 URL 200 | `js/entity/EntityPool.js`、`js/perf/PerfPanel.js`、`js/perf/Quality.js`、`js/world/Viewport.js`、`js/entity/components/RemoteInterp.js` **全 200** |
+| 素材入库 | 13 PNG + 13 `.meta` | 线上 `assets/` 实测 **13 PNG + 13 `.meta`**（与入库数一致，无丢资源）；抽查 6 个素材 URL 全 200 |
+| 配置包与健康 | 200 | `/gamedata/manifest.json` 200（`generatedAt 2026-09-21T16:07:17.494Z`，scene 1 `sha256:2a2e0f80…`）、`/health` 200 |
+| 站点规模 | 与 Task 3 记录一致 | `/client` **96 文件** |
+| 后端进程 | active | `systemctl is-active game-server` = **active** |
+| TLS 证书链（A1） | `Verify return code: 0 (ok)`、公共 CA | **`0 (ok)`**，issuer `C=US, O=Let's Encrypt, CN=YE2`，链 4 张（leaf ← YE2 ← Root YE ← ISRG Root X2 ← ISRG Root X1），`notAfter 2026-12-22 15:38:49 GMT` |
+| 公网可达（服务器侧自测） | 全 200 且校验通过 | `pub_health=200 ssl_verify=0`、`pub_client=200 ssl_verify=0`、`pub_jianghu=200 ssl_verify=0` |
+| `wss` 握手 | 101 | **101**（**curl 须加 `--http1.1`**，走 h2 会得 400） |
+
+**P0 事故与修复（证书回退）**：
+
+- **现象**：线上 443 服务的是**自建 CA 证书**（`Verify return code: 19 (self signed certificate in certificate chain)`）——A1 回归，手机/微信端直接报不受信。
+- **证据链**：站点 conf `game.joho.cn-ssl.conf` 指向 `ssl/game.joho.cn.fullchain.crt`/`.key`，该文件 md5 `c306bcb0822c330241dad60af5b38200` 与**换证前 22:41 备份 `/opt/1panel/game-site-backup/20260923_224154/ssl/` 内的自建 CA 文件逐字节相同**；LE 证书（md5 `906577d2…`）仅存于 `*.le_1790227810` 与 `/opt/1panel/cert-stage/game.joho.cn/`，公钥 md5 配对一致（`6cdf925a3874c2e67c2e5695924ce7d8`）。时间线：`ssl/` 目录 mtime **2026-09-24 13:30:10**（内容回到换证前），openresty worker 13:30:31 重启。**面板记录自身正确**（`auto_renew=1`、`push_dir=1`、`exec_shell=1` 且 shell = cp + chmod + reload），故非续期机制问题，而是「有人把站点/`ssl/` 整目录还原」。
+- **修复（用户授权后执行，18:14 完成）**：备份现场 `ssl/` → `/opt/1panel/game-site-backup/fixcert-20260924_181432`（10 文件）→ `cp -f cert-stage/game.joho.cn/fullchain.pem → ssl/game.joho.cn.fullchain.crt`、`cp -f privkey.pem → ssl/game.joho.cn.key`、`chmod 600` → `docker exec 1Panel-openresty-cFrx openresty -t`（OK）→ `-s reload` → 验证 **`0 (ok)`** + 上述公网三项 + `wss 101`。
+- **防再发**：`game-client/README.md` 已写入「**⚠️ 证书回退陷阱（2026-09-24 实际踩到）**」+ 两条硬约束（回退只还原 `client/` 等产物目录、绝不还原 `ssl/`；改动后必跑三条验证命令，`19` = 自建链又回来了）。
+
+#### 7.4.2 本机性能基线（已完成，`s9-art-after`）
+
+口径与 S8 基线一致：dev 端点 + `tools/serve.mjs`（:5173），`node scripts/perf-sample.mjs --label s9-art-after --move-ms 6000 --idle-ms 6000 --map-localhost-ipv4`，结果已 append 到 `docs/perf-sample.md`。
+
+| 项 | 实测 | 目标 |
+|---|---|---|
+| 移动段 fps 均值 / 最低 | **60 / 59.9** | 60（H5） |
+| 静止段 fps 均值 | **59.8** | — |
+| drawcall 峰值 | **39** | ≤60 |
+| heap 峰值 | **23.2 MB** | ≤300MB |
+| 移动段 上行/s 均值 | **9.5** | ≤10 |
+| 静止段 上行合计 | **0** | ≈0 |
+| 结束档位 | **high** | 不降级 |
+
+> 说明：本机 5173 被 jianghu-client vite 占用在 `::1`，`localhost` 优先解析 IPv6 → **必须加 `--map-localhost-ipv4`**（否则页面打到 vite，`#s1-submit` 超时）。此环境细节已记入 `perf-sample.mjs` 的参数注释。
+
+#### 7.4.3 真机点检执行清单（人工，H5 手机浏览器）
+
+**为何本机做不了**：本机是 Windows 且**出网被拦**（DNS/HTTPS 全不通），既没有真机、也没有 `chrome://inspect` 的 USB 通道与 Mac 的 Safari Inspector；服务器侧 SSH 只能验「产物/证书/接口」，验不了「手机上的 fps 与内存」。故本轮**只产出清单与模板**，实测由人工执行后回填。
+
+**执行顺序（安卓门槛档为例，中端/iOS 同法各跑一遍）**：
+
+1. 手机浏览器打开 `https://game.joho.cn/client/`（确认地址栏无证书告警 —— 有告警说明 §7.4.1 的 P0 复发，先修证书再点检）；秒表起 T1（URL → 登录表单可输入）。
+2. USB 连 PC → PC Chrome `chrome://inspect` → inspect 该页 → Console 备用。
+3. 输入 `spike01` / `spike123456` 登录，秒表计 T2（点登录 → 场景首帧）；T3 = T1 + T2。
+4. Console 执行 `__PERF__.panel(true)` 显形面板（或 `__PERF__.snapshot()` 逐秒读数）；按 `ArrowRight/Down/Left/Up` 走一段 + 静止一段，各读数 **F**（fps）与 **M**（heapMB）。
+5. 观察控制台是否出现 `[S8] 连续 3000ms fps 低于目标 80% → 自动降级 quality=low` 或 `snapshot().quality === 'low'`（**D**）；若触发，记录降级后 fps。
+6. 切换场景（或走出/回到场景）后再读一次 heap，判定**是否回落**（**M** 后半句）。
+7. 截图/录屏留证，按下方模板填行，回填 README「真机性能矩阵」节。
+
+**真机点检记录模板**（Step 6 用；**数据待填，不预填占位数值**）：
+
+| 机型 | 系统/浏览器 | T1(s) | T2(s) | T3(s) | fps 均值/最低 | drawcall 峰 | heap 峰(MB) | 切场景后 heap(MB) | 触发降级 | 降级后 fps | 结论 | 证据文件 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 待填（低端安卓 · 门槛档） | 待填 | 待填 | 待填 | 待填（≤5s） | 待填（≥30） | 待填 | 待填（≤300） | 待填（应回落） | 待填 | 待填 | 待填 PASS/FAIL | 截图/录屏文件名 |
+| 待填（中端安卓 · 参考档） | 待填 | 待填 | 待填 | 待填（≤5s） | 待填（≥30） | 待填 | 待填（≤300） | 待填（应回落） | 待填 | 待填 | 待填 | 截图/录屏文件名 |
+| 待填（iOS Safari · 参考档） | 待填 | 待填 | 待填 | 待填（≤5s） | 待填（≥30，目视估算） | n/a（无 Inspector） | **n/a**（iOS 无 `performance.memory`） | n/a | 待填 | 待填 | 待填 | 录屏文件名 |
+
+**填写注意**：① `drawcall` 仅安卓可读（`snapshot().drawcall`），iOS 无 Inspector 时记 n/a；② 触发降级时，**F 用降级后的值判**（Step 1 表 F 行）；③ iOS 的 fps/heap 属目视估算，结论须标注「非仪器读数」；④ 三档中**低端安卓为 A4 门槛档**，其 FAIL 即 A4 FAIL。
