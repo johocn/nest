@@ -83,6 +83,11 @@ interface RowHit {
  *     10 舞台像素换算到手机上只有 ~4 CSS px，真实手指抖动轻易超过。而摇杆（`MOUSE_DOWN`/`DRAG`/`UP`）
  *     与交互按钮（`MOUSE_DOWN`）都不走这层判定，所以在手机上一直正常。
  *     → 处置：可点行一律改 `MOUSE_DOWN`（与交互按钮同一口径，按下即响应）。
+ *
+ * **两步确认（S9 第四轮，触控）**：第三轮把可点行加高到 44 后，手机上「点得准」已解决，但**误触代价**仍在 ——
+ * 建造/投料/拆除原来都是「一击即发」，手指滑一下就可能拆掉建筑。故操作行改为：
+ * 点一下只把它标成待确认（行首 `▶` + 底色，**不执行**），底部出现「确认执行：xxx」行，点它才真正执行；
+ * 蓝图行本身只是切换选择（无副作用），仍保持一步。键盘 `Enter/G/Del` 保持直接执行（不受影响）。
  */
 export class BuildPanel {
   private static root: Laya.Sprite | null = null;
@@ -97,6 +102,18 @@ export class BuildPanel {
   private static busy = false;
   private static templateIndex = 0;
   private static cursor = { gx: 0, gy: 0 };
+  /**
+   * **两步确认（S9 第四轮，触控）**：待确认的操作项 key（`PENDING` 的键），null = 无。
+   * 点操作行只把它标为待确认（行首 `▶` + 底部出现「确认执行」行），**不执行**；执行只发生在
+   * 底部「确认执行」行 —— 手机上误触不再直接拆建筑/投料。键盘 `Enter/G/Del` 仍是直接执行。
+   */
+  private static pendingKey: string | null = null;
+  /** 待确认项：key → 行内文案 + 执行体（新增一个操作只需在这里加一行） */
+  private static readonly PENDING: Record<string, { label: string; run: () => void }> = {
+    build: { label: '建造', run: () => void BuildPanel.doBuild() },
+    contribute: { label: '投料', run: () => void BuildPanel.doContribute() },
+    demolish: { label: '拆除', run: () => void BuildPanel.doDemolish() },
+  };
   private static buildings: BuildingView[] = [];
   private static panelRect = { x: 0, y: 0, w: 0, h: 0 };
 
@@ -170,6 +187,7 @@ export class BuildPanel {
 
   static close(): void {
     BuildPanel.opened = false;
+    BuildPanel.pendingKey = null;
     if (BuildPanel.root) {
       BuildPanel.root.removeChildren();
     }
@@ -302,13 +320,16 @@ export class BuildPanel {
         BuildPanel.cycleTemplate(1);
         return;
       case 'enter':
+        BuildPanel.clearPending(); // 键盘是「直接执行」，不留在触控的待确认态里
         void BuildPanel.doBuild();
         return;
       case 'g':
+        BuildPanel.clearPending();
         void BuildPanel.doContribute();
         return;
       case 'delete':
       case 'backspace':
+        BuildPanel.clearPending();
         void BuildPanel.doDemolish();
         return;
       default:
@@ -345,6 +366,30 @@ export class BuildPanel {
     if (count === 0) return;
     BuildPanel.templateIndex = (BuildPanel.templateIndex + step + count) % count;
     BuildPanel.rebuild();
+  }
+
+  /** 标记待确认项（点操作行时调用）；再点同一行则取消 */
+  private static setPending(key: string): void {
+    BuildPanel.pendingKey = BuildPanel.pendingKey === key ? null : key;
+    BuildPanel.rebuild();
+  }
+
+  /** 清除待确认（切换蓝图 / 关面板 / 键盘直接执行时调用），避免上一次的待确认被后来的确认行误执行 */
+  private static clearPending(): void {
+    if (BuildPanel.pendingKey === null) return;
+    BuildPanel.pendingKey = null;
+    if (BuildPanel.opened) BuildPanel.rebuild();
+  }
+
+  /** 执行待确认项并清空（底部「确认执行」行的唯一出口） */
+  private static runPending(): void {
+    const key = BuildPanel.pendingKey;
+    if (!key) return;
+    BuildPanel.pendingKey = null;
+    // 先抹掉待确认态（行首 ▶ / 确认行）再执行：动作有守卫分支（光标格无建筑、非法格等）只弹 toast 不重建，
+    // 不先 rebuild 就会留一条「点了没反应」的确认行在面板上
+    BuildPanel.rebuild();
+    BuildPanel.PENDING[key]?.run();
   }
 
   private static async doBuild(): Promise<void> {
@@ -636,6 +681,8 @@ export class BuildPanel {
         bg: selected ? B.selectedBgColor : undefined,
         onClick: () => {
           BuildPanel.templateIndex = i;
+          // 换蓝图时清掉待确认：否则「先点拆除、再换蓝图、再点确认执行」会拆掉不该拆的
+          BuildPanel.clearPending();
           BuildPanel.rebuild();
         },
       });
@@ -666,25 +713,41 @@ export class BuildPanel {
       rows.push({ text: '建筑：无', color: B.dimColor });
     }
 
-    rows.push({ text: '—— 操作 ——', color: B.dimColor });
-    rows.push({
-      text: `建造（Enter）　${costText(BuildPanel.selectedTemplate()?.buildCost ?? [])}`,
-      color: prediction.legal ? B.legalColor : B.dimColor,
-      button: true,
-      onClick: () => void BuildPanel.doBuild(),
-    });
-    rows.push({
-      text: '投料（G）　共建场景向光标处建筑投料',
-      color: target && target.state === 'building' ? B.lineColor : B.dimColor,
-      button: true,
-      onClick: () => void BuildPanel.doContribute(),
-    });
-    rows.push({
-      text: '拆除（Del）　不返还材料',
-      color: B.lineColor,
-      button: true,
-      onClick: () => void BuildPanel.doDemolish(),
-    });
+    rows.push({ text: '—— 操作（点行选中，再点下方「确认执行」）——', color: B.dimColor });
+    /** 操作行（**两步确认**）：点一下只标为待确认，不执行 —— 行首 `▶` 即待确认标记 */
+    const opRow = (key: string, text: string, color: string): void => {
+      rows.push({
+        text: `${BuildPanel.pendingKey === key ? '▶' : '　'}${text}`,
+        color: BuildPanel.pendingKey === key ? B.titleColor : color,
+        bg: BuildPanel.pendingKey === key ? B.selectedBgColor : undefined,
+        button: true,
+        onClick: () => BuildPanel.setPending(key),
+      });
+    };
+    opRow(
+      'build',
+      `建造（Enter）　${costText(BuildPanel.selectedTemplate()?.buildCost ?? [])}`,
+      prediction.legal ? B.legalColor : B.dimColor,
+    );
+    opRow(
+      'contribute',
+      '投料（G）　共建场景向光标处建筑投料',
+      target && target.state === 'building' ? B.lineColor : B.dimColor,
+    );
+    opRow('demolish', '拆除（Del）　不返还材料', B.lineColor);
+
+    // 确认行（**只有它真正执行**）：有待确认项时才出现，手机上的第二个、也是唯一的大确认目标
+    const pending = BuildPanel.pendingKey ? BuildPanel.PENDING[BuildPanel.pendingKey] : null;
+    if (pending) {
+      rows.push({
+        text: `确认执行：${pending.label}`,
+        color: B.titleColor,
+        bg: B.selectedBgColor,
+        button: true,
+        onClick: () => BuildPanel.runPending(),
+      });
+    }
+
     // 手机上的退出口：触控「建造」按钮在面板下方，可能被面板盖住，且面板不吃指针 —— 必须有行内关闭
     rows.push({
       text: '关闭面板（B）',
