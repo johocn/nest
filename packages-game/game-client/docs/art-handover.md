@@ -82,7 +82,7 @@ assets/
 | 用途 | 建议文件名 | 逻辑尺寸（代码出处） | @1x | @2x | 透明通道 | 备注 |
 |---|---|---|---|---|---|---|
 | HUD toast / hint 底框 | 不交付 | 无固定尺寸：宽高 = 文本测量 + 内边距（`src/ui/Hud.ts:67-81`：`textWidth/textHeight` + `toastPadX/toastPadY`）；hint 宽 = `min(640, stageWidth-48)`、高按行数（`Hud.ts:104-120`） | — | — | — | 尺寸随文案变化 → **以代码为准待主程确认**是否九宫格贴图化 |
-| 对话框面板 | 不交付 | 宽 `min(panelMaxWidth 640, stageWidth-80)`，高按内容行数推导 —— `src/ui/DialogueView.ts:165-181`、`AppConfig.ts:83` | — | — | — | 同上，无固定像素尺寸 |
+| 对话框面板 | 不交付 | 宽 `min(panelMaxWidth 448, stageWidth-80)`，高按内容行数推导 —— `src/ui/DialogueView.ts:165-181`、`AppConfig.ts:83`（448 为让开左下方向键/右下交互按钮的几何上限） | — | — | — | 同上，无固定像素尺寸 |
 | 建造面板底框 | 不交付 | 宽 320、高按行数推导（`AppConfig.ts:118`；`src/world/BuildPanel.ts:474-481`） | — | — | — | 同上 |
 | 登录页面板 | 不交付 | 宽 `min(420, …)`、高按字段布局推导（`AppConfig.ts:163`；`src/ui/login-logic.ts` 的 `loginLayout`） | — | — | — | 同上 |
 | 交互图标（对话/采集等） | `ui/icon_talk.png`（暂定，无 `resKey` 来源） | **当前无实现**：交互仅键盘 `F` + 脚底光圈提示，无图标节点 | 待确认 | 待确认 | PNG-32（RGBA） | 无现有代码依据 → 图标清单与尺寸**待主程确认** |

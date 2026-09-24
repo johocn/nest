@@ -235,8 +235,13 @@ export type DialogueChooseHandler = (optionIndex: number) => void;
 
 /**
  * 对话框（屏幕空间自绘）。与 `Hud` 一致：静态单例、挂 `Laya.stage` 顶层并设较大 zOrder。
- * 打开时不阻塞移动（移动是键盘 W/A/S/D，互不干扰），但交互键 F 由 `InteractController` 屏蔽，
- * 避免连点重复请求。
+ *
+ * **指针不设遮罩（S9 修复）**：根节点**不设尺寸、不显式改 `mouseEnabled`**，故它自身永远不是命中目标，
+ * 触摸会穿透到下层（触控方向键）；只有选项按钮（子节点，显式 `mouseEnabled=true`）吃点击。
+ * 理由：Laya 命中检测里，根节点一旦「有 bounds + 显式 mouseEnabled=true」就会成为最上层命中目标，
+ * 把整个舞台的指针吃掉（`ui/TouchControls` zOrder 9998 在其下 → 按住方向键完全无反应），
+ * 于是出现「对话打开时键盘能走、触控走不了」的不一致。现在键盘 W/A/S/D 与触控方向键行为一致：
+ * **都能走**；交互键 F 与触控「交互」按钮由 `InteractController.triggerInteract` 统一屏蔽，避免连点重复请求。
  */
 export class DialogueView {
   private static root: Laya.Sprite | null = null;
@@ -253,7 +258,8 @@ export class DialogueView {
     const root = new Laya.Sprite();
     root.name = 's5-dialogue';
     root.zOrder = D.zOrder;
-    root.mouseEnabled = false;
+    // 不设 mouseEnabled / 不设 size：根节点自身不参与命中（否则会吃掉舞台上的触摸），
+    // 选项按钮作为子节点照常接收点击。详见类注释「指针不设遮罩」。
     Laya.stage.addChild(root);
     DialogueView.root = root;
 
@@ -281,9 +287,6 @@ export class DialogueView {
     DialogueView.view = view;
     if (onChoose) DialogueView.onChoose = onChoose;
     DialogueView.opened = true;
-    // 打开时铺满舞台接管鼠标（选项按钮在最上层，先命中）
-    DialogueView.root.mouseEnabled = true;
-    DialogueView.root.size(AppConfig.stageWidth, AppConfig.stageHeight);
     DialogueView.rebuild();
   }
 
@@ -307,7 +310,6 @@ export class DialogueView {
     DialogueView.view = null;
     DialogueView.onChoose = null;
     if (!DialogueView.root) return;
-    DialogueView.root.mouseEnabled = false;
     DialogueView.root.removeChildren();
   }
 

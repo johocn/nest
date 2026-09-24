@@ -80,7 +80,12 @@ export const AppConfig = {
   dialogue: {
     /** 对话框根节点 zOrder：须盖在 HUD 之上 */
     zOrder: 10000,
-    panelMaxWidth: 640,
+    /**
+     * 面板宽度上限。**上限受触控层几何约束**：面板水平居中，而左下角 8 向方向键占 x 12..220、
+     * 右下角交互按钮占 x 848..936（见下方 `touch`），故居中面板宽度须 ≤ 960 − 2×232 = 496，
+     * 否则选项行会压在方向键右列（`↗/→/↘`）上——点它会**误选对话选项**。取 448 留 36px 余量。
+     */
+    panelMaxWidth: 448,
     panelMarginX: 40,
     panelBottomOffset: 24,
     panelBgColor: 'rgba(0,0,0,0.88)',
