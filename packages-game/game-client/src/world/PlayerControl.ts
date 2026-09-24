@@ -48,6 +48,23 @@ export class PlayerControl {
   }
 
   /**
+   * S9 触控：虚拟方向键把**与键盘同名**的键注入/移出按下集合（`'w'/'a'/'s'/'d'`），
+   * 之后完全复用 `onFrame` 的位移与 10Hz 上报链路 —— 键盘路径、上报口径、WS 契约零变更。
+   */
+  press(key: string): void {
+    this.pressed.add(String(key).toLowerCase());
+  }
+
+  release(key: string): void {
+    this.pressed.delete(String(key).toLowerCase());
+  }
+
+  /** 抬手兜底：一次性释放全部方向键（防「手指滑出按钮后一直走」） */
+  releaseAll(): void {
+    this.pressed.clear();
+  }
+
+  /**
    * S8 Task 5（D7）：改**时间基** —— 位移 = `speedPxPerMs × Laya.timer.delta`（毫秒），
    * 60fps 与 30fps 手感一致（等价性由纯函数 `world/move-step` 的断言证明）。
    * 上报口径（`moveReportIntervalMs` / `moveReportThreshold`）与上报时机**逐字未改**。

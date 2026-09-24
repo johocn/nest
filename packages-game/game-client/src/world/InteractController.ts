@@ -82,11 +82,20 @@ export class InteractController {
       return;
     }
 
-    if (key !== KEY_INTERACT || this.busy) return;
-    // 对话打开时屏蔽交互键 F（避免连点重复请求）；移动是 W/A/S/D，不受影响
+    if (key !== KEY_INTERACT) return;
+    await this.triggerInteract();
+  }
+
+  /**
+   * S9 触控：交互按钮与键盘 F **共用同一入口**（行为逐字不变）——
+   * 触控只补输入通道，不做任何逻辑分支。
+   */
+  async triggerInteract(): Promise<void> {
+    if (this.busy) return;
+    // 对话打开时屏蔽交互（避免连点重复请求）；移动是 W/A/S/D，不受影响
     if (DialogueView.isOpen) return;
 
-    // 按键时按同一规则重选一次，避免用上一次节流的结果
+    // 触发时按同一规则重选一次，避免用上一次节流的结果
     const picked = this.pick();
     if (!picked) {
       Hud.toast('附近没有可交互目标');

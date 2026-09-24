@@ -27,6 +27,7 @@ import { remotePlayerAdapter } from '../world/entity-pool-adapter';
 import { Toast } from '../ui/Toast';
 import { Hud } from '../ui/Hud';
 import { DialogueView } from '../ui/DialogueView';
+import { TouchControls } from '../ui/TouchControls';
 
 const state = {
   cfg: null as SceneConfig | null,
@@ -171,10 +172,18 @@ async function afterLogin(): Promise<void> {
   });
 
   // ⑦ 本地移动 → 10Hz 上报
-  new PlayerControl(me, ws, { width: cfg.scene.mapWidth, height: cfg.scene.mapHeight }).attach();
+  const playerControl = new PlayerControl(me, ws, {
+    width: cfg.scene.mapWidth,
+    height: cfg.scene.mapHeight,
+  });
+  playerControl.attach();
 
   // ⑧ 就近交互（F 键）
-  new InteractController(me).attach();
+  const interactControl = new InteractController(me);
+  interactControl.attach();
+
+  // ⑧a S9 手机触控（仅触摸设备）：8 向虚拟方向键 + 交互按钮，复用上面两条链路（键盘行为零变更）
+  TouchControls.attach(playerControl, interactControl);
 
   // ⑧b S6 建造（规则/蓝图/建筑列表走服务端权威接口；面板为引擎内自绘）
   await attachBuild(me, cfg);

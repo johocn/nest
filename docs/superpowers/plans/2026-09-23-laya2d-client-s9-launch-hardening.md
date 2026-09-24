@@ -2,7 +2,7 @@
 
 > **状态：执行中，范围收敛为 H5-only（2026-09-24）。** 微信小游戏侧**缺 AppID**，Task 6（正式提审）**阻塞**，Task 5 的产物链**代码已交付**，真实 `release/wxgame` 导出的复核随小游戏上线解阻后再补。本文件只做规划与记录，不动代码、不动生产。
 > **H5 侧进度快照（2026-09-24）**：Task 1（证书）/ Task 2（S8 上线）/ Task 5（包体门禁）/ Task 7（广播门禁）**已完成**；Task 3 Step 2–3（素材入库 + 贴图接线）**已完成并上线**（落地方式偏离 D8，见 Task 3 Step 2 记录），Step 4–5（图集）**已决策不做**（2026-09-24 确认，见 Task 3 Step 4/5 记录），Step 6（线上点检）**服务器侧已完成、手机端待人工**（见 §7.4.1）；Task 4（真机验收，唯一需设备的硬缺口）**清单与模板已就绪、实测未做**；Task 8（验收与文档结清）Step 1–4 **已完成**（见 §7，提交 `76c2e8e7f`）。
-> **点检轮快照（2026-09-24 晚，「接上文，真机点检」）**：① **P0 已修** —— 线上证书 13:30 被「整目录还原」类操作回退成自建 CA（A1 回归），18:14 用面板 cert-stage 的 LE 全链重铺 + reload 修好（`0 (ok)`），回退陷阱已写进 `game-client/README.md`；② **服务器侧点检完成**（SSH → odoo）：线上产物 md5 与本机一致、S8 五模块/素材/manifest/health 全 200、assets 13 PNG + 13 `.meta`、`wss` 101；③ **本地基线完成**：`s9-art-after` 60fps / drawcall 峰 39 / heap 峰 23.2MB / up 9.5 / high（Task 3 Step 3 + §7.4.2）；④ **真机清单与记录模板已产出**（Task 4 Step 1–6 + §7.4.3），实测待人工持真机执行 —— 本机 Windows 且**出网被拦**，无真机通道。
+> **点检轮快照（2026-09-24 晚，「接上文，真机点检」）**：① **P0 已修** —— 线上证书 13:30 被「整目录还原」类操作回退成自建 CA（A1 回归），18:14 用面板 cert-stage 的 LE 全链重铺 + reload 修好（`0 (ok)`），回退陷阱已写进 `game-client/README.md`；② **服务器侧点检完成**（SSH → odoo）：线上产物 md5 与本机一致、S8 五模块/素材/manifest/health 全 200、assets 13 PNG + 13 `.meta`、`wss` 101；③ **本地基线完成**：`s9-art-after` 60fps / drawcall 峰 39 / heap 峰 23.2MB / up 9.5 / high（Task 3 Step 3 + §7.4.2）；④ **真机清单与记录模板已产出**（Task 4 Step 1–6 + §7.4.3），实测待人工持真机执行 —— 本机 Windows 且**出网被拦**，无真机通道；⑤ **低端代理预评估完成**（§7.4.4，`perf-sample.mjs` 新增 `--cpu-throttle`）：×6 仍 60fps（**H5 无 CPU 瓶颈**）、×50 **首次实证自动降级链路可用**（降级后 39.7fps ≥30）—— 代理值**不参与 A4 判定**。
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development（沿用 S2–S8 的既定方式：每 Task 派新 subagent，Task 间两阶段评审）。
 
 **Goal:** 把「能在开发者工具与本机跑通」的客户端变成**可正式上线**的游戏端：修掉生产证书链、把 S8 性能成果发布上线、接入已定稿美术并做图集、在**真机低端机型**上验收帧率与内存、建立包体与后端广播的**硬指标门禁**，最终通过**微信小游戏正式提审**并上线 H5。
@@ -229,7 +229,7 @@
 - [ ] **Step 1** 定义机型矩阵（§4 待确认 5）与测量项：冷启动耗时、稳态 fps、内存峰值、场景切换回落。→ **口径已定义（本轮）**：
   - **机型矩阵**（§4 待确认 5 的默认口径，三档）：① **低端安卓** —— 门槛档，A4 判定以它为准（如骁龙 4xx/6xx 系、4GB RAM、Android 10±）；② **中端安卓** —— 参考档（如骁龙 7xx 系、8GB RAM）；③ **iOS Safari** —— 参考档。**三档各一台**即可，机型/系统版本如实填进 Step 6 表。
   - **打开地址与账号**：手机浏览器直接打开 `https://game.joho.cn/client/`（**非** `http://`、**非** PC 地址），用 `spike01` / `spike123456` 登录；需看「互见」时在 PC 另开一窗用 `spike02` 同场景对照（Task 2 Step 4 的线上双窗口径）。
-  - **打点方式（关键约束：手机无键盘，`F3` 不可用）**：
+  - **打点方式（关键约束：手机无键盘，`F3` 不可用；移动/交互见 §7.4.5 触控通道）**：
     - **安卓**：USB 连 PC → PC Chrome 打开 `chrome://inspect` → inspect 手机页面 → Console 执行 `__PERF__.panel(true)`（显形面板，`__PERF__.panel()` 不传参是**切换**，连调两次取第二次返回值才是「读」）或 `__PERF__.snapshot()` 逐秒读数。**面板读数项**：`fps` / `drawcall` / `heapMB` / `upPerSec` / `quality` / `entityTotal`。
     - **iOS**：无 Mac 则走不了 Safari Web Inspector → **仅目视 + 录屏**，`heapMB` 记 **n/a**（iOS 无 `performance.memory`，`snapshot().heapMB` 本就返回 null），fps 以目视是否卡顿 + 录屏帧计数估算，并在结论里标注「非仪器读数」。
   - **测量项与判定阈值**（A4 三项 + 降级）：
@@ -243,11 +243,11 @@
     | M | 内存峰值 / 切场景后 | `snapshot().heapMB` | 峰值 **≤300MB**，切场景后**回落**（安卓）；iOS 记 n/a |
     | D | 自动降级可复现性 | 控制台日志 + `snapshot().quality` | 出现 `[S8] 连续 3000ms fps 低于目标 80% → 自动降级 quality=low` 或 `quality==='low'`，且**降级后 fps ≥30** |
 
-  - **桌面端已知基线（仅供对照，非真机结论）**：H5 线上 PC 非 headless **60fps** / drawcall 峰 34 / heap 峰 17MB（Task 2 Step 5）；本机 dev `s9-art-after` 60fps / drawcall 峰 39 / heap 峰 23.2MB（Task 3 Step 3）。真机数值**一律实测填入，不预填**。
+  - **桌面端已知基线（仅供对照，非真机结论）**：H5 线上 PC 非 headless **60fps** / drawcall 峰 34 / heap 峰 17MB（Task 2 Step 5）；本机 dev `s9-art-after` 60fps / drawcall 峰 39 / heap 峰 23.2MB（Task 3 Step 3）；**CPU 限速代理**（非真机替代）见 §7.4.4：×6 仍 60fps、×50 触发降级后 39.7fps。真机数值**一律实测填入，不预填**。
 - [ ] **Step 2** 真机跑 H5（手机浏览器）：记录面板数据 + 截图/录屏。→ **本期仅 H5 手机浏览器**（小游戏真机随 Task 6 解阻再补）。操作即 Step 1 的「打开地址 + 打点方式」；每档机型产出一份 Step 6 表行 + 至少 1 张面板截图或 1 段录屏。
-- [ ] **Step 3** **自动降级验证**：在低端机上确认连续 3s 低于目标 80% → 降 `quality=low`（并记录降级后 fps）。→ 判据见 Step 1 表 D 行。**若低端安卓本就 ≥30fps 不触发降级**，改由「临时构造」验证：`https://game.joho.cn/client/?quality=low` 强制低档，确认面板 `quality==='low'` 且表现正常（**证明开关链路可用**），并在结论里注明「未触发自动降级，仅验证手动切档」。
-- [ ] **Step 4** 若 <30fps：先查 `Quality` 开关项（名标签/网格线/触发区描边）与图集是否生效，再考虑降级阈值调参（**禁止无数据调参**）。→ 处置顺序（§3 风险 #6）：① 降级开关项（`?quality=low` 或触发自动降级）；② 图集（Task 3 Step 4/5 已决策不做，**真机 <30fps 是它的首选触发条件**）；③ 最后才动 `degradeRatio` 调参。
-- [ ] **Step 5** 达标判定：A4 三项（帧率/内存/启动）。→ 判定表（**逐档机型单独判**，低端安卓为门槛档）：T3 ≤5s、F ≥30（若触发降级，用**降级后**的 F 判定）、M ≤300MB 且切场景后回落（iOS 该项记 n/a 并在结论标注）。三项全过 = 该档 PASS；低端安卓 FAIL 即 A4 FAIL。
+- [ ] **Step 3** **自动降级验证**：在低端机上确认连续 3s 低于目标 80% → 降 `quality=low`（并记录降级后 fps）。→ 判据见 Step 1 表 D 行。**若低端安卓本就 ≥30fps 不触发降级**，改由「临时构造」验证：`https://game.joho.cn/client/?quality=low` 强制低档，确认面板 `quality==='low'` 且表现正常（**证明开关链路可用**），并在结论里注明「未触发自动降级，仅验证手动切档」。**代理侧已先证**：§7.4.4 的 ×50 CPU 限速下该链路**真实触发**（日志 + `finalQuality=low`，降级后 39.7fps ≥30）—— 真机只需复现「是否触发」，不必再验证代码通不通。
+- [ ] **Step 4** 若 <30fps：先查 `Quality` 开关项（名标签/网格线/触发区描边）与图集是否生效，再考虑降级阈值调参（**禁止无数据调参**）。→ 处置顺序（§3 风险 #6）：① 降级开关项（`?quality=low` 或触发自动降级）；② 图集（Task 3 Step 4/5 已决策不做，**真机 <30fps 是它的首选触发条件**）；③ 最后才动 `degradeRatio` 调参。**先验线索**：§7.4.4 表明 H5 无 CPU 瓶颈（×6 仍 60fps），故真机掉帧优先怀疑 **GPU / 内存**——第 ② 步（图集，本质是减少纹理与 drawcall）的优先级因此高于第 ③ 步调参。
+- [ ] **Step 5** 达标判定：A4 三项（帧率/内存/启动）。→ 判定表（**逐档机型单独判**，低端安卓为门槛档）：T3 ≤5s、F ≥30（若触发降级，用**降级后**的 F 判定）、M ≤300MB 且切场景后回落（iOS 该项记 n/a 并在结论标注）。三项全过 = 该档 PASS；低端安卓 FAIL 即 A4 FAIL。**§7.4.4 的 CPU 限速值只作参考、不参与判定**（不模拟移动 GPU / 内存 / 触屏，且为桌面浏览器口径）。
 - [ ] **Step 6** 记录矩阵表 + 结论，commit：`test(game-client): 真机机型矩阵与性能验收记录`。→ **模板已就绪（本轮）**，见 §7.4「真机点检记录模板」；实测数据由执行者填入后随本 Step 一起提交（README「真机性能矩阵」节的占位表同步回填）。
 
 ### Task 5: 包体门禁与产物链
@@ -275,7 +275,7 @@
 - [x] **Step 2** 用 S8 的历史数据（`loadtest-s8-result.json`）验证门禁脚本能正确判定（含一次「故意把阈值调到不可能满足」的失败路径验证）。→ 50bot 历史数据 PASS/exit 0；5 条阈值各自单独调到不可能满足均 exit 1（断言彼此独立）；`--run` 布线用 1 bot/8s 实测 PASS（输出隔离到临时文件，S8 数据文件 SHA256 未变）。
 - [x] **Step 3** 监控固化：记录 pm2/systemd 的 RSS/CPU 观测命令与「超标看什么」的排查顺序（不引入监控组件）。→ 报告 §6。
 - [x] **Step 4** 明确触发条件：**目标并发 >50 人** 或门禁连续失败 → 重新评估后端视口裁剪/分线（需单独确认，属广播行为变更）。→ 报告 §7（含 N² 外推表：100 人 ≈100k/s、200 人 ≈400k/s）。
-- [x] **Step 5** `scripts/loadtest-s9-report.md`：上线前/后指标对照 + 门禁结论。→ 上线后一列 **PENDING**（Task 2 未执行，挂账）。
+- [x] **Step 5** `scripts/loadtest-s9-report.md`：上线前/后指标对照 + 门禁结论。→ **已闭环**：报告 §3 上线前（S8 本机 50 bot）+ **§4 上线后对照（2026-09-24 生产冒烟，5 bot/10s：P95 33.08ms、上行 9.2/s/人、掉线 0、进场景 5/5）**；§4.1 记录生产冒烟暴露的两处脚本缺陷。**注**：上线后为 5 bot 冒烟口径（2G 生产机未跑 50 bot），非 50 bot 对照。
 - [x] **Step 6** commit：`test(game-perf): 广播硬指标门禁与上线报告`
 
 ### Task 8: S9 验收与文档结清
@@ -367,7 +367,7 @@ Task 1（证书，硬前置）→ Task 2（H5 发布）→ Task 3（素材/图�
 | A1 | 证书链合法 | `openssl s_client -showcerts -connect game.joho.cn:443` | 链完整、issuer 公共 CA、无 `unable to verify` | **通过**：`Verify return code: 0 (ok)`，issuer `C=US, O=Let's Encrypt, CN=YE2`（链 4 张）；本机 `curl`（系统 CA、不带 `-k`）→ 200 / `ssl_verify_result=0`；Node `https.get` → `authorized=true`（Task 1 Step 4）。**⚠️ 2026-09-24 曾回归过一次**：站点 `ssl/` 被「整目录还原」覆盖回自建 CA（`19 self signed certificate`），当日 18:14 已修复并复验 `0 (ok)`；防再发条款见 `game-client/README.md` 与 §7.4.1 |
 | A2 | S8 成果上线 | 线上 `/client/` 含 S8 模块、`PerfPanel` 可开、线上 `perf-sample` | 线上产物为 S8 版 | **通过**：线上 `/client/index.html` 200 且 md5 `533b098c…` 与本机一致；S8 十模块 URL 全 200；F3 面板真实按键可开；线上非 headless **60fps**/最低 59.9、drawcall 峰 34、heap 峰 17MB、上行 9.4/s、静止 0；`?quality=low` 生效（drawcall 峰 15）（Task 2 Step 3–5）。**2026-09-24 晚服务器侧复验**：S8 五模块 URL 仍全 200，`index.html` md5 更新为 `8d9d559a…`（Task 3 素材上线后的重建产物，本机逐字节一致）（§7.4.1） |
 | A3 | 美术接入 | 素材入库 + `.meta` 完整；drawcall/包体前后数值 | 素材入库 + 数值记录（图集不列入，§4-3 已确认不做） | **达成**：12 张 PNG 入库（程序化生成 + 同格式 `.meta`，**偏离 D8 已获批准**）并贴图接线、已上线（`b5d8c19f0`）；图集本期已决策不做（不计入缺口）；**进图前后基线已补齐**（2026-09-24 晚，Task 3 Step 3）：表现不回退（60/59.9、drawcall 38→39、heap 18.7→23.2MB、high），包体 71→96 文件 / 2.41→2.95 MB（+0.52 MiB，远低于门禁） |
-| A4 | 真机性能 | 低端安卓机型矩阵实测（面板打点） | ≥30fps / ≤300MB / 冷启动 ≤5s | **未做 / PENDING（清单已就绪）**：本机 Windows + 出网被拦，无真机通道；**点检清单 + 记录模板本轮已产出**（Task 4 Step 1–6、§7.4.3，H5 手机浏览器口径），实测待人工持真机执行后回填。**无任何真机 fps/内存/启动数据** |
+| A4 | 真机性能 | 低端安卓机型矩阵实测（面板打点） | ≥30fps / ≤300MB / 冷启动 ≤5s | **未做 / PENDING（清单已就绪 + 代理预评估已做）**：本机 Windows + 出网被拦，无真机通道；**点检清单 + 记录模板本轮已产出**（Task 4 Step 1–6、§7.4.3，H5 手机浏览器口径），**CPU 限速代理预评估见 §7.4.4**（×6 仍 60fps、×50 真实触发自动降级且降级后 39.7fps ≥30 —— 但**不参与 A4 判定**）。**无任何真机 fps/内存/启动数据** |
 | A5 | 包体门禁 | `tools/check-package.mjs`（体积/hash/引擎脚本顺序） | exit 0 | **脚本通过**：H5 布局（`release/client` 71 文件 / 2.23MB）与 wxgame 布局 fixture 均 **6/6 PASS, exit 0**；6 条失败路径各自独立命中（exit 1/2 正确）。**真实 `release/wxgame` 复核 PENDING**（缺 AppID 不导出）（Task 5 Step 1/2） |
 | A6 | 正式提审 | 体验版验收 → 提交审核 → 上线 | 审核通过上线 | **未做 / PENDING**：**阻塞于缺微信小游戏 AppID**（Task 6 全部 Step 未启动） |
 | A7 | 广播硬指标 | `scripts/loadtest-gate.mjs` | exit 0（P95 ≤200ms、投递 ≤25k/s、0 掉线、RSS Δ ≤50MB） | **门禁判定正确**：S8 历史 50bot 数据 PASS/exit 0；5 条阈值各自单独调到不可能满足均 exit 1（独立）；生产冒烟（5 bot/10s）**P95 33.08ms**、上行 9.2/s/人、**掉线 0**、进场景 5/5，门禁 exit 1 **仅因远端 RSS 无法度量**（脚本缺陷已记录）（Task 7 Step 2 + Task 2 Step 5） |
@@ -383,7 +383,7 @@ Task 1（证书，硬前置）→ Task 2（H5 发布）→ Task 3（素材/图�
 | Task 3 基线数值（drawcall/heap/包体） | **已补齐**（2026-09-24 晚） | 同口径采样写入 Task 3 Step 3：表现「60/59.9、drawcall 39、heap 23.2MB、up 9.5、high」不回退；包体 96 文件 / 2,953,242 B（+0.52 MiB，远低于门禁）。单变量未隔离：heap +4.5MB 含样本波动，不作为结论 |
 | Task 3 Step 6 线上点检 | **服务器侧完成 / 手机端待人工** | 服务器侧（SSH 到 odoo）全量核对通过：线上 `index.html` md5 与本机逐字节一致、S8 五模块 + manifest + health + 6 素材 URL 全 200、assets 13 PNG + 13 `.meta`、`wss` 101；**线上手机浏览器端到端点检归入 Task 4，由人工持真机执行**（模板见 §7.4） |
 | **生产证书被回退成自建 CA（P0，2026-09-24 发现）** | **已修复**（2026-09-24 18:14） | 站点 `ssl/` 目录 13:30 被「整目录还原」类操作覆盖回自建 CA（A1 回归，手机/微信端报不受信）。已用面板 cert-stage 的 LE 全链 + 私钥重铺 + `chmod 600` + reload，验证 `Verify return code: 0 (ok)`（链 4 张）；同源事故的**回退陷阱已写进 `game-client/README.md`**（只还原产物目录、绝不还原 `ssl/`）。详见 §7.4 |
-| Task 4（A4 真机性能） | **PENDING（清单已就绪）** | 需真实设备（低端/中端安卓 + iOS）；**点检清单与记录模板本轮已产出**（Task 4 Step 1–6 + §7.4 模板），本机无真机通道（出网被拦），实测待人工执行 |
+| Task 4（A4 真机性能） | **PENDING（清单已就绪 + 代理预评估已做）** | 需真实设备（低端/中端安卓 + iOS）；**点检清单与记录模板本轮已产出**（Task 4 Step 1–6 + §7.4 模板），**CPU 限速代理预评估见 §7.4.4**（含自动降级首次实证触发），本机无真机通道（出网被拦、无 USB/Safari Inspector），真机实测待人工执行 |
 | Task 5 真实 `release/wxgame` 复核 | **PENDING** | 缺 AppID 不导出，产物链仅以 fixture 自检 |
 | Task 6（A6 正式提审） | **BLOCKED** | 缺微信小游戏 AppID，S9 记为 H5-only 交付 |
 | Task 8 Step 4（commit） | **已执行** | `76c2e8e7f`（`docs(game-client): S9 上线硬化验收记录`，README.md + 本文件） |
@@ -440,7 +440,7 @@ Task 1（证书，硬前置）→ Task 2（H5 发布）→ Task 3（素材/图�
 1. 手机浏览器打开 `https://game.joho.cn/client/`（确认地址栏无证书告警 —— 有告警说明 §7.4.1 的 P0 复发，先修证书再点检）；秒表起 T1（URL → 登录表单可输入）。
 2. USB 连 PC → PC Chrome `chrome://inspect` → inspect 该页 → Console 备用。
 3. 输入 `spike01` / `spike123456` 登录，秒表计 T2（点登录 → 场景首帧）；T3 = T1 + T2。
-4. Console 执行 `__PERF__.panel(true)` 显形面板（或 `__PERF__.snapshot()` 逐秒读数）；按 `ArrowRight/Down/Left/Up` 走一段 + 静止一段，各读数 **F**（fps）与 **M**（heapMB）。
+4. Console 执行 `__PERF__.panel(true)` 显形面板（或 `__PERF__.snapshot()` 逐秒读数）；用**左下角虚拟方向键**（§7.4.5）按住走一段 + 静止一段，各读数 **F**（fps）与 **M**（heapMB）。
 5. 观察控制台是否出现 `[S8] 连续 3000ms fps 低于目标 80% → 自动降级 quality=low` 或 `snapshot().quality === 'low'`（**D**）；若触发，记录降级后 fps。
 6. 切换场景（或走出/回到场景）后再读一次 heap，判定**是否回落**（**M** 后半句）。
 7. 截图/录屏留证，按下方模板填行，回填 README「真机性能矩阵」节。
@@ -454,3 +454,49 @@ Task 1（证书，硬前置）→ Task 2（H5 发布）→ Task 3（素材/图�
 | 待填（iOS Safari · 参考档） | 待填 | 待填 | 待填 | 待填（≤5s） | 待填（≥30，目视估算） | n/a（无 Inspector） | **n/a**（iOS 无 `performance.memory`） | n/a | 待填 | 待填 | 待填 | 录屏文件名 |
 
 **填写注意**：① `drawcall` 仅安卓可读（`snapshot().drawcall`），iOS 无 Inspector 时记 n/a；② 触发降级时，**F 用降级后的值判**（Step 1 表 F 行）；③ iOS 的 fps/heap 属目视估算，结论须标注「非仪器读数」；④ 三档中**低端安卓为 A4 门槛档**，其 FAIL 即 A4 FAIL。
+
+#### 7.4.4 低端代理预评估（CPU 限速 · **非 A4 替代**）
+
+真机不可得时的降险手段：用 CDP `Emulation.setCPUThrottlingRate` 在桌面浏览器上降 CPU 速度近似低端安卓。为此给 `scripts/perf-sample.mjs` 新增 `--cpu-throttle <n>`（记录字段新增 `cpuThrottle` / `degradeLine`）。**局限（必读）**：只降 CPU，不模拟移动 GPU、显存/内存带宽与触屏输入 —— 结论只能回答「H5 是否 CPU 瓶颈」，**不能替代 A4 真机验收**。
+
+| 限速 | 移动段 fps 均值 / 最低 | 静止段 fps 均值 | drawcall 峰 | heap 峰 | 自动降级 | 结束档位 |
+|---|---|---|---|---|---|---|
+| 不限速（`s9-art-after` 对照） | 60 / 59.9 | 59.8 | 39 | 23.2 MB | 未触发 | high |
+| ×6 | 59.2 / 55.2 | 60 | 39 | 21.8 MB | 未触发 | high |
+| ×20 | 50.3 / 20.8 | 58.2 | 38 | 22.5 MB | 未触发 | high |
+| ×50 | **39.7 / 32.8** | 46.8 | **28** | 22.8 MB | **已触发** | **low** |
+
+**结论**：
+
+1. **H5 不是 CPU 瓶颈**：×6（已属低端安卓量级的 CPU 降速）仍稳 60fps；直到 ×20 才见回落（最低 20.8，但未持续 3s，故未降级），×50 才崩到 39.7。
+2. **自动降级链路首次被实证可用**（此前 H5 从未触发过）：×50 出现 `[S8] 连续 3000ms fps 低于目标 80% → 自动降级 quality=low`，`finalQuality=low`，drawcall 峰 38→28；**降级后 fps 均值 39.7 / 最低 32.8，均 ≥30** —— 与 Task 4 Step 3 的「降级后 fps ≥30」判据一致。
+3. **对真机的指向**：真机若 <30fps，更可能来自**移动 GPU / 内存带宽 / 触屏输入**而非 CPU，处置仍按 §3 风险 #6 顺序（开关项 → 图集 → 阈值调参）；图集是否启动仍待真机数据决定。
+
+样本：`docs/perf-sample.md` 的 `s9-lowend-proxy-6x` / `s9-lowend-proxy-20x` / `s9-lowend-proxy-50x`。
+
+#### 7.4.5 手机触控通道（本轮补入 —— **A4 真机验收的硬前置**）
+
+**发现的硬阻断（本轮）**：手机浏览器上**完全无法操作**。全客户端只有键盘输入 —— `PlayerControl` 只绑 `KEY_DOWN/KEY_UP`，`InteractController` 只在 `'f'` 键上派发交互，触屏一个字都不认。所以 §7.4.3 里「按 `ArrowRight/Down/Left/Up` 走一段」在真机上根本做不到，A4 的 F/M 两项（稳态 fps / 内存峰值）**必然测不出**（人只能站在原地）。
+
+**补法（最小改动：只补输入通道，零逻辑分支）**：
+
+| 文件 | 改动 |
+|---|---|
+| `src/config/AppConfig.ts` | 新增 `touch` 常量块（zOrder 9998、单格 64px、3×3 网格、交互按钮 88px、半透明配色） |
+| `src/world/PlayerControl.ts` | 新增 `press(key)` / `release(key)` / `releaseAll()`：把**与键盘同名**的 `'w'/'a'/'s'/'d'` 注入既有 `pressed` 集合，之后完全复用 `onFrame` 的位移与 10Hz 上报 |
+| `src/world/InteractController.ts` | `F` 键分支抽成 `public async triggerInteract()`，键盘路径改为委托它（行为逐字不变） |
+| `src/ui/TouchControls.ts`（新增） | 引擎内自绘（同 `Hud` 范式，不引 DOM/`laya.ui`）：左下 8 向方向键 + 右下「交互」按钮；**仅触摸设备显示**；按住用 `MOUSE_DOWN`、抬手由**舞台级** `MOUSE_UP` 统一 `releaseAll()` 兜底（防手指滑出按钮后卡键一直走） |
+| `src/boot/Main.ts` | 进场景装配 ⑧a 处接线 `TouchControls.attach(playerControl, interactControl)` |
+
+**范围（用户 2026-09-24 决策）**：只做**走动 + 交互**；建造（`B` 键与面板内 `Q/E/Enter/G/Del`）本期不做。
+
+**e2e 取证（Playwright 移动端模拟 + CDP `Input.dispatchTouchEvent`，本机 5173/3000/6379 + 本机 PostgreSQL 16，**已跑通 15/15 PASS**）**：
+
+- 触摸设备识别 → `[S9] 触控层就绪：8 向方向键（单格 64px）+ 交互按钮`；PC（无触摸）→ `非触摸设备：不启用触控层`（触控层不渲染）。
+- **真实位移**（取 WS 上行报文，比截图硬）：按住方向键「右」1s，`world.move` 帧 `x: 648 → 908`（≈240px/s 与 `moveSpeedPxPerMs=0.24` 一致）；`upPerSec` 0 → 5 → 9；抬手后 `upPerSec` 回到 **0** 且不再有新位置帧。
+- **交互与键盘同源**：走回 `plant_01`（`(560,480)`，物件半径 70）→ 点「交互」→ 命中 `POST /api/client/v1/world/objects/1/interact`（`before=3 → after=4`）。
+- 回归：S3/S4/S5/S6/S7/S8 六个零依赖冒烟全绿（16/18/27/50/102/146 项）。
+
+**仍未做**：真机（含 iOS Safari）上的触控手感与多点触控（Laya 默认 `multiTouchEnabled=false`，同屏只能按一个按钮 —— 8 向已由单格覆盖，不影响走动；「按住方向键 + 同屏点交互」不支持，需抬手后再点）。
+
+**发布前置**：触控代码**尚未发布到线上** `game.joho.cn/client/`（仍只有本机 `bin/` 产物）——真机验收前必须先走 `publish.mjs h5-site` + 上传（同 Task 2 / Task 3 流程），否则手机上打开的还是没有触控的旧产物。

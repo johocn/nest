@@ -249,6 +249,35 @@ export const AppConfig = {
     maxPerKind: 32,
   },
   /**
+   * S9 手机触控（引擎内自绘，屏幕空间）：8 向虚拟方向键 + 交互按钮，**仅触摸设备显示**。
+   * 只补输入通道：方向键把与键盘同名的 `'w'/'a'/'s'/'d'` 注入 `PlayerControl.pressed`，
+   * 交互按钮走 `InteractController.triggerInteract()` —— 与键盘是同一条链路，PC 端行为零变更。
+   * 尺寸均为**舞台坐标**（`SCALE_SHOWALL` 下随舞台等比缩放）。
+   */
+  touch: {
+    /** 触控层根节点 zOrder：**低于** hud(9999) —— 提示条/对话/建造/登录/性能面板永远盖在它上面 */
+    zOrder: 9998,
+    /** 方向键单格边长与格间距：3×3 网格排布（中心格空置），故整盘边长 = 3×边长 + 2×间距 */
+    buttonSize: 64,
+    buttonGap: 8,
+    /** 方向键盘到左下角的边距 */
+    padMargin: 12,
+    /** 交互按钮尺寸与到右下角的边距 */
+    interactWidth: 88,
+    interactHeight: 88,
+    interactMarginRight: 24,
+    interactMarginBottom: 40,
+    /** 半透明不挡视野；按下时换高亮底色做即时反馈 */
+    bgColor: 'rgba(255,255,255,0.16)',
+    pressedBgColor: 'rgba(255,255,255,0.42)',
+    borderColor: 'rgba(255,255,255,0.35)',
+    borderWidth: 1,
+    /** 箭头字形字号 / 交互按钮字号 / 文字色 */
+    glyphFontSize: 26,
+    interactFontSize: 20,
+    textColor: '#ffffff',
+  },
+  /**
    * S8 Task 3 静态背景层（世界空间）：地块 + 网格 + 触发区描边 + 增量排序阈值集中在此，避免魔法数字散落。
    * **取值全部 = 优化前的字面量原值**（`'#2f6b3a'` / `'#3d7a4a'` / 1px / 100px / `'#f5c542'` / 2px），
    * 保证 `quality='high'` 与基线**表现逐字一致**（风险 #1 表现不回退）。
