@@ -500,3 +500,71 @@ Task 1（证书，硬前置）→ Task 2（H5 发布）→ Task 3（素材/图�
 **仍未做**：真机（含 iOS Safari）上的触控手感与多点触控（Laya 默认 `multiTouchEnabled=false`，同屏只能按一个按钮 —— 8 向已由单格覆盖，不影响走动；「按住方向键 + 同屏点交互」不支持，需抬手后再点）。
 
 **发布前置**：触控代码**尚未发布到线上** `game.joho.cn/client/`（仍只有本机 `bin/` 产物）——真机验收前必须先走 `publish.mjs h5-site` + 上传（同 Task 2 / Task 3 流程），否则手机上打开的还是没有触控的旧产物。
+
+#### 7.4.6 真机验收的 LAN 通道（2026-09-24 用户选择「先不发布」）
+
+不发布也能真机验收，前提是让手机直连开发机：
+
+| 环节 | 做法 |
+|---|---|
+| 入口页 | `game-client/bin/lan.html`（**gitignored 构建目录**，非源码；`serve.mjs` 直接可服）——在引擎脚本后注入 `window.__ENV__ = { apiBase: 'http://192.168.1.2:3000', wsUrl: '…/game' }`（机制见 `Platform.ts` `envValue`）。`bin/index.html` 不注入，故本机 localhost 流程与 `perf-sample.mjs` 不受影响 |
+| 后端 | 本机起 `mock-redis`(6379) + `node dist/src/main.js`(3000)，并把 LAN 源加入白名单：`CORS_ORIGINS=…,http://192.168.1.2:5173,http://192.168.1.2:3000`（否则前端登录/接口全被 CORS 拦） |
+| 静态 | `node tools/serve.mjs`(5173，绑 `::` 双栈，LAN 可达) |
+| 手机 URL | `http://192.168.1.2:5173/lan.html`（同一 WiFi；开发机 LAN IP 用 `Get-NetIPAddress` 查） |
+| ⚠️ 防火墙 | 本机三个 Profile 均 `Enabled=True / DefaultInboundAction=NotConfigured`，且**没有 `node.exe` 入站允许规则** → 手机大概率连不上。需**管理员** PowerShell 放行：`New-NetFirewallRule -DisplayName "lan-game" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 3000,5173 -Profile Any` |
+
+**LAN 源预检（本机以 `http://192.168.1.2:5173/lan.html` 为源跑同一套触控 e2e）：10/10 PASS**
+
+- `__ENV__` 注入生效 → 跨源登录 + 进场景成功（CORS 放行 LAN 源）→ 触控层启用；**全程无控制台错误、无失败请求**（CORS / ws / 静态资源都干净）。
+- 触控位移与上报同 localhost：按住「右」`world.move` 帧 `x: 644 → 952`，`upPerSec` 0 → 6 → 9，抬手回 0。
+- 触控几何：根节点 9 个子节点 = 8 向 + 交互，交互按钮 `88×88 @ (848,512)`。
+- 触控点按「交互」→ 命中 `POST /api/client/v1/world/npcs/13/talk` 并弹出对话。
+
+**两条与验收有关的实测结论（不是 bug，记录以免误判）**
+
+1. **交互目标由「就近 + priority」裁决，NPC 会抢走物件**：站在 `chest_01 (420,600)` 旁边时选中的是同样在附近的 `npc:13`（货郎），于是发的是 `talk` 而非 `collect`。真机验收要测「采集」得挑没有 NPC 抢的物件。**⚠️ 2026-09-24 更正**：这里原先举的 `plant_01 (560,480)` **也不安全**（货郎会巡逻过来抢，§7.4.7 实测）；目前已知的稳妥点是 **`stone_01 (720,400)`**（最近 NPC smith 距 122px）。
+2. **「该 NPC 暂不可对话」是契约内的正常出口**：`InteractComponent` 规定「未实现类型 / 不可手动激活的触发器 / Quest 注册位」`canInteract()=true` 但 `interact()` **只 toast、不发请求**。所以「点交互没看到请求」不等于触控坏了——**同位置键盘 F 也是同样 toast**（本轮已用此差分证明触控与键盘行为一致）。
+
+**手机端读数（A4 的 F/M）怎么办**：手机无键盘，`F3` 调不出面板。安卓可 USB + PC Chrome `chrome://inspect` → Console 执行 `__PERF__.panel(true)`；iOS 无此路。若不便接线，则 F/M 采用 §7.4.4 的 CPU 限速代理样本（已在 `docs/perf-sample.md`），真机只做**功能与手感**验收。
+
+#### 7.4.7 移动端模拟验收（**非真机**，2026-09-24 用户决策「先不发布，跑完可自动化的部分」）
+
+**口径声明（必读）**：本节数据来自 Chromium 移动端模拟（移动 UA + DPR 1.75 + `isMobile/hasTouch` + 视口 915×412 横屏 + CDP 真实触摸事件），**不是真机**：不反映移动 GPU / 内存带宽 / 机型差异，也**不参与 A4 判定**（§1.2 / §7.4.3 的真机表仍为「待填」）。它的用途是：① 补上「触控通路」的端到端取证；② 把 §7.4.3 里**可自动化**的部分（T1/T2/T3、F/M、D、切档）先跑出基线，真机只需换设备复测；③ 沉淀可复跑的脚本。
+
+**工具**：`scripts/accept-mobile.mjs`（零依赖，仅可选 playwright；同 `perf-sample.mjs` 一样从 `e:\code\node_modules` 解析）
+
+```bash
+node scripts/accept-mobile.mjs --label mobile-sim --map-localhost-ipv4                       # 标准轮
+node scripts/accept-mobile.mjs --label mobile-sim-throttle50 --cpu-throttle 50 --map-localhost-ipv4  # 自动降级
+node scripts/accept-mobile.mjs --label mobile-sim-quality-low --quality low --map-localhost-ipv4     # 手动切档
+```
+
+产物：`docs/perf-shots/<label>.png`（移动视口截图）+ `docs/perf-shots/<label>.json`（逐秒样本与全部取证字段）。
+
+**实测（场景 1，固定路线 → ↓ ← ↑ →，移动 10s + 静止 10s）**：
+
+| 轮次 | 限速 / 档位 | T1(s) | T2(s) | T3(s) | fps 均值 / 最低 | drawcall 峰 | heap 峰 | 静止后 heap | 触发降级 | 结束档位 | 交互取证 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `mobile-sim` | 不限速 / 平台默认 | 0.40 | 0.33 | **0.73** | **59.8 / 58.0** | 38 | 16.8 MB | **15.2 MB（回落）** | 未触发 | high | `201 POST …/world/objects/2/interact` |
+| `mobile-sim-throttle50` | **×50** / 平台默认 | 2.07 | 2.26 | 4.33 | 56.2 / **39.4** | **29** | 16.1 MB | 15.3 MB（回落） | **已触发** | **low** | `201 POST …/world/npcs/12/talk` |
+| `mobile-sim-quality-low` | 不限速 / **`?quality=low`** | 0.41 | 0.33 | 0.74 | 60.0 / 60.0 | **29** | 16.0 MB | 16.0 MB（5s/5s 短采样，不作回落结论） | 未触发（强制低档） | **low** | `201 POST …/world/objects/2/interact` |
+
+**触控通路取证（每轮均成立）**：
+
+| 项 | 实测 |
+|---|---|
+| 触控层启用 | `[S9] 触控层就绪`；根节点 **9 个按钮**（8 向 + 交互），交互按钮 `88×88`（舞台坐标 `(848,512)`） |
+| 触摸送达 | `touchDelivered=1`（CDP 触摸 → 舞台 `MOUSE_DOWN` 计数 +1，**证明点按真的到达**，非「以为点了」） |
+| 按住能走 | 移动段上行 **9.0–9.4 次/秒**（键盘基线 9.5，`world.move` 帧 `x: 644 → 676 → …`） |
+| 松手能停 | 静止段上行合计 **0**（抬手即停，舞台级 `MOUSE_UP` 兜底有效） |
+| 交互命中 | HUD 选中 `object:2`（stone_01）→ 点「交互」→ HUD `采集成功，获得 8 gold` + `201 POST …/objects/2/interact` |
+| 无副作用 | `pageerror=0`、失败请求 `=0`、CORS 干净（全程无控制台报错） |
+
+**自动降级（D 项）实证**：×50 下出现 `[S8] 连续 3000ms fps 低于目标 80% → 自动降级 quality=low`，`finalQuality=low`，drawcall 峰 38 → **29**，**降级后最低 fps 39.4 ≥ 30** —— 与 §7.4.4 桌面口径一致，且本轮是**在移动端模拟 + 真实触摸输入**下复现的。
+
+**本轮发现（重要，留待决策）**：
+
+1. **对话打开后触控失效，但与键盘不一致**：交互成功（如 `talk`）会打开 `DialogueView`（zOrder 10000，顶层遮罩）→ **之后所有触摸都被它吃掉**（实测：若把交互取证排在移动段之前，移动段 `upPerSec` 恒 0；键盘不受影响）。而 `InteractController.triggerInteract` 的注释明确写着「对话打开时屏蔽交互……**移动是 W/A/S/D，不受影响**」→ 结果变成「**对话打开时键盘能走、触控走不了**」，与设计意图相悖。本轮**未改代码**（属产品行为，待确认意图后再定：把方向键提到对话之上，或让对话遮罩不吞事件）。
+2. **NPC 抢目标 + 巡逻**（复述 §7.4.6 结论并对脚本取点产生实际影响）：NPC 半径 90 > 物件 70，且 NPC 会巡逻移动 → 站点必须选「NPC 距离 > 90 且不易被巡逻覆盖」的点。本轮由 `plant_01 (560,480)`（被货郎抢走）改为 **`stone_01 (720,400)`**（最近 NPC smith 距 122px）后稳定命中物件。`npcs:3:1` / `npc:12` 这类选中是**契约内占位出口**（只 toast 不发请求），不是触控故障。
+
+**仍未做（需真机 / 人工）**：真机三档（低端安卓门槛档、中端安卓、iOS Safari）与手感验收、iOS 无法用 `chrome://inspect` 的目视口径、多点触控（Laya `multiTouchEnabled=false`，同屏只能按一个按钮）。

@@ -71,6 +71,10 @@ node tools/publish.mjs wxgame          # 1) 补 config/（清陈旧 + 重算 sha
 
 **PENDING —— 待 Task 4 回填**：真机验收需真实设备（起点矩阵 = 1 低端安卓 + 1 中端安卓 + 1 iOS），本期未执行，故本表**暂无任何 fps / 内存 / 冷启动数据**（不预填占位数值）。
 
+- 点检清单与记录模板：S9 计划 `docs/superpowers/plans/2026-09-23-laya2d-client-s9-launch-hardening.md` §7.4.3。
+- 真机不可得时的**代理预评估**（非真机验收）：`node scripts/perf-sample.mjs --label lowend-proxy --cpu-throttle 6 --map-localhost-ipv4` —— CDP 降 CPU 速度近似低端安卓；实测 ×6 仍 60fps、×50 会触发自动降级（见计划 §7.4.4）。
+- **移动端模拟验收**（非真机，2026-09-24）：`node scripts/accept-mobile.mjs --label mobile-sim --map-localhost-ipv4` —— Chromium 移动端模拟（移动 UA + DPR + 触摸），把 T1/T2/T3、fps/内存、自动降级、触控交互打通并出截图；也支持 `--cpu-throttle 50`（验证自动降级）与 `--quality low`（验证手动切档）。产物 `docs/perf-shots/<label>.{png,json}`。参考值：标准轮 **60fps / drawcall 38 / heap 峰 16.8MB（静止回落至 15.2）/ 触控上行 9.0–9.4 次/秒**；**该口径不参与 A4 判定**（见计划 §7.4.7）。
+
 待回填列（判定口径见 S9 计划 §1.2 与 §1.6 A4）：
 
 | 机型 | 系统 | 稳态 fps（低端安卓 ≥30） | 内存峰值（≤300MB） | 冷启动（≤5s） | 自动降级触发 | 证据 |

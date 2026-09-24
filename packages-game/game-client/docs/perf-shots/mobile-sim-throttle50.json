@@ -1,0 +1,366 @@
+{
+  "label": "mobile-sim-throttle50",
+  "at": "2026-09-24T13:47:31.120Z",
+  "commit": "9cc58bf84",
+  "dirty": true,
+  "mode": "移动端模拟（非真机）",
+  "browser": "151.0.7922.34",
+  "headless": false,
+  "mobile": {
+    "vw": 915,
+    "vh": 412,
+    "dpr": 1.75,
+    "isMobile": true,
+    "hasTouch": true,
+    "userAgent": "Mozilla/5.0 (Linux; Android 10; SM-A105F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+  },
+  "url": "http://localhost:5173/",
+  "cpuThrottle": 50,
+  "quality": null,
+  "timing": {
+    "T1_s": 2.07,
+    "T2_s": 2.26,
+    "T3_s": 4.33
+  },
+  "padGeometry": {
+    "scale": 0.644,
+    "ox": 149,
+    "oy": 0,
+    "canvas": {
+      "w": 618,
+      "h": 412
+    },
+    "stage": {
+      "w": 960,
+      "h": 640
+    },
+    "buttons": [
+      {
+        "text": "↖",
+        "sx": 44,
+        "sy": 452,
+        "w": 64,
+        "h": 64
+      },
+      {
+        "text": "↑",
+        "sx": 116,
+        "sy": 452,
+        "w": 64,
+        "h": 64
+      },
+      {
+        "text": "↗",
+        "sx": 188,
+        "sy": 452,
+        "w": 64,
+        "h": 64
+      },
+      {
+        "text": "←",
+        "sx": 44,
+        "sy": 524,
+        "w": 64,
+        "h": 64
+      },
+      {
+        "text": "→",
+        "sx": 188,
+        "sy": 524,
+        "w": 64,
+        "h": 64
+      },
+      {
+        "text": "↙",
+        "sx": 44,
+        "sy": 596,
+        "w": 64,
+        "h": 64
+      },
+      {
+        "text": "↓",
+        "sx": 116,
+        "sy": 596,
+        "w": 64,
+        "h": 64
+      },
+      {
+        "text": "↘",
+        "sx": 188,
+        "sy": 596,
+        "w": 64,
+        "h": 64
+      },
+      {
+        "text": "交互",
+        "sx": 892,
+        "sy": 556,
+        "w": 88,
+        "h": 88
+      }
+    ]
+  },
+  "interact": {
+    "spot": {
+      "x": 720,
+      "y": 400,
+      "expect": "stone_01 (720,400)，半径 70；最近 NPC smith(700,520) 距离 122 > 90"
+    },
+    "posAtSpot": {
+      "x": 704,
+      "y": 424
+    },
+    "hudAtSpot": "登录成功：playerId=1 | 按 F 交互：npc:12",
+    "hudAfter": "登录成功：playerId=1 | 按 F 交互：npc:12",
+    "touchDelivered": 1,
+    "hits": [
+      "201 POST /api/client/v1/world/npcs/12/talk"
+    ],
+    "toastLine": "(无 [S3] 日志)"
+  },
+  "route": "→ 1.9s → ↓ 1.9s → ← 1.9s → ↑ 1.9s → → 2.4s",
+  "moveSamples": [
+    {
+      "t": 1.01,
+      "fps": 39.4,
+      "statFps": 39,
+      "drawcall": 29,
+      "entityTotal": 17,
+      "entityVisible": 17,
+      "upPerSec": 7,
+      "quality": "low",
+      "heapMB": 13.2
+    },
+    {
+      "t": 2.03,
+      "fps": 56.9,
+      "statFps": 57,
+      "drawcall": 26,
+      "entityTotal": 17,
+      "entityVisible": 16,
+      "upPerSec": 9,
+      "quality": "low",
+      "heapMB": 14
+    },
+    {
+      "t": 3.05,
+      "fps": 58.2,
+      "statFps": 59,
+      "drawcall": 23,
+      "entityTotal": 17,
+      "entityVisible": 14,
+      "upPerSec": 9,
+      "quality": "low",
+      "heapMB": 14.7
+    },
+    {
+      "t": 4.06,
+      "fps": 60.9,
+      "statFps": 60,
+      "drawcall": 23,
+      "entityTotal": 17,
+      "entityVisible": 12,
+      "upPerSec": 9,
+      "quality": "low",
+      "heapMB": 15.1
+    },
+    {
+      "t": 5.1,
+      "fps": 57.1,
+      "statFps": 57,
+      "drawcall": 15,
+      "entityTotal": 17,
+      "entityVisible": 9,
+      "upPerSec": 8,
+      "quality": "low",
+      "heapMB": 15.6
+    },
+    {
+      "t": 6.11,
+      "fps": 59,
+      "statFps": 59,
+      "drawcall": 13,
+      "entityTotal": 17,
+      "entityVisible": 9,
+      "upPerSec": 10,
+      "quality": "low",
+      "heapMB": 16.1
+    },
+    {
+      "t": 7.13,
+      "fps": 58,
+      "statFps": 58,
+      "drawcall": 13,
+      "entityTotal": 17,
+      "entityVisible": 15,
+      "upPerSec": 8,
+      "quality": "low",
+      "heapMB": 13.9
+    },
+    {
+      "t": 8.18,
+      "fps": 58,
+      "statFps": 58,
+      "drawcall": 23,
+      "entityTotal": 17,
+      "entityVisible": 17,
+      "upPerSec": 9,
+      "quality": "low",
+      "heapMB": 14.4
+    },
+    {
+      "t": 9.2,
+      "fps": 56.1,
+      "statFps": 57,
+      "drawcall": 28,
+      "entityTotal": 17,
+      "entityVisible": 17,
+      "upPerSec": 8,
+      "quality": "low",
+      "heapMB": 14.2
+    },
+    {
+      "t": 10.01,
+      "fps": 58.1,
+      "statFps": 58,
+      "drawcall": 27,
+      "entityTotal": 17,
+      "entityVisible": 17,
+      "upPerSec": 9,
+      "quality": "low",
+      "heapMB": 14.7
+    }
+  ],
+  "idleSamples": [
+    {
+      "t": 1.02,
+      "fps": 60.9,
+      "statFps": 60,
+      "drawcall": 20,
+      "entityTotal": 17,
+      "entityVisible": 12,
+      "upPerSec": 0,
+      "quality": "low",
+      "heapMB": 14.9
+    },
+    {
+      "t": 2.05,
+      "fps": 58.9,
+      "statFps": 59,
+      "drawcall": 20,
+      "entityTotal": 17,
+      "entityVisible": 12,
+      "upPerSec": 0,
+      "quality": "low",
+      "heapMB": 15.2
+    },
+    {
+      "t": 3.07,
+      "fps": 59.9,
+      "statFps": 60,
+      "drawcall": 20,
+      "entityTotal": 17,
+      "entityVisible": 12,
+      "upPerSec": 0,
+      "quality": "low",
+      "heapMB": 14.8
+    },
+    {
+      "t": 4.08,
+      "fps": 59.2,
+      "statFps": 60,
+      "drawcall": 20,
+      "entityTotal": 17,
+      "entityVisible": 12,
+      "upPerSec": 0,
+      "quality": "low",
+      "heapMB": 15.1
+    },
+    {
+      "t": 5.1,
+      "fps": 60.9,
+      "statFps": 60,
+      "drawcall": 20,
+      "entityTotal": 17,
+      "entityVisible": 12,
+      "upPerSec": 0,
+      "quality": "low",
+      "heapMB": 15.5
+    },
+    {
+      "t": 6.12,
+      "fps": 59.1,
+      "statFps": 60,
+      "drawcall": 20,
+      "entityTotal": 17,
+      "entityVisible": 12,
+      "upPerSec": 0,
+      "quality": "low",
+      "heapMB": 15
+    },
+    {
+      "t": 7.13,
+      "fps": 60,
+      "statFps": 60,
+      "drawcall": 19,
+      "entityTotal": 17,
+      "entityVisible": 11,
+      "upPerSec": 0,
+      "quality": "low",
+      "heapMB": 15.3
+    },
+    {
+      "t": 8.15,
+      "fps": 59.9,
+      "statFps": 60,
+      "drawcall": 18,
+      "entityTotal": 17,
+      "entityVisible": 11,
+      "upPerSec": 0,
+      "quality": "low",
+      "heapMB": 15.6
+    },
+    {
+      "t": 9.17,
+      "fps": 60,
+      "statFps": 60,
+      "drawcall": 18,
+      "entityTotal": 17,
+      "entityVisible": 11,
+      "upPerSec": 0,
+      "quality": "low",
+      "heapMB": 15.1
+    },
+    {
+      "t": 10.02,
+      "fps": 61,
+      "statFps": 60,
+      "drawcall": 18,
+      "entityTotal": 17,
+      "entityVisible": 11,
+      "upPerSec": 0,
+      "quality": "low",
+      "heapMB": 15.3
+    }
+  ],
+  "degradeLine": "[S8] 连续 3000ms fps 低于目标 80% → 自动降级 quality=low",
+  "qualityLine": "[S8] quality=high switches=nameLabels=1 gridLines=1 triggerOutline=1 interp=full remoteHz=10 (platform=h5 url=- env=- config=auto)",
+  "finalQuality": "low",
+  "heapAtIdleEndMB": 15.3,
+  "pageErrors": [],
+  "failedRequests": [],
+  "consoleTouch": "[S9] 贴图预加载 9/9 命中",
+  "screenshot": "E:\\code\\nest\\packages-game\\game-client\\docs\\perf-shots\\mobile-sim-throttle50.png",
+  "summary": {
+    "moveFpsMean": 56.17,
+    "moveFpsMin": 39.4,
+    "idleFpsMean": 59.98,
+    "drawcallPeak": 29,
+    "heapPeakMB": 16.1,
+    "heapAtIdleEndMB": 15.3,
+    "heapFellBack": true,
+    "moveUpPerSecMean": 8.6,
+    "idleUpPerSecSum": 0,
+    "finalQuality": "low"
+  }
+}
