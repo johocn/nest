@@ -507,6 +507,27 @@ Task 1（证书，硬前置）→ Task 2（H5 发布）→ Task 3（素材/图�
 - **验证**：站点目录 **97 文件 / 2,967,970B**；`index.html` 线上 md5 **`5a20bce8020ec25cf8e0464c018f1a79`** 与本机逐字节一致；服务器侧 `Host: game.joho.cn` 下 `/client/index.html`、`/client/js/ui/TouchControls.js`、`/client/js/boot/Main.js`、`/client/js/env-config.js`、`/client/assets/resources/bg_scene1.png`、`/gamedata/manifest.json`、`/health` **全 200**；线上 `TouchControls.js` 含 `s9-stick-zone` 且 `AppConfig.js` 为 `stickZoneWidth: 256`（收窄版）；本机 `curl --resolve game.joho.cn:443:39.106.99.9 https://game.joho.cn/client/index.html` → **200 且 `ssl_verify_result=0`**（公共 CA 链合法，与 Task 1 结论一致）。
 - **口径提示**：本次发布用的是**工作区当前 `src/`**（含 `Entity.ts` / `spawn-merge.ts` 等**未提交**改动），与已提交 HEAD（`9d2097fd4`）存在差异 —— 若要「线上产物 = 某次 commit 可字节级重现」，需先处置这几个未提交文件再重发。
 
+**S9 第二轮修复（2026-09-24，真机实测「建造面板仍点不动」）**
+
+- **上一轮结论被真机推翻**：§7.4.7 第 3 条的 BuildPanel 修复（删根节点遮罩）只验证了「空白处按下 → 选格」，**从未测「点面板里的行」，也从未真机验证** → 真机上依旧点不动。根因与遮罩无关，是两条叠加：
+  1. **绑的是 `CLICK`**：引擎 `InputManager.clickTestThreshold = 10`（**舞台像素**），而实测手机 390 CSS px 宽时 `SCALE_SHOWALL` 缩放比仅 **0.406** → 10 舞台像素 ≈ **4 CSS px**；真机手指按下时轻滚超过 4 CSS px 即被 `TouchInfo.move()` 置 `clickCancelled=true`，`clickTest()` 返回 null，**CLICK 根本不派发**。反证：同口径早已改成 `MOUSE_DOWN` 的摇杆 / 交互按钮一直正常。
+  2. **命中的行带太矮**：建造面板蓝图行高 **20** 舞台像素（≈8.1 CSS px）、对话选项行 `optionHeight=22`（≈8.9 CSS px），远小于手指落点误差 → 常按到相邻的**信息行**（那些行有意不可点），表现就是「点了没反应」。
+- **改法（视觉零变化：只放大看不见的命中区 + 换事件口径）**：
+
+| 文件 | 改动 |
+|---|---|
+| `src/config/AppConfig.ts` | `touch` 段新增 `minHitHeight: 44`（**舞台像素**，≈18 CSS px，与 88 的交互按钮同量级）：所有「点一下就有反应」的行把**命中区**撑到至少 44，**视觉一律不动** |
+| `src/world/BuildPanel.ts` | ① `Laya.stage` 的 `CLICK` → **`MOUSE_DOWN`**（`onStageClick` → `onStageDown`），并加 `fromTouchLayer(e)` 守卫（沿 `e.target` 的父链找 `s9-touch`：摇杆 / 交互按钮上的按下不移动建造光标）；② `rebuild()` 改为「行带预排（`RowHit`）→ 绘制（视觉节点一律 `mouseEnabled=false`）→ `addRowHit()`」；③ 新增 `addRowHit()`：以行带为中心向上下扩到 44，**边界夹在面板内框与相邻可点行的分界**（相邻两行都可点 → 只能各吃半个行距） |
+| `src/ui/DialogueView.ts` | 同源隐患一并修（用户 2026-09-24 选定范围 = BuildPanel + DialogueView，不含 LoginView）：选项行 `CLICK` → `MOUSE_DOWN`，命中区扩到 `max(行带, 44)`、上下界夹在相邻选项行分界中点；底色与文字仍画在行带上（用 `row.y - top` 补偿）→ **视觉零变化** |
+
+- **取证（CDP `Input.dispatchTouchEvent`，移动模拟 390×844，实测 scale=0.406）**：蓝图行「手指不动」→ `mouseDown=1 / click=1`；蓝图行「按下后位移 10 CSS px」→ **`mouseDown=1 / click=0`**（旧 `CLICK` 会漏掉的那一下，正是真机的手感）；信息行按下**不响应且不移动光标**；地图空白处按下 → 选址光标移动；摇杆区按下 → 光标不动且摇杆底座出现。命中区实测：`s6-build-hit` 高度 **20 → 32/35**（可加高的行）；**相邻两行都可点时保持 20**（投料行 26 与相邻蓝图行 20，物理上无法各自到 44）。对话选项行命中区 **24/26/26/24**（≈9.7–10.6 CSS px），「按下后位移 10 CSS px」→ fire 且 `click=0`。
+- **回归**：`node tools/build-fallback.mjs` 通过（42 个产物）；S3/S4/S5/S6/S7/S8 六个零依赖冒烟全绿（16/18/27/50/102/146）。
+- **提交**：`ee6b1fea8`「fix(game-client): 建造面板与对话选项改 MOUSE_DOWN + 命中区加高，修真机点不动（S9）」，**仅 3 文件**（`src/config/AppConfig.ts`、`src/world/BuildPanel.ts`、`src/ui/DialogueView.ts`），3 files changed / 139 insertions(+) / 28 deletions(-)。
+- **发布记录（第二轮，2026-09-24）**：同链路 `build-fallback` → `inject-env --env prod` → `publish h5-site` → **97 文件 / 2,880,884B**；`tar.gz` 1,141,393B，sha256 **`e9d411e9677ce4425e536204116140867db0f15cd4859201c9e5ef9232a9a1fd`**（服务器 `sha256sum` 比对一致）；解到 `client.new` 后**换目录**（`before: 97 / new: 97 / after: 97`），`chmod -R u=rwX,go=rX`。**备份（回退用）**：`client.bak_touch2_20260924_234148`（发布前的上一版 = 97 文件 / 2,967,970B），回退 = `mv client client.failed && mv client.bak_touch2_20260924_234148 client`。
+- **验证（第二轮）**：本机 ⇄ 服务器 md5 双向一致 —— `index.html` **`acc04c8ed250a6d12d5c5a0d35c84a20`**、`js/world/BuildPanel.js` **`6ec7788aca4171d1ac10f34cbc74233e`**（含 marker `s6-build-hit`）、`js/ui/DialogueView.js` **`a941f5f00241da807d6b1fe37830c433`**（含 3 处 `MOUSE_DOWN`）；`env-config.js` 为 prod；公网 `https://game.joho.cn/client/index.html` 与 `.../js/world/BuildPanel.js` 均 **200** 且含 marker。
+- **本次口径已收敛**：提交与发布同源（发布用的 `src/` 即 `ee6b1fea8` 的内容），上一轮「线上产物 ≠ HEAD」的差异已消除。
+- **仍未做**：**真机复验**（需用户手测）；`LoginView` 的 `CLICK`（提交按钮 @273 / 输入框 @303）为同类隐患但本次按用户决策未修。
+
 #### 7.4.6 真机验收的 LAN 通道（2026-09-24 用户选择「先不发布」；**当晚已发布，本节降为备用通道**）
 
 不发布也能真机验收，前提是让手机直连开发机：
@@ -583,5 +604,7 @@ node scripts/accept-mobile.mjs --label mobile-sim-quality-low --quality low --ma
     - **连带修掉一个既有 bug**（与触控无关，本次一并修）：`B` 键打不开建造面板 —— `InteractController.onKeyDown` 与 `BuildPanel.onKeyDown` **都**监听 stage 的 `KEY_DOWN` 并各自 `toggle()`，一次按键「开+关」互相抵消。已删除 `InteractController` 里的 `KEY_BUILD` 分支（含随之无用的 `BuildPanel` import 与常量），建造键监听收敛到 `BuildPanel` 一处。实测：按 `b` → `s6-build-panel` 子节点 **0 → 18**，再按 `b` → **0**。
     - **激活区宽度 480 → 256（零重叠）**：初版激活区 `x 0..480` 与对话面板（`x 256..704`）重叠 224px，压在选项行上的按下会**误选对话选项**。取 `256` 后激活区右界与面板左缘**恰好贴齐**（`dialogue.panelMaxWidth=448` 的推导也正是这条：左缘 ≥ 256 → `w ≤ 448`；右缘 704 < 848 让开交互按钮）。实测：无面板/对话打开两种状态下，激活区 5 点 `(40,440)/(128,440)/(250,440)/(128,300)/(128,600)` 按下**全部起摇杆**、底座坐标逐点等于按下点、无一误选；底座圆覆盖舞台 `x 40..216`，与面板左缘 256 有 40px 间隙。
     - **摇杆版实测**（移动端模拟 + CDP `touchStart→touchMove→保持→touchEnd`，`accept-mobile.mjs` 已同步改为摇杆口径并刷新 `docs/perf-shots/mobile-sim.json`）：5 段路线 + 闭环走位共 8 次长按，每次 `base` 均为按下点 `(128,440)`、`knob` 偏移逐次为 `(±88,0)`/`(0,±88)`；移动段 **8.7 次/秒**、静止段 **0**；`59.88–60.01 fps` / drawcall 峰 **39** / heap 峰 16.7MB（静止回落 15.4）；`对 stone_01 交互 → 201`、`pageerror=0`。**建造面板打开时摇杆仍可用**（面板 18 子节点下按住 → `upPerSec=9`）、**对话打开时摇杆仍可用**（`upPerSec=9`）且选项点击 `200`。
+
+4. **可点行「绑 CLICK + 行带太矮」导致真机点不动（2026-09-24 第二轮修复，已提交 `ee6b1fea8` 并发布）**：第 3 条只修了「根节点遮罩」，且当轮验证只覆盖「空白处按下选格」，**既没测面板内的行、也没真机验证** → 真机上手测「建造面板仍点不动」。与遮罩无关的两条根因、改法（`touch.minHitHeight=44` + `s6-build-hit` 命中区 + `CLICK`→`MOUSE_DOWN` + `fromTouchLayer` 守卫，BuildPanel/DialogueView 同批，**视觉零变化**）、CDP 取证与第二轮发布记录见 §7.4.5 末节。**教训**：① 触控验证必须**打在真实可点元素上**（空白处选格通过 ≠ 行按钮可用）；② 手机端可点元素一律 `MOUSE_DOWN`，不用 `CLICK`（`clickTestThreshold=10` 舞台像素 ≈ 手机 4 CSS px）。仍待**真机复验**。
 
 **仍未做（需真机 / 人工）**：真机三档（低端安卓门槛档、中端安卓、iOS Safari）与手感验收、iOS 无法用 `chrome://inspect` 的目视口径。**⚠️ 更正（2026-09-24）**：原写「多点触控（Laya `multiTouchEnabled=false`，同屏只能按一个按钮）」不成立 —— 引擎 `laya.core.js:25963` 显式 `InputManager.multiTouchEnabled = true`，多点触控默认开启，「摇杆按住 + 同屏点交互」可行（摇杆另按 `touchId` 过滤，见第 3 条）。
