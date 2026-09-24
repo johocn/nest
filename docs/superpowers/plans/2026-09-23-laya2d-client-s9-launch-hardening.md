@@ -1,6 +1,7 @@
 # LayaAir 2D 客户端 · S9 上线硬化批（真机性能 / 图集 / 生产证书 / 正式提审）实施计划
 
 > **状态：执行中，范围收敛为 H5-only（2026-09-24）。** 微信小游戏侧**缺 AppID**，Task 6（正式提审）**阻塞**，Task 5 的产物链**代码已交付**，真实 `release/wxgame` 导出的复核随小游戏上线解阻后再补。本文件只做规划与记录，不动代码、不动生产。
+> **H5 侧进度快照（2026-09-24）**：Task 1（证书）/ Task 2（S8 上线）/ Task 5（包体门禁）/ Task 7（广播门禁）**已完成**；Task 3 Step 2–3（素材入库 + 贴图接线）**已完成并上线**（落地方式偏离 D8，见 Task 3 Step 2 记录），Step 4–6 **未做**（图集与线上点检）；Task 4（真机验收，唯一需设备的硬缺口）与 Task 8（验收与文档结清）**未开始**。
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development（沿用 S2–S8 的既定方式：每 Task 派新 subagent，Task 间两阶段评审）。
 
 **Goal:** 把「能在开发者工具与本机跑通」的客户端变成**可正式上线**的游戏端：修掉生产证书链、把 S8 性能成果发布上线、接入已定稿美术并做图集、在**真机低端机型**上验收帧率与内存、建立包体与后端广播的**硬指标门禁**，最终通过**微信小游戏正式提审**并上线 H5。
@@ -30,8 +31,8 @@
 |---|---|---|---|
 | 1 | **生产证书不被信任（提审硬阻塞）** | `https://game.joho.cn` 当前为**自建 CA** 签发：subject `CN=game.joho.cn, O=JOHO Enterprise`，issuer `CN=JOHO Enterprise Root CA`，链深 2；Node/浏览器报 `SELF_SIGNED_CERT_IN_CHAIN`；有效期至 2036-09-18 | Task 1：换**公共 CA** 证书（S7 原计划「补中间证书」的前提不成立 —— 根就不是公共 CA） |
 | 2 | **S8 成果未上线** | H5 站点 `/client/index.html` 已可访问（200）但内容是 S7 时期的产物；S8 的 `perf/`、`EntityPool`、`Viewport`、`RemoteInterp` 未发布（S8 报告 §8 挂账） | Task 2：发布 S8 产物 + 线上冒烟 |
-| 3 | **美术未接入** | `assets/resources/` 只有 `placeholder.png`；客户端全部实体由 `graphics` 绘制 | Task 3：素材入库 + 图集 |
-| 4 | **无图集能力验证** | 从未导出过图集；`release/web/resources/` 仅 IDE 默认产物 | Task 3：图集导出 + 加载策略 + 数值对比 |
+| 3 | **美术未接入** | `assets/resources/` 只有 `placeholder.png`；客户端全部实体由 `graphics` 绘制 | Task 3：素材入库 + 图集（**2026-09-24 已入库并接入上线**；图集未做，见 Task 3 Step 4/5） |
+| 4 | **无图集能力验证** | 从未导出过图集；`release/web/resources/` 仅 IDE 默认产物 | Task 3：图集导出 + 加载策略 + 数值对比（**未做**） |
 | 5 | **真机数据为零** | S8 只证明「30fps 等价性」（纯函数），无真机 fps/内存/启动耗时 | Task 4：真机矩阵实测 + 自动降级验证 |
 | 6 | **包体检查脚本缺失** | `tools/check-package.mjs` **不存在**（S7 Task 6 未落地）；`release/wxgame/` **不存在** | Task 5：落地包体门禁 |
 | 7 | **小游戏产物链未闭环** | GUI 导出（不可自动化）+ `config/` 补齐 + env 注入 + 包体检查 未串成一条命令 | Task 5/6：产物链 + 提审 |
@@ -191,12 +192,12 @@
 ### Task 3: 美术素材入库 + 图集（先量后做）
 
 - [x] **Step 1** 素材交接清单（D8）：分层图 / 摆件 / 图标 的尺寸、透明通道、命名、`@2x` 约定、放置目录 `assets/resources/**`；清单写入 README 或素材文档。→ 已落地 `game-client/docs/art-handover.md`（README 目录约定加 1 行链接）；尺寸逐项附代码出处，3 处待主程确认（建筑贴图尺寸口径 / 玩家朝向与动态 NPC 命名 / 图集页命名与 `@2x` 自动识别），待确认项**不阻塞** Step 2 入库。
-- [ ] **Step 2** 素材入库：放入 `assets/resources/**`，由 IDE 生成 `.meta`（**不得手工塞文件**）；`smoke-s9-atlas.mjs` 断言命名与清单一致。
-- [ ] **Step 3** **接入原始素材并量基线**：静态层与实体改贴图（无素材时回退 `graphics`），记录 drawcall / heap / 包体。
-- [ ] **Step 4** 图集导出（IDE 自带工具）→ `assets/resources/atlas/**`；`atlas-manifest.mjs` 校验清单与产物一致。
-- [ ] **Step 5** 对比：图集前后 drawcall / 包体 / 加载耗时（**允许某项变差，但必须记录并给出结论**）。
-- [ ] **Step 6** H5 与开发者工具双端点检（表现不回退），跑 S1 冒烟 + S8 断言。
-- [ ] **Step 7** commit：`feat(game-client): 美术素材入库与图集接入`
+- [x] **Step 2** 素材入库：放入 `assets/resources/**`，由 IDE 生成 `.meta`（**不得手工塞文件**）；`smoke-s9-atlas.mjs` 断言命名与清单一致。→ **已完成，但落地方式偏离 D8（用户 2026-09-24 已批准）**：没有美术真稿来源，改由 **`tools/gen-art.ps1` 程序化生成** 12 张 PNG（11 实体 + 1 背景）并**同时写出同格式 `.meta`**（140B / UTF-8 无 BOM / 无尾随换行 / v4 uuid），视同 IDE 导入产物。零新依赖（仅 Windows 自带 `System.Drawing`）。**AI 文生图通道实测不可用**（`text_to_image` 无鉴权返回 `default.jpeg` 占位图），故背景也一并程序化。原计划的「分层图」未做——背景是**单张整图** `bg_scene1.png`，非分层。交付明细见 `game-client/docs/art-handover.md` §8。**挂账**：`scripts/smoke-s9-atlas.mjs` **未落地**（命名/清单断言缺失）。
+- [ ] **Step 3** **接入原始素材并量基线**：静态层与实体改贴图（无素材时回退 `graphics`），记录 drawcall / heap / 包体。→ **接线已完成并已上线，基线数值未量（未达本 Step 验收）**。接线范围：`SceneBuilder` 背景走 `bgResKey(cfg)` 命中贴图 / 未命中回退底色；实体走 `TextureRegistry`（`resKey` → `resources/<resKey>.png`，404 归一 null → 回退 `placeholder.png`）；建筑绘制尺寸改为 `footprint × 64`（进度条/耐久锚点随高度上移）；**玩家**原 `resKey: ''` 永不生效，改走新常量 `EntityFactory.PLAYER_RES_KEY`；**建筑** resKey 由蓝图 `BuildingTemplate.resKey` 经 `build-logic.toBuildingSpawn` 透传（**未改 WS 契约**）。**缺基线**：进图前后的 drawcall / heap / 包体三项数值未记录。
+- [ ] **Step 4** 图集导出（IDE 自带工具）→ `assets/resources/atlas/**`；`atlas-manifest.mjs` 校验清单与产物一致。→ **未做**：`assets/resources/atlas/` 与 `tools/atlas-manifest.mjs` 均不存在。
+- [ ] **Step 5** 对比：图集前后 drawcall / 包体 / 加载耗时（**允许某项变差，但必须记录并给出结论**）。→ **未做**（依赖 Step 4）。已知口径：12 张素材实体合计约 21KB、背景 480.3KB（单张整图，故图集收益主要来自实体侧）。
+- [ ] **Step 6** H5 与开发者工具双端点检（表现不回退），跑 S1 冒烟 + S8 断言。→ **未做完整点检**：`tsc --noEmit` 通过、6 个冒烟（S3/S4/S5/S6/S8/S7）全绿、`publish.mjs h5-site` 装配 96 文件（assets 28 文件）已跑；**线上真机/浏览器点检未做**（本机沙箱 DNS 不通，无法解析 `game.joho.cn`），已用「拼版预览图 + 看图自评」替代，并据此修掉 3 个绘制缺陷（缺参 / 两点多边形 / PowerShell 变量名大小写覆盖导致背景只铺局部）。线上校验改用服务器侧 `curl -sI`：`/client/index.html`、`/assets/resources/**` 共 15 个 URL 全 200。
+- [x] **Step 7** commit：`feat(game-client): 美术素材入库与图集接入` → 实际提交 `b5d8c19f0`（`feat(game-client): 美术素材入库与贴图接线（S9 Task 3）`，33 files / +844 −44）；另附 `73924cc6a`（`chore(git): .meta 文件禁用换行转换（-text）`）。**部署**：本地 `tar.gz` → `scp` → 服务器先 `cp -a` 备份（`client.bak_art_<时间戳>`）再解压到 `.../game.joho.cn/client/`，**服务器零构建**。**注**：本次提交不含图集（Step 4/5 未做），Step 6 亦未完整达成。
 
 ### Task 4: 真机性能验收（低端机型）
 
