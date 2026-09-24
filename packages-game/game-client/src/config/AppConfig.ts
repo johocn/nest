@@ -108,7 +108,8 @@ export const AppConfig = {
     bodyLineHeight: 20,
     optionFontSize: 14,
     optionColor: '#8ecdf7',
-    optionHeight: 22,
+    /** 选项行高（S9 第三轮起 22 → 44：手机上 22 只有 8.9 CSS px，手指点不准；面板自底向上生长，不会溢出） */
+    optionHeight: 44,
     optionGap: 4,
     optionBgColor: 'rgba(255,255,255,0.06)',
     optionPadX: 8,
@@ -137,13 +138,20 @@ export const AppConfig = {
     lineColor: '#e6edf3',
     dimColor: '#8b949e',
     lineHeight: 20,
+    /**
+     * **可点行的行带高度（S9 第三轮）**：蓝图行（选蓝图）与操作按钮行（建造/投料/拆除/关闭）都用它。
+     * 理由：手机上 20 舞台像素只有 **8.1 CSS px**、手指点不准 —— 而面板的行带是**连续无缝**的，
+     * 「命中区加高」在相邻行都可点时最多只能吃半个行距（实测中间行仍是 20）→ 只能把**视觉行带本身**加高。
+     * 44 ≈ 18 CSS px，与触控按钮同量级；面板因此变高（约 310 → 480），仍在 640 内。
+     */
+    touchRowHeight: 44,
     /** 蓝图行选中底色 */
     selectedBgColor: 'rgba(47,129,247,0.35)',
     /** 合法性红/绿 */
     legalColor: '#3fb950',
     illegalColor: '#ff7b72',
-    /** 操作按钮行高与底色 */
-    buttonHeight: 26,
+    /** 操作按钮行高与底色（S9 第三轮起 26 → 44，与 `touchRowHeight` 一致，手机上才点得准） */
+    buttonHeight: 44,
     buttonBgColor: 'rgba(255,255,255,0.10)',
     /** 格点预览：半透明填充 + 边框 */
     previewAlpha: 0.35,
@@ -300,15 +308,16 @@ export const AppConfig = {
     interactFontSize: 20,
     textColor: '#ffffff',
     /**
-     * **可点行的最小命中高度（舞台像素）**：触控下所有「点一下就有反应」的行（建造面板的行、
-     * 对话的选项行）都把自己的命中区撑到至少这个高度（**视觉不变，只是看不见的命中区变大**）。
+     * **可点行的最小命中高度（舞台像素）**：触控下「点一下就有反应」的行把自己的命中区撑到至少这个高度。
      *
      * 为什么需要：`SCALE_SHOWALL` 把 960×640 等比缩到手机宽度，常见机型（如 390 CSS px 宽）
-     * 缩放比只有 ~0.41 —— 建造面板的文本行带 `lineHeight=20`、对话选项 `optionHeight=22`
-     * 落到屏幕上只有 **8–9 CSS px 高**，而手指落点误差普遍 >4 CSS px，于是「想点按钮」的按下
-     * 多半落在相邻的非可点行上（或行与行之间的信息行），表现就是「点了没反应」。
-     * 交互按钮 `interactHeight=88`（≈36 CSS px）之所以在手机上一直好使，就是因为它够高。
-     * 取 **44**：≈18 CSS px，与 88 的交互按钮同一量级，且不改变任何视觉布局。
+     * 缩放比只有 ~0.41 —— 20 舞台像素的行带落到屏幕上只有 **8.1 CSS px 高**，而手指落点误差普遍
+     * >4 CSS px，表现就是「点了没反应」。交互按钮 `interactHeight=88`（≈36 CSS px）之所以一直好使，就是够高。
+     * 取 **44**：≈18 CSS px，与 88 的交互按钮同一量级。
+     *
+     * **但命中区只解决「相邻有空隙」的行**：面板的行带是连续无缝的，相邻行都可点时只能各吃半个行距
+     * （实测中间行仍是 20）—— 故 **S9 第三轮把可点行的视觉行带本身也加到了 44**
+     * （`build.touchRowHeight` / `build.buttonHeight` / `dialogue.optionHeight`），本常量退化为兜底。
      */
     minHitHeight: 44,
   },

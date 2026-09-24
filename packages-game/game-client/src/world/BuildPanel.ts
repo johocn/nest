@@ -531,8 +531,10 @@ export class BuildPanel {
     // 行带预排：命中区的加高要按「相邻行是否可点」夹边界，避免加高后误触到相邻的建造/投料/拆除
     const bands: { top: number; height: number; onClick?: () => void }[] = [];
     let y = panelY + B.padY;
+    const bandHeight = (row: PanelRow) =>
+      row.button ? B.buttonHeight : row.onClick ? B.touchRowHeight : B.lineHeight;
     for (const row of rows) {
-      const h = row.button ? B.buttonHeight : B.lineHeight;
+      const h = bandHeight(row);
       bands.push({ top: y, height: h, onClick: row.onClick });
       y += h + (row.button ? 4 : 0);
     }
@@ -561,10 +563,14 @@ export class BuildPanel {
         if (row.bg) {
           const hl = new Laya.Sprite();
           hl.mouseEnabled = false;
-          hl.graphics.drawRect(contentX, band.top, contentWidth, B.lineHeight, row.bg);
+          hl.graphics.drawRect(contentX, band.top, contentWidth, band.height, row.bg);
           root.addChild(hl);
         }
-        root.addChild(BuildPanel.makeText(row.text, contentX, band.top + 3, row.color));
+        // 可点行（蓝图）行带已加高到 44 → 文本垂直居中；信息行仍是 20，保持原有 +3 的观感
+        const textTop = row.onClick
+          ? band.top + Math.round((band.height - B.lineFontSize) / 2)
+          : band.top + 3;
+        root.addChild(BuildPanel.makeText(row.text, contentX, textTop, row.color));
       }
       BuildPanel.addRowHit(root, {
         x: contentX,

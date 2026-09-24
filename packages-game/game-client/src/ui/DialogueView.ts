@@ -244,9 +244,11 @@ export type DialogueChooseHandler = (optionIndex: number) => void;
  * 于是出现「对话打开时键盘能走、触控走不了」的不一致。现在键盘 W/A/S/D 与触控方向键行为一致：
  * **都能走**；交互键 F 与触控「交互」按钮由 `InteractController.triggerInteract` 统一屏蔽，避免连点重复请求。
  * **选项行为什么在手机上点不动（S9 第二轮修复）**：与 S6 建造面板同源 ——
- *  1. 选项行带 `D.optionHeight=22` 舞台像素，`SCALE_SHOWALL` 缩到手机宽度（390 CSS px 时缩放比仅 ~0.41）
+ *  1. 选项行带 `D.optionHeight` 原为 22 舞台像素，`SCALE_SHOWALL` 缩到手机宽度（390 CSS px 时缩放比仅 ~0.41）
  *     后只有 **9 CSS px 高**，手指落点误差普遍 >4 CSS px；→ 命中区撑到 `touch.minHitHeight`（视觉不变）。
- *     注意相邻选项都是可点行，物理上无法各自到 44，故只能各吃到行距（`optionGap=4`）的一半（22→26）。
+ *     注意相邻选项都是可点行，物理上无法各自到 44，故只能各吃到行距（`optionGap=4`）的一半。
+ *     **S9 第三轮**：改不动命中区就改行带本身 —— `optionHeight` 22 → **44**（≈18 CSS px），
+ *     命中区随之自然等于行带（面板自底向上生长，不会溢出屏幕）。
  *  2. 原来绑 `CLICK`：引擎 `clickTestThreshold=10`（舞台像素 ≈ 手机 4 CSS px），真机手指轻滚即不派发。
  *     → 改 `MOUSE_DOWN`（按下即响应，与触控层交互按钮同口径）。
  */
