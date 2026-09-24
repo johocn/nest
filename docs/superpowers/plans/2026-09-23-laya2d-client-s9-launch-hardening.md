@@ -1,7 +1,7 @@
 # LayaAir 2D 客户端 · S9 上线硬化批（真机性能 / 图集 / 生产证书 / 正式提审）实施计划
 
 > **状态：执行中，范围收敛为 H5-only（2026-09-24）。** 微信小游戏侧**缺 AppID**，Task 6（正式提审）**阻塞**，Task 5 的产物链**代码已交付**，真实 `release/wxgame` 导出的复核随小游戏上线解阻后再补。本文件只做规划与记录，不动代码、不动生产。
-> **H5 侧进度快照（2026-09-24）**：Task 1（证书）/ Task 2（S8 上线）/ Task 5（包体门禁）/ Task 7（广播门禁）**已完成**；Task 3 Step 2–3（素材入库 + 贴图接线）**已完成并上线**（落地方式偏离 D8，见 Task 3 Step 2 记录），Step 4–6 **未做**（图集与线上点检）；Task 4（真机验收，唯一需设备的硬缺口）**未做**；Task 8（验收与文档结清）Step 1–3 **已完成**（见 §7），Step 4 提交待用户确认。
+> **H5 侧进度快照（2026-09-24）**：Task 1（证书）/ Task 2（S8 上线）/ Task 5（包体门禁）/ Task 7（广播门禁）**已完成**；Task 3 Step 2–3（素材入库 + 贴图接线）**已完成并上线**（落地方式偏离 D8，见 Task 3 Step 2 记录），Step 4–5（图集）**已决策不做**（2026-09-24 确认，见 Task 3 Step 4/5 记录），Step 6（线上点检）**未做**；Task 4（真机验收，唯一需设备的硬缺口）**未做**；Task 8（验收与文档结清）Step 1–4 **已完成**（见 §7，提交 `76c2e8e7f`）。
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development（沿用 S2–S8 的既定方式：每 Task 派新 subagent，Task 间两阶段评审）。
 
 **Goal:** 把「能在开发者工具与本机跑通」的客户端变成**可正式上线**的游戏端：修掉生产证书链、把 S8 性能成果发布上线、接入已定稿美术并做图集、在**真机低端机型**上验收帧率与内存、建立包体与后端广播的**硬指标门禁**，最终通过**微信小游戏正式提审**并上线 H5。
@@ -31,8 +31,8 @@
 |---|---|---|---|
 | 1 | **生产证书不被信任（提审硬阻塞）** | `https://game.joho.cn` 当前为**自建 CA** 签发：subject `CN=game.joho.cn, O=JOHO Enterprise`，issuer `CN=JOHO Enterprise Root CA`，链深 2；Node/浏览器报 `SELF_SIGNED_CERT_IN_CHAIN`；有效期至 2036-09-18 | Task 1：换**公共 CA** 证书（S7 原计划「补中间证书」的前提不成立 —— 根就不是公共 CA） |
 | 2 | **S8 成果未上线** | H5 站点 `/client/index.html` 已可访问（200）但内容是 S7 时期的产物；S8 的 `perf/`、`EntityPool`、`Viewport`、`RemoteInterp` 未发布（S8 报告 §8 挂账） | Task 2：发布 S8 产物 + 线上冒烟 |
-| 3 | **美术未接入** | `assets/resources/` 只有 `placeholder.png`；客户端全部实体由 `graphics` 绘制 | Task 3：素材入库 + 图集（**2026-09-24 已入库并接入上线**；图集未做，见 Task 3 Step 4/5） |
-| 4 | **无图集能力验证** | 从未导出过图集；`release/web/resources/` 仅 IDE 默认产物 | Task 3：图集导出 + 加载策略 + 数值对比（**未做**） |
+| 3 | **美术未接入** | `assets/resources/` 只有 `placeholder.png`；客户端全部实体由 `graphics` 绘制 | Task 3：素材入库 + 图集（**2026-09-24 已入库并接入上线**；图集本期已决策不做，见 Task 3 Step 4/5） |
+| 4 | **无图集能力验证** | 从未导出过图集；`release/web/resources/` 仅 IDE 默认产物 | Task 3：图集导出 + 加载策略 + 数值对比（**已决策不做**：图集按可选优化处理，§4-3） |
 | 5 | **真机数据为零** | S8 只证明「30fps 等价性」（纯函数），无真机 fps/内存/启动耗时 | Task 4：真机矩阵实测 + 自动降级验证 |
 | 6 | **包体检查脚本缺失** | `tools/check-package.mjs` **不存在**（S7 Task 6 未落地）；`release/wxgame/` **不存在** | Task 5：落地包体门禁 |
 | 7 | **小游戏产物链未闭环** | GUI 导出（不可自动化）+ `config/` 补齐 + env 注入 + 包体检查 未串成一条命令 | Task 5/6：产物链 + 提审 |
@@ -122,7 +122,7 @@
 |---|---|---|
 | A1 | 证书链合法 | `openssl s_client -showcerts -connect game.joho.cn:443` 链完整、issuer 为公共 CA；浏览器无告警；微信开发者工具域名校验通过 |
 | A2 | S8 成果上线 | 线上 `/client/` 产物含 S8 模块；线上 `PerfPanel` 可开（F3）；线上跑一次 `perf-sample.mjs` 达标 |
-| A3 | 美术接入 | 素材全部入库且 `.meta` 完整；图集生效；drawcall/包体有前后数值（允许变差，但必须记录并说明） |
+| A3 | 美术接入 | 素材全部入库且 `.meta` 完整；drawcall/包体有前后数值（允许变差，但必须记录并说明）。**图集不列入验收**（§4 待确认 3 已确认本期不做） |
 | A4 | 真机性能 | 低端安卓 ≥30fps 稳定 / 内存 ≤300MB / 冷启动 ≤5s；自动降级在低端机触发可复现 |
 | A5 | 包体门禁 | `check-package.mjs` 通过：主包 ≤4MB、总包 ≤20MB、`config/manifest.json` hash 匹配、引擎三脚本顺序正确 |
 | A6 | 正式提审 | 体验版内部验收通过 → 提交审核 → 审核通过上线（含类目/隐私/协议材料齐全） |
@@ -194,8 +194,8 @@
 - [x] **Step 1** 素材交接清单（D8）：分层图 / 摆件 / 图标 的尺寸、透明通道、命名、`@2x` 约定、放置目录 `assets/resources/**`；清单写入 README 或素材文档。→ 已落地 `game-client/docs/art-handover.md`（README 目录约定加 1 行链接）；尺寸逐项附代码出处，3 处待主程确认（建筑贴图尺寸口径 / 玩家朝向与动态 NPC 命名 / 图集页命名与 `@2x` 自动识别），待确认项**不阻塞** Step 2 入库。
 - [x] **Step 2** 素材入库：放入 `assets/resources/**`，由 IDE 生成 `.meta`（**不得手工塞文件**）；`smoke-s9-atlas.mjs` 断言命名与清单一致。→ **已完成，但落地方式偏离 D8（用户 2026-09-24 已批准）**：没有美术真稿来源，改由 **`tools/gen-art.ps1` 程序化生成** 12 张 PNG（11 实体 + 1 背景）并**同时写出同格式 `.meta`**（140B / UTF-8 无 BOM / 无尾随换行 / v4 uuid），视同 IDE 导入产物。零新依赖（仅 Windows 自带 `System.Drawing`）。**AI 文生图通道实测不可用**（`text_to_image` 无鉴权返回 `default.jpeg` 占位图），故背景也一并程序化。原计划的「分层图」未做——背景是**单张整图** `bg_scene1.png`，非分层。交付明细见 `game-client/docs/art-handover.md` §8。**挂账**：`scripts/smoke-s9-atlas.mjs` **未落地**（命名/清单断言缺失）。
 - [ ] **Step 3** **接入原始素材并量基线**：静态层与实体改贴图（无素材时回退 `graphics`），记录 drawcall / heap / 包体。→ **接线已完成并已上线，基线数值未量（未达本 Step 验收）**。接线范围：`SceneBuilder` 背景走 `bgResKey(cfg)` 命中贴图 / 未命中回退底色；实体走 `TextureRegistry`（`resKey` → `resources/<resKey>.png`，404 归一 null → 回退 `placeholder.png`）；建筑绘制尺寸改为 `footprint × 64`（进度条/耐久锚点随高度上移）；**玩家**原 `resKey: ''` 永不生效，改走新常量 `EntityFactory.PLAYER_RES_KEY`；**建筑** resKey 由蓝图 `BuildingTemplate.resKey` 经 `build-logic.toBuildingSpawn` 透传（**未改 WS 契约**）。**缺基线**：进图前后的 drawcall / heap / 包体三项数值未记录。
-- [ ] **Step 4** 图集导出（IDE 自带工具）→ `assets/resources/atlas/**`；`atlas-manifest.mjs` 校验清单与产物一致。→ **未做**：`assets/resources/atlas/` 与 `tools/atlas-manifest.mjs` 均不存在。
-- [ ] **Step 5** 对比：图集前后 drawcall / 包体 / 加载耗时（**允许某项变差，但必须记录并给出结论**）。→ **未做**（依赖 Step 4）。已知口径：12 张素材实体合计约 21KB、背景 480.3KB（单张整图，故图集收益主要来自实体侧）。
+- [ ] **Step 4** 图集导出（IDE 自带工具）→ `assets/resources/atlas/**`；`atlas-manifest.mjs` 校验清单与产物一致。→ **【本期不做】**（用户 2026-09-24 决策，与 §4 待确认 3 默认口径一致）：`assets/resources/atlas/` 与 `tools/atlas-manifest.mjs` 均不存在，未落地。理由见 Step 5。
+- [ ] **Step 5** 对比：图集前后 drawcall / 包体 / 加载耗时（**允许某项变差，但必须记录并给出结论**）。→ **【本期不做，随 Step 4 一并放弃】** 决策依据：① 收益侧——H5 线上实测 **60fps、drawcall 峰值 34**（S8 / Task 2 口径），**无性能压力**，自动降级在 H5 从未触发；② 包体侧——12 张实体素材合计仅约 21KB，包体主体是背景 **480.3KB 单张整图**（打不进图集），合图仅省几十 KB 文件头，**收益近零**；③ 成本侧——需把 `TextureRegistry` 由「按 URL 逐张加载」改为「加载 `.atlas` + `@img0.png` 按帧名取纹理」，属真实代码改动 + 6 冒烟回归 + 重新构建部署，且计划风险 #4 记有像素错位/模糊风险。**能力澄清**：Step 4 原假设「IDE 工具导出、不可自动化」**不成立**——`library/` 下现成产物表明 `.atlas` 是**纯 JSON 帧表 + PNG**，程序化生成本可行（同 `gen-art.ps1` 的零依赖套路），故本次属**主动取舍而非能力受限**。**后续触发条件**：Task 4 真机（低端安卓）若 <30fps，图集为首选优化项（风险 #6 处置顺序：降级开关项 → 图集 → `degradeRatio` 调参）。
 - [ ] **Step 6** H5 与开发者工具双端点检（表现不回退），跑 S1 冒烟 + S8 断言。→ **未做完整点检**：`tsc --noEmit` 通过、6 个冒烟（S3/S4/S5/S6/S8/S7）全绿、`publish.mjs h5-site` 装配 96 文件（assets 28 文件）已跑；**线上真机/浏览器点检未做**（本机沙箱 DNS 不通，无法解析 `game.joho.cn`），已用「拼版预览图 + 看图自评」替代，并据此修掉 3 个绘制缺陷（缺参 / 两点多边形 / PowerShell 变量名大小写覆盖导致背景只铺局部）。线上校验改用服务器侧 `curl -sI`：`/client/index.html`、`/assets/resources/**` 共 15 个 URL 全 200。
 - [x] **Step 7** commit：`feat(game-client): 美术素材入库与图集接入` → 实际提交 `b5d8c19f0`（`feat(game-client): 美术素材入库与贴图接线（S9 Task 3）`，33 files / +844 −44）；另附 `73924cc6a`（`chore(git): .meta 文件禁用换行转换（-text）`）。**部署**：本地 `tar.gz` → `scp` → 服务器先 `cp -a` 备份（`client.bak_art_<时间戳>`）再解压到 `.../game.joho.cn/client/`，**服务器零构建**。**注**：本次提交不含图集（Step 4/5 未做），Step 6 亦未完整达成。
 
@@ -241,7 +241,7 @@
 - [x] **Step 1** 全量回归：`npm test`（≥1176）、`smoke-laya2d-s1` 9/9、S3/S4/S5/S6/S8/S7 六个客户端冒烟全 PASS。→ 实测（2026-09-24）：`npm test` **91 suites / 1176 tests 全绿**（exit 0，150.1s）；`smoke-laya2d-s1` **9/9 PASS**（末行「S1 冒烟全部通过」，exit 0）；客户端冒烟 S3 **16/16**、S4 **18/18**、S5 **27/27**、S6 **50/50**、S8 **146/146**、S7 平台层 **102/102**，全部 exit 0；`build-fallback` **41 产物重写** exit 0。
 - [x] **Step 2** `README.md`：S1 #8 → PASS（**H5-only**：附线上 `/client/` 证据；小游戏体验版证据随 Task 6 解阻再补）+ 双端发布手册 + 真机矩阵 + 证书续期说明。→ 已完成（**偏离**：S1 #8 **未**整体改 PASS —— 按事实拆为「**H5 PASS**（线上 `/client/index.html` 200、`/assets/resources/**` 15 URL 全 200）/ **小游戏 BLOCKED**（缺 AppID）」；双端发布手册与证书续期说明核对**已在位、无需补**；新增「真机性能矩阵（S9 Task 4）」占位节，**不预填任何 fps/内存/启动数值**）。
 - [x] **Step 3** 把 A1–A10 的实测值填进本文件的执行记录节（沿用 S5–S8 的写法规格）。→ 见本文件 **§7 执行记录（S9）**：§7.1 门禁实测 + §7.2 A1–A10 实测 + §7.3 挂账。
-- [ ] **Step 4** commit：`docs(game-client): S9 上线硬化验收记录` → **未执行**（留待用户确认；当前改动保持未提交状态）。
+- [x] **Step 4** commit：`docs(game-client): S9 上线硬化验收记录` → 实际提交 `76c2e8e7f`（README.md + 本文件，2 files / +69 −8）。
 
 ---
 
@@ -266,7 +266,7 @@
 
 1. **证书方案**：用哪种公共 CA？【默认：阿里云/腾讯云免费 DV 证书（域名 `game.joho.cn`，1 年）】——是否允许我操作 **odoo** 的 OpenResty 证书文件与指令（改动前备份、只动本站点）？
 2. **美术素材交接**：素材由谁、以什么形式提供（目录/压缩包/网盘）？是否已包含 `@2x` 与命名规范？【默认：用户提供分层图与摆件 PNG，我按 §1.5 目录约定入库并生成 `.meta`】
-3. **是否强制图集**？【默认：图集作为可选优化（保留原始素材回退），**不做「必须用图集」的验收**】
+3. **是否强制图集**？【默认：图集作为可选优化（保留原始素材回退），**不做「必须用图集」的验收**】→ **已确认（2026-09-24）：按默认执行，本期不做图集**（Task 3 Step 4/5 记为「不做」并保留理由与后续触发条件）
 4. **提审材料**：隐私政策 / 用户协议 / 类目资质是否已有？【默认：由业务侧提供，我只出清单与技术要求】
 5. **真机机型矩阵**：起点定为「1 低端安卓 + 1 中端安卓 + 1 iOS」是否够？【默认：够】
 6. **上线验收口径**：S9 的完成定义 = 「审核通过并上线」（而非「提交审核」）？【默认：是】
@@ -324,7 +324,7 @@ Task 1（证书，硬前置）→ Task 2（H5 发布）→ Task 3（素材/图�
 |---|---|---|---|---|
 | A1 | 证书链合法 | `openssl s_client -showcerts -connect game.joho.cn:443` | 链完整、issuer 公共 CA、无 `unable to verify` | **通过**：`Verify return code: 0 (ok)`，issuer `C=US, O=Let's Encrypt, CN=YE2`（链 4 张）；本机 `curl`（系统 CA、不带 `-k`）→ 200 / `ssl_verify_result=0`；Node `https.get` → `authorized=true`（Task 1 Step 4） |
 | A2 | S8 成果上线 | 线上 `/client/` 含 S8 模块、`PerfPanel` 可开、线上 `perf-sample` | 线上产物为 S8 版 | **通过**：线上 `/client/index.html` 200 且 md5 `533b098c…` 与本机一致；S8 十模块 URL 全 200；F3 面板真实按键可开；线上非 headless **60fps**/最低 59.9、drawcall 峰 34、heap 峰 17MB、上行 9.4/s、静止 0；`?quality=low` 生效（drawcall 峰 15）（Task 2 Step 3–5） |
-| A3 | 美术接入 | 素材入库 + `.meta` 完整；图集生效；drawcall/包体前后数值 | 素材入库 + 数值记录 | **部分达成**：12 张 PNG 入库（程序化生成 + 同格式 `.meta`，**偏离 D8 已获批准**）并贴图接线、已上线（`b5d8c19f0`）；**图集未做**（`assets/resources/atlas/` 与 `tools/atlas-manifest.mjs` 均不存在）；**进图前后 drawcall/heap/包体基线未记录**（Task 3 Step 3） |
+| A3 | 美术接入 | 素材入库 + `.meta` 完整；drawcall/包体前后数值 | 素材入库 + 数值记录（图集不列入，§4-3 已确认不做） | **部分达成**：12 张 PNG 入库（程序化生成 + 同格式 `.meta`，**偏离 D8 已获批准**）并贴图接线、已上线（`b5d8c19f0`）；图集本期已决策不做（不计入缺口）；**进图前后 drawcall/heap/包体基线未记录**（Task 3 Step 3） |
 | A4 | 真机性能 | 低端安卓机型矩阵实测（面板打点） | ≥30fps / ≤300MB / 冷启动 ≤5s | **未做 / PENDING**：需真实设备，无任何 fps/内存/启动数据（Task 4 未启动） |
 | A5 | 包体门禁 | `tools/check-package.mjs`（体积/hash/引擎脚本顺序） | exit 0 | **脚本通过**：H5 布局（`release/client` 71 文件 / 2.23MB）与 wxgame 布局 fixture 均 **6/6 PASS, exit 0**；6 条失败路径各自独立命中（exit 1/2 正确）。**真实 `release/wxgame` 复核 PENDING**（缺 AppID 不导出）（Task 5 Step 1/2） |
 | A6 | 正式提审 | 体验版验收 → 提交审核 → 上线 | 审核通过上线 | **未做 / PENDING**：**阻塞于缺微信小游戏 AppID**（Task 6 全部 Step 未启动） |
@@ -337,10 +337,10 @@ Task 1（证书，硬前置）→ Task 2（H5 发布）→ Task 3（素材/图�
 
 | 项 | 状态 | 原因与后续 |
 |---|---|---|
-| Task 3 Step 4/5（图集导出 + 前后对比） | **未做** | `assets/resources/atlas/` 与 `tools/atlas-manifest.mjs` 均不存在；图集为可选优化（§4 待确认 3） |
+| Task 3 Step 4/5（图集导出 + 前后对比） | **已决策不做** | 用户 2026-09-24 确认按 §4 待确认 3 默认口径执行：线上 60fps / drawcall 峰 34 无性能压力、包体收益近零（实体素材仅 ~21KB）、需改加载路径并回归；后续触发条件见 Task 3 Step 5 |
 | Task 3 基线数值（drawcall/heap/包体） | **未记录** | 贴图接线已上线但未量前后数值（Step 3 未达验收） |
 | Task 3 Step 6 线上浏览器点检 | **部分** | 服务器侧 `curl -sI` 复核 15 个 URL 全 200；浏览器真机点检未做（本机沙箱 DNS 不通） |
 | Task 4（A4 真机性能） | **PENDING** | 需真实设备（低端/中端安卓 + iOS），唯一需设备的硬缺口 |
 | Task 5 真实 `release/wxgame` 复核 | **PENDING** | 缺 AppID 不导出，产物链仅以 fixture 自检 |
 | Task 6（A6 正式提审） | **BLOCKED** | 缺微信小游戏 AppID，S9 记为 H5-only 交付 |
-| Task 8 Step 4（commit） | **未执行** | 留待用户确认；改动保持未提交状态 |
+| Task 8 Step 4（commit） | **已执行** | `76c2e8e7f`（`docs(game-client): S9 上线硬化验收记录`，README.md + 本文件） |
