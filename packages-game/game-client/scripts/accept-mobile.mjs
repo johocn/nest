@@ -173,7 +173,7 @@ async function readTouch() {
     };
     const zone = byName('s9-stick-zone');
     const base = byName('s9-stick-base');
-    let interact = null;
+    const buttons = [];
     for (let i = 0; i < root.numChildren; i++) {
       const c = root.getChildAt(i);
       let text = '';
@@ -181,7 +181,7 @@ async function readTouch() {
         const t = c.getChildAt(j);
         if (t && typeof t.text === 'string') text += t.text;
       }
-      if (text) interact = { text, sx: c.x + c.width / 2, sy: c.y + c.height / 2 };
+      if (text) buttons.push({ name: c.name, text, sx: c.x + c.width / 2, sy: c.y + c.height / 2 });
     }
     return {
       scale: Math.round(scale * 1000) / 1000,
@@ -190,7 +190,8 @@ async function readTouch() {
       canvas: { w: Math.round(r.width), h: Math.round(r.height) },
       stage: { w: stage.width, h: stage.height },
       zone: zone ? { sx: zone.x, sy: zone.y, w: zone.width, h: zone.height } : null,
-      interact,
+      buttons,
+      interact: buttons.find((b) => b.text.includes('交互')) ?? null,
     };
   });
 }
@@ -285,8 +286,9 @@ try {
   if (!touch?.zone) throw new Error(`触控层缺少摇杆激活区（readTouch=${JSON.stringify(touch)}）`);
   /** 舞台坐标 → CSS 坐标 */
   const toCss = (sx, sy) => ({ x: touch.ox + sx * touch.scale, y: touch.oy + sy * touch.scale });
+  /** 按按钮文本（含即命中）取 CSS 落点：`交互` / `建造` */
   const btnCss = (t) => {
-    const b = touch.interact && touch.interact.text === t ? touch.interact : null;
+    const b = (touch.buttons ?? []).find((x) => x.text.includes(t)) ?? null;
     return b ? toCss(b.sx, b.sy) : null;
   };
   /** 摇杆按下点＝激活区中心（舞台坐标）：四个方向的 `±stickRadius` 落点都仍在舞台内、且不压 HUD/面板 */
@@ -368,7 +370,80 @@ try {
   const interactHits = apiHits.slice(apiBefore);
   const toastLine = consoleLines.slice(uiBefore).find((l) => l.includes('[S3]')) ?? '(无 [S3] 日志)';
 
-  // ⑥ 截图（移动视口原尺寸）
+  // ⑥ 触控建造面板取证（第二轮修复的核心场景）：点「建造」开面板 → **点面板行**（真机点不动的那个面）
+  //    → 点「关闭面板」行退出。行的定位一律用**视觉文本坐标**（真机手指就是这么落的），不靠内部命名。
+  const readPanel = () =>
+    page.evaluate(() => {
+      let root = null;
+      const walk = (n) => {
+        if (root) return;
+        if (n.name === 's6-build-panel') return void (root = n);
+        for (let i = 0; i < n.numChildren; i++) walk(n.getChildAt(i));
+      };
+      walk(window.Laya.stage);
+      if (!root) return { exists: false, children: 0, rows: [], hitHeights: [] };
+      const rows = [];
+      const hitHeights = [];
+      for (let i = 0; i < root.numChildren; i++) {
+        const c = root.getChildAt(i);
+        if (c.name === 's6-build-hit') hitHeights.push(Math.round(c.height));
+        // 行文本：信息行挂在 root 下，**按钮行的文本挂在按钮 sprite 下**（一层），故两级都要收
+        if (typeof c.text === 'string' && c.text) {
+          rows.push({ text: c.text, x: c.x, y: c.y, h: c.textHeight ?? 0 });
+          continue;
+        }
+        for (let j = 0; j < c.numChildren; j++) {
+          const t = c.getChildAt(j);
+          if (t && typeof t.text === 'string' && t.text) {
+            rows.push({ text: t.text, x: c.x + t.x, y: c.y + t.y, h: t.textHeight ?? 0 });
+          }
+        }
+      }
+      return { exists: true, children: root.numChildren, rows, hitHeights };
+    });
+  /** 点某一行：用视觉文本的中心（舞台坐标）→ CSS */
+  async function tapRow(row) {
+    const p = toCss(row.x + 24, row.y + Math.max(6, row.h / 2));
+    await touchDown(p.x, p.y);
+    await sleep(120);
+    await touchUp();
+    await sleep(600);
+  }
+  const buildBtn = btnCss('建造');
+  const panelBefore = await readPanel();
+  if (buildBtn) {
+    await touchDown(buildBtn.x, buildBtn.y);
+    await sleep(140);
+    await touchUp();
+    await sleep(800);
+  }
+  const panelOpened = await readPanel();
+  const selectedBefore = panelOpened.rows.find((r) => r.text.startsWith('▸'))?.text ?? null;
+  // 蓝图行文本 = `${选中?'▸':'　'}${名称}　${造价}　${秒}s` → 取第二行（非选中者）下手，选中标记会移动
+  const bpRows = panelOpened.rows.filter((r) => /^[▸　]/.test(r.text) && r.text.includes('s'));
+  if (bpRows.length > 1) await tapRow(bpRows[1]);
+  const panelAfterRow = await readPanel();
+  const selectedAfter = panelAfterRow.rows.find((r) => r.text.startsWith('▸'))?.text ?? null;
+  // 面板内的「关闭面板」行：手机上的唯一退出口（触控按钮可能被面板盖住）
+  const closeRow = panelAfterRow.rows.find((r) => r.text.includes('关闭面板'));
+  if (closeRow) await tapRow(closeRow);
+  const panelClosed = await readPanel();
+  const panelProbe = {
+    buttonFound: !!buildBtn,
+    buttonCss: buildBtn ? { x: Math.round(buildBtn.x), y: Math.round(buildBtn.y) } : null,
+    beforeChildren: panelBefore.children,
+    openedChildren: panelOpened.children,
+    openedByButton: panelOpened.children > 0,
+    hitHeights: panelOpened.hitHeights,
+    selectedBefore,
+    selectedAfter,
+    rowClickWorked: selectedBefore !== selectedAfter && selectedAfter != null,
+    closeRowTouched: !!closeRow,
+    closedChildren: panelClosed.children,
+    closedByRow: panelClosed.children === 0,
+  };
+
+  // ⑦ 截图（移动视口原尺寸）
   mkdirSync(dirname(shotPath), { recursive: true });
   await page.screenshot({ path: shotPath });
 
@@ -398,6 +473,7 @@ try {
       toastLine,
     },
     route: DIR_PLAN.map(([d, f]) => `${d} ${round((f * moveMs) / 1000, 2)}s`).join(' → '),
+    buildPanel: panelProbe,
     moveSamples,
     idleSamples,
     degradeLine: consoleLines.find((l) => l.includes('自动降级')) ?? '(未触发自动降级)',
@@ -432,5 +508,5 @@ const summary = {
 };
 
 writeFileSync(outPath ?? join(root, 'docs', 'perf-shots', `${label}.json`), JSON.stringify({ ...record, summary }, null, 2), 'utf8');
-console.log(JSON.stringify({ summary, timing: record.timing, interact: record.interact, degradeLine: record.degradeLine, stick: record.stick?.probes, pageErrors: record.pageErrors.length, failedRequests: record.failedRequests.length }, null, 2));
+console.log(JSON.stringify({ summary, timing: record.timing, interact: record.interact, buildPanel: record.buildPanel, degradeLine: record.degradeLine, stick: record.stick?.probes, pageErrors: record.pageErrors.length, failedRequests: record.failedRequests.length }, null, 2));
 console.log(`\n截图：${record.screenshot}`);

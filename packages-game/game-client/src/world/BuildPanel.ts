@@ -609,6 +609,12 @@ export class BuildPanel {
     if (forbidden) {
       rows.push({ text: '此场景不允许建造', color: B.illegalColor });
       rows.push({ text: '建造入口已禁用', color: B.dimColor });
+      rows.push({
+        text: '关闭面板（B）',
+        color: B.dimColor,
+        button: true,
+        onClick: () => BuildPanel.close(),
+      });
       return rows;
     }
 
@@ -672,6 +678,13 @@ export class BuildPanel {
       color: B.lineColor,
       button: true,
       onClick: () => void BuildPanel.doDemolish(),
+    });
+    // 手机上的退出口：触控「建造」按钮在面板下方，可能被面板盖住，且面板不吃指针 —— 必须有行内关闭
+    rows.push({
+      text: '关闭面板（B）',
+      color: B.dimColor,
+      button: true,
+      onClick: () => BuildPanel.close(),
     });
 
     return rows;

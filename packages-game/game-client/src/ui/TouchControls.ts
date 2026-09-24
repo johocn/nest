@@ -1,4 +1,5 @@
 import { AppConfig } from '../config/AppConfig';
+import { BuildPanel } from '../world/BuildPanel';
 import type { InteractController } from '../world/InteractController';
 import type { PlayerControl } from '../world/PlayerControl';
 
@@ -25,11 +26,12 @@ export function stickKeys(dx: number, dy: number, deadZone: number): string[] {
 }
 
 /**
- * S9 手机触控（引擎内自绘，屏幕空间）：**浮动虚拟摇杆** + 交互按钮，仅触摸设备显示。
+ * S9 手机触控（引擎内自绘，屏幕空间）：**浮动虚拟摇杆** + 交互按钮 + 建造按钮，仅触摸设备显示。
  *
  * 定位：**只补输入通道，不改任何游戏逻辑** —— 摇杆把与键盘同名的 `'w'/'a'/'s'/'d'` 按 8 向离散
  * 注入 `PlayerControl.pressed`（复用同一条「本地位移 → 10Hz `world.move` 上报」链路），
- * 交互按钮走 `InteractController.triggerInteract()`（与键盘 F 同一分支）。
+ * 交互按钮走 `InteractController.triggerInteract()`（与键盘 F 同一分支），
+ * 建造按钮走 `BuildPanel.toggle()`（与键盘 B 同一分支；面板内的关闭行是手机上的退出口）。
  * WS 契约、上报口径、键盘行为**全部零变更**。
  *
  * 与 `Hud` 同范式：只挂 `Laya.stage` 顶层，只用已验证基元（`Laya.Sprite` + `graphics` + `Laya.Text`），
@@ -100,6 +102,21 @@ export class TouchControls {
     interactBtn.on(Laya.Event.MOUSE_DOWN, null, () => void interact.triggerInteract());
     root.addChild(interactBtn);
 
+    // 建造按钮：叠放在交互按钮正上方，与键盘 B 同一入口（BuildPanel.toggle）
+    const buildBtn = TouchControls.makeButton(
+      '建造',
+      T.interactWidth,
+      T.interactHeight,
+      T.interactFontSize,
+    );
+    buildBtn.name = 's9-build-btn';
+    buildBtn.pos(
+      AppConfig.stageWidth - T.interactMarginRight - T.interactWidth,
+      AppConfig.stageHeight - T.buildMarginBottom - T.interactHeight,
+    );
+    buildBtn.on(Laya.Event.MOUSE_DOWN, null, () => BuildPanel.toggle());
+    root.addChild(buildBtn);
+
     /** 是否已有一根手指按在摇杆上（`activeId` 为该手指的 touchId，-1 表示未知/未做区分） */
     let active = false;
     let activeId = -1;
@@ -169,7 +186,7 @@ export class TouchControls {
     Laya.stage.addChild(root);
     console.log(
       `[S9] 触控层就绪：浮动摇杆（激活区 ${T.stickZoneWidth}×${T.stickZoneHeight}，半径 ${T.stickRadius}）` +
-        ` + 交互按钮，zOrder=${T.zOrder}；按住拖动移动、松手停`,
+        ` + 交互/建造按钮，zOrder=${T.zOrder}；按住拖动移动、松手停`,
     );
   }
 

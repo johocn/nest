@@ -284,6 +284,13 @@ export const AppConfig = {
     interactHeight: 88,
     interactMarginRight: 24,
     interactMarginBottom: 40,
+    /**
+     * 「建造」按钮到右下角的边距：与交互按钮**同宽同高**（复用 `interactWidth/Height/interactFontSize`），
+     * 竖直叠放在交互按钮正上方（水平位置一致）。`152 = interactMarginBottom(40) + interactHeight(88) + 24(间距)`
+     * → 按钮落在 `y 400..488`（与交互按钮同为 88×88）。
+     * 面板打开时若被建造面板盖住，面板内已有「关闭面板」按钮行兜底（见 `BuildPanel.rows`）。
+     */
+    buildMarginBottom: 152,
     /** 半透明不挡视野；`pressedBgColor` 同时用作摇杆头底色 */
     bgColor: 'rgba(255,255,255,0.16)',
     pressedBgColor: 'rgba(255,255,255,0.42)',
