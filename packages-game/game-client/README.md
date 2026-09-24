@@ -62,6 +62,16 @@ node tools/publish.mjs wxgame          # 1) 补 config/（清陈旧 + 重算 sha
 
 导入微信开发者工具时用产物根目录 `release/wxgame/`，本地设置勾选「不校验合法域名…」即可开发调试。
 
+## 真机性能矩阵（S9 Task 4）
+
+**PENDING —— 待 Task 4 回填**：真机验收需真实设备（起点矩阵 = 1 低端安卓 + 1 中端安卓 + 1 iOS），本期未执行，故本表**暂无任何 fps / 内存 / 冷启动数据**（不预填占位数值）。
+
+待回填列（判定口径见 S9 计划 §1.2 与 §1.6 A4）：
+
+| 机型 | 系统 | 稳态 fps（低端安卓 ≥30） | 内存峰值（≤300MB） | 冷启动（≤5s） | 自动降级触发 | 证据 |
+|---|---|---|---|---|---|---|
+| 待填 | 待填 | 待填 | 待填 | 待填 | 待填 | 截图/录屏 |
+
 ## S1 工具链实证
 
 环境：LayaAir IDE **3.4.1**（`D:\Program Files\LayaAirIDE`），工程 `e:\code\nest\packages-game\game-client`。
@@ -154,7 +164,7 @@ IDE 的 `release/web/js/index.js` 会 `Object.assign(Laya.PlayerConfig, config)`
 | 5 | NPC 位置与配置一致 | PASS | 实体层 dump 出 13 个实体（10 物件 + 3 NPC），与配置包逐一比对**不一致 0 个**：`NPC11=(600,380)`、`NPC12=(700,520)`、`NPC13=(500,560)`，物件 `物1=(560,480)` … `物9=(760,820)` |
 | 6 | 1 次采集 + 1 次 NPC 对话 | PASS | `[S1] 对话返回 {"spawnId":"12","name":"spike-铁匠","talkType":"talk","text":"铁匠：要打铁，先得有矿。","options":[]}`；`[S1] 采集返回 {"ok":true,"reward":{"currencyType":"gold","amount":3}}` |
 | 7 | 双窗口互见移动 | PASS | 浏览器实体层出现 `玩家3` 且坐标随广播变化（584→633→591），且仅一个 `我(1)`（自身广播被正确忽略）；反向 Node 第二客户端记录 `P2 SAW player:1 pos=(796,480)` |
-| 8 | 小游戏端（**降级口径**） | BLOCKED | 见下「#8 未完成项」：IDE 命令行导出不可行，需人工 GUI 导出 |
+| 8 | 小游戏端（**H5-only 口径**） | **H5 PASS / 小游戏 BLOCKED** | **H5 侧：已完成并上线**——线上 `/client/index.html` → 200、`/assets/resources/**` 共 15 个 URL 全 200（服务器侧 `curl -sI` 复核，S9 Task 2/3）；`F3` 面板可用、进场景 + 双窗互见跑通。**小游戏侧：仍 BLOCKED**——除 IDE 命令行导出不可行（需人工 GUI）外，还**缺微信小游戏 AppID**（S9 Task 6 阻塞）。详见下「#8 未完成项」 |
 | 9 | 后端回归全绿、旧契约零改动 | PASS | `npm test` → `Test Suites: 80 passed`、`Tests: 998 passed`；`git diff bbe550903 -- …/world.client.controller.ts` 仅**新增** `npcs/:spawnId/talk`；`…/gateway/game.gateway.ts` 1 处 diff 为计划已记录的「实测偏离③」（先落身份再 `await validateToken` 的握手时序修复），无既有消息契约变更 |
 
 ### 冒烟脚本
@@ -180,6 +190,8 @@ S1 冒烟全部通过
 
 ### #8 未完成项（小游戏端，待人工 GUI）
 
+**S9 状态（2026-09-24）**：**H5 侧已完成并上线**（见上「S1 验收结论」#8）；**小游戏侧仍 BLOCKED** —— 除下列「CLI 无法导出」外，还**缺微信小游戏 AppID**（S9 Task 6 因此阻塞），故本项整体不判 PASS。
+
 已落地的小游戏端适配：`Platform.readLocalText()`（`wx.getFileSystemManager().readFileSync`）+ `ConfigLoader.readText()` 小游戏分支（读包内 `config/*.json` 而非 `fetch`），H5 路径回归通过。
 
 阻塞点：**IDE 命令行无法导出 wxgame**。原始输出（`LayaAirIDE.exe --project=… --script=Build.buildWxgame`）：
@@ -191,7 +203,7 @@ unknown script 'Build.buildWxgame'
 
 `release/` 下仅有 GUI 手动构建出来的 `web/`，无 `wxgame/`；`local/buildLogs/` 也只有 `web-*.log`。CLI 模式要求交互式账号登录，故 `--script` 机制在本机不可用（与「工具链实证 3」同因）。
 
-待人工执行（完成后即可按降级口径把 #8 判为 PASS）：
+待人工执行（**需先拿到微信小游戏 AppID**，完成后小游戏侧方可判 PASS）：
 
 1. IDE 打开工程 `packages-game/game-client` → 「构建/发布」选「微信小游戏」执行，记录实际产物目录（预期 `release/wxgame`）；
 2. `Copy-Item -Recurse -Force ..\game-server\gamedata (Join-Path (Resolve-Path .\release\wxgame).Path 'config')`；

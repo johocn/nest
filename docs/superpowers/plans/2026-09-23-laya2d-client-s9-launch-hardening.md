@@ -1,7 +1,7 @@
 # LayaAir 2D 客户端 · S9 上线硬化批（真机性能 / 图集 / 生产证书 / 正式提审）实施计划
 
 > **状态：执行中，范围收敛为 H5-only（2026-09-24）。** 微信小游戏侧**缺 AppID**，Task 6（正式提审）**阻塞**，Task 5 的产物链**代码已交付**，真实 `release/wxgame` 导出的复核随小游戏上线解阻后再补。本文件只做规划与记录，不动代码、不动生产。
-> **H5 侧进度快照（2026-09-24）**：Task 1（证书）/ Task 2（S8 上线）/ Task 5（包体门禁）/ Task 7（广播门禁）**已完成**；Task 3 Step 2–3（素材入库 + 贴图接线）**已完成并上线**（落地方式偏离 D8，见 Task 3 Step 2 记录），Step 4–6 **未做**（图集与线上点检）；Task 4（真机验收，唯一需设备的硬缺口）与 Task 8（验收与文档结清）**未开始**。
+> **H5 侧进度快照（2026-09-24）**：Task 1（证书）/ Task 2（S8 上线）/ Task 5（包体门禁）/ Task 7（广播门禁）**已完成**；Task 3 Step 2–3（素材入库 + 贴图接线）**已完成并上线**（落地方式偏离 D8，见 Task 3 Step 2 记录），Step 4–6 **未做**（图集与线上点检）；Task 4（真机验收，唯一需设备的硬缺口）**未做**；Task 8（验收与文档结清）Step 1–3 **已完成**（见 §7），Step 4 提交待用户确认。
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development（沿用 S2–S8 的既定方式：每 Task 派新 subagent，Task 间两阶段评审）。
 
 **Goal:** 把「能在开发者工具与本机跑通」的客户端变成**可正式上线**的游戏端：修掉生产证书链、把 S8 性能成果发布上线、接入已定稿美术并做图集、在**真机低端机型**上验收帧率与内存、建立包体与后端广播的**硬指标门禁**，最终通过**微信小游戏正式提审**并上线 H5。
@@ -238,10 +238,10 @@
 
 ### Task 8: S9 验收与文档结清
 
-- [ ] **Step 1** 全量回归：`npm test`（≥1176）、`smoke-laya2d-s1` 9/9、S3/S4/S5/S6/S8/S7 六个客户端冒烟全 PASS。
-- [ ] **Step 2** `README.md`：S1 #8 → PASS（**H5-only**：附线上 `/client/` 证据；小游戏体验版证据随 Task 6 解阻再补）+ 双端发布手册 + 真机矩阵 + 证书续期说明。
-- [ ] **Step 3** 把 A1–A10 的实测值填进本文件的执行记录节（沿用 S5–S8 的写法规格）。
-- [ ] **Step 4** commit：`docs(game-client): S9 上线硬化验收记录`
+- [x] **Step 1** 全量回归：`npm test`（≥1176）、`smoke-laya2d-s1` 9/9、S3/S4/S5/S6/S8/S7 六个客户端冒烟全 PASS。→ 实测（2026-09-24）：`npm test` **91 suites / 1176 tests 全绿**（exit 0，150.1s）；`smoke-laya2d-s1` **9/9 PASS**（末行「S1 冒烟全部通过」，exit 0）；客户端冒烟 S3 **16/16**、S4 **18/18**、S5 **27/27**、S6 **50/50**、S8 **146/146**、S7 平台层 **102/102**，全部 exit 0；`build-fallback` **41 产物重写** exit 0。
+- [x] **Step 2** `README.md`：S1 #8 → PASS（**H5-only**：附线上 `/client/` 证据；小游戏体验版证据随 Task 6 解阻再补）+ 双端发布手册 + 真机矩阵 + 证书续期说明。→ 已完成（**偏离**：S1 #8 **未**整体改 PASS —— 按事实拆为「**H5 PASS**（线上 `/client/index.html` 200、`/assets/resources/**` 15 URL 全 200）/ **小游戏 BLOCKED**（缺 AppID）」；双端发布手册与证书续期说明核对**已在位、无需补**；新增「真机性能矩阵（S9 Task 4）」占位节，**不预填任何 fps/内存/启动数值**）。
+- [x] **Step 3** 把 A1–A10 的实测值填进本文件的执行记录节（沿用 S5–S8 的写法规格）。→ 见本文件 **§7 执行记录（S9）**：§7.1 门禁实测 + §7.2 A1–A10 实测 + §7.3 挂账。
+- [ ] **Step 4** commit：`docs(game-client): S9 上线硬化验收记录` → **未执行**（留待用户确认；当前改动保持未提交状态）。
 
 ---
 
@@ -295,3 +295,52 @@ Task 1（证书，硬前置）→ Task 2（H5 发布）→ Task 3（素材/图�
 - **S9（本文件）**：上线硬化 —— 证书 / 发布 / 图集 / 真机 / 包体 / 提审 + 广播门禁。
 - **S10（另出计划）**：内容与工具 —— GM 后台**拖拽摆点编辑器**（总纲 §1 已列为第二阶段）、玩法/场景内容扩充、运营数据看板。
 - 拆分理由：两者改动面（客户端+运维 vs 后台+内容）、验收口径（可上线 vs 可运营）与前置条件均无交叉，混批会让提审被后台开发拖住。
+
+---
+
+## 7. 执行记录（S9）
+
+> 执行时间：2026-09-24（**H5-only** 范围）。本地环境：PostgreSQL 16（`localhost:5432/game_server`）+ mock-redis（`:6379`）+ 后端 `npm start`（`:3000`）。
+> 生产环境：`odoo`（39.106.99.9）、`https://game.joho.cn`。
+> 「期望」列取自 §1.2 硬指标 / §1.6 验收映射；「实测」一律为本次回归（§7.1）与各 Task Step 的记录值。
+
+### 7.1 门禁实测（Task 8 Step 1 全量回归）
+
+| 项 | 命令 | 期望 | 实测 |
+|---|---|---|---|
+| 后端回归 | `game-server: npm test` | 全绿，tests ≥1176 | **91 suites / 1176 tests 全绿**，exit 0（150.1s） |
+| S1 冒烟回归 | `game-server: node scripts/smoke-laya2d-s1.mjs` | 9/9 PASS | **9/9 PASS**，末行「S1 冒烟全部通过」，exit 0 |
+| 客户端构建 | `game-client: node tools/build-fallback.mjs` | 构建 OK | **41 个产物重写导入扩展名**，exit 0 |
+| S3 组件断言 | `node scripts/smoke-s3-components.mjs` | 全 PASS | **16/16 PASS**，exit 0 |
+| S4 NPC 断言 | `node scripts/smoke-s4-npc.mjs` | 全 PASS | **18/18 PASS**，exit 0 |
+| S5 对话断言 | `node scripts/smoke-s5-dialogue.mjs` | 全 PASS | **27/27 PASS**，exit 0 |
+| S6 建造断言 | `node scripts/smoke-s6-build.mjs` | 全 PASS | **50/50 PASS**，exit 0 |
+| S8 性能断言 | `node scripts/smoke-s8-perf.mjs` | 全 PASS | **146/146 PASS**，exit 0 |
+| S7 平台层断言 | `node scripts/smoke-platform-s7.mjs` | 全 PASS | **102/102 PASS**，exit 0 |
+
+### 7.2 验收映射实测（A1–A10）
+
+| # | 验收项 | 判定方式（命令） | 期望 | 实测 |
+|---|---|---|---|---|
+| A1 | 证书链合法 | `openssl s_client -showcerts -connect game.joho.cn:443` | 链完整、issuer 公共 CA、无 `unable to verify` | **通过**：`Verify return code: 0 (ok)`，issuer `C=US, O=Let's Encrypt, CN=YE2`（链 4 张）；本机 `curl`（系统 CA、不带 `-k`）→ 200 / `ssl_verify_result=0`；Node `https.get` → `authorized=true`（Task 1 Step 4） |
+| A2 | S8 成果上线 | 线上 `/client/` 含 S8 模块、`PerfPanel` 可开、线上 `perf-sample` | 线上产物为 S8 版 | **通过**：线上 `/client/index.html` 200 且 md5 `533b098c…` 与本机一致；S8 十模块 URL 全 200；F3 面板真实按键可开；线上非 headless **60fps**/最低 59.9、drawcall 峰 34、heap 峰 17MB、上行 9.4/s、静止 0；`?quality=low` 生效（drawcall 峰 15）（Task 2 Step 3–5） |
+| A3 | 美术接入 | 素材入库 + `.meta` 完整；图集生效；drawcall/包体前后数值 | 素材入库 + 数值记录 | **部分达成**：12 张 PNG 入库（程序化生成 + 同格式 `.meta`，**偏离 D8 已获批准**）并贴图接线、已上线（`b5d8c19f0`）；**图集未做**（`assets/resources/atlas/` 与 `tools/atlas-manifest.mjs` 均不存在）；**进图前后 drawcall/heap/包体基线未记录**（Task 3 Step 3） |
+| A4 | 真机性能 | 低端安卓机型矩阵实测（面板打点） | ≥30fps / ≤300MB / 冷启动 ≤5s | **未做 / PENDING**：需真实设备，无任何 fps/内存/启动数据（Task 4 未启动） |
+| A5 | 包体门禁 | `tools/check-package.mjs`（体积/hash/引擎脚本顺序） | exit 0 | **脚本通过**：H5 布局（`release/client` 71 文件 / 2.23MB）与 wxgame 布局 fixture 均 **6/6 PASS, exit 0**；6 条失败路径各自独立命中（exit 1/2 正确）。**真实 `release/wxgame` 复核 PENDING**（缺 AppID 不导出）（Task 5 Step 1/2） |
+| A6 | 正式提审 | 体验版验收 → 提交审核 → 上线 | 审核通过上线 | **未做 / PENDING**：**阻塞于缺微信小游戏 AppID**（Task 6 全部 Step 未启动） |
+| A7 | 广播硬指标 | `scripts/loadtest-gate.mjs` | exit 0（P95 ≤200ms、投递 ≤25k/s、0 掉线、RSS Δ ≤50MB） | **门禁判定正确**：S8 历史 50bot 数据 PASS/exit 0；5 条阈值各自单独调到不可能满足均 exit 1（独立）；生产冒烟（5 bot/10s）**P95 33.08ms**、上行 9.2/s/人、**掉线 0**、进场景 5/5，门禁 exit 1 **仅因远端 RSS 无法度量**（脚本缺陷已记录）（Task 7 Step 2 + Task 2 Step 5） |
+| A8 | 零契约变更 + 回归 | `git diff`（WS 契约）+ `npm test` + 6 冒烟 | 字段零改动、全绿 | **通过**：`world.move`/`world.entity_update` 字段零改动（Task 3 resKey 走蓝图 `BuildingTemplate` 透传，未动 WS 契约）；`npm test` **91/1176 全绿**；6 个客户端冒烟全 PASS（§7.1） |
+| A9 | 服务器零构建 | `publish.mjs` 源码断言 + 人工核对 | 全程无 `npm run build` | **通过**：`publish.mjs` 源码不含 `ssh/scp/curl/npm run build`（S7 冒烟 I-4 PASS）；Task 2/3 部署均「本机构建 → scp → 服务器解包」，服务器零构建 |
+| A10 | 文档结清 | `README.md` 核对（S1 #8 / 双端发布 / 真机矩阵 / 包体上限） | 文档更新 | **完成（H5-only 口径）**：S1 #8 按事实拆分「H5 PASS（线上证据）/ 小游戏 BLOCKED（缺 AppID）」；双端发布手册与证书续期说明已在位；真机矩阵新增占位节（不预填数值） |
+
+### 7.3 挂账 / 未达成
+
+| 项 | 状态 | 原因与后续 |
+|---|---|---|
+| Task 3 Step 4/5（图集导出 + 前后对比） | **未做** | `assets/resources/atlas/` 与 `tools/atlas-manifest.mjs` 均不存在；图集为可选优化（§4 待确认 3） |
+| Task 3 基线数值（drawcall/heap/包体） | **未记录** | 贴图接线已上线但未量前后数值（Step 3 未达验收） |
+| Task 3 Step 6 线上浏览器点检 | **部分** | 服务器侧 `curl -sI` 复核 15 个 URL 全 200；浏览器真机点检未做（本机沙箱 DNS 不通） |
+| Task 4（A4 真机性能） | **PENDING** | 需真实设备（低端/中端安卓 + iOS），唯一需设备的硬缺口 |
+| Task 5 真实 `release/wxgame` 复核 | **PENDING** | 缺 AppID 不导出，产物链仅以 fixture 自检 |
+| Task 6（A6 正式提审） | **BLOCKED** | 缺微信小游戏 AppID，S9 记为 H5-only 交付 |
+| Task 8 Step 4（commit） | **未执行** | 留待用户确认；改动保持未提交状态 |
