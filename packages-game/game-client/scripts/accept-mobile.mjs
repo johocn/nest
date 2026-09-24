@@ -11,6 +11,7 @@
 //
 // 前置：后端 :3000 + 静态服务器 :5173（node tools/serve.mjs）已在跑。
 // 触控按下走 CDP `Input.dispatchTouchEvent`（Playwright 的 touchscreen 只支持 tap，无法「按住持续移动」）。
+// 摇杆是**浮动**的：在激活区内 touchStart（底座落在按下点）→ touchMove 偏移一个 `stickRadius` → 保持 → touchEnd。
 import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -139,10 +140,15 @@ const touchDown = (x, y) =>
     type: 'touchStart',
     touchPoints: [{ x, y, id: 1, radiusX: 6, radiusY: 6, force: 1 }],
   });
+const touchMove = (x, y) =>
+  cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [{ x, y, id: 1, radiusX: 6, radiusY: 6, force: 1 }],
+  });
 const touchUp = () => cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
 
 /** 读触控层几何（舞台坐标 → CSS 坐标的换算按 SCALE_SHOWALL 定义：等比 + 居中） */
-async function readPad() {
+async function readTouch() {
   return page.evaluate(() => {
     const stage = window.Laya.stage;
     const canvas = document.querySelector('canvas');
@@ -150,23 +156,32 @@ async function readPad() {
     const scale = Math.min(r.width / stage.width, r.height / stage.height);
     const ox = r.left + (r.width - stage.width * scale) / 2;
     const oy = r.top + (r.height - stage.height * scale) / 2;
-    let found = null;
+    let root = null;
     const walk = (n) => {
-      if (found) return;
-      if (n.name === 's9-touch') return void (found = n);
+      if (root) return;
+      if (n.name === 's9-touch') return void (root = n);
       for (let i = 0; i < n.numChildren; i++) walk(n.getChildAt(i));
     };
     walk(stage);
-    if (!found) return null;
-    const buttons = [];
-    for (let i = 0; i < found.numChildren; i++) {
-      const c = found.getChildAt(i);
+    if (!root) return null;
+    const byName = (name) => {
+      for (let i = 0; i < root.numChildren; i++) {
+        const c = root.getChildAt(i);
+        if (c.name === name) return c;
+      }
+      return null;
+    };
+    const zone = byName('s9-stick-zone');
+    const base = byName('s9-stick-base');
+    let interact = null;
+    for (let i = 0; i < root.numChildren; i++) {
+      const c = root.getChildAt(i);
       let text = '';
       for (let j = 0; j < c.numChildren; j++) {
         const t = c.getChildAt(j);
         if (t && typeof t.text === 'string') text += t.text;
       }
-      buttons.push({ text, sx: c.x + c.width / 2, sy: c.y + c.height / 2, w: c.width, h: c.height });
+      if (text) interact = { text, sx: c.x + c.width / 2, sy: c.y + c.height / 2 };
     }
     return {
       scale: Math.round(scale * 1000) / 1000,
@@ -174,8 +189,34 @@ async function readPad() {
       oy: Math.round(oy),
       canvas: { w: Math.round(r.width), h: Math.round(r.height) },
       stage: { w: stage.width, h: stage.height },
-      buttons,
+      zone: zone ? { sx: zone.x, sy: zone.y, w: zone.width, h: zone.height } : null,
+      interact,
     };
+  });
+}
+
+/** 摇杆运行时状态：底座是否显示 + 摇杆头相对底座的偏移（证明拖动真的被吃进去了，而不只是「没报错」） */
+async function probeStick() {
+  return page.evaluate(() => {
+    let root = null;
+    const walk = (n) => {
+      if (root) return;
+      if (n.name === 's9-touch') return void (root = n);
+      for (let i = 0; i < n.numChildren; i++) walk(n.getChildAt(i));
+    };
+    walk(window.Laya.stage);
+    if (!root) return null;
+    for (let i = 0; i < root.numChildren; i++) {
+      const c = root.getChildAt(i);
+      if (c.name !== 's9-stick-base') continue;
+      const knob = c.numChildren > 0 ? c.getChildAt(0) : null;
+      return {
+        visible: c.visible,
+        base: { x: Math.round(c.x), y: Math.round(c.y) },
+        knob: knob ? { x: Math.round(knob.x), y: Math.round(knob.y) } : null,
+      };
+    }
+    return null;
   });
 }
 
@@ -240,18 +281,33 @@ try {
     window.__UI = { down: 0 };
     window.Laya.stage.on(window.Laya.Event.MOUSE_DOWN, null, () => window.__UI.down++);
   });
-  const pad = await readPad();
+  const touch = await readTouch();
+  if (!touch?.zone) throw new Error(`触控层缺少摇杆激活区（readTouch=${JSON.stringify(touch)}）`);
+  /** 舞台坐标 → CSS 坐标 */
+  const toCss = (sx, sy) => ({ x: touch.ox + sx * touch.scale, y: touch.oy + sy * touch.scale });
   const btnCss = (t) => {
-    const b = pad.buttons.find((x) => x.text === t);
-    return b ? { x: pad.ox + b.sx * pad.scale, y: pad.oy + b.sy * pad.scale } : null;
+    const b = touch.interact && touch.interact.text === t ? touch.interact : null;
+    return b ? toCss(b.sx, b.sy) : null;
   };
+  /** 摇杆按下点＝激活区中心（舞台坐标）：四个方向的 `±stickRadius` 落点都仍在舞台内、且不压 HUD/面板 */
+  const STICK_ORIGIN = { x: touch.zone.sx + touch.zone.w / 2, y: touch.zone.sy + touch.zone.h / 2 };
+  /** 方向 → 单位偏移（屏幕坐标，y 向下） */
+  const DIR_VEC = { '→': [1, 0], '←': [-1, 0], '↑': [0, -1], '↓': [0, 1] };
+  const STICK_R = 88; // AppConfig.touch.stickRadius
+  /** 每次长按的摇杆取证（底座可见 + 摇杆头偏移），证明拖动真被吃进去了 */
+  const stickProbes = [];
 
-  /** 按住某方向键 ms 毫秒（触控，非键盘），松开即停 */
+  /** 按住某方向 ms 毫秒（触控，非键盘）：在激活区内按下（浮动底座落在按下点）→ 拖到该方向 → 松开即停 */
   async function hold(dir, ms) {
-    const p = btnCss(dir);
-    if (!p) throw new Error(`触控层缺少方向键 ${dir}（readPad=${JSON.stringify(pad?.buttons?.map((b) => b.text))}）`);
-    await touchDown(p.x, p.y);
-    await sleep(ms);
+    const vec = DIR_VEC[dir];
+    if (!vec) throw new Error(`未知方向 ${dir}`);
+    const o = toCss(STICK_ORIGIN.x, STICK_ORIGIN.y);
+    const p = toCss(STICK_ORIGIN.x + vec[0] * STICK_R, STICK_ORIGIN.y + vec[1] * STICK_R);
+    await touchDown(o.x, o.y);
+    await touchMove(p.x, p.y);
+    await sleep(60); // 给 MOUSE_DRAG 派发与按键注入留一拍
+    stickProbes.push({ dir, ...(await probeStick()) });
+    await sleep(Math.max(0, ms - 60));
     await touchUp();
   }
 
@@ -272,8 +328,8 @@ try {
     return lastMove;
   }
 
-  // ③ 移动段（固定路线，触控长按）—— **必须排在交互取证之前**：交互一旦成功（如 talk）会弹出对话，
-  //    对话是 zOrder 10000 的顶层遮罩，会把后续所有触摸吃掉（2026-09-24 实测：先做交互则移动段 upPerSec 恒 0）
+  // ③ 移动段（固定路线，触控长按）—— **仍排在交互取证之前**：交互若弹出对话/建造面板，其选项按钮
+  //    会盖在摇杆激活区右侧（面板占 x 256..704，激活区右界 256 与之贴齐），先做交互会让移动段读不到上行
   await page.evaluate(() => window.__PERF__.panel(true));
   const moveTask = (async () => {
     for (const [dir, frac] of DIR_PLAN) {
@@ -330,7 +386,8 @@ try {
     cpuThrottle,
     quality,
     timing: { T1_s: t1, T2_s: t2, T3_s: round(t1 + t2) },
-    padGeometry: pad,
+    padGeometry: touch,
+    stick: { origin: STICK_ORIGIN, radius: STICK_R, probes: stickProbes },
     interact: {
       spot: COLLECT_SPOT,
       posAtSpot: posAtSpot ? { x: posAtSpot.x, y: posAtSpot.y } : null,
@@ -375,5 +432,5 @@ const summary = {
 };
 
 writeFileSync(outPath ?? join(root, 'docs', 'perf-shots', `${label}.json`), JSON.stringify({ ...record, summary }, null, 2), 'utf8');
-console.log(JSON.stringify({ summary, timing: record.timing, interact: record.interact, degradeLine: record.degradeLine, padChildren: record.padGeometry?.buttons?.length, pageErrors: record.pageErrors.length, failedRequests: record.failedRequests.length }, null, 2));
+console.log(JSON.stringify({ summary, timing: record.timing, interact: record.interact, degradeLine: record.degradeLine, stick: record.stick?.probes, pageErrors: record.pageErrors.length, failedRequests: record.failedRequests.length }, null, 2));
 console.log(`\n截图：${record.screenshot}`);

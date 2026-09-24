@@ -51,6 +51,11 @@ interface PanelRow {
  *
  * 权威性：合法性只是**本地预判**（`build-logic.predictPlot`），服务端 `assertCanBuild` 才是权威；
  * 落成/拆除一律由服务端广播驱动，面板不做本地状态推进。
+ *
+ * **指针不设遮罩（S9 修复）**：根节点既不 `size()` 也不改 `mouseEnabled` —— 引擎的命中检测是**纯几何**的
+ * （`hitTest` 只看自身 `width>0 && height>0` 且包含该点），根节点一旦有边界就会成为最上层命中目标、
+ * 吃掉整个舞台的指针（表现为「面板打开后手机摇杆按不动」）。去掉后根节点自身永不命中，行按钮/命中条
+ * 作为子节点照常接收点击，空白处点击穿透到下层并**继续冒泡到舞台**，故 `onStageClick`（移动建造光标）不受影响。
  */
 export class BuildPanel {
   private static root: Laya.Sprite | null = null;
@@ -74,7 +79,8 @@ export class BuildPanel {
     const root = new Laya.Sprite();
     root.name = 's6-build-panel';
     root.zOrder = B.zOrder;
-    root.mouseEnabled = false;
+    // 不设 mouseEnabled / 不设 size：根节点自身不参与命中（否则会吃掉整个舞台的指针 → 触控层收不到按下）。
+    // 面板行按钮作为子节点照常接收点击。详见类注释「指针不设遮罩」。
     Laya.stage.addChild(root);
     BuildPanel.root = root;
 
@@ -130,8 +136,6 @@ export class BuildPanel {
     if (!root || !ctx || BuildPanel.opened) return;
 
     BuildPanel.opened = true;
-    root.mouseEnabled = true;
-    root.size(AppConfig.stageWidth, AppConfig.stageHeight);
     BuildPanel.rebuild();
 
     await BuildPanel.reload();
@@ -140,7 +144,6 @@ export class BuildPanel {
   static close(): void {
     BuildPanel.opened = false;
     if (BuildPanel.root) {
-      BuildPanel.root.mouseEnabled = false;
       BuildPanel.root.removeChildren();
     }
     if (BuildPanel.preview) {

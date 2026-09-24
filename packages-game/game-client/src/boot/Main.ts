@@ -182,7 +182,7 @@ async function afterLogin(): Promise<void> {
   const interactControl = new InteractController(me);
   interactControl.attach();
 
-  // ⑧a S9 手机触控（仅触摸设备）：8 向虚拟方向键 + 交互按钮，复用上面两条链路（键盘行为零变更）
+  // ⑧a S9 手机触控（仅触摸设备）：浮动虚拟摇杆 + 交互按钮，复用上面两条链路（键盘行为零变更）
   TouchControls.attach(playerControl, interactControl);
 
   // ⑧b S6 建造（规则/蓝图/建筑列表走服务端权威接口；面板为引擎内自绘）

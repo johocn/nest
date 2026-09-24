@@ -8,15 +8,12 @@ import { Api } from '../net/api';
 import type { DialogueQuestMarks } from '../net/api';
 import { ApiError } from '../net/http';
 import { Session } from '../net/Session';
-import { BuildPanel } from './BuildPanel';
 import { DialogueView, normalizeChoose } from '../ui/DialogueView';
 import type { DialogueNodeView } from '../ui/DialogueView';
 import { Hud } from '../ui/Hud';
 
 /** 交互键：Laya 的 KEY_DOWN 事件只代理 nativeEvent.key（不带 keyCode），故用归一化小写 'f' 判定 */
 const KEY_INTERACT = 'f';
-/** S6 建造键：打开/关闭建造面板（面板内部另用 Q/E 切换蓝图、Enter 建造、G 投料、Del 拆除） */
-const KEY_BUILD = 'b';
 /** 目标重选节流：每 6 帧（≈100ms）一次，跟手且无谓开销可忽略 */
 const PICK_FRAME_INTERVAL = 6;
 
@@ -75,13 +72,8 @@ export class InteractController {
   private async onKeyDown(e: Laya.Event): Promise<void> {
     const key = String((e as unknown as { key?: string }).key ?? '').toLowerCase();
 
-    // S6 建造键 B：打开/关闭建造面板。面板自身在 forbidden 场景展示「此场景不允许建造」并禁用操作行
-    if (key === KEY_BUILD) {
-      if (DialogueView.isOpen) return;
-      BuildPanel.toggle();
-      return;
-    }
-
+    // 注：建造键 B 的监听**只在 BuildPanel.onKeyDown 一处**（两个处理器都监听 stage 的 KEY_DOWN，
+    // 若此处再 toggle 一次，同一次按键会「开+关」互相抵消 → 面板永远打不开）。触发交互键 F 是本类的职责。
     if (key !== KEY_INTERACT) return;
     await this.triggerInteract();
   }

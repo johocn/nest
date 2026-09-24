@@ -1,7 +1,7 @@
 {
   "label": "mobile-sim",
-  "at": "2026-09-24T13:46:33.496Z",
-  "commit": "9cc58bf84",
+  "at": "2026-09-24T15:08:25.497Z",
+  "commit": "357543fd8",
   "dirty": true,
   "mode": "移动端模拟（非真机）",
   "browser": "151.0.7922.34",
@@ -18,9 +18,9 @@
   "cpuThrottle": 0,
   "quality": null,
   "timing": {
-    "T1_s": 0.4,
-    "T2_s": 0.33,
-    "T3_s": 0.73
+    "T1_s": 0.45,
+    "T2_s": 0.35,
+    "T3_s": 0.8
   },
   "padGeometry": {
     "scale": 0.644,
@@ -34,69 +34,120 @@
       "w": 960,
       "h": 640
     },
-    "buttons": [
+    "zone": {
+      "sx": 0,
+      "sy": 240,
+      "w": 256,
+      "h": 400
+    },
+    "interact": {
+      "text": "交互",
+      "sx": 892,
+      "sy": 556
+    }
+  },
+  "stick": {
+    "origin": {
+      "x": 128,
+      "y": 440
+    },
+    "radius": 88,
+    "probes": [
       {
-        "text": "↖",
-        "sx": 44,
-        "sy": 452,
-        "w": 64,
-        "h": 64
+        "dir": "→",
+        "visible": true,
+        "base": {
+          "x": 128,
+          "y": 440
+        },
+        "knob": {
+          "x": 88,
+          "y": 0
+        }
       },
       {
-        "text": "↑",
-        "sx": 116,
-        "sy": 452,
-        "w": 64,
-        "h": 64
+        "dir": "↓",
+        "visible": true,
+        "base": {
+          "x": 128,
+          "y": 440
+        },
+        "knob": {
+          "x": 0,
+          "y": 88
+        }
       },
       {
-        "text": "↗",
-        "sx": 188,
-        "sy": 452,
-        "w": 64,
-        "h": 64
+        "dir": "←",
+        "visible": true,
+        "base": {
+          "x": 128,
+          "y": 440
+        },
+        "knob": {
+          "x": -88,
+          "y": 0
+        }
       },
       {
-        "text": "←",
-        "sx": 44,
-        "sy": 524,
-        "w": 64,
-        "h": 64
+        "dir": "↑",
+        "visible": true,
+        "base": {
+          "x": 128,
+          "y": 440
+        },
+        "knob": {
+          "x": 0,
+          "y": -88
+        }
       },
       {
-        "text": "→",
-        "sx": 188,
-        "sy": 524,
-        "w": 64,
-        "h": 64
+        "dir": "→",
+        "visible": true,
+        "base": {
+          "x": 128,
+          "y": 440
+        },
+        "knob": {
+          "x": 88,
+          "y": 0
+        }
       },
       {
-        "text": "↙",
-        "sx": 44,
-        "sy": 596,
-        "w": 64,
-        "h": 64
+        "dir": "←",
+        "visible": true,
+        "base": {
+          "x": 128,
+          "y": 440
+        },
+        "knob": {
+          "x": -88,
+          "y": 0
+        }
       },
       {
-        "text": "↓",
-        "sx": 116,
-        "sy": 596,
-        "w": 64,
-        "h": 64
+        "dir": "↑",
+        "visible": true,
+        "base": {
+          "x": 128,
+          "y": 440
+        },
+        "knob": {
+          "x": 0,
+          "y": -88
+        }
       },
       {
-        "text": "↘",
-        "sx": 188,
-        "sy": 596,
-        "w": 64,
-        "h": 64
-      },
-      {
-        "text": "交互",
-        "sx": 892,
-        "sy": 556,
-        "w": 88,
-        "h": 88
+        "dir": "←",
+        "visible": true,
+        "base": {
+          "x": 128,
+          "y": 440
+        },
+        "knob": {
+          "x": -88,
+          "y": 0
+        }
       }
     ]
   },
@@ -107,8 +158,8 @@
       "expect": "stone_01 (720,400)，半径 70；最近 NPC smith(700,520) 距离 122 > 90"
     },
     "posAtSpot": {
-      "x": 724,
-      "y": 396
+      "x": 720,
+      "y": 392
     },
     "hudAtSpot": "登录成功：playerId=1 | 按 F 交互：object:2",
     "hudAfter": "采集成功，获得 8 gold | 按 F 交互：object:2",
@@ -122,110 +173,110 @@
   "moveSamples": [
     {
       "t": 1.01,
-      "fps": 58,
-      "statFps": 58,
+      "fps": 58.6,
+      "statFps": 59,
       "drawcall": 38,
       "entityTotal": 17,
       "entityVisible": 17,
       "upPerSec": 9,
       "quality": "high",
-      "heapMB": 13.2
+      "heapMB": 13
     },
     {
-      "t": 2.03,
-      "fps": 59.9,
+      "t": 2.01,
+      "fps": 60.1,
       "statFps": 60,
-      "drawcall": 36,
+      "drawcall": 37,
       "entityTotal": 17,
       "entityVisible": 15,
-      "upPerSec": 9,
+      "upPerSec": 10,
       "quality": "high",
-      "heapMB": 13.9
+      "heapMB": 13.6
     },
     {
-      "t": 3.04,
-      "fps": 60.1,
+      "t": 3.02,
+      "fps": 60.3,
       "statFps": 60,
       "drawcall": 33,
       "entityTotal": 17,
       "entityVisible": 14,
-      "upPerSec": 9,
-      "quality": "high",
-      "heapMB": 14.5
-    },
-    {
-      "t": 4.06,
-      "fps": 60.1,
-      "statFps": 60,
-      "drawcall": 29,
-      "entityTotal": 17,
-      "entityVisible": 8,
-      "upPerSec": 9,
-      "quality": "high",
-      "heapMB": 15
-    },
-    {
-      "t": 5.07,
-      "fps": 60,
-      "statFps": 60,
-      "drawcall": 23,
-      "entityTotal": 17,
-      "entityVisible": 8,
-      "upPerSec": 8,
-      "quality": "high",
-      "heapMB": 15.4
-    },
-    {
-      "t": 6.09,
-      "fps": 60,
-      "statFps": 60,
-      "drawcall": 17,
-      "entityTotal": 17,
-      "entityVisible": 8,
-      "upPerSec": 10,
-      "quality": "high",
-      "heapMB": 15.8
-    },
-    {
-      "t": 7.1,
-      "fps": 59.9,
-      "statFps": 60,
-      "drawcall": 17,
-      "entityTotal": 17,
-      "entityVisible": 16,
-      "upPerSec": 9,
-      "quality": "high",
-      "heapMB": 16.3
-    },
-    {
-      "t": 8.11,
-      "fps": 60,
-      "statFps": 60,
-      "drawcall": 29,
-      "entityTotal": 17,
-      "entityVisible": 17,
-      "upPerSec": 10,
-      "quality": "high",
-      "heapMB": 16.8
-    },
-    {
-      "t": 9.12,
-      "fps": 60,
-      "statFps": 60,
-      "drawcall": 37,
-      "entityTotal": 17,
-      "entityVisible": 17,
       "upPerSec": 8,
       "quality": "high",
       "heapMB": 14.3
     },
     {
-      "t": 10.01,
+      "t": 4.02,
       "fps": 59.9,
       "statFps": 60,
-      "drawcall": 38,
+      "drawcall": 29,
       "entityTotal": 17,
-      "entityVisible": 16,
+      "entityVisible": 10,
+      "upPerSec": 10,
+      "quality": "high",
+      "heapMB": 14.8
+    },
+    {
+      "t": 5.03,
+      "fps": 60,
+      "statFps": 60,
+      "drawcall": 24,
+      "entityTotal": 17,
+      "entityVisible": 8,
+      "upPerSec": 7,
+      "quality": "high",
+      "heapMB": 15.2
+    },
+    {
+      "t": 6.04,
+      "fps": 60,
+      "statFps": 60,
+      "drawcall": 17,
+      "entityTotal": 17,
+      "entityVisible": 8,
+      "upPerSec": 9,
+      "quality": "high",
+      "heapMB": 15.7
+    },
+    {
+      "t": 7.05,
+      "fps": 60,
+      "statFps": 60,
+      "drawcall": 17,
+      "entityTotal": 17,
+      "entityVisible": 14,
+      "upPerSec": 8,
+      "quality": "high",
+      "heapMB": 16.2
+    },
+    {
+      "t": 8.06,
+      "fps": 59.9,
+      "statFps": 60,
+      "drawcall": 25,
+      "entityTotal": 17,
+      "entityVisible": 17,
+      "upPerSec": 9,
+      "quality": "high",
+      "heapMB": 16.7
+    },
+    {
+      "t": 9.08,
+      "fps": 60,
+      "statFps": 60,
+      "drawcall": 36,
+      "entityTotal": 17,
+      "entityVisible": 17,
+      "upPerSec": 8,
+      "quality": "high",
+      "heapMB": 14.2
+    },
+    {
+      "t": 10.01,
+      "fps": 60,
+      "statFps": 60,
+      "drawcall": 39,
+      "entityTotal": 17,
+      "entityVisible": 17,
       "upPerSec": 9,
       "quality": "high",
       "heapMB": 14.7
@@ -233,29 +284,29 @@
   ],
   "idleSamples": [
     {
-      "t": 1.01,
-      "fps": 60.1,
+      "t": 1,
+      "fps": 60,
       "statFps": 60,
-      "drawcall": 27,
+      "drawcall": 28,
       "entityTotal": 17,
       "entityVisible": 12,
       "upPerSec": 0,
       "quality": "high",
-      "heapMB": 14.8
+      "heapMB": 14.9
     },
     {
-      "t": 2.03,
-      "fps": 59.9,
+      "t": 2.02,
+      "fps": 60,
       "statFps": 60,
       "drawcall": 25,
       "entityTotal": 17,
       "entityVisible": 12,
       "upPerSec": 0,
       "quality": "high",
-      "heapMB": 15.1
+      "heapMB": 14.5
     },
     {
-      "t": 3.03,
+      "t": 3.04,
       "fps": 60,
       "statFps": 60,
       "drawcall": 25,
@@ -263,11 +314,33 @@
       "entityVisible": 11,
       "upPerSec": 0,
       "quality": "high",
-      "heapMB": 14.7
+      "heapMB": 14.8
     },
     {
       "t": 4.05,
       "fps": 60,
+      "statFps": 60,
+      "drawcall": 24,
+      "entityTotal": 17,
+      "entityVisible": 11,
+      "upPerSec": 0,
+      "quality": "high",
+      "heapMB": 15.2
+    },
+    {
+      "t": 5.06,
+      "fps": 60,
+      "statFps": 60,
+      "drawcall": 23,
+      "entityTotal": 17,
+      "entityVisible": 11,
+      "upPerSec": 0,
+      "quality": "high",
+      "heapMB": 14.7
+    },
+    {
+      "t": 6.07,
+      "fps": 60.1,
       "statFps": 60,
       "drawcall": 23,
       "entityTotal": 17,
@@ -277,8 +350,8 @@
       "heapMB": 15
     },
     {
-      "t": 5.06,
-      "fps": 59.9,
+      "t": 7.08,
+      "fps": 60,
       "statFps": 60,
       "drawcall": 23,
       "entityTotal": 17,
@@ -288,8 +361,8 @@
       "heapMB": 15.3
     },
     {
-      "t": 6.07,
-      "fps": 60,
+      "t": 8.1,
+      "fps": 59.9,
       "statFps": 60,
       "drawcall": 23,
       "entityTotal": 17,
@@ -299,8 +372,8 @@
       "heapMB": 14.9
     },
     {
-      "t": 7.09,
-      "fps": 60,
+      "t": 9.12,
+      "fps": 60.1,
       "statFps": 60,
       "drawcall": 23,
       "entityTotal": 17,
@@ -310,7 +383,7 @@
       "heapMB": 15.1
     },
     {
-      "t": 8.1,
+      "t": 10.02,
       "fps": 60,
       "statFps": 60,
       "drawcall": 23,
@@ -319,47 +392,25 @@
       "upPerSec": 0,
       "quality": "high",
       "heapMB": 15.4
-    },
-    {
-      "t": 9.11,
-      "fps": 59.9,
-      "statFps": 60,
-      "drawcall": 23,
-      "entityTotal": 17,
-      "entityVisible": 11,
-      "upPerSec": 0,
-      "quality": "high",
-      "heapMB": 15.7
-    },
-    {
-      "t": 10.01,
-      "fps": 60.1,
-      "statFps": 60,
-      "drawcall": 23,
-      "entityTotal": 17,
-      "entityVisible": 11,
-      "upPerSec": 0,
-      "quality": "high",
-      "heapMB": 15.2
     }
   ],
   "degradeLine": "(未触发自动降级)",
   "qualityLine": "[S8] quality=high switches=nameLabels=1 gridLines=1 triggerOutline=1 interp=full remoteHz=10 (platform=h5 url=- env=- config=auto)",
   "finalQuality": "high",
-  "heapAtIdleEndMB": 15.2,
+  "heapAtIdleEndMB": 15.4,
   "pageErrors": [],
   "failedRequests": [],
   "consoleTouch": "[S9] 贴图预加载 9/9 命中",
   "screenshot": "E:\\code\\nest\\packages-game\\game-client\\docs\\perf-shots\\mobile-sim.png",
   "summary": {
-    "moveFpsMean": 59.79,
-    "moveFpsMin": 58,
-    "idleFpsMean": 59.99,
-    "drawcallPeak": 38,
-    "heapPeakMB": 16.8,
-    "heapAtIdleEndMB": 15.2,
+    "moveFpsMean": 59.88,
+    "moveFpsMin": 58.6,
+    "idleFpsMean": 60.01,
+    "drawcallPeak": 39,
+    "heapPeakMB": 16.7,
+    "heapAtIdleEndMB": 15.4,
     "heapFellBack": true,
-    "moveUpPerSecMean": 9,
+    "moveUpPerSecMean": 8.7,
     "idleUpPerSecSum": 0,
     "finalQuality": "high"
   }

@@ -440,7 +440,7 @@ Task 1（证书，硬前置）→ Task 2（H5 发布）→ Task 3（素材/图�
 1. 手机浏览器打开 `https://game.joho.cn/client/`（确认地址栏无证书告警 —— 有告警说明 §7.4.1 的 P0 复发，先修证书再点检）；秒表起 T1（URL → 登录表单可输入）。
 2. USB 连 PC → PC Chrome `chrome://inspect` → inspect 该页 → Console 备用。
 3. 输入 `spike01` / `spike123456` 登录，秒表计 T2（点登录 → 场景首帧）；T3 = T1 + T2。
-4. Console 执行 `__PERF__.panel(true)` 显形面板（或 `__PERF__.snapshot()` 逐秒读数）；用**左下角虚拟方向键**（§7.4.5）按住走一段 + 静止一段，各读数 **F**（fps）与 **M**（heapMB）。
+4. Console 执行 `__PERF__.panel(true)` 显形面板（或 `__PERF__.snapshot()` 逐秒读数）；用**左下角虚拟摇杆**（§7.4.5）按住走一段 + 静止一段，各读数 **F**（fps）与 **M**（heapMB）。
 5. 观察控制台是否出现 `[S8] 连续 3000ms fps 低于目标 80% → 自动降级 quality=low` 或 `snapshot().quality === 'low'`（**D**）；若触发，记录降级后 fps。
 6. 切换场景（或走出/回到场景）后再读一次 heap，判定**是否回落**（**M** 后半句）。
 7. 截图/录屏留证，按下方模板填行，回填 README「真机性能矩阵」节。
@@ -482,22 +482,22 @@ Task 1（证书，硬前置）→ Task 2（H5 发布）→ Task 3（素材/图�
 
 | 文件 | 改动 |
 |---|---|
-| `src/config/AppConfig.ts` | 新增 `touch` 常量块（zOrder 9998、单格 64px、3×3 网格、交互按钮 88px、半透明配色） |
-| `src/world/PlayerControl.ts` | 新增 `press(key)` / `release(key)` / `releaseAll()`：把**与键盘同名**的 `'w'/'a'/'s'/'d'` 注入既有 `pressed` 集合，之后完全复用 `onFrame` 的位移与 10Hz 上报 |
+| `src/config/AppConfig.ts` | 新增 `touch` 常量块（zOrder 9998、摇杆激活区 256×400 / 半径 88 / 摇杆头 36 / 死区 0.28、交互按钮 88px、半透明配色）—— 初版为 3×3 网格 8 向方向键，2026-09-24 改为浮动摇杆（见 §7.4.7 第 3 条） |
+| `src/world/PlayerControl.ts` | 新增 `press(key)` / `release(key)`：把**与键盘同名**的 `'w'/'a'/'s'/'d'` 注入既有 `pressed` 集合，之后完全复用 `onFrame` 的位移与 10Hz 上报（原 `releaseAll()` 已删，见 §7.4.7 第 3 条「差量注入」） |
 | `src/world/InteractController.ts` | `F` 键分支抽成 `public async triggerInteract()`，键盘路径改为委托它（行为逐字不变） |
-| `src/ui/TouchControls.ts`（新增） | 引擎内自绘（同 `Hud` 范式，不引 DOM/`laya.ui`）：左下 8 向方向键 + 右下「交互」按钮；**仅触摸设备显示**；按住用 `MOUSE_DOWN`、抬手由**舞台级** `MOUSE_UP` 统一 `releaseAll()` 兜底（防手指滑出按钮后卡键一直走） |
+| `src/ui/TouchControls.ts`（新增） | 引擎内自绘（同 `Hud` 范式，不引 DOM/`laya.ui`）：左下**浮动虚拟摇杆**（激活区内按下 → 底座落在按下点）+ 右下「交互」按钮；**仅触摸设备显示**；抬手由 激活区 `MOUSE_DRAG_END` + `MOUSE_DRAG` + **舞台级** `MOUSE_UP` 三路收口、按 `touchId` 过滤（见 §7.4.7 第 3 条） |
 | `src/boot/Main.ts` | 进场景装配 ⑧a 处接线 `TouchControls.attach(playerControl, interactControl)` |
 
 **范围（用户 2026-09-24 决策）**：只做**走动 + 交互**；建造（`B` 键与面板内 `Q/E/Enter/G/Del`）本期不做。
 
 **e2e 取证（Playwright 移动端模拟 + CDP `Input.dispatchTouchEvent`，本机 5173/3000/6379 + 本机 PostgreSQL 16，**已跑通 15/15 PASS**）**：
 
-- 触摸设备识别 → `[S9] 触控层就绪：8 向方向键（单格 64px）+ 交互按钮`；PC（无触摸）→ `非触摸设备：不启用触控层`（触控层不渲染）。
-- **真实位移**（取 WS 上行报文，比截图硬）：按住方向键「右」1s，`world.move` 帧 `x: 648 → 908`（≈240px/s 与 `moveSpeedPxPerMs=0.24` 一致）；`upPerSec` 0 → 5 → 9；抬手后 `upPerSec` 回到 **0** 且不再有新位置帧。
+- 触摸设备识别 → `[S9] 触控层就绪：浮动摇杆（激活区 256×400，半径 88）+ 交互按钮`；PC（无触摸）→ `非触摸设备：不启用触控层`（触控层不渲染）。
+- **真实位移**（取 WS 上行报文，比截图硬）：摇杆按住「右」1s，`world.move` 帧 `x: 648 → 908`（≈240px/s 与 `moveSpeedPxPerMs=0.24` 一致；2026-09-24 摇杆版为 8.7–9.4 次/秒）；抬手后 `upPerSec` 回到 **0** 且不再有新位置帧。
 - **交互与键盘同源**：走回 `plant_01`（`(560,480)`，物件半径 70）→ 点「交互」→ 命中 `POST /api/client/v1/world/objects/1/interact`（`before=3 → after=4`）。
 - 回归：S3/S4/S5/S6/S7/S8 六个零依赖冒烟全绿（16/18/27/50/102/146 项）。
 
-**仍未做**：真机（含 iOS Safari）上的触控手感与多点触控（Laya 默认 `multiTouchEnabled=false`，同屏只能按一个按钮 —— 8 向已由单格覆盖，不影响走动；「按住方向键 + 同屏点交互」不支持，需抬手后再点）。
+**仍未做**：真机（含 iOS Safari）上的触控手感验收。**⚠️ 2026-09-24 更正**：本行原写「Laya 默认 `multiTouchEnabled=false`，同屏只能按一个按钮」是**错的** —— 引擎 `laya.core.js:25963` 显式 `InputManager.multiTouchEnabled = true`，多点触控默认开启，故「摇杆按住 + 同屏点交互」本身可行；摇杆另按 `touchId` 过滤（只认按下摇杆的那根手指），避免交互按钮抬手时把摇杆一起停掉。
 
 **发布前置**：触控代码**尚未发布到线上** `game.joho.cn/client/`（仍只有本机 `bin/` 产物）——真机验收前必须先走 `publish.mjs h5-site` + 上传（同 Task 2 / Task 3 流程），否则手机上打开的还是没有触控的旧产物。
 
@@ -553,7 +553,7 @@ node scripts/accept-mobile.mjs --label mobile-sim-quality-low --quality low --ma
 
 | 项 | 实测 |
 |---|---|
-| 触控层启用 | `[S9] 触控层就绪`；根节点 **9 个按钮**（8 向 + 交互），交互按钮 `88×88`（舞台坐标 `(848,512)`） |
+| 触控层启用 | `[S9] 触控层就绪`；摇杆激活区 `256×400`（舞台 `(0,240)`）+ 底座/摇杆头（按下才显示）+ 交互按钮 `88×88`（舞台 `(848,512)`）—— 2026-09-24 摇杆版 |
 | 触摸送达 | `touchDelivered=1`（CDP 触摸 → 舞台 `MOUSE_DOWN` 计数 +1，**证明点按真的到达**，非「以为点了」） |
 | 按住能走 | 移动段上行 **9.0–9.4 次/秒**（键盘基线 9.5，`world.move` 帧 `x: 644 → 676 → …`） |
 | 松手能停 | 静止段上行合计 **0**（抬手即停，舞台级 `MOUSE_UP` 兜底有效） |
@@ -570,4 +570,12 @@ node scripts/accept-mobile.mjs --label mobile-sim-quality-low --quality low --ma
     - **连带修掉的布局冲突**：选项命中区原为 `x176..784`，把方向键右列（`↗/→/↘`，`x156..220`）整列压在下面——不只是「按不动」，**点它会误选对话选项**。故 `dialogue.panelMaxWidth` 640 → **448**（居中面板 x 256..704，让开左下方向键 x≤220 与右下交互按钮 x≥848；居中面板宽度上限 ≤496 属几何约束）。收窄后复测：两组几何不相交、按住 `→` → **23 帧 / 588px**、静置 0 帧、选项点击 200、文本无溢出（最大右边缘 524 < 面板右 704）。
 2. **NPC 抢目标 + 巡逻**（复述 §7.4.6 结论并对脚本取点产生实际影响）：NPC 半径 90 > 物件 70，且 NPC 会巡逻移动 → 站点必须选「NPC 距离 > 90 且不易被巡逻覆盖」的点。本轮由 `plant_01 (560,480)`（被货郎抢走）改为 **`stone_01 (720,400)`**（最近 NPC smith 距 122px）后稳定命中物件。`npcs:3:1` / `npc:12` 这类选中是**契约内占位出口**（只 toast 不发请求），不是触控故障。另：村长 `npc:11` 无对话数据（`talk` 返回空 `options` + `dialogueId=null`，只走 greeting 兜底、不开视图），验对话请用铁匠 `npc:12`。
 
-**仍未做（需真机 / 人工）**：真机三档（低端安卓门槛档、中端安卓、iOS Safari）与手感验收、iOS 无法用 `chrome://inspect` 的目视口径、多点触控（Laya `multiTouchEnabled=false`，同屏只能按一个按钮）。
+3. **8 向方向键 → 浮动虚拟摇杆；并修掉两处「面板根节点吃指针」（2026-09-24 用户决策，已修复并验证）**：
+    - **动机**：第 1 条只修了 `DialogueView`，`BuildPanel` 是同一写法的第二处（`init/open/close` 里 `mouseEnabled` + `open()` 里 `size(960,640)`）→ 建造面板一打开，摇杆同样按不动；且 8 向 3×3 方向键在手机上按键面积小、手感差（用户要求改摇杆）。
+    - **摇杆实现**（`src/ui/TouchControls.ts`）：左下角锚定一块**不可见但可命中**的激活区（`256×400`，`mouseEnabled=true`）接住按下 —— 这是必须的，因为引擎 `MOUSE_DRAG`/`MOUSE_DRAG_END` **只向「按下时命中的节点链」**（`TouchInfo.downTargets`）派发，空处按下连 `MOUSE_DOWN` 都收不到；按下后浮动底座落在按下点，拖动按方向钳制在半径 88 内并按 8 向离散注入 `'w'/'a'/'s'/'d'`（纯函数 `stickKeys`，阈值 sin22.5°=0.3827，死区 88×0.28≈24.6）；抬手由 激活区 `MOUSE_DRAG_END` + `MOUSE_DRAG` + 舞台 `MOUSE_UP` 三路收口，并按 `touchId` 过滤（只认按下摇杆的那根手指）。**差量注入**（只 press 新增 / release 失效）→ `PlayerControl.releaseAll()` 成为死代码已删除，且触控与键盘可并存。
+    - **BuildPanel 修复**：删掉 `init()` 的 `mouseEnabled=false`、`open()` 的 `mouseEnabled=true` + `size(960,640)`、`close()` 的 `mouseEnabled=false` → 根节点自身永不命中（`hitTest` 是**纯几何**：只看自身 `width>0 && height>0`），行按钮作为子节点照常可点；点空白处仍**冒泡到 stage**，`onStageClick`（移动建造光标）不受影响（实测光标 `格(10,7) → 格(7,4)`、预览 bounds `(640,448)→(448,256)`）。
+    - **连带修掉一个既有 bug**（与触控无关，本次一并修）：`B` 键打不开建造面板 —— `InteractController.onKeyDown` 与 `BuildPanel.onKeyDown` **都**监听 stage 的 `KEY_DOWN` 并各自 `toggle()`，一次按键「开+关」互相抵消。已删除 `InteractController` 里的 `KEY_BUILD` 分支（含随之无用的 `BuildPanel` import 与常量），建造键监听收敛到 `BuildPanel` 一处。实测：按 `b` → `s6-build-panel` 子节点 **0 → 18**，再按 `b` → **0**。
+    - **激活区宽度 480 → 256（零重叠）**：初版激活区 `x 0..480` 与对话面板（`x 256..704`）重叠 224px，压在选项行上的按下会**误选对话选项**。取 `256` 后激活区右界与面板左缘**恰好贴齐**（`dialogue.panelMaxWidth=448` 的推导也正是这条：左缘 ≥ 256 → `w ≤ 448`；右缘 704 < 848 让开交互按钮）。实测：无面板/对话打开两种状态下，激活区 5 点 `(40,440)/(128,440)/(250,440)/(128,300)/(128,600)` 按下**全部起摇杆**、底座坐标逐点等于按下点、无一误选；底座圆覆盖舞台 `x 40..216`，与面板左缘 256 有 40px 间隙。
+    - **摇杆版实测**（移动端模拟 + CDP `touchStart→touchMove→保持→touchEnd`，`accept-mobile.mjs` 已同步改为摇杆口径并刷新 `docs/perf-shots/mobile-sim.json`）：5 段路线 + 闭环走位共 8 次长按，每次 `base` 均为按下点 `(128,440)`、`knob` 偏移逐次为 `(±88,0)`/`(0,±88)`；移动段 **8.7 次/秒**、静止段 **0**；`59.88–60.01 fps` / drawcall 峰 **39** / heap 峰 16.7MB（静止回落 15.4）；`对 stone_01 交互 → 201`、`pageerror=0`。**建造面板打开时摇杆仍可用**（面板 18 子节点下按住 → `upPerSec=9`）、**对话打开时摇杆仍可用**（`upPerSec=9`）且选项点击 `200`。
+
+**仍未做（需真机 / 人工）**：真机三档（低端安卓门槛档、中端安卓、iOS Safari）与手感验收、iOS 无法用 `chrome://inspect` 的目视口径。**⚠️ 更正（2026-09-24）**：原写「多点触控（Laya `multiTouchEnabled=false`，同屏只能按一个按钮）」不成立 —— 引擎 `laya.core.js:25963` 显式 `InputManager.multiTouchEnabled = true`，多点触控默认开启，「摇杆按住 + 同屏点交互」可行（摇杆另按 `touchId` 过滤，见第 3 条）。
