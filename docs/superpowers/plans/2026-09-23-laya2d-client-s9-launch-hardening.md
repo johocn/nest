@@ -488,7 +488,7 @@ Task 1（证书，硬前置）→ Task 2（H5 发布）→ Task 3（素材/图�
 | `src/ui/TouchControls.ts`（新增） | 引擎内自绘（同 `Hud` 范式，不引 DOM/`laya.ui`）：左下**浮动虚拟摇杆**（激活区内按下 → 底座落在按下点）+ 右下「交互」按钮；**仅触摸设备显示**；抬手由 激活区 `MOUSE_DRAG_END` + `MOUSE_DRAG` + **舞台级** `MOUSE_UP` 三路收口、按 `touchId` 过滤（见 §7.4.7 第 3 条） |
 | `src/boot/Main.ts` | 进场景装配 ⑧a 处接线 `TouchControls.attach(playerControl, interactControl)` |
 
-**范围（用户 2026-09-24 决策）**：只做**走动 + 交互**；建造（`B` 键与面板内 `Q/E/Enter/G/Del`）本期不做。
+**范围（用户 2026-09-24 决策）**：只做**走动 + 交互**；建造（`B` 键与面板内 `Q/E/Enter/G/Del`）本期不做。**⚠️ 2026-09-25 修订**：真机复验时发现「手机上没有打开建造面板的入口（只有键盘 `b`）」，故**补上触控建造入口 + 面板内关闭行**，原「建造本期不做」作废 —— 见本节末「S9 第三轮补充」。
 
 **e2e 取证（Playwright 移动端模拟 + CDP `Input.dispatchTouchEvent`，本机 5173/3000/6379 + 本机 PostgreSQL 16，**已跑通 15/15 PASS**）**：
 
@@ -527,6 +527,25 @@ Task 1（证书，硬前置）→ Task 2（H5 发布）→ Task 3（素材/图�
 - **验证（第二轮）**：本机 ⇄ 服务器 md5 双向一致 —— `index.html` **`acc04c8ed250a6d12d5c5a0d35c84a20`**、`js/world/BuildPanel.js` **`6ec7788aca4171d1ac10f34cbc74233e`**（含 marker `s6-build-hit`）、`js/ui/DialogueView.js` **`a941f5f00241da807d6b1fe37830c433`**（含 3 处 `MOUSE_DOWN`）；`env-config.js` 为 prod；公网 `https://game.joho.cn/client/index.html` 与 `.../js/world/BuildPanel.js` 均 **200** 且含 marker。
 - **本次口径已收敛**：提交与发布同源（发布用的 `src/` 即 `ee6b1fea8` 的内容），上一轮「线上产物 ≠ HEAD」的差异已消除。
 - **仍未做**：**真机复验**（需用户手测）；`LoginView` 的 `CLICK`（提交按钮 @273 / 输入框 @303）为同类隐患但本次按用户决策未修。
+
+**S9 第三轮补充（2026-09-25，手机建造入口 + 面板内退出口）**
+
+- **起因（真机复验的前置阻断）**：核对代码后确认手机**根本打不开建造面板** —— 面板唯一入口是键盘 `b`（`BuildPanel.onKeyDown`），触控层只有摇杆 + 交互按钮，也没有 URL 参数入口。也就是说「手机点不动建造面板」这句话在触控入口补齐前**无法真机复验**。
+- **改法（4 文件，仍不改任何游戏逻辑）**：
+
+| 文件 | 改动 |
+|---|---|
+| `src/config/AppConfig.ts` | `touch.buildMarginBottom: 152` —— 「建造」按钮与交互按钮**同尺寸**（复用 `interactWidth/Height/interactFontSize`），竖直叠放其上，落在 `y 400..488`；`152 = interactMarginBottom(40) + interactHeight(88) + 24(间距)` |
+| `src/ui/TouchControls.ts` | 新增建造按钮（`name='s9-build-btn'`，绑 `MOUSE_DOWN`）→ `BuildPanel.toggle()`，与键盘 `B` **同一入口** |
+| `src/world/BuildPanel.ts` | `rows()` 末尾（及 `forbidden` 分支）新增「**关闭面板（B）**」按钮行 —— 手机上的**唯一退出口**：面板 zOrder 10001 会盖住触控层的建造按钮，若没有行内关闭会「开得进、出不来」 |
+| `scripts/accept-mobile.mjs` | 新增触控建造面板取证段：`readTouch` 改返回 `buttons[]`（`btnCss` 按文本查找，不再只认「交互」）；`readPanel` 读 `s6-build-panel` 的**视觉文本行**与命中区高度；点行一律用**文本坐标**（真机手指落点口径） |
+
+- **取证（移动模拟 390×844 + CDP 真实触摸，`docs/perf-shots/build-btn-touch.json`）**：点「建造」（CSS `723,286`）→ 面板子节点 **0 → 23**；点第 2 张蓝图行 → 选中标记 **`▸木屋` → `▸石墙`**（**即上一轮真机点不动的那一面，现已可点**）；命中区高度 `[32,20,32,35,26,26,35]`（相邻两行都可点时只能各吃半个行距，符合物理约束）；点「关闭面板」行 → **23 → 0**；摇杆 11 次长按全正常、静止段上行 0、`pageErrors=0`、失败请求 0。
+- **回归**：`build-fallback` 42 产物；S3/S4/S5/S6/S7/S8 冒烟全绿（16/18/27/50/102/146）。
+- **取证脚本的一个坑（下次直接用）**：面板**按钮行的文本挂在按钮 sprite 下**（比信息行深一层），只收 root 直接子节点的文本会漏掉「关闭面板」→ 已改为两级收集。
+- **发布记录（第三轮，2026-09-25）**：`build-fallback` → `inject-env --env prod` → `publish h5-site` → **97 文件 / 2,882,681B**；`tar.gz` 1,141,914B，sha256 **`5ec880e972276335a4a340556729d466f49f545edfa30f0fa379b779b17014c5`**（服务器 `sha256sum` 一致）；换目录解法同前（`before: 97 / new: 97 / after: 97`）。**备份（回退用）**：`client.bak_buildbtn_20260924_235713`（= 第二轮版本），回退 = `mv client client.failed && mv client.bak_buildbtn_20260924_235713 client`。
+- **验证（第三轮）**：本机 ⇄ 服务器 md5 逐字节一致 —— `index.html` **`2896d25925abe0b1ce385a4c0b7ccead`**、`js/world/BuildPanel.js` **`086646801a5f970795d32b57bd4272c8`**、`js/ui/TouchControls.js` **`cbb5cca2650fc4a034c017930b041e92`**；线上 `TouchControls.js` 含 `s9-build-btn`、`AppConfig.js` 含 `buildMarginBottom: 152` 与 `minHitHeight: 44`；公网 `index.html` 200。
+- **仍未做**：**真机复验本轮的建造按钮与面板行手感**（需用户手测，机型：中端安卓 + Chrome）。
 
 #### 7.4.6 真机验收的 LAN 通道（2026-09-24 用户选择「先不发布」；**当晚已发布，本节降为备用通道**）
 
