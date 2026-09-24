@@ -1,6 +1,7 @@
 import { Boot } from './Boot';
 import { LoginView } from './LoginView';
 import { AppConfig } from '../config/AppConfig';
+import { TextureRegistry } from '../assets/TextureRegistry';
 import { ConfigLoader } from '../config/loader';
 import type { NpcInstanceConfig, SceneConfig, ServerSpawn } from '../config/schema';
 import { AiComponent } from '../entity/components/AiComponent';
@@ -42,11 +43,23 @@ interface EnterSceneSync {
   npcs?: NpcInstanceConfig[];
 }
 
+/** S9：进场景前批量预加载（静态物件 + 固定 NPC + 场景背景）；缺图归一为回退占位贴图，不阻塞 */
+function preloadSceneTextures(cfg: SceneConfig): Promise<void> {
+  return TextureRegistry.preload([
+    ...cfg.staticEntities.map((e) => e.resKey),
+    ...cfg.fixedNpcs.map((n) => n.resKey),
+    SceneBuilder.bgResKey(cfg),
+    // S9：玩家默认贴图无下发来源，按工厂常量取（远端/本地同一张）
+    EntityFactory.PLAYER_RES_KEY,
+  ]);
+}
+
 async function afterLogin(): Promise<void> {
   if (Platform.isMiniGame()) {
     // S1 微信端只验收「配置包 + 静态层 + HTTP 登录」，WS 适配见 S7（Task 13）
     const cfg = await ConfigLoader.loadScene();
     await EntityFactory.loadPlaceholder();
+    await preloadSceneTextures(cfg);
     Laya.stage.addChild(SceneBuilder.build(cfg));
     Toast.info('微信端 S1：静态场景已渲染（WS 待 S7）');
     return;
@@ -55,6 +68,8 @@ async function afterLogin(): Promise<void> {
   // ① 配置包 → 静态层
   const cfg = await ConfigLoader.loadScene();
   await EntityFactory.loadPlaceholder();
+  // S9：进场景前批量预加载实体/背景贴图（缺图静默回退占位贴图，不阻塞）
+  await preloadSceneTextures(cfg);
   Laya.stage.addChild(SceneBuilder.build(cfg));
   state.cfg = cfg;
 
@@ -79,6 +94,8 @@ async function afterLogin(): Promise<void> {
   // ④b S4：NPC 实例（含巡逻路点）。fixed 实例会与上一步的 spawn 实体同 id（npc:<spawnId>），
   // 已在注册表中的不重复建；random/patrol 的 npcs:<ruleId>:<slot> 是新实体。
   const npcInstances = sync.data.npcs ?? [];
+  // S9：NPC 实例贴图随下发数据预加载（缺图回退占位贴图）
+  await TextureRegistry.preload(npcInstances.map((n) => n.resKey));
   let npcCreated = 0;
   for (const npc of npcInstances) {
     if (EntityRegistry.get(npc.npcId)) continue;
@@ -230,6 +247,8 @@ async function attachBuild(me: Entity, cfg: SceneConfig): Promise<void> {
   }
 
   state.buildRule = rule;
+  // S9 Task 3：建筑贴图随蓝图预加载（`BuildingTemplate.resKey`）；缺图静默回退占位贴图，不阻塞建实体
+  await TextureRegistry.preload(templates.map((t) => t.resKey));
   BuildPanel.attach(
     me,
     SceneBuilder.layer,

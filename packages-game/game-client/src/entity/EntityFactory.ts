@@ -1,4 +1,5 @@
 import { AppConfig } from '../config/AppConfig';
+import { TextureRegistry } from '../assets/TextureRegistry';
 import { AiComponent } from './components/AiComponent';
 import { BuildComponent, BuildingViewComponent } from './components/BuildComponent';
 import { Component } from './components/Component';
@@ -13,6 +14,9 @@ import type { FixedNpc, NpcInstanceConfig, ServerSpawn, StaticEntity } from '../
 
 const PLACEHOLDER_URL = `${AppConfig.assetBase}resources/placeholder.png`;
 
+/** 占位贴图的 resKey（与 `PLACEHOLDER_URL` 同一条路径规则，故走注册表统一加载/容错） */
+const PLACEHOLDER_KEY = 'placeholder';
+
 const COLORS: Record<string, string> = {
   player: '#2f81f7',
   npc: '#f5a524',
@@ -25,11 +29,19 @@ const COLORS: Record<string, string> = {
 export class EntityFactory {
   private static texture: Laya.Texture | null = null;
 
-  /** 一次性加载占位贴图（验证引擎 loader 与静态资源路径） */
+  /**
+   * 玩家默认贴图 resKey（S9 Task 3）：玩家实体在下发数据里**没有** resKey（`ServerSpawn` 不带），
+   * 故按本常量取默认外观；素材缺失时 `TextureRegistry` 归一为 null → 回退占位贴图。
+   * 素材落盘：`assets/resources/player_default.png`。
+   */
+  static readonly PLAYER_RES_KEY = 'player_default';
+
+  /** 一次性加载占位贴图：缺图静默回退（实体只画底色矩形），不抛错、不阻断启动（S9） */
   static async loadPlaceholder(): Promise<void> {
-    await Laya.loader.load(PLACEHOLDER_URL);
-    EntityFactory.texture = Laya.Loader.getRes(PLACEHOLDER_URL) as Laya.Texture;
-    console.log(`[S1] 占位贴图加载完成：${PLACEHOLDER_URL}`);
+    EntityFactory.texture = await TextureRegistry.load(PLACEHOLDER_KEY);
+    console.log(
+      `[S1] 占位贴图${EntityFactory.texture ? '加载完成' : '缺失（仅画底色）'}：${PLACEHOLDER_URL}`,
+    );
   }
 
   static createPlayer(playerId: string, x: number, y: number): Entity {
@@ -43,6 +55,7 @@ export class EntityFactory {
       y,
       color: COLORS.player,
       texture: EntityFactory.texture,
+      resKey: EntityFactory.PLAYER_RES_KEY,
     });
   }
 
@@ -61,6 +74,7 @@ export class EntityFactory {
       y,
       color: COLORS.player,
       texture: EntityFactory.texture,
+      resKey: EntityFactory.PLAYER_RES_KEY,
     };
   }
 
@@ -88,6 +102,7 @@ export class EntityFactory {
         y: e.y,
         color: COLORS.object,
         texture: EntityFactory.texture,
+        resKey: e.resKey,
       },
       // 交互组件完全由配置包的 interact 信息声明（type/cd/oneTime），工厂不做业务分支
       [
@@ -112,6 +127,7 @@ export class EntityFactory {
         y: n.y,
         color: COLORS.npc,
         texture: EntityFactory.texture,
+        resKey: n.resKey,
       },
       // npc_template 的交互类型 S3 固定为对话（talk）；shop/quest/transport 属 S5
       [createInteractComponent({ kind: 'talk' })],
@@ -132,6 +148,8 @@ export class EntityFactory {
         y: sp.spawnY,
         color: COLORS[sp.entityType] ?? COLORS.object,
         texture: EntityFactory.texture,
+        // 服务端 spawn 不带 resKey（配置包才有），故按占位贴图兜底（S9）
+        resKey: '',
       },
       // 动态 NPC 与静态 NPC 一致挂对话组件；怪物的战斗交互属 S4，此处不挂交互组件
       sp.entityType === 'npc' ? [createInteractComponent({ kind: 'talk' })] : [],
@@ -157,6 +175,7 @@ export class EntityFactory {
         y: n.y,
         color: COLORS.npc,
         texture: EntityFactory.texture,
+        resKey: n.resKey,
       },
       extras,
     );
@@ -205,6 +224,9 @@ export class EntityFactory {
         y: spawn.y,
         color: COLORS.building,
         texture: EntityFactory.texture,
+        // S9 Task 3：建筑 resKey 由蓝图带出（`BuildingTemplate.resKey`，主程已确认），缺失则回退占位贴图
+        resKey: spawn.resKey,
+        footprint: { w: spawn.w, h: spawn.h },
       },
       [
         new BuildComponent(rule),
@@ -213,6 +235,7 @@ export class EntityFactory {
           spawn.finishAt,
           spawn.buildSeconds,
           spawn.durability,
+          spawn.h,
         ),
       ],
     );
@@ -226,7 +249,15 @@ export class EntityFactory {
     const entity = new Entity(opts);
     const components: Component[] = [
       new TransformComponent(entity.sprite, opts.x, opts.y),
-      new VisualComponent(entity.sprite, opts.kind, opts.displayName, opts.color, opts.texture),
+      new VisualComponent(
+        entity.sprite,
+        opts.kind,
+        opts.displayName,
+        opts.color,
+        opts.texture,
+        opts.resKey,
+        opts.footprint ?? null,
+      ),
       ...extras,
     ];
     for (const c of components) entity.attach(c);

@@ -1,5 +1,6 @@
 import type { SceneConfig, ServerSpawn } from '../config/schema';
 import { AppConfig } from '../config/AppConfig';
+import { TextureRegistry } from '../assets/TextureRegistry';
 import { Entity } from '../entity/Entity';
 import { EntityFactory } from '../entity/EntityFactory';
 import { EntityRegistry } from '../entity/EntityRegistry';
@@ -73,13 +74,26 @@ export class SceneBuilder {
   }
 
   /**
+   * 背景贴图的 resKey（S9 口径）：`bg_scene<sceneId>`，实际路径 `resources/bg_scene<sceneId>.png`。
+   * 公开供进场景前的批量预加载复用同一命名，避免字符串二次书写。
+   */
+  static bgResKey(cfg: SceneConfig): string {
+    return `bg_scene${cfg.sceneId}`;
+  }
+
+  /**
    * 背景绘制（含网格与触发区描边）：全部 graphics 命令的唯一来源，`build` 与 `applyQuality` 共用。
    * 返回本次下发的命令数（供面板/日志量化「几十条 → 1 个缓存位图」的收益，不参与渲染）。
+   *
+   * S9：`resources/bg_scene<sceneId>.png` 命中 → 1:1 铺在 (0,0)，左上角对齐世界原点、无偏移无居中；
+   * 未命中 → 保持原有 `drawRect` 底色（缺图表现与接入前一致）。
    */
   private static drawBackground(bg: Laya.Sprite, cfg: SceneConfig, sw: QualitySwitches): number {
     let cmds = 0;
     bg.graphics.clear();
-    bg.graphics.drawRect(0, 0, cfg.scene.mapWidth, cfg.scene.mapHeight, BG.groundColor);
+    const bgTex = TextureRegistry.get(SceneBuilder.bgResKey(cfg));
+    if (bgTex) bg.graphics.drawTexture(bgTex, 0, 0, cfg.scene.mapWidth, cfg.scene.mapHeight);
+    else bg.graphics.drawRect(0, 0, cfg.scene.mapWidth, cfg.scene.mapHeight, BG.groundColor);
     cmds++;
 
     if (shouldDrawGrid(sw)) {

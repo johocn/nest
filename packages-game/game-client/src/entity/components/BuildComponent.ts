@@ -5,7 +5,7 @@ import type { BuildMode, BuildRuleView, BuildingState } from '../../net/api';
 import { AppConfig } from '../../config/AppConfig';
 import { EntityRegistry } from '../EntityRegistry';
 import { BuildPanel } from '../../world/BuildPanel';
-import { buildingAppearance, calcProgress } from '../../world/build-logic';
+import { buildingAppearance, calcProgress, DEFAULT_GRID_SIZE } from '../../world/build-logic';
 
 const B = AppConfig.build;
 
@@ -66,8 +66,25 @@ export class BuildingViewComponent extends Component {
     private finishAt: string | null,
     private readonly buildSeconds: number,
     private readonly durability: number | null,
+    /** 占地高度（格数）：绘制尺寸 = 格数 × 64，进度条/耐久锚点随之整体上移（S9） */
+    private readonly footprintH = 1,
   ) {
     super();
+  }
+
+  /** 相对标准实体高度（32）多出的高度：锚点按此上移，保持与低矮建筑相同的间距 */
+  private get lift(): number {
+    return Math.max(1, this.footprintH) * DEFAULT_GRID_SIZE - 32;
+  }
+
+  /** 进度条 y：原 `-42` 是「32 高实体顶部再上 10px」的锚点 */
+  private get barY(): number {
+    return B.progressBarOffsetY - this.lift;
+  }
+
+  /** 耐久文本 y：原 `-12` 的顶部相对锚点保持不变 */
+  private get durabilityY(): number {
+    return -12 - this.lift;
   }
 
   onAttach(owner: Entity): void {
@@ -117,7 +134,7 @@ export class BuildingViewComponent extends Component {
         this.bar.mouseEnabled = false;
         this.bar.graphics.drawRect(
           -B.progressBarWidth / 2,
-          B.progressBarOffsetY,
+          this.barY,
           B.progressBarWidth,
           B.progressBarHeight,
           B.progressBgColor,
@@ -141,7 +158,7 @@ export class BuildingViewComponent extends Component {
         owner.sprite.addChild(text);
       }
       this.durabilityText.text = `耐久 ${this.durability}`;
-      this.durabilityText.pos(-Math.round(this.durabilityText.textWidth / 2), -12);
+      this.durabilityText.pos(-Math.round(this.durabilityText.textWidth / 2), this.durabilityY);
       this.durabilityText.visible = true;
     } else if (this.durabilityText) {
       this.durabilityText.visible = false;
@@ -157,14 +174,14 @@ export class BuildingViewComponent extends Component {
     bar.graphics.clear();
     bar.graphics.drawRect(
       -B.progressBarWidth / 2,
-      B.progressBarOffsetY,
+      this.barY,
       B.progressBarWidth,
       B.progressBarHeight,
       B.progressBgColor,
     );
     bar.graphics.drawRect(
       -B.progressBarWidth / 2,
-      B.progressBarOffsetY,
+      this.barY,
       filled,
       B.progressBarHeight,
       color,

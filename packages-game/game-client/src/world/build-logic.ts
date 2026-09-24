@@ -191,6 +191,8 @@ export interface BuildingSpawn extends BuildingUpdate {
   w: number;
   h: number;
   name: string;
+  /** S9 Task 3：蓝图贴图 resKey（`BuildingTemplate.resKey`）；蓝图缺失时为 ''，回退占位贴图 */
+  resKey: string;
   /** 蓝图 durability；取不到为 null（不显示耐久） */
   durability: number | null;
   /** 蓝图建造耗时（秒），进度条插值用；取不到为 0 */
@@ -249,6 +251,7 @@ export function toBuildingSpawn(
     w: Math.max(1, Math.floor(src.w ?? template?.footprintW ?? 1)),
     h: Math.max(1, Math.floor(src.h ?? template?.footprintH ?? 1)),
     name: template?.name ?? `建筑${src.buildingId}`,
+    resKey: template?.resKey ?? '',
     durability: template ? template.durability : null,
     buildSeconds: template?.buildSeconds ?? 0,
   };
