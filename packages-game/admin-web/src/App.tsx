@@ -1,4 +1,4 @@
-﻿import { Navigate, Route, Routes } from 'react-router-dom';
+﻿﻿import { Navigate, Route, Routes } from 'react-router-dom';
 import AdminLayout from './layouts/AdminLayout';
 import Login from './pages/Login';
 import GMCommand from './pages/GMCommand';
@@ -13,6 +13,7 @@ import FeedbackPage from './pages/Community/Feedback';
 import ReportsPage from './pages/Community/Reports';
 import DashboardPage from './pages/Analytics/Dashboard';
 import BalanceAuditPage from './pages/Balance/Audit';
+import EconomyPage from './pages/Economy';
 import PlayerPage from './pages/Player';
 import RiskPage from './pages/Risk';
 import RealmPage from './pages/Realm';
@@ -56,6 +57,7 @@ export default function App() {
         <Route path="community/reports" element={<ReportsPage />} />
         <Route path="analytics/dashboard" element={<DashboardPage />} />
         <Route path="balance/audit" element={<BalanceAuditPage />} />
+        <Route path="economy" element={<EconomyPage />} />
         <Route path="player" element={<PlayerPage />} />
         <Route path="risk" element={<RiskPage />} />
         <Route path="realm" element={<RealmPage />} />

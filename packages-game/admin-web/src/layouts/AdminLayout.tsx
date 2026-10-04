@@ -1,4 +1,4 @@
-﻿import { Layout, Menu, Button } from 'antd';
+﻿﻿import { Layout, Menu, Button } from 'antd';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   ThunderboltOutlined,
@@ -58,6 +58,7 @@ const menuItems: MenuItem[] = [
     label: '数据分析',
     children: [
       { key: '/analytics/dashboard', label: '运营看板' },
+      { key: '/economy', label: '经济看板', icon: <LineChartOutlined /> },
       { key: '/balance/audit', label: '经济审计' },
       { key: '/reconcile', label: '对账' },
     ],
