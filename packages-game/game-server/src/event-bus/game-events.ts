@@ -9,6 +9,10 @@ export const GameEvents = {
   BATTLE_REPORTED: 'combat.battle.reported',
   ARBITRATION_SETTLED: 'combat.arbitration.settled',
   GRUDGE_DECLARED: 'combat.grudge.declared',
+  // Buff / Skill 事件（修复前 buff.service 错发 ENTITY_SPAWNED）
+  SKILL_CAST: 'skill.cast',
+  BUFF_APPLIED: 'buff.applied',
+  BUFF_REMOVED: 'buff.removed',
 
   // 经济事件
   CURRENCY_CHANGED: 'economy.currency.changed',

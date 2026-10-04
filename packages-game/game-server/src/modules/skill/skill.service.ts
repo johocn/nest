@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SkillTemplate } from './entities';
@@ -6,6 +6,8 @@ import { CacheService } from '@cache/cache.service';
 import { BuffService } from '@modules/buff/buff.service';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
+import { EventBusService } from '@event-bus/event-bus.service';
+import { GameEvents } from '@event-bus/game-events';
 
 export interface CastSkillResult {
   skillId: string;
@@ -26,6 +28,8 @@ export interface CharacterStats {
 
 @Injectable()
 export class SkillService {
+  private readonly logger = new Logger(SkillService.name);
+
   private readonly CD_KEY = (characterId: string, skillId: string) =>
     `cd:skill:${characterId}:${skillId}`;
 
@@ -34,6 +38,7 @@ export class SkillService {
     private readonly skillRepo: Repository<SkillTemplate>,
     private readonly cacheService: CacheService,
     private readonly buffService: BuffService,
+    private readonly eventBus: EventBusService,
   ) {}
 
   async castSkill(
@@ -66,7 +71,20 @@ export class SkillService {
       });
     }
 
-    // Get buff-modified stats for attacker
+    // ===== S0: buff 顺序修复 —— 先 self buff 再算属性（当前攻击能吃到自己刚加的 buff） =====
+    let defenderBuffId: string | null = null;
+    if (skill.effectJson?.buffId) {
+      const isSelf = skill.effectJson.buffTarget === 'self';
+      if (isSelf) {
+        // self buff：先 apply → 再算属性 → 伤害公式用 buff 后属性
+        await this.buffService.applyBuff(attackerId, skill.effectJson.buffId);
+      } else {
+        // defender debuff：先记下来，伤害算完再 apply（影响 defender 后续防御，但当前伤害已算）
+        defenderBuffId = skill.effectJson.buffId;
+      }
+    }
+
+    // Get buff-modified stats for attacker（self buff 生效后重算）
     const modifiedStats = await this.buffService.calculateModifiedStats(
       attackerId,
       baseStats,
@@ -82,14 +100,24 @@ export class SkillService {
       skill.cooldown,
     );
 
-    // Apply buff from effectJson if present
+    // ===== 收尾：defender debuff apply + 事件 =====
     let buffApplied = false;
-    if (skill.effectJson?.buffId) {
-      const buffTarget =
-        skill.effectJson.buffTarget === 'self' ? attackerId : defenderId;
-      await this.buffService.applyBuff(buffTarget, skill.effectJson.buffId);
+    if (defenderBuffId) {
+      await this.buffService.applyBuff(defenderId, defenderBuffId);
       buffApplied = true;
+    } else if (skill.effectJson?.buffId) {
+      buffApplied = true; // self buff 已在上面 apply
     }
+
+    // SKILL_CAST 事件 —— 供成就/任务系统监听
+    this.eventBus.emit(GameEvents.SKILL_CAST, {
+      attackerId,
+      skillTemplateId,
+      skillName: skill.name,
+      damage,
+      buffApplied,
+      mpCost: skill.mpCost,
+    });
 
     return {
       skillId: skill.id,
