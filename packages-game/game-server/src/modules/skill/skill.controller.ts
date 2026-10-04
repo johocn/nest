@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -45,5 +46,12 @@ export class SkillController {
     @Body() dto: Partial<CreateSkillTemplateDto>,
   ) {
     return this.skillService.updateTemplate(id, dto);
+  }
+
+  @Delete('template/:id')
+  @ApiOperation({ summary: '删除技能模板' })
+  async deleteTemplate(@Param('id') id: string) {
+    await this.skillService.removeTemplate(id);
+    return { removed: id };
   }
 }

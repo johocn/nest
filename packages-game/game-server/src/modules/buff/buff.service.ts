@@ -186,6 +186,10 @@ export class BuffService {
     return this.buffRepo.findOne({ where: { id } });
   }
 
+  async removeTemplate(id: string): Promise<void> {
+    await this.buffRepo.delete(id);
+  }
+
   async createTemplate(data: Partial<BuffTemplate>): Promise<BuffTemplate> {
     const template = this.buffRepo.create(data);
     return this.buffRepo.save(template);

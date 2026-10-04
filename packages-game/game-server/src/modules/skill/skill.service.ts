@@ -153,6 +153,10 @@ export class SkillService {
     return this.skillRepo.findOne({ where: { id } });
   }
 
+  async removeTemplate(id: string): Promise<void> {
+    await this.skillRepo.delete(id);
+  }
+
   async createTemplate(data: Partial<SkillTemplate>): Promise<SkillTemplate> {
     const template = this.skillRepo.create(data);
     return this.skillRepo.save(template);

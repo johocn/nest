@@ -90,6 +90,10 @@ export class DropService {
     return this.dropRepo.findOne({ where: { id } });
   }
 
+  async removeDropTemplate(id: string): Promise<void> {
+    await this.dropRepo.delete(id);
+  }
+
   async createDropTemplate(data: Partial<DropTemplate>): Promise<DropTemplate> {
     const template = this.dropRepo.create(data);
     return this.dropRepo.save(template);

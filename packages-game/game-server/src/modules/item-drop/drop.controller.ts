@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -46,6 +47,13 @@ export class DropController {
     @Body() dto: Partial<CreateDropTemplateDto>,
   ) {
     return this.dropService.updateDropTemplate(id, dto);
+  }
+
+  @Delete('template/:id')
+  @ApiOperation({ summary: '删除掉落模板' })
+  async deleteTemplate(@Param('id') id: string) {
+    await this.dropService.removeDropTemplate(id);
+    return { removed: id };
   }
 
   @Post('roll')

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -45,5 +46,12 @@ export class BuffController {
     @Body() dto: Partial<CreateBuffTemplateDto>,
   ) {
     return this.buffService.updateTemplate(id, dto);
+  }
+
+  @Delete('template/:id')
+  @ApiOperation({ summary: '删除Buff模板' })
+  async removeTemplate(@Param('id') id: string) {
+    await this.buffService.removeTemplate(id);
+    return { removed: id };
   }
 }

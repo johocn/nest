@@ -132,6 +132,10 @@ export class NoticeService {
     return this.noticeRepo.findOne({ where: { id } });
   }
 
+  async deleteNotice(id: string): Promise<void> {
+    await this.noticeRepo.delete(id);
+  }
+
   async getNoticeList(
     page: number,
     limit: number,

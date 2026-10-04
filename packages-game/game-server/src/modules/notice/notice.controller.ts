@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -81,5 +82,13 @@ export class NoticeController {
     @Body() dto: Partial<CreateNoticeDto>,
   ) {
     return this.noticeService.updateNotice(id, dto);
+  }
+
+  @UseGuards(AdminGuard)
+  @Delete('api/admin/v1/notice/:id')
+  @ApiOperation({ summary: '删除公告' })
+  async deleteNotice(@Param('id') id: string) {
+    await this.noticeService.deleteNotice(id);
+    return { removed: id };
   }
 }
