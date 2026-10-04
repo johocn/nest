@@ -9,6 +9,7 @@ import { PlayerModule } from '@modules/player/player.module';
 import { InventoryModule } from '@modules/inventory/inventory.module';
 import { BuffModule } from '@modules/buff/buff.module';
 import { CharacterModule } from '@modules/character/character.module';
+import { MatchmakingModule } from '@modules/matchmaking/matchmaking.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { CharacterModule } from '@modules/character/character.module';
     InventoryModule,
     BuffModule,
     CharacterModule,
+    MatchmakingModule,
   ],
   controllers: [AdminController],
   providers: [AdminService, GmCommandService],

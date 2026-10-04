@@ -12,6 +12,7 @@ import { AdminService } from './admin.service';
 import { GmCommandService } from './gm-command.service';
 import { AdminGuard } from '@common/guards/admin.guard';
 import type { AdminJwtPayload } from '@common/guards/admin.guard';
+import { RoomService } from '@modules/matchmaking/room.service';
 
 @ApiTags('Admin-Operations')
 @ApiBearerAuth()
@@ -21,6 +22,7 @@ export class AdminController {
   constructor(
     private readonly adminService: AdminService,
     private readonly gmService: GmCommandService,
+    private readonly roomService: RoomService,
   ) {}
 
   @Get('online')
@@ -83,5 +85,17 @@ export class AdminController {
       targetPlayerId: body.targetPlayerId,
       args: { cmd: body.cmd, ...(body.args ?? {}) },
     });
+  }
+
+  // ===== Room 管理 =====
+
+  @Get('rooms')
+  @ApiOperation({ summary: '列出所有活跃 Room（ranked/casual/pve/party）' })
+  async listRooms() {
+    const modes = ['ranked', 'casual', 'pve', 'party'];
+    const rooms = (
+      await Promise.all(modes.map((m) => this.roomService.listByMode(m)))
+    ).flat();
+    return { data: rooms };
   }
 }
