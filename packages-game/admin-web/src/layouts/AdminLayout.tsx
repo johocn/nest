@@ -29,6 +29,9 @@ const menuItems: MenuItem[] = [
       { key: '/player', label: '玩家管理', icon: <UserOutlined /> },
       { key: '/risk', label: '风控', icon: <SafetyOutlined /> },
       { key: '/admin-log', label: '操作日志' },
+      { key: '/mail', label: '邮件管理' },
+      { key: '/notice', label: '公告管理' },
+      { key: '/chat', label: '聊天/客服' },
     ],
   },
   {
@@ -70,6 +73,9 @@ const menuItems: MenuItem[] = [
     children: [
       { key: '/realm', label: '境界模板' },
       { key: '/inventory', label: '物品模板' },
+      { key: '/activity', label: '活动管理' },
+      { key: '/achievement', label: '成就模板' },
+      { key: '/vip', label: 'VIP配置' },
     ],
   },
 ];

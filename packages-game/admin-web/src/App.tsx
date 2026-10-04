@@ -22,6 +22,12 @@ import DialoguePage from './pages/Dialogue';
 import ReconcilePage from './pages/Reconcile';
 import AdminLogPage from './pages/AdminLog';
 import ExplorePage from './pages/Explore';
+import MailPage from './pages/Mail';
+import NoticePage from './pages/Notice';
+import ChatPage from './pages/Chat';
+import ActivityPage from './pages/Activity';
+import AchievementPage from './pages/Achievement';
+import VipPage from './pages/VIP';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const token = localStorage.getItem('admin_token');
@@ -49,6 +55,9 @@ export default function App() {
         <Route path="ladder" element={<Ladder />} />
         <Route path="room" element={<RoomPage />} />
         <Route path="config" element={<ConfigCenter />} />
+        <Route path="mail" element={<MailPage />} />
+        <Route path="notice" element={<NoticePage />} />
+        <Route path="chat" element={<ChatPage />} />
 
         <Route path="world/scene" element={<ScenePage />} />
         <Route path="world/npc" element={<NpcPage />} />
@@ -67,6 +76,10 @@ export default function App() {
         <Route path="reconcile" element={<ReconcilePage />} />
         <Route path="admin-log" element={<AdminLogPage />} />
         <Route path="explore" element={<ExplorePage />} />
+
+        <Route path="activity" element={<ActivityPage />} />
+        <Route path="achievement" element={<AchievementPage />} />
+        <Route path="vip" element={<VipPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
