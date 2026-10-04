@@ -43,6 +43,7 @@ import { ReconcileModule } from '@modules/reconcile/reconcile.module';
 import { RealmModule } from '@modules/realm/realm.module';
 import { ExploreModule } from '@modules/explore/explore.module';
 import { GiftCodeModule } from '@modules/giftcode/giftcode.module';
+import { TraceModule } from '@common/trace/trace.module';
 import { SchedulerModule } from '@scheduler/scheduler.module';
 import { HealthModule } from '@health/health.module';
 import { RequestIdMiddleware } from '@common/middleware/request-id.middleware';
@@ -99,6 +100,9 @@ import { RateLimitGuard } from '@common/guards/rate-limit.guard';
     RealmModule,
     ExploreModule,
     GiftCodeModule,
+
+    // 可观测性
+    TraceModule,
 
     // 定时任务
     SchedulerModule,
