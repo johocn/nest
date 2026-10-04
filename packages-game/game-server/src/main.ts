@@ -146,8 +146,26 @@ async function bootstrap() {
   app.enableShutdownHooks();
 
   const port = process.env.APP_PORT || 3000;
-  await app.listen(port);
-  logger.log(`Game server started on port ${port}`, 'Bootstrap');
+  // 先 listen 端口（原生 http.Server），再后台 app.init 注册 hooks
+  // 避免某些场景下 app.listen / app.init 永不返回
+  const httpAdapter = app.getHttpAdapter();
+  const server = httpAdapter.getHttpServer();
+  server.on('error', (err: Error) => {
+    logger.error(`HTTP server error: ${err.message}`, 'Bootstrap');
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.listen(port, () => {
+      logger.log(`Game server started on port ${port}`, 'Bootstrap');
+      resolve();
+    });
+    server.on('error', reject);
+  });
+  // 后台 init（onApplicationBootstrap hooks 等），注册失败不阻塞主流程
+  app.init().then(() => {
+    logger.log('App init completed', 'Bootstrap');
+  }).catch((err) => {
+    logger.error(`App init error: ${err?.message}`, 'Bootstrap');
+  });
 }
 
 bootstrap().catch((err) => {
