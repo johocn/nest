@@ -776,6 +776,34 @@ export enum ReportHandleAction {
   BAN = 'BAN',
 }
 
+// ===== 礼包兑换码枚举 =====
+
+/** 兑换码生成方式 */
+export enum GiftCodeGenerateType {
+  /** 手动批量生成随机码 */
+  BATCH = 'batch',
+  /** 规则生成（前缀+日期+随机段，可预测） */
+  PATTERN = 'pattern',
+  /** 单次固定码（运营指定） */
+  CUSTOM = 'custom',
+}
+
+/** 兑换码状态 */
+export enum GiftCodeStatus {
+  ACTIVE = 'active',
+  USED = 'used',
+  DISABLED = 'disabled',
+  EXPIRED = 'expired',
+}
+
+/** 玩家领过同模板码时是否允许继续领（限领口径） */
+export enum GiftCodeClaimLimit {
+  /** 玩家无限制重复领（每次消耗兑换码本身） */
+  UNLIMITED = 'unlimited',
+  /** 玩家对该模板只允许领一次（防刷） */
+  ONE_PER_PLAYER = 'one_per_player',
+}
+
 // ===== 社交经济枚举（阶段5批2） =====
 
 export enum SocialPointType {
