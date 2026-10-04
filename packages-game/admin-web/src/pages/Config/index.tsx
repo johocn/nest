@@ -35,7 +35,7 @@ function ConfigTab() {
   const load = async () => {
     setLoading(true);
     try {
-      const r = await client.get('/admin/v1/config');
+      const r = await client.get('/admin/v1/config/list');
       setData(r.data?.data?.items ?? r.data?.data ?? []);
     } catch {
       // 拦截器已处理
@@ -278,17 +278,17 @@ export default function ConfigCenter() {
           {
             key: 'buff',
             label: 'Buff 模板',
-            children: <TemplateTab title="Buff 模板" endpoint="buff" />,
+            children: <TemplateTab title="Buff 模板" endpoint="buff/template/list" />,
           },
           {
             key: 'skill',
             label: 'Skill 模板',
-            children: <TemplateTab title="Skill 模板" endpoint="skill" />,
+            children: <TemplateTab title="Skill 模板" endpoint="skill/template/list" />,
           },
           {
             key: 'drop',
             label: '掉落表',
-            children: <TemplateTab title="掉落表" endpoint="item-drop" />,
+            children: <TemplateTab title="掉落表" endpoint="item-drop/template/list" />,
           },
         ]}
       />

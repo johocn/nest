@@ -13,7 +13,7 @@ export default function Login() {
 
   const onFinish = async (values: LoginParams) => {
     try {
-      const res = await client.post('/admin/v1/auth/login', values);
+      const res = await client.post('/admin/v1/login', values);
       const token = res.data?.data?.token ?? res.data?.token;
       if (!token) {
         message.error('登录响应中未找到 token');

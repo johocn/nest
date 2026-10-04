@@ -5,6 +5,8 @@ import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { AdminGuard } from '@common/guards/admin.guard';
 import { CurrentPlayer } from '@common/decorators/current-player.decorator';
 import type { CurrentPlayerData } from '@common/decorators/current-player.decorator';
+import { CurrentAdmin } from '@common/decorators/current-admin.decorator';
+import type { CurrentAdminData } from '@common/decorators/current-admin.decorator';
 
 @ApiTags('Ladder')
 @ApiBearerAuth()
@@ -31,5 +33,32 @@ export class LadderController {
   @ApiOperation({ summary: '[管理] 赛季结算' })
   async settleSeason(@Body() body: { adminId: string }) {
     return this.ladderService.settleSeason(body.adminId);
+  }
+}
+
+@ApiTags('Admin-Ladder')
+@ApiBearerAuth()
+@UseGuards(AdminGuard)
+@Controller('api/admin/v1/ladder')
+export class AdminLadderController {
+  constructor(private readonly ladderService: LadderService) {}
+
+  @Get('top')
+  @ApiOperation({ summary: '[Admin] 天梯榜单 Top N' })
+  async getTopN(@Query('limit') limit: string) {
+    return this.ladderService.getTopN(Number(limit) || 50);
+  }
+
+  @Post('settle')
+  @ApiOperation({ summary: '[Admin] 赛季结算' })
+  async settleSeason(@CurrentAdmin() admin: CurrentAdminData) {
+    return this.ladderService.settleSeason(admin.adminId);
+  }
+
+  @Post('refresh')
+  @ApiOperation({ summary: '[Admin] 刷新 Redis ZSet 缓存' })
+  async refresh() {
+    const count = await this.ladderService.refreshSeasonCache();
+    return { refreshed: count };
   }
 }

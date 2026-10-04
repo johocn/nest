@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { LadderService } from './ladder.service';
-import { LadderController } from './ladder.controller';
+import { LadderController, AdminLadderController } from './ladder.controller';
 import { LadderRecord } from './entities';
 import { PlayerModule } from '@modules/player/player.module';
 import { ConfigManageModule } from '@modules/config/config.module';
@@ -18,7 +18,7 @@ import { EconomyModule } from '@modules/economy/economy.module';
     CacheModule,
     EconomyModule,
   ],
-  controllers: [LadderController],
+  controllers: [LadderController, AdminLadderController],
   providers: [LadderService],
   exports: [LadderService],
 })

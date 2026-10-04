@@ -146,40 +146,32 @@ export class LadderService {
   async getTopN(
     limit = 50,
   ): Promise<Array<{ playerId: string; score: number; tier: string; rank: number }>> {
-    const season = await this.getSeason();
-    const n = Math.min(Math.max(limit, 1), 100);
+    try {
+      const season = await this.getSeason();
+      const n = Math.min(Math.max(limit, 1), 100);
 
-    // 走 ZSet zRangeWithScores REV —— O(log n)
-    const zRes = await this.cacheService.zRangeWithScores(
-      this.ZSET_KEY(season),
-      0,
-      n - 1,
-      true, // REV = 降序
-    );
-
-    if (!zRes?.length) {
-      // ZSet 冷缓存 → 先 refresh 再查
-      await this.refreshSeasonCache(season);
-      const retried = await this.cacheService.zRangeWithScores(
-        this.ZSET_KEY(season),
-        0,
-        n - 1,
-        true,
+      const zRes = await this.cacheService.zRangeWithScores(
+        this.ZSET_KEY(season), 0, n - 1, true,
       );
-      return retried.map((m, i) => ({
-        playerId: m.value,
-        score: m.score,
-        tier: this.tierOf(m.score),
-        rank: i + 1,
-      }));
-    }
 
-    return zRes.map((m, i) => ({
-      playerId: m.value,
-      score: m.score,
-      tier: this.tierOf(m.score),
-      rank: i + 1,
-    }));
+      if (!zRes?.length) {
+        await this.refreshSeasonCache(season).catch(() => 0);
+        const retried = await this.cacheService.zRangeWithScores(
+          this.ZSET_KEY(season), 0, n - 1, true,
+        ).catch(() => []);
+        if (!retried?.length) return [];
+        return retried.map((m, i) => ({
+          playerId: m.value, score: m.score, tier: this.tierOf(m.score), rank: i + 1,
+        }));
+      }
+
+      return zRes.map((m, i) => ({
+        playerId: m.value, score: m.score, tier: this.tierOf(m.score), rank: i + 1,
+      }));
+    } catch (err) {
+      this.logger.warn(`[Ladder] getTopN failed: ${(err as Error).message}`);
+      return [];
+    }
   }
 
   // ===== 结算（匹配成功后自动触发） =====
