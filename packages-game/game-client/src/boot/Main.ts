@@ -28,6 +28,7 @@ import { Toast } from '../ui/Toast';
 import { Hud } from '../ui/Hud';
 import { DialogueView } from '../ui/DialogueView';
 import { TouchControls } from '../ui/TouchControls';
+import { injectGMPanel } from '../gm-panel';
 
 const state: {
   cfg: SceneConfig | null;
@@ -229,6 +230,9 @@ async function afterLogin(): Promise<void> {
   Laya.timer.frameLoop(AppConfig.viewport.tickFrames, null, loops.cull);
   Laya.timer.frameLoop(10, null, loops.resort);
   console.log(`[S1] 客户端版本 ${AppConfig.clientVersion}，配置包 v${cfg.version}`);
+
+  // GM DOM overlay —— 非微信小游戏环境自动生效（内部已 guard）
+  injectGMPanel();
 }
 
 /** 清理 Main.afterLogin 注册的三个全局逐帧 loop —— 支持重进场景/退出登录 */
