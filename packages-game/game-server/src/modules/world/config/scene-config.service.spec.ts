@@ -139,7 +139,9 @@ function objectTemplateFixture(
   } as unknown as ObjectTemplate;
 }
 
-function npcTemplateFixture(overrides: Partial<NpcTemplate> = {}): NpcTemplate {
+function npcTemplateFixture(
+  overrides: Partial<NpcTemplate> = {},
+): NpcTemplate {
   return {
     id: '8',
     name: 'spike-村长',
@@ -323,11 +325,7 @@ describe('SceneConfigService（S2 配置包导出/发布/回滚）', () => {
           onceOnly: false,
         },
       ]);
-      expect(payload).toMatchObject({
-        schemaVersion: 1,
-        sceneId: 1,
-        version: 1,
-      });
+      expect(payload).toMatchObject({ schemaVersion: 1, sceneId: 1, version: 1 });
     });
 
     it('landmark 映射为 read、未知类型兜底 collect', () => {
@@ -366,10 +364,7 @@ describe('SceneConfigService（S2 配置包导出/发布/回滚）', () => {
 
     it('entry 优先取 layerConfig.entry', () => {
       const scene = sceneFixture({
-        layerConfig: {
-          entry: { x: 128, y: 256 },
-          ground: { res: 'map/g.png' },
-        },
+        layerConfig: { entry: { x: 128, y: 256 }, ground: { res: 'map/g.png' } },
       });
 
       const { payload } = buildScenePayload({

@@ -25,7 +25,12 @@ export interface EntityOptions {
   x: number;
   y: number;
   color: string;
+  /** 回退贴图（S9：占位贴图）——`resKey` 未命中时用 */
   texture: Laya.Texture | null;
+  /** 贴图相对路径（配置里的 `resKey` 原文）；空串即无真图 → 用 `texture` 回退 */
+  resKey: string;
+  /** 建筑占地格数（仅 `building` 用：绘制尺寸 = 格数 × 64） */
+  footprint?: { w: number; h: number };
 }
 
 /**
@@ -151,7 +156,14 @@ export class Entity {
     this._templateId = opts.templateId;
 
     this.getComponent(TransformComponent)?.reset(opts.x, opts.y);
-    this.getComponent(VisualComponent)?.reset(opts.kind, opts.displayName, opts.color, opts.texture);
+    this.getComponent(VisualComponent)?.reset(
+      opts.kind,
+      opts.displayName,
+      opts.color,
+      opts.texture,
+      opts.resKey,
+      opts.footprint ?? null,
+    );
 
     // 任务标记：清状态并隐藏既有 markText（复用节点，不 new、不 removeChild）
     this.questMark = null;

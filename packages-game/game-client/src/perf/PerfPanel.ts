@@ -120,6 +120,10 @@ export class PerfPanel {
     // 始终每帧计数（面板隐藏时也计，否则 __PERF__ 快照会失真）；只累加、不重绘
     Laya.timer.frameLoop(1, PerfPanel, PerfPanel.onFrame);
     console.log(`[S8] PerfPanel 就绪：F3 开关 zOrder=${P.zOrder}（引擎内自绘，无 DOM）`);
+    if (PerfPanel.urlWantsPanel()) {
+      PerfPanel.show(true);
+      console.log('[S8] ?perf=1 → 面板开机显形（真机点检用；手机无键盘 / iOS 无 console）');
+    }
   }
 
   static get isVisible(): boolean {
@@ -135,6 +139,19 @@ export class PerfPanel {
     PerfPanel.visible = on;
     PerfPanel.root.visible = on;
     if (on) PerfPanel.render();
+  }
+
+  /**
+   * `?perf=1` 覆盖来源（**真机点检专用**）：手机上既没有键盘（F3 用不了），iOS 也没有
+   * `chrome://inspect` 与 console（`__PERF__.panel(true)` 也敲不了）→ 只能靠 URL 开机显形。
+   * 取值 `1` / `true` / `on`（大小写不敏感）；其余一律忽略。
+   */
+  private static urlWantsPanel(): boolean {
+    const loc = (globalThis as any).location;
+    if (!loc || typeof loc.search !== 'string') return false;
+    const m = /[?&]perf=([^&]+)/.exec(loc.search);
+    if (!m) return false;
+    return ['1', 'true', 'on'].includes(decodeURIComponent(m[1]).toLowerCase());
   }
 
   // ── 交互 / 采样 ──────────────────────────────────────────────────────────

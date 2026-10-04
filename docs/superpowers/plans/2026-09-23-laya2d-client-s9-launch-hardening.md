@@ -439,13 +439,18 @@ Task 1（证书，硬前置）→ Task 2（H5 发布）→ Task 3（素材/图�
 
 **执行顺序（安卓门槛档为例，中端/iOS 同法各跑一遍）**：
 
-1. 手机浏览器打开 `https://game.joho.cn/client/`（确认地址栏无证书告警 —— 有告警说明 §7.4.1 的 P0 复发，先修证书再点检）；秒表起 T1（URL → 登录表单可输入）。
-2. USB 连 PC → PC Chrome `chrome://inspect` → inspect 该页 → Console 备用。
+1. 手机浏览器打开 `https://game.joho.cn/client/?perf=1`（**`?perf=1` = 开机显形性能面板**，见下方注；确认地址栏无证书告警 —— 有告警说明 §7.4.1 的 P0 复发，先修证书再点检）；秒表起 T1（URL → 登录表单可输入）。
+2. （**仅安卓需要，iOS 跳过**）USB 连 PC → PC Chrome `chrome://inspect` → inspect 该页 → Console 备用；用途是逐秒读 `__PERF__.snapshot()` 与抓自动降级日志原文。
 3. 输入 `spike01` / `spike123456` 登录，秒表计 T2（点登录 → 场景首帧）；T3 = T1 + T2。
-4. Console 执行 `__PERF__.panel(true)` 显形面板（或 `__PERF__.snapshot()` 逐秒读数）；用**左下角虚拟摇杆**（§7.4.5）按住走一段 + 静止一段，各读数 **F**（fps）与 **M**（heapMB）。
+4. 面板**开机即在左上角 (8,8)**（不压左下摇杆，可边走边看数）：按住**左下角虚拟摇杆**（§7.4.5）走约 10s + 静止约 10s，读 **F**（`fps` 行）与 **M**（`内存` 行）。
 5. 观察控制台是否出现 `[S8] 连续 3000ms fps 低于目标 80% → 自动降级 quality=low` 或 `snapshot().quality === 'low'`（**D**）；若触发，记录降级后 fps。
 6. 切换场景（或走出/回到场景）后再读一次 heap，判定**是否回落**（**M** 后半句）。
 7. 截图/录屏留证，按下方模板填行，回填 README「真机性能矩阵」节。
+
+> **`?perf=1`（2026-09-25 新增，专为真机点检而加）**：面板读的是 `PerfPanel`，原先**只有键盘 `F3`** 能开 —— 手机上没键盘、iOS 又没有 `chrome://inspect` 与 console（`__PERF__.panel(true)` 同样敲不了），于是 **iOS 那档根本出不了数**。现在 URL 带 `?perf=1`（或 `true` / `on`，大小写不敏感）即**开机显形**，**任意手机、不需要 PC 与数据线**；无参数时行为完全不变（默认隐藏，`?perf=0` 等无关值忽略）。可与质量档共存：`?perf=1&quality=low`（实测 `quality=low` 生效、面板同显）。
+> 改动位置 `src/perf/PerfPanel.ts`（`init()` 末尾读 `urlWantsPanel()`），**仅 1 文件、不改生产契约**（`__PERF__` 注释已声明为 dev/验收钩子）。
+> **发布记录（2026-09-25）**：`build-fallback` → `inject-env --env prod` → `publish h5-site` → **97 文件**；tar 1,144,101B、sha256 **`d3e974e5d8167422ff126f4fa8eb8b9742373d80dc3c064f068a6d25ce891f65`**（服务器 `sha256sum` 一致）；换目录 `before: 97 / new: 97 / after: 97`。**备份（回退用）**：`client.bak_perfflag_20260925_095927`（97 文件，= 两步确认版），回退 = `mv client client.failed && mv client.bak_perfflag_20260925_095927 client`。
+> **验证**：本机 ⇄ 服务器 md5 逐字节一致 —— `index.html` **`832309d3a68c7f4412d094af43ee0e74`**、`js/perf/PerfPanel.js` **`697c42187e05dd6bbab5c824c71d1b18`**；**公网实测**（Playwright，390×844）：`?perf=1` → 面板可见 ✓、无参数 → 隐藏 ✓、`?perf=0` → 隐藏 ✓、`?perf=on&quality=low` → 可见且 `quality=low` ✓；面板读数行样例 `fps 60.1 (stat 60.0) / drawcall 1 / 上行 world.move 0/s / quality high … / 内存 9.5MB`。
 
 **真机点检记录模板**（Step 6 用；**数据待填，不预填占位数值**）：
 
@@ -453,9 +458,9 @@ Task 1（证书，硬前置）→ Task 2（H5 发布）→ Task 3（素材/图�
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | 待填（低端安卓 · 门槛档） | 待填 | 待填（≤2.5s 预算） | 待填（≤2.5s 预算） | 待填（**≤5s · 判定**） | 待填（≥30） | 待填 | 待填（≤300） | 待填（应回落） | 待填 | 待填 | 待填 PASS/FAIL | 截图/录屏文件名 |
 | 待填（中端安卓 · 参考档） | 待填 | 待填（≤2.5s 预算） | 待填（≤2.5s 预算） | 待填（**≤5s · 判定**） | 待填（≥30） | 待填 | 待填（≤300） | 待填（应回落） | 待填 | 待填 | 待填 | 截图/录屏文件名 |
-| 待填（iOS Safari · 参考档） | 待填 | 待填（≤2.5s 预算） | 待填（≤2.5s 预算） | 待填（**≤5s · 判定**） | 待填（≥30，目视估算） | n/a（无 Inspector） | **n/a**（iOS 无 `performance.memory`） | n/a | 待填 | 待填 | 待填 | 录屏文件名 |
+| 待填（iOS Safari · 参考档） | 待填 | 待填（≤2.5s 预算） | 待填（≤2.5s 预算） | 待填（**≤5s · 判定**） | 待填（≥30，**面板读数**） | 待填（**面板读数**） | **n/a**（iOS 无 `performance.memory`） | n/a | 待填（**看面板 `quality` 行**） | 待填 | 待填 | 录屏文件名 |
 
-**填写注意**：① `drawcall` 仅安卓可读（`snapshot().drawcall`），iOS 无 Inspector 时记 n/a；② 触发降级时，**F 用降级后的值判**（Step 1 表 F 行）；③ iOS 的 fps/heap 属目视估算，结论须标注「非仪器读数」；④ 三档中**低端安卓为 A4 门槛档**，其 FAIL 即 A4 FAIL；⑤ **T1 / T2 必须分两格单独记**（别只记 T3）：T1 列与 T2 列各带 2.5s **诊断预算**，超预算的那一段就是排查入口（T1 超 → 前端装载；T2 超 → 登录 + 进场景）；**判定只用 T3 列**（≤5s）。
+**填写注意**：① **fps 与 `drawcall` 任何机型都能读**（`?perf=1` 面板内含 `Laya.Stat`，不需要 USB / Inspector）；**只有 heap 在 iOS 是 n/a**（`performance.memory` 是 Chrome 私有 API）；② 触发降级时，**F 用降级后的值判**（Step 1 表 F 行）；③ 安卓走 `chrome://inspect` 除读数外还要**抄降级日志原文**留证，iOS 用面板 `quality` 行替代；④ 三档中**低端安卓为 A4 门槛档**，其 FAIL 即 A4 FAIL；⑤ **T1 / T2 必须分两格单独记**（别只记 T3）：T1 列与 T2 列各带 2.5s **诊断预算**，超预算的那一段就是排查入口（T1 超 → 前端装载；T2 超 → 登录 + 进场景）；**判定只用 T3 列**（≤5s）。
 
 #### 7.4.4 低端代理预评估（CPU 限速 · **非 A4 替代**）
 

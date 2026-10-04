@@ -1,5 +1,5 @@
 // S8 性能基线采样器（零依赖：除可选的 playwright；不写入任何 package.json）
-// 用法：node scripts/perf-sample.mjs --label baseline [--headless] [--move-ms 10000] [--idle-ms 10000] [--quality high|low]
+// 用法：node scripts/perf-sample.mjs --label baseline [--headless] [--move-ms 10000] [--idle-ms 10000] [--quality high|low] [--cpu-throttle 6]
 //
 // 前置：① 后端在 :3000 运行；② 静态服务器在 :5173 运行（node tools/serve.mjs）。
 // 本机 playwright 由 `e:\code\node_modules\playwright` 解析（未装 → 打印 SKIP 与手动测量指引并 exit 0）。
@@ -48,6 +48,12 @@ const mapLocalhostIpv4 = argv.includes('--map-localhost-ipv4');
  * 用本参数把发往 5173 的连接目标改到该端口 —— 页面 origin 仍是 `http://localhost:5173`，CORS 照常通过。
  */
 const proxyPort = argOf('proxy-port', null);
+/**
+ * CPU 限速倍数（CDP `Emulation.setCPUThrottlingRate`，0/不传 = 不限速）。用途：真机不可得时，
+ * 用「桌面浏览器 × 4~6 倍 CPU 降速」近似低端安卓，做**代理预评估**（含验证自动降级链路）。
+ * **不等于 A4 真机验收**：不反映移动 GPU、内存带宽与触屏输入差异，结论必须标注为代理值。
+ */
+const cpuThrottle = Math.max(0, Number(argOf('cpu-throttle', '0')) || 0);
 const stabilizeMs = 3000;
 const USER = { user: 'spike01', pass: 'spike123456' };
 
@@ -116,6 +122,12 @@ const context = await browser.newContext({ viewport: { width: 1280, height: 800 
 const page = await context.newPage();
 page.on('console', (m) => consoleLines.push(m.text()));
 
+// CPU 限速：必须在业务脚本执行前生效，故在 goto 之前设置（重设也不影响已加载页面的后续执行）
+if (cpuThrottle > 0) {
+  const cdp = await context.newCDPSession(page);
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: cpuThrottle });
+}
+
 let record = null;
 try {
   // ① 清 localStorage（保证走登录页），再打开页面
@@ -166,6 +178,8 @@ try {
   const browserVersion = browser.version();
   const sceneLine = consoleLines.find((l) => l.includes('静态层渲染完成')) ?? '(未捕获到静态层日志)';
   const qualityLine = consoleLines.find((l) => l.includes('[S8] quality=')) ?? '(未捕获到质量日志)';
+  // 自动降级日志（S8 Task 5：连续 3000ms fps 低于目标 80% → quality=low）；未触发时记 n/a
+  const degradeLine = consoleLines.find((l) => l.includes('自动降级')) ?? '(未触发自动降级)';
   // S8 Task 3：背景层合图命令数（合图前 1+23+2=26 条 → cacheAs=bitmap 后 1 个缓存位图）
   const bgLine = consoleLines.find((l) => l.includes('[S8] 背景层')) ?? '(未捕获到背景层日志)';
   const finalSnapshot = (await sampleOnce(page)) ?? {};
@@ -178,10 +192,12 @@ try {
     browser: browserVersion,
     headless,
     mapLocalhostIpv4,
+    cpuThrottle,
     userAgent: ua,
     url: urlWithQuality,
     quality,
     qualityLine,
+    degradeLine,
     bgLine,
     sceneLine,
     route: KEY_PLAN.map(([k, f]) => `${k} ${round(f * moveMs / 1000, 2)}s`).join(' → '),
@@ -233,10 +249,11 @@ const md = [
   `## ${record.label} · ${record.at}`,
   '',
   `- commit: \`${record.commit}\`（工作区脏：${record.dirty === null ? 'n/a' : record.dirty ? '是' : '否'}）`,
-  `- 浏览器: Chromium/${record.browser} · headless=${record.headless ? '是' : '否'} · map-localhost-ipv4=${record.mapLocalhostIpv4 ? '是' : '否'}`,
+  `- 浏览器: Chromium/${record.browser} · headless=${record.headless ? '是' : '否'} · map-localhost-ipv4=${record.mapLocalhostIpv4 ? '是' : '否'} · CPU 限速=${record.cpuThrottle > 0 ? `×${record.cpuThrottle}` : '不限速'}`,
   `- userAgent: \`${record.userAgent}\``,
   `- 打开地址: ${record.url}（--quality ${record.quality ?? '未指定（走平台默认）'}）`,
   `- 质量日志: \`${record.qualityLine}\``,
+  `- 自动降级: \`${record.degradeLine}\``,
   `- 背景层: \`${record.bgLine}\``,
   `- 场景: ${record.sceneLine}`,
   `- 路线: ${record.route}（共 ${record.moveMs / 1000}s），随后静止 ${record.idleMs / 1000}s`,

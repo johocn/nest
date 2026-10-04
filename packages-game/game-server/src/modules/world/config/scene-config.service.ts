@@ -94,8 +94,8 @@ export class SceneConfigService {
     });
     const version = (latest?.version ?? 0) + 1;
 
-    const [spawns, triggers, objectTemplates, npcTemplates] = await Promise.all(
-      [
+    const [spawns, triggers, objectTemplates, npcTemplates] =
+      await Promise.all([
         this.spawnRepo.find({
           where: { sceneId: scene.id, isActive: true },
           order: { id: 'ASC' },
@@ -106,8 +106,7 @@ export class SceneConfigService {
         }),
         this.objectRepo.find(),
         this.npcRepo.find(),
-      ],
-    );
+      ]);
 
     const { payload, payloadHash } = buildScenePayload({
       scene,
