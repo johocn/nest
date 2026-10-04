@@ -7,6 +7,7 @@ import { Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import type { Server, Socket } from 'socket.io';
 import { MatchmakingService } from './matchmaking.service';
+import { RoomService } from './room.service';
 import { PlayerService } from '@modules/player/player.service';
 import { GameEvents } from '@event-bus/game-events';
 import { ConnectionService } from '@modules/gateway/connection.service';
@@ -21,6 +22,7 @@ export class MatchmakingGateway {
 
   constructor(
     private readonly matchmakingService: MatchmakingService,
+    private readonly roomService: RoomService,
     private readonly playerService: PlayerService,
     private readonly connectionService: ConnectionService,
   ) {}
@@ -63,12 +65,20 @@ export class MatchmakingGateway {
     this.logger.log(
       `Match success: ${payload.players.join(' vs ')} (${payload.mode})`,
     );
+
+    // 创建 Room —— 所有后续流程（ready → start → finish）走 RoomService
+    const room = await this.roomService.create({
+      mode: payload.mode,
+      players: payload.players,
+    });
+
     for (const playerId of payload.players) {
       try {
         const conn = await this.connectionService.getPlayerConnection(playerId);
         if (conn?.socketId) {
           this.server.to(conn.socketId).emit('matchmaking:matched', {
             mode: payload.mode,
+            roomId: room.id,
             players: payload.players,
           });
         }
@@ -79,6 +89,59 @@ export class MatchmakingGateway {
         );
       }
     }
+  }
+
+  // ===== Room WebSocket 消息 =====
+
+  @SubscribeMessage('room:ready')
+  async handleRoomReady(client: Socket, data: { roomId: string; ready?: boolean }) {
+    const playerId = client.data?.playerId;
+    if (!playerId) return { code: 401, msg: '未认证' };
+
+    const room = await this.roomService.get(data.roomId);
+    if (!room) return { code: 404, msg: '房间不存在或已解散' };
+
+    const inRoom = room.players.some((p) => p.playerId === playerId);
+    if (!inRoom) return { code: 403, msg: '你不在这个房间' };
+
+    const updated = await this.roomService.setReady(data.roomId, playerId, data.ready ?? true);
+
+    // 广播房间状态给所有成员
+    for (const p of room.players) {
+      const conn = await this.connectionService.getPlayerConnection(p.playerId);
+      if (conn?.socketId) {
+        this.server.to(conn.socketId).emit('room:update', updated);
+      }
+    }
+    return { code: 200, data: updated };
+  }
+
+  @SubscribeMessage('room:leave')
+  async handleRoomLeave(client: Socket, data: { roomId: string; reason?: string }) {
+    const playerId = client.data?.playerId;
+    if (!playerId) return { code: 401, msg: '未认证' };
+
+    const room = await this.roomService.get(data.roomId);
+    if (!room) return { code: 404, msg: '房间不存在' };
+
+    await this.roomService.leave(data.roomId, playerId, data.reason ?? 'leave');
+    // 广播解散/房间更新
+    for (const p of room.players) {
+      if (p.playerId === playerId) continue;
+      const conn = await this.connectionService.getPlayerConnection(p.playerId);
+      if (conn?.socketId) {
+        const updated = await this.roomService.get(data.roomId);
+        if (updated) {
+          this.server.to(conn.socketId).emit('room:update', updated);
+        } else {
+          this.server.to(conn.socketId).emit('room:destroyed', {
+            roomId: data.roomId,
+            reason: 'player-leave',
+          });
+        }
+      }
+    }
+    return { code: 200, msg: '已离开房间' };
   }
 
   @SubscribeMessage('matchmaking:cancel')

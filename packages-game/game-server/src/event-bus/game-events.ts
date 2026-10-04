@@ -24,6 +24,13 @@ export const GameEvents = {
   VIP_LEVEL_UP: 'player.vip.level_up',
   RECHARGE_SUCCESS: 'payment.recharge.success',
   MATCH_SUCCESS: 'matchmaking.match.success',
+  // Room 生命周期事件
+  ROOM_CREATED: 'room.created',
+  ROOM_DESTROYED: 'room.destroyed',
+  ROOM_STARTED: 'room.started',
+  ROOM_FINISHED: 'room.finished',
+  ROOM_PLAYER_READY: 'room.player.ready',
+  ROOM_PLAYER_LEFT: 'room.player.left',
   PLAYER_OFFLINE_SYNC: 'player.offline.sync',
   PLAYER_OFFLINE_SAVED: 'player.offline.saved',
   POWER_CHANGED: 'character.power.changed',

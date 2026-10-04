@@ -8,7 +8,9 @@ import { PlayerService } from '@modules/player/player.service';
 import { ConfigManageService } from '@modules/config/config.service';
 import { EventBusService } from '@event-bus/event-bus.service';
 import { AdminService } from '@modules/admin/admin.service';
-import { ConfigType } from '@constants/enums';
+import { CacheService } from '@cache/cache.service';
+import { EconomyService } from '@modules/economy/economy.service';
+import { CurrencyType, ConfigType } from '@constants/enums';
 
 const TIER_BOUNDS: Array<{ tier: string; min: number }> = [
   { tier: '青铜', min: 1000 },
@@ -17,9 +19,19 @@ const TIER_BOUNDS: Array<{ tier: string; min: number }> = [
   { tier: '宗师', min: 1600 },
 ];
 
+/** 赛季前 N 名发奖 */
+const SEASON_REWARDS: Array<{ rankMin: number; rankMax: number; vipExp: number; gold: number }> = [
+  { rankMin: 1, rankMax: 1, vipExp: 5000, gold: 50000 },
+  { rankMin: 2, rankMax: 3, vipExp: 3000, gold: 30000 },
+  { rankMin: 4, rankMax: 10, vipExp: 1500, gold: 15000 },
+  { rankMin: 11, rankMax: 50, vipExp: 500, gold: 5000 },
+];
+
 @Injectable()
 export class LadderService {
   private readonly logger = new Logger(LadderService.name);
+
+  private readonly ZSET_KEY = (season: string) => `ladder:zset:${season}`;
 
   constructor(
     @InjectRepository(LadderRecord)
@@ -28,6 +40,8 @@ export class LadderService {
     private readonly configService: ConfigManageService,
     private readonly eventBus: EventBusService,
     private readonly adminService: AdminService,
+    private readonly cacheService: CacheService,
+    private readonly economyService: EconomyService,
   ) {}
 
   private async getSeason(): Promise<string> {
@@ -45,6 +59,28 @@ export class LadderService {
     return tier;
   }
 
+  // ===== ZSet 缓存同步 =====
+
+  /** 把某赛季 DB 全量刷进 Redis ZSet（冷启动 / 缓存丢失时调） */
+  async refreshSeasonCache(season?: string): Promise<number> {
+    const s = season ?? (await this.getSeason());
+    const rows = await this.ladderRepo.find({ where: { season: s } });
+    if (!rows.length) return 0;
+
+    // zAdd 批量写
+    const pipeline = rows.map((r) => this.cacheService.zAdd(this.ZSET_KEY(s), r.score, r.playerId));
+    await Promise.all(pipeline);
+    this.logger.log(`[Ladder] refreshSeasonCache season=${s} count=${rows.length}`);
+    return rows.length;
+  }
+
+  /** 单个玩家的 score 同步到 ZSet（settleMatch 后自动调） */
+  private async syncPlayerScore(playerId: string, score: number, season: string): Promise<void> {
+    await this.cacheService.zAdd(this.ZSET_KEY(season), score, playerId);
+  }
+
+  // ===== 查询 =====
+
   async getRecord(playerId: string): Promise<LadderRecord> {
     const season = await this.getSeason();
     let record = await this.ladderRepo.findOne({
@@ -61,6 +97,8 @@ export class LadderService {
           streak: 0,
         }),
       );
+      // 新玩家 → 同步到 ZSet
+      await this.syncPlayerScore(playerId, record.score, season);
     }
     return record;
   }
@@ -87,35 +125,71 @@ export class LadderService {
     };
   }
 
+  /** 用 ZSet zRevRank O(log n) 取排名，不再全量扫 */
   async getRank(playerId: string, season: string): Promise<number> {
+    const rank = await this.cacheService.zRevRank(this.ZSET_KEY(season), playerId);
+    if (rank !== null && rank >= 0) return rank + 1;
+    // ZSet 没这个玩家（冷缓存）→ 回退 DB 全量扫 + 重建
+    this.logger.warn(`[Ladder] ZSet miss for ${playerId} season=${season}, fallback DB`);
     const rows = await this.ladderRepo.find({
       where: { season },
       order: { score: 'DESC' },
     });
-    return rows.findIndex((r) => r.playerId === playerId) + 1;
+    const found = rows.findIndex((r) => r.playerId === playerId);
+    // 顺手重建这个玩家的 ZSet
+    if (found >= 0) {
+      await this.syncPlayerScore(playerId, rows[found].score, season);
+    }
+    return found >= 0 ? found + 1 : 0;
   }
 
   async getTopN(
     limit = 50,
-  ): Promise<Array<{ playerId: string; score: number; tier: string }>> {
+  ): Promise<Array<{ playerId: string; score: number; tier: string; rank: number }>> {
     const season = await this.getSeason();
-    const rows = await this.ladderRepo.find({
-      where: { season },
-      order: { score: 'DESC' },
-      take: Math.min(Math.max(limit, 1), 100),
-    });
-    return rows.map((r) => ({
-      playerId: r.playerId,
-      score: r.score,
-      tier: this.tierOf(r.score),
+    const n = Math.min(Math.max(limit, 1), 100);
+
+    // 走 ZSet zRangeWithScores REV —— O(log n)
+    const zRes = await this.cacheService.zRangeWithScores(
+      this.ZSET_KEY(season),
+      0,
+      n - 1,
+      true, // REV = 降序
+    );
+
+    if (!zRes?.length) {
+      // ZSet 冷缓存 → 先 refresh 再查
+      await this.refreshSeasonCache(season);
+      const retried = await this.cacheService.zRangeWithScores(
+        this.ZSET_KEY(season),
+        0,
+        n - 1,
+        true,
+      );
+      return retried.map((m, i) => ({
+        playerId: m.value,
+        score: m.score,
+        tier: this.tierOf(m.score),
+        rank: i + 1,
+      }));
+    }
+
+    return zRes.map((m, i) => ({
+      playerId: m.value,
+      score: m.score,
+      tier: this.tierOf(m.score),
+      rank: i + 1,
     }));
   }
+
+  // ===== 结算（匹配成功后自动触发） =====
 
   @OnEvent(GameEvents.MATCH_SUCCESS)
   async settleMatch(payload: { mode: string; players: string[] }): Promise<void> {
     if (payload.mode !== 'ranked' || payload.players.length !== 2) return;
     const [a, b] = payload.players;
     try {
+      const season = await this.getSeason();
       const [pa, pb, na, nb] = await Promise.all([
         this.playerService.getById(a),
         this.playerService.getById(b),
@@ -143,40 +217,95 @@ export class LadderService {
       loser.streak = 0;
       await this.ladderRepo.save([winner, loser]);
 
+      // 同步 Redis ZSet
+      await Promise.all([
+        this.syncPlayerScore(winner.playerId, winner.score, season),
+        this.syncPlayerScore(loser.playerId, loser.score, season),
+      ]);
+
       this.eventBus.emit(GameEvents.LADDER_MATCH_SETTLED, {
         mode: 'ranked',
         winnerId: winner.playerId,
         loserId: loser.playerId,
-        season: await this.getSeason(),
+        season,
       });
     } catch (err) {
       this.logger.error('Ladder settle failed', (err as Error).message);
     }
   }
 
-  async settleSeason(adminId: string): Promise<{ newSeason: string; rewarded: number }> {
+  // ===== 赛季结算（Admin 触发 + 自动发奖） =====
+
+  async settleSeason(adminId: string): Promise<{
+    newSeason: string;
+    rewarded: number;
+    rewardsSent: number;
+  }> {
     const season = await this.getSeason();
-    const rows = await this.ladderRepo.find({ where: { season } });
-    const rewarded = rows.filter((r) => r.score >= 1300).length;
+
+    // 1) 取 Top 50 发奖
+    const top = await this.getTopN(50);
+    let rewardsSent = 0;
+
+    for (const entry of top) {
+      const reward = SEASON_REWARDS.find(
+        (r) => entry.rank >= r.rankMin && entry.rank <= r.rankMax,
+      );
+      if (!reward) continue;
+
+      const opTrace = `ladder-season-${season}-rank-${entry.rank}`;
+      try {
+        if (reward.vipExp > 0) {
+          await this.playerService.addVipExp(entry.playerId, reward.vipExp);
+        }
+        if (reward.gold > 0) {
+          await this.economyService.addCurrency(
+            entry.playerId,
+            CurrencyType.GOLD,
+            reward.gold,
+            'ladder_season',
+            opTrace,
+          );
+        }
+        rewardsSent++;
+      } catch (err) {
+        this.logger.error(
+          `[Ladder] season reward FAIL player=${entry.playerId} rank=${entry.rank}: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    // 2) Admin 日志 + 切赛季
     await this.adminService.logOperation({
       adminId,
       operation: 'ladder.season.settle',
-      changeBefore: { season },
-      changeAfter: { rewarded },
+      changeBefore: { season, topCount: top.length },
+      changeAfter: { rewardsSent, totalRecords: top.length },
     });
+
     const nextSeason = String(Number(season) + 1);
     await this.configService.setConfig(
       'ladder.season',
       nextSeason,
-      ConfigType.NUMBER,
+      ConfigType.STRING,
       '天梯当前赛季',
       adminId,
     );
+
+    // 3) 刷新新赛季 ZSet（空的，玩家打第一场自动初始化 record）
+    await this.cacheService.del(this.ZSET_KEY(season));
+
     this.eventBus.emit(GameEvents.LADDER_SEASON_SETTLED, {
       season,
       nextSeason,
-      rewarded,
+      rewardsSent,
     });
-    return { newSeason: nextSeason, rewarded };
+
+    this.logger.log(`[Ladder] Season ${season} settled → ${nextSeason}, rewarded=${rewardsSent}`);
+    return {
+      newSeason: nextSeason,
+      rewarded: top.filter((t) => t.score >= 1300).length,
+      rewardsSent,
+    };
   }
 }

@@ -6,6 +6,8 @@ import { LadderRecord } from './entities';
 import { PlayerModule } from '@modules/player/player.module';
 import { ConfigManageModule } from '@modules/config/config.module';
 import { AdminModule } from '@modules/admin/admin.module';
+import { CacheModule } from '@cache/cache.module';
+import { EconomyModule } from '@modules/economy/economy.module';
 
 @Module({
   imports: [
@@ -13,6 +15,8 @@ import { AdminModule } from '@modules/admin/admin.module';
     PlayerModule,
     ConfigManageModule,
     AdminModule,
+    CacheModule,
+    EconomyModule,
   ],
   controllers: [LadderController],
   providers: [LadderService],
