@@ -15,15 +15,6 @@ function RequireAuth({ children }: { children: JSX.Element }) {
   return children;
 }
 
-function PlaceholderPage({ title }: { title: string }) {
-  return (
-    <div style={{ padding: 24 }}>
-      <h2>{title}</h2>
-      <p>（页面占位，后续实现）</p>
-    </div>
-  );
-}
-
 export default function App() {
   return (
     <Routes>
