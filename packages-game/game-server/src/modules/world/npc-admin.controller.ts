@@ -172,6 +172,21 @@ export class NpcAdminController {
     return { success: true };
   }
 
+  @Post('npc-rules/:id/toggle')
+  @ApiOperation({ summary: '启停 NPC 出现规则（未传 isActive 则取反）' })
+  async toggleRule(
+    @Param('id') id: string,
+    @Body() body: { isActive?: boolean },
+  ) {
+    const rule = await this.ruleRepo.findOne({ where: { id } });
+    if (!rule) {
+      throw new GameException(ErrorCodes.PARAM_INVALID, 'NPC 规则不存在');
+    }
+    rule.isActive = body.isActive !== undefined ? body.isActive : !rule.isActive;
+    const saved = await this.ruleRepo.save(rule);
+    return saved;
+  }
+
   // ---------- NPC 巡逻路径 ----------
 
   @Get('npc-routes/list')

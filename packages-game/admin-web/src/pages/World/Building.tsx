@@ -79,7 +79,7 @@ export default function BuildingPage() {
     const values = await form.validateFields();
     try {
       if (current) {
-        await client.patch(`/admin/v1/world/building-templates/${current.id}`, values);
+        await client.put(`/admin/v1/world/building-templates/${current.id}`, values);
         message.success('更新成功');
         setEditOpen(false);
       } else {

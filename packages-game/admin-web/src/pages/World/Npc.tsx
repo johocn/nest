@@ -77,7 +77,7 @@ export default function NpcPage() {
 
   const toggleRule = async (record: NpcRule) => {
     try {
-      await client.patch(`/admin/v1/world/npc-rules/${record.id}/toggle`);
+      await client.post(`/admin/v1/world/npc-rules/${record.id}/toggle`);
       message.success('已切换启停');
       setRulesReloadKey((k) => k + 1);
     } catch {
@@ -111,7 +111,7 @@ export default function NpcPage() {
     const values = await ruleForm.validateFields();
     try {
       if (currentRule) {
-        await client.patch(`/admin/v1/world/npc-rules/${currentRule.id}`, values);
+        await client.put(`/admin/v1/world/npc-rules/${currentRule.id}`, values);
         message.success('更新成功');
         setRuleEditOpen(false);
       } else {
@@ -165,7 +165,7 @@ export default function NpcPage() {
     const payload = { ...values, points };
     try {
       if (currentRoute) {
-        await client.patch(`/admin/v1/world/npc-routes/${currentRoute.id}`, payload);
+        await client.put(`/admin/v1/world/npc-routes/${currentRoute.id}`, payload);
         message.success('更新成功');
         setRouteEditOpen(false);
       } else {

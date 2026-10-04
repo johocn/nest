@@ -143,7 +143,7 @@ export default function ScenePage() {
   const handleEdit = async () => {
     const values = await form.validateFields();
     try {
-      await client.patch(`/admin/v1/world/scene/${current?.id}`, values);
+      await client.put(`/admin/v1/world/scene/${current?.id}`, values);
       message.success('更新成功');
       setEditOpen(false);
       triggerReload();
