@@ -35,7 +35,8 @@ export class RankingController {
     @Param('playerId') playerId: string,
   ) {
     const rank = await this.rankingService.getPlayerRank(type, playerId);
-    return { rank };
+    const score = await this.rankingService.getPlayerScore(type, playerId);
+    return { rank, score };
   }
 
   // ===== Admin =====
@@ -45,8 +46,8 @@ export class RankingController {
   @Post('api/admin/v1/ranking/:type/snapshot')
   @ApiOperation({ summary: '创建排行榜快照' })
   async createSnapshot(@Param('type') type: RankingType) {
-    await this.rankingService.createSnapshot(type);
-    return { success: true };
+    const count = await this.rankingService.createSnapshot(type);
+    return { success: true, count };
   }
 
   @ApiBearerAuth()
@@ -55,5 +56,23 @@ export class RankingController {
   @ApiOperation({ summary: '排行榜快照列表' })
   async getSnapshotList(@Query('page') page = 1, @Query('limit') limit = 20) {
     return this.rankingService.getSnapshotList(Number(page), Number(limit));
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(AdminGuard)
+  @Post('api/admin/v1/ranking/:type/refresh')
+  @ApiOperation({ summary: '从 DB 快照重建 Redis ZSet（Redis flush 后恢复）' })
+  async refreshFromDB(@Param('type') type: RankingType) {
+    const count = await this.rankingService.refreshFromDB(type);
+    return { success: true, restored: count };
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(AdminGuard)
+  @Post('api/admin/v1/ranking/refresh')
+  @ApiOperation({ summary: '从 DB 快照重建所有类型 Redis ZSet' })
+  async refreshAllFromDB() {
+    const count = await this.rankingService.refreshFromDB();
+    return { success: true, restored: count };
   }
 }

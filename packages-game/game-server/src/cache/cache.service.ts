@@ -122,6 +122,11 @@ export class CacheService implements OnModuleInit, OnModuleDestroy {
     return this.client.zRem(key, members);
   }
 
+  /** 成员在降序排列中的排名（0-based）；返回 null 表示成员不在 ZSet 中 */
+  async zRevRank(key: string, member: string): Promise<number | null> {
+    return this.client.zRevRank(key, member);
+  }
+
   // ===== 分布式锁 =====
   async acquireLock(key: string, ttlSeconds: number): Promise<boolean> {
     const result = await this.client.set(key, 'locked', {
