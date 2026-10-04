@@ -1,6 +1,10 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import AdminLayout from './layouts/AdminLayout';
 import Login from './pages/Login';
+import GMCommand from './pages/GMCommand';
+import Trace from './pages/Trace';
+import Ladder from './pages/Ladder';
+import RoomPage from './pages/Room';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const token = localStorage.getItem('admin_token');
@@ -32,10 +36,10 @@ export default function App() {
         }
       >
         <Route index element={<Navigate to="/gm" replace />} />
-        <Route path="gm" element={<PlaceholderPage title="GM 命令" />} />
-        <Route path="trace" element={<PlaceholderPage title="可观测性" />} />
-        <Route path="ladder" element={<PlaceholderPage title="天梯" />} />
-        <Route path="room" element={<PlaceholderPage title="Room" />} />
+        <Route path="gm" element={<GMCommand />} />
+        <Route path="trace" element={<Trace />} />
+        <Route path="ladder" element={<Ladder />} />
+        <Route path="room" element={<RoomPage />} />
         <Route path="config" element={<PlaceholderPage title="配置中心" />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
