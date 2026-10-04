@@ -5,6 +5,7 @@ import GMCommand from './pages/GMCommand';
 import Trace from './pages/Trace';
 import Ladder from './pages/Ladder';
 import RoomPage from './pages/Room';
+import ConfigCenter from './pages/Config';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const token = localStorage.getItem('admin_token');
@@ -40,7 +41,7 @@ export default function App() {
         <Route path="trace" element={<Trace />} />
         <Route path="ladder" element={<Ladder />} />
         <Route path="room" element={<RoomPage />} />
-        <Route path="config" element={<PlaceholderPage title="配置中心" />} />
+        <Route path="config" element={<ConfigCenter />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
