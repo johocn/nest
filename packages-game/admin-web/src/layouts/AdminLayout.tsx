@@ -1,4 +1,4 @@
-import { Layout, Menu, Button } from 'antd';
+﻿import { Layout, Menu, Button } from 'antd';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   ThunderboltOutlined,
@@ -28,6 +28,7 @@ const menuItems: MenuItem[] = [
       { key: '/config', label: '配置中心' },
       { key: '/player', label: '玩家管理', icon: <UserOutlined /> },
       { key: '/risk', label: '风控', icon: <SafetyOutlined /> },
+      { key: '/admin-log', label: '操作日志' },
     ],
   },
   {
@@ -38,6 +39,8 @@ const menuItems: MenuItem[] = [
       { key: '/world/scene', label: '场景管理' },
       { key: '/world/npc', label: 'NPC管理' },
       { key: '/world/building', label: '建筑蓝图' },
+      { key: '/dialogue', label: '对话管理' },
+      { key: '/explore', label: '奇遇模板' },
     ],
   },
   {
@@ -56,6 +59,7 @@ const menuItems: MenuItem[] = [
     children: [
       { key: '/analytics/dashboard', label: '运营看板' },
       { key: '/balance/audit', label: '经济审计' },
+      { key: '/reconcile', label: '对账' },
     ],
   },
   {

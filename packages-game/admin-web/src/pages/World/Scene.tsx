@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import {
   Button,
   Form,
@@ -6,7 +6,9 @@ import {
   InputNumber,
   Modal,
   Popconfirm,
+  Select,
   Space,
+  Table,
   Tabs,
   Tag,
   message,
@@ -24,6 +26,17 @@ interface Scene {
   radius?: number;
   description?: string;
   updatedAt?: string;
+}
+
+interface SceneVersion {
+  id: number;
+  sceneId: number;
+  version: number;
+  hash: string;
+  filePath: string;
+  status: string;
+  publishedAt?: string;
+  createdAt?: string;
 }
 
 // 详情里懒加载后端数据的小组件
@@ -81,6 +94,153 @@ function SceneForm({ form }: { form: any }) {
         <Input.TextArea rows={3} />
       </Form.Item>
     </Form>
+  );
+}
+
+function VersionTab({ sceneId }: { sceneId: number }) {
+  const [versions, setVersions] = useState<SceneVersion[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [rollbackOpen, setRollbackOpen] = useState(false);
+  const [targetVersion, setTargetVersion] = useState<number | null>(null);
+  const [submitLoading, setSubmitLoading] = useState(false);
+
+  const loadVersions = async () => {
+    setLoading(true);
+    try {
+      const res = await client.get(`/admin/v1/world/scene-config/${sceneId}/versions`);
+      const env = res?.data ?? res;
+      const body = env?.code === 0 ? env.data : env;
+      const list: SceneVersion[] = body?.items ?? body?.list ?? (Array.isArray(body) ? body : []);
+      setVersions(list);
+    } catch {
+      setVersions([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadVersions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sceneId]);
+
+  const handleExport = async () => {
+    try {
+      await client.post(`/admin/v1/world/scene-config/${sceneId}/export`);
+      message.success('导出成功');
+      loadVersions();
+    } catch {
+      // 拦截器已提示
+    }
+  };
+
+  const handlePublish = async () => {
+    if (targetVersion == null) return;
+    setSubmitLoading(true);
+    try {
+      await client.post(`/admin/v1/world/scene-config/${sceneId}/publish`, { version: targetVersion });
+      message.success('发布成功');
+      setPublishOpen(false);
+      setTargetVersion(null);
+      loadVersions();
+    } catch {
+      // 拦截器已提示
+    } finally {
+      setSubmitLoading(false);
+    }
+  };
+
+  const handleRollback = async () => {
+    if (targetVersion == null) return;
+    setSubmitLoading(true);
+    try {
+      await client.post(`/admin/v1/world/scene-config/${sceneId}/rollback`, { version: targetVersion });
+      message.success('回滚成功');
+      setRollbackOpen(false);
+      setTargetVersion(null);
+      loadVersions();
+    } catch {
+      // 拦截器已提示
+    } finally {
+      setSubmitLoading(false);
+    }
+  };
+
+  const versionOptions = versions.map((v) => ({ value: v.version, label: `v${v.version}` }));
+
+  const columns: ColumnsType<SceneVersion> = [
+    { title: 'Version', dataIndex: 'version', width: 100, render: (v) => `v${v}` },
+    { title: 'Hash', dataIndex: 'hash', width: 140, render: (h: string) => (h ? h.slice(0, 12) + '...' : '-') },
+    { title: '文件路径', dataIndex: 'filePath' },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      width: 120,
+      render: (s: string) => {
+        const color = s === 'published' ? 'green' : s === 'draft' ? 'default' : 'blue';
+        return s ? <Tag color={color}>{s}</Tag> : '-';
+      },
+    },
+    { title: '创建时间', dataIndex: 'createdAt', width: 180 },
+  ];
+
+  return (
+    <div>
+      <Space style={{ marginBottom: 12 }}>
+        <Button type="primary" onClick={handleExport}>
+          导出新版本
+        </Button>
+        <Button onClick={() => setPublishOpen(true)}>发布版本</Button>
+        <Button danger onClick={() => setRollbackOpen(true)}>回滚版本</Button>
+      </Space>
+
+      <Table<SceneVersion>
+        rowKey="id"
+        columns={columns}
+        dataSource={versions}
+        loading={loading}
+        pagination={false}
+        locale={{ emptyText: '暂无版本' }}
+      />
+
+      <Modal
+        open={publishOpen}
+        onCancel={() => setPublishOpen(false)}
+        onOk={handlePublish}
+        okText="确认发布"
+        cancelText="取消"
+        confirmLoading={submitLoading}
+        title="发布版本"
+      >
+        <div style={{ marginBottom: 8 }}>选择要发布的版本：</div>
+        <Select
+          style={{ width: '100%' }}
+          placeholder="选择版本"
+          options={versionOptions}
+          onChange={(v) => setTargetVersion(v)}
+        />
+      </Modal>
+
+      <Modal
+        open={rollbackOpen}
+        onCancel={() => setRollbackOpen(false)}
+        onOk={handleRollback}
+        okText="确认回滚"
+        cancelText="取消"
+        okButtonProps={{ danger: true }}
+        confirmLoading={submitLoading}
+        title="回滚版本"
+      >
+        <div style={{ marginBottom: 8 }}>选择要回滚到的版本：</div>
+        <Select
+          style={{ width: '100%' }}
+          placeholder="选择版本"
+          options={versionOptions}
+          onChange={(v) => setTargetVersion(v)}
+        />
+      </Modal>
+    </div>
   );
 }
 
@@ -210,7 +370,7 @@ export default function ScenePage() {
         open={detailOpen}
         onCancel={() => setDetailOpen(false)}
         footer={null}
-        width={720}
+        width={800}
         title={`场景详情 #${current?.id} - ${current?.name}`}
       >
         {current && (
@@ -243,6 +403,11 @@ export default function ScenePage() {
                 key: 'triggers',
                 label: '触发器',
                 children: <AsyncContent fetcher={() => fetchTriggers(current.id)} emptyText="无触发器" />,
+              },
+              {
+                key: 'versions',
+                label: '场景配置版本',
+                children: <VersionTab sceneId={current.id} />,
               },
             ]}
           />

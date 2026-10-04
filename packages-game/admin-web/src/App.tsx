@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+﻿import { Navigate, Route, Routes } from 'react-router-dom';
 import AdminLayout from './layouts/AdminLayout';
 import Login from './pages/Login';
 import GMCommand from './pages/GMCommand';
@@ -17,6 +17,10 @@ import PlayerPage from './pages/Player';
 import RiskPage from './pages/Risk';
 import RealmPage from './pages/Realm';
 import InventoryPage from './pages/Inventory';
+import DialoguePage from './pages/Dialogue';
+import ReconcilePage from './pages/Reconcile';
+import AdminLogPage from './pages/AdminLog';
+import ExplorePage from './pages/Explore';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const token = localStorage.getItem('admin_token');
@@ -56,6 +60,11 @@ export default function App() {
         <Route path="risk" element={<RiskPage />} />
         <Route path="realm" element={<RealmPage />} />
         <Route path="inventory" element={<InventoryPage />} />
+
+        <Route path="dialogue" element={<DialoguePage />} />
+        <Route path="reconcile" element={<ReconcilePage />} />
+        <Route path="admin-log" element={<AdminLogPage />} />
+        <Route path="explore" element={<ExplorePage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
