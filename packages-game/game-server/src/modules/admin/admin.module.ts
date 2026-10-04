@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AdminService } from './admin.service';
 import { GmCommandService } from './gm-command.service';
@@ -15,11 +15,11 @@ import { MatchmakingModule } from '@modules/matchmaking/matchmaking.module';
   imports: [
     TypeOrmModule.forFeature([GmOperateLog]),
     ConnectionModule,
-    PlayerModule,
+    forwardRef(() => PlayerModule),
     InventoryModule,
     BuffModule,
     CharacterModule,
-    MatchmakingModule,
+    forwardRef(() => MatchmakingModule),
   ],
   controllers: [AdminController],
   providers: [AdminService, GmCommandService],
