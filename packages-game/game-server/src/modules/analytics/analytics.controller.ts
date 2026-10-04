@@ -55,9 +55,10 @@ export class AnalyticsController {
   @UseGuards(AdminGuard)
   @Get('api/admin/v1/analytics/dau')
   @ApiOperation({ summary: 'DAU' })
-  async getDau(@Query('date') date: string) {
-    const dau = await this.analyticsService.getDailyActiveUsers(date);
-    return { date, dau };
+  async getDau(@Query('date') date?: string) {
+    const d = date ?? new Date().toISOString().slice(0, 10);
+    const dau = await this.analyticsService.getDailyActiveUsers(d);
+    return { date: d, dau };
   }
 
   @UseGuards(AdminGuard)

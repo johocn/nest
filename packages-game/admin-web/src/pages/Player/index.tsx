@@ -1,5 +1,14 @@
 import { useMemo, useState } from 'react';
-import { Button, Modal, Space, Tag } from 'antd';
+import {
+  Button,
+  Descriptions,
+  Drawer,
+  Space,
+  Spin,
+  Table,
+  Tabs,
+  Tag,
+} from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import AdminTable from '../../components/AdminTable';
 import client from '../../api/client';
@@ -21,12 +30,51 @@ interface Player {
   updatedAt?: string;
 }
 
+interface CurrencyInfo {
+  currencyType: string;
+  amount: number;
+}
+
+const CURRENCY_COLOR_MAP: Record<string, string> = {
+  gold: 'gold',
+  diamond: 'cyan',
+  favor: 'magenta',
+  guild_contrib: 'blue',
+  face: 'purple',
+};
+
+const currencyColumns: ColumnsType<CurrencyInfo> = [
+  {
+    title: '货币类型',
+    dataIndex: 'currencyType',
+    width: 160,
+    render: (v: string) => (
+      <Tag color={CURRENCY_COLOR_MAP[v] || 'default'}>{v}</Tag>
+    ),
+  },
+  { title: '数量', dataIndex: 'amount', width: 160 },
+];
+
 export default function PlayerPage() {
   const [detailOpen, setDetailOpen] = useState(false);
-  const [current, setCurrent] = useState<Player | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [playerDetail, setPlayerDetail] = useState<Player | null>(null);
+  const [currencies, setCurrencies] = useState<CurrencyInfo[]>([]);
 
   const fetchList = (page: number, limit: number) =>
     client.get('/admin/v1/player/list', { params: { page, limit } });
+
+  const handleDetail = async (id: number | string) => {
+    setDetailOpen(true);
+    setLoading(true);
+    try {
+      const { data } = await client.get(`/admin/v1/player/${id}/detail`);
+      setPlayerDetail(data?.player ?? null);
+      setCurrencies(data?.currencies ?? []);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const columns = useMemo<ColumnsType<Player>>(
     () => [
@@ -64,13 +112,7 @@ export default function PlayerPage() {
         width: 100,
         render: (_: any, r) => (
           <Space>
-            <Button
-              size="small"
-              onClick={() => {
-                setCurrent(r);
-                setDetailOpen(true);
-              }}
-            >
+            <Button size="small" onClick={() => handleDetail(r.id)}>
               详情
             </Button>
           </Space>
@@ -79,6 +121,45 @@ export default function PlayerPage() {
     ],
     [],
   );
+
+  const detailItems = useMemo(() => {
+    if (!playerDetail) return [];
+    return [
+      { key: 'id', label: 'ID', children: playerDetail.id },
+      { key: 'nickname', label: '昵称', children: playerDetail.nickname || '-' },
+      { key: 'level', label: '等级', children: playerDetail.level ?? '-' },
+      { key: 'vipLevel', label: 'VIP 等级', children: playerDetail.vipLevel ?? '-' },
+      { key: 'vipExp', label: 'VIP 经验', children: playerDetail.vipExp ?? '-' },
+      {
+        key: 'totalRecharge',
+        label: '累计充值',
+        children: (playerDetail.totalRecharge ?? 0) + ' 元',
+      },
+      {
+        key: 'onlineStatus',
+        label: '在线状态',
+        children: playerDetail.onlineStatus ? (
+          <Tag color="green">在线</Tag>
+        ) : (
+          <Tag>离线</Tag>
+        ),
+      },
+      {
+        key: 'createdAt',
+        label: '创建时间',
+        children: playerDetail.createdAt
+          ? new Date(playerDetail.createdAt).toLocaleString()
+          : '-',
+      },
+      {
+        key: 'updatedAt',
+        label: '更新时间',
+        children: playerDetail.updatedAt
+          ? new Date(playerDetail.updatedAt).toLocaleString()
+          : '-',
+      },
+    ];
+  }, [playerDetail]);
 
   return (
     <>
@@ -89,26 +170,46 @@ export default function PlayerPage() {
         fetchFn={fetchList}
       />
 
-      <Modal
+      <Drawer
         open={detailOpen}
-        title="玩家详情"
-        onCancel={() => setDetailOpen(false)}
-        footer={null}
-        width={600}
+        title={playerDetail ? `玩家详情 #${playerDetail.id}` : '玩家详情'}
+        width={720}
+        onClose={() => setDetailOpen(false)}
+        destroyOnClose
       >
-        <pre
-          style={{
-            background: '#f5f5f5',
-            padding: 12,
-            borderRadius: 4,
-            maxHeight: 400,
-            overflow: 'auto',
-            fontSize: 12,
-          }}
-        >
-          {JSON.stringify(current, null, 2)}
-        </pre>
-      </Modal>
+        <Spin spinning={loading} tip="加载中...">
+          <Tabs
+            defaultActiveKey="basic"
+            items={[
+              {
+                key: 'basic',
+                label: '基础信息',
+                children: (
+                  <Descriptions
+                    column={2}
+                    bordered
+                    size="small"
+                    items={detailItems}
+                  />
+                ),
+              },
+              {
+                key: 'currencies',
+                label: '货币',
+                children: (
+                  <Table<CurrencyInfo>
+                    rowKey="currencyType"
+                    size="small"
+                    pagination={false}
+                    dataSource={currencies}
+                    columns={currencyColumns}
+                  />
+                ),
+              },
+            ]}
+          />
+        </Spin>
+      </Drawer>
     </>
   );
 }
