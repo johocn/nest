@@ -57,4 +57,30 @@ export class TextureRegistry {
       `[S9] 贴图预加载 ${hit}/${keys.length} 命中${hit < keys.length ? '（未命中者回退占位贴图）' : ''}`,
     );
   }
+
+  /**
+   * 释放所有已加载贴图（场景切换 / shutdown 时调用）。
+   * missing Set 保留（避免场景重建时对同一缺图反复 404 重试）。
+   */
+  static clear(): void {
+    if (TextureRegistry.cache.size === 0) return;
+    for (const [resKey, tex] of TextureRegistry.cache) {
+      const url = TextureRegistry.urlOf(resKey);
+      // Laya.loader.releaseRes 让引擎从资源池摘除；Texture.destroy() 释放 GPU 纹理
+      try {
+        Laya.loader.releaseRes(url);
+      } catch {
+        /* 引擎版本差异兜底：releaseRes 可能不存在或抛 */
+      }
+      if (tex && typeof (tex as any).destroy === 'function') {
+        try {
+          (tex as any).destroy();
+        } catch {
+          /* Laya.Texture.destroy 已无引用时报错，忽略 */
+        }
+      }
+    }
+    TextureRegistry.cache.clear();
+    console.log(`[S9] TextureRegistry.clear() 完成（贴图释放）`);
+  }
 }

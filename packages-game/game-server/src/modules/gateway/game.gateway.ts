@@ -112,6 +112,20 @@ export class GameGateway
     const sceneId = client.data?.sceneId;
     if (sceneId) {
       await this.worldService.leaveScene(playerId, sceneId);
+      // 广播「玩家离开」帧：场景内其余客户端据此从 EntityRegistry 移除远端玩家实体
+      // （entity_update 复用 player 分支，state='leave' 是客户端 remove 的唯一真值来源）
+      this.server.to(`scene:${sceneId}`).emit('message', {
+        cmd: 'world.entity_update',
+        seq: 0,
+        code: 0,
+        msg: 'success',
+        data: {
+          entityId: `player:${playerId}`,
+          entityType: 'player',
+          playerId,
+          state: 'leave',
+        },
+      });
     }
 
     await this.connectionService.playerDisconnect(playerId, 'disconnect');

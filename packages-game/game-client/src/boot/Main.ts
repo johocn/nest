@@ -8,7 +8,7 @@ import { AiComponent } from '../entity/components/AiComponent';
 import { BuildingViewComponent } from '../entity/components/BuildComponent';
 import { Entity } from '../entity/Entity';
 import { EntityFactory } from '../entity/EntityFactory';
-import { acquire } from '../entity/EntityPool';
+import { acquire, release } from '../entity/EntityPool';
 import { RemoteInterp } from '../entity/components/RemoteInterp';
 import { EntityRegistry } from '../entity/EntityRegistry';
 import { Api } from '../net/api';
@@ -128,6 +128,17 @@ async function afterLogin(): Promise<void> {
     if (d.entityType === 'player') {
       if (String(d.playerId) === String(Session.playerId)) return;
 
+      // 玩家离开（服务端 handleDisconnect 广播）：从 EntityRegistry 移除 + 归还对象池
+      if (d.state === 'leave') {
+        const e = EntityRegistry.get(d.entityId);
+        if (e) {
+          EntityRegistry.remove(d.entityId);
+          release(e);
+          console.log(`[S1] 远端玩家 ${d.entityId} 离开，已回收`);
+        }
+        return;
+      }
+
       const pos = d.pos ?? { x: 0, y: 0 };
       // S8 Task 5：远端玩家**不再直接 setPos**（那是位置跳变的来源），只覆盖插值目标，
       // 由 RemoteInterp 逐帧平滑逼近。`EntityRegistry.upsert`（已存在即 setPos）语义零变更，
@@ -242,14 +253,15 @@ export function shutdownClient(
   shutdownLoops();
   playerControl?.detach();
   interactControl?.detach();
-  BuildPanel.close();
+  BuildPanel.destroy();
   state.ws?.disconnect();
   state.ws = null;
   state.me = null;
   state.cfg = null;
   state.buildRule = null;
   EntityRegistry.clear();
-  console.log('[S1] 客户端 shutdown 完成（loop / 监听 / 实体注册表已清空）');
+  TextureRegistry.clear();
+  console.log('[S1] 客户端 shutdown 完成（loop / 监听 / 实体注册表 / 贴图已清空）');
 }
 
 /** 无规则行的兜底视图（与后端 `BuildRuleService.getRule` 的 forbidden 默认视图同口径，宁可禁用不可误建） */

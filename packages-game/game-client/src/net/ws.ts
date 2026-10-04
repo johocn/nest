@@ -51,7 +51,26 @@ export class WsClient {
     this.socket.on('message', (m: WsMessage) => this.dispatch(m));
     this.socket.on('disconnect', (reason: string) => {
       console.warn(`[S1] WS disconnected: ${reason}`);
+      // 断连时所有 pending 请求应立即 reject，不等 8s 超时 —— 否则挂起 Promise 会长期占用资源
+      this.rejectPendingAll(new Error(`WS disconnected: ${reason}`));
     });
+  }
+
+  /** 断开连接（供 shutdownClient 等外部调用） */
+  disconnect(): void {
+    this.rejectPendingAll(new Error('WS client explicitly disconnected'));
+    this.socket?.disconnect();
+    this.socket = null;
+  }
+
+  /** 把 pending Map 中所有挂起请求立即 reject（断连 / 关闭时调用） */
+  private rejectPendingAll(err: Error): void {
+    if (this.pending.size === 0) return;
+    for (const p of this.pending.values()) {
+      clearTimeout(p.timer);
+      p.reject(err);
+    }
+    this.pending.clear();
   }
 
   /** 注册某类应答/广播的处理函数（非应答式广播用 onBroadcast） */

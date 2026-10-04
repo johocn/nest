@@ -133,6 +133,31 @@ export class BuildPanel {
     console.log(`[S6] BuildPanel 就绪：zOrder=${B.zOrder}（引擎内自绘，无 DOM）`);
   }
 
+  /**
+   * 彻底销毁 BuildPanel（注销 stage 监听 + 清 timer + 移除 root）。
+   * 给「退出登录 / 热更 / 完全退出」留口子；init 后的首次启动不需调用（target=null 时不会有监听残留）。
+   */
+  static destroy(): void {
+    Laya.timer.clearAll(BuildPanel);
+    Laya.stage.off(Laya.Event.KEY_DOWN, BuildPanel, BuildPanel.onKeyDown);
+    Laya.stage.off(Laya.Event.MOUSE_DOWN, BuildPanel, BuildPanel.onStageDown);
+    if (BuildPanel.root && BuildPanel.root.parent) {
+      BuildPanel.root.parent.removeChild(BuildPanel.root);
+    }
+    BuildPanel.root = null;
+    BuildPanel.preview = null;
+    BuildPanel.progressBar = null;
+    BuildPanel.layer = null;
+    BuildPanel.ctx = null;
+    BuildPanel.me = null;
+    BuildPanel.onView = null;
+    BuildPanel.buildings = [];
+    BuildPanel.opened = false;
+    BuildPanel.busy = false;
+    BuildPanel.pendingKey = null;
+    console.log('[S6] BuildPanel.destroy() 完成（stage 监听已注销）');
+  }
+
   /** 进场景后注入上下文（场景尺寸 / 规则 / 蓝图 / 世界层）并启动刷新循环 */
   static attach(
     me: Entity,
