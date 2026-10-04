@@ -155,6 +155,8 @@ export class BuildPanel {
       BuildPanel.preview = preview;
       layer?.addChild(preview);
     }
+    // 先清再注册：防止多次 attach（场景重进）时重复叠加同一个 refresh loop
+    Laya.timer.clear(BuildPanel, BuildPanel.refresh);
     Laya.timer.frameLoop(B.refreshFrameInterval, BuildPanel, BuildPanel.refresh);
     console.log(
       `[S6] 建造面板接入：场景 ${ctx.sceneId} 模式=${ctx.rule.mode} 格 ${gridSize}px 蓝图 ${ctx.templates.length} 个`,
@@ -188,6 +190,8 @@ export class BuildPanel {
   static close(): void {
     BuildPanel.opened = false;
     BuildPanel.pendingKey = null;
+    // 面板关闭时暂停 refresh loop —— 省电 + 干净（open/attach 时会重新 frameLoop）
+    Laya.timer.clear(BuildPanel, BuildPanel.refresh);
     if (BuildPanel.root) {
       BuildPanel.root.removeChildren();
     }

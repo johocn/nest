@@ -47,6 +47,17 @@ export class InteractController {
     );
   }
 
+  /** 释放 timer / 键盘监听 + 清空交互状态（对话/标记） */
+  detach(): void {
+    Laya.stage.off(Laya.Event.KEY_DOWN, this, this.onKeyDown);
+    Laya.timer.clearAll(this);
+    this.lastHintId = null;
+    this.dialogue = null;
+    this.markedEntity = null;
+    this.busy = false;
+    this.choosing = false;
+  }
+
   /**
    * 每帧重选：高亮跟随当前目标；提示条仅在目标变化时改写。
    * （不每帧重写 hint：组件可能正用 hint 展示长文本，如 ReadComponent 的阅读文案。）

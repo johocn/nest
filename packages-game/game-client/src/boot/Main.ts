@@ -29,11 +29,19 @@ import { Hud } from '../ui/Hud';
 import { DialogueView } from '../ui/DialogueView';
 import { TouchControls } from '../ui/TouchControls';
 
-const state = {
-  cfg: null as SceneConfig | null,
-  ws: null as WsClient | null,
-  me: null as Entity | null,
-  buildRule: null as BuildRuleView | null,
+const state: {
+  cfg: SceneConfig | null;
+  ws: WsClient | null;
+  me: Entity | null;
+  buildRule: BuildRuleView | null;
+  // 三个全局逐帧驱动 loop 的 method 引用 —— 由 afterLogin 注册、shutdown 清理
+  loops: { updateAll: () => void; cull: () => void; resort: () => void } | null;
+} = {
+  cfg: null,
+  ws: null,
+  me: null,
+  buildRule: null,
+  loops: null,
 };
 
 interface EnterSceneSync {
@@ -192,16 +200,56 @@ async function afterLogin(): Promise<void> {
   //    S8 Task 4：谓词「可见才更新」—— 离屏实体不再做逐帧插值/进度计算（缺省无谓词时行为与基线一致）。
   //    例外：建筑实体始终更新 —— `BuildingViewComponent.update` 不只是视觉插值，还承担**生命周期清理**
   //    （demolishing 淡出到点后从 EntityRegistry 移除）。若把它也冻结，离屏的拆除中建筑会永不回收。
-  Laya.timer.frameLoop(1, null, () =>
-    EntityRegistry.updateAll(
-      Laya.timer.delta,
-      (e) => e.sprite.visible !== false || e.getComponent(BuildingViewComponent) !== null,
-    ),
-  );
-  // S8 Task 4：裁剪 tick 先于 resort 注册，保证两者同帧触发时 resort 看到最新可见性
-  Laya.timer.frameLoop(AppConfig.viewport.tickFrames, null, () => SceneBuilder.cull(state.me));
-  Laya.timer.frameLoop(10, null, () => SceneBuilder.resort());
+  //    存 method 引用到 state.loops，shutdown() 时可统一 clear —— 支持「退出登录 → 重新登录」
+  //    不产生重复 loop。
+  const loops = {
+    updateAll: (): void =>
+      EntityRegistry.updateAll(
+        Laya.timer.delta,
+        (e) => e.sprite.visible !== false || e.getComponent(BuildingViewComponent) !== null,
+      ),
+    cull: (): void => SceneBuilder.cull(state.me),
+    resort: (): void => SceneBuilder.resort(),
+  };
+  // 先清再注册：防止 afterLogin 被二次调用（重进场景）时重复叠加 loop
+  shutdownLoops();
+  state.loops = loops;
+  Laya.timer.frameLoop(1, null, loops.updateAll);
+  Laya.timer.frameLoop(AppConfig.viewport.tickFrames, null, loops.cull);
+  Laya.timer.frameLoop(10, null, loops.resort);
   console.log(`[S1] 客户端版本 ${AppConfig.clientVersion}，配置包 v${cfg.version}`);
+}
+
+/** 清理 Main.afterLogin 注册的三个全局逐帧 loop —— 支持重进场景/退出登录 */
+function shutdownLoops(): void {
+  const l = state.loops;
+  if (!l) return;
+  Laya.timer.clear(null, l.updateAll);
+  Laya.timer.clear(null, l.cull);
+  Laya.timer.clear(null, l.resort);
+  state.loops = null;
+}
+
+/**
+ * 客户端全量清理（退出登录 / 重进场景时调用）。
+ * 先停 loop → 再断 WS → 再清各子系统 attach 出来的监听/timer。
+ * 不做「销毁场景节点」—— 场景层重建由新的 afterLogin 负责。
+ */
+export function shutdownClient(
+  playerControl?: PlayerControl | null,
+  interactControl?: InteractController | null,
+): void {
+  shutdownLoops();
+  playerControl?.detach();
+  interactControl?.detach();
+  BuildPanel.close();
+  state.ws?.disconnect();
+  state.ws = null;
+  state.me = null;
+  state.cfg = null;
+  state.buildRule = null;
+  EntityRegistry.clear();
+  console.log('[S1] 客户端 shutdown 完成（loop / 监听 / 实体注册表已清空）');
 }
 
 /** 无规则行的兜底视图（与后端 `BuildRuleService.getRule` 的 forbidden 默认视图同口径，宁可禁用不可误建） */

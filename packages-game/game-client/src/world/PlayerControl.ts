@@ -35,6 +35,17 @@ export class PlayerControl {
     console.log('[S1] 移动控制就绪：WASD / 方向键；移动中约 10Hz 上报 world.move');
   }
 
+  /**
+   * 释放所有 timer / 事件监听 + 清空按键集合。
+   * 支持「退出登录 → 重新登录」「切换场景」等路径的生命周期回收。
+   */
+  detach(): void {
+    Laya.stage.off(Laya.Event.KEY_DOWN, this, this.onKeyDown);
+    Laya.stage.off(Laya.Event.KEY_UP, this, this.onKeyUp);
+    Laya.timer.clearAll(this);
+    this.pressed.clear();
+  }
+
   private onKeyDown(e: Laya.Event): void {
     this.pressed.add(PlayerControl.normKey(e));
   }
