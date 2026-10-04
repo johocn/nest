@@ -60,6 +60,12 @@ packages-game/**/package-lock.json
 # 场景配置包产物由服务端发布时写盘，不入库；仅用 .gitkeep 占位托管目录
 packages-game/game-server/gamedata/*
 !packages-game/game-server/gamedata/.gitkeep
+# Laya 引擎元数据文件（随资源自动生成，不应入库）
+*.meta
+# 真机点检截图 / 构建 tar 包 / 临时探针脚本
+packages-game/game-client/docs/perf-shots/
+packages-game/game-client/*.tar.gz
+packages-game/game-client/scripts/_probe-*.mjs
 
 # tests
 /test
