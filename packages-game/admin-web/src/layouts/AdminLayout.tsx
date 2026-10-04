@@ -2,20 +2,57 @@ import { Layout, Menu, Button } from 'antd';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   ThunderboltOutlined,
-  SearchOutlined,
-  TrophyOutlined,
+  GlobalOutlined as GlobeOutlined,
   TeamOutlined,
-  SettingOutlined,
+  LineChartOutlined,
 } from '@ant-design/icons';
+import type { MenuProps } from 'antd';
 
 const { Header, Sider, Content } = Layout;
 
-const menuItems = [
-  { key: '/gm', icon: <ThunderboltOutlined />, label: 'GM命令' },
-  { key: '/trace', icon: <SearchOutlined />, label: '可观测性' },
-  { key: '/ladder', icon: <TrophyOutlined />, label: '天梯' },
-  { key: '/room', icon: <TeamOutlined />, label: 'Room' },
-  { key: '/config', icon: <SettingOutlined />, label: '配置中心' },
+type MenuItem = Required<MenuProps>['items'][number];
+
+const menuItems: MenuItem[] = [
+  {
+    key: 'ops',
+    icon: <ThunderboltOutlined />,
+    label: '运维',
+    children: [
+      { key: '/gm', label: 'GM命令' },
+      { key: '/trace', label: '可观测性' },
+      { key: '/ladder', label: '天梯' },
+      { key: '/room', label: 'Room' },
+      { key: '/config', label: '配置中心' },
+    ],
+  },
+  {
+    key: 'world',
+    icon: <GlobeOutlined />,
+    label: '世界运营',
+    children: [
+      { key: '/world/scene', label: '场景管理' },
+      { key: '/world/npc', label: 'NPC管理' },
+      { key: '/world/building', label: '建筑蓝图' },
+    ],
+  },
+  {
+    key: 'community',
+    icon: <TeamOutlined />,
+    label: '社区运营',
+    children: [
+      { key: '/community/feedback', label: '玩家反馈' },
+      { key: '/community/reports', label: '举报处理' },
+    ],
+  },
+  {
+    key: 'analytics',
+    icon: <LineChartOutlined />,
+    label: '数据分析',
+    children: [
+      { key: '/analytics/dashboard', label: '运营看板' },
+      { key: '/balance/audit', label: '经济审计' },
+    ],
+  },
 ];
 
 export default function AdminLayout() {
@@ -29,7 +66,7 @@ export default function AdminLayout() {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider theme="light">
+      <Sider theme="light" width={220}>
         <div style={{ height: 48, lineHeight: '48px', textAlign: 'center', fontWeight: 'bold' }}>
           Game Admin
         </div>
