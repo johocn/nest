@@ -18,15 +18,15 @@ import client from '../../api/client';
 interface NpcRule {
   id: number;
   sceneId: number;
-  templateId: number;
-  spawnRate: number;
+  npcTemplateId: number;
+  ruleType?: string | number;
   isActive: boolean;
 }
 
 interface NpcRoute {
   id: number;
-  routeName: string;
-  waypoints: any[];
+  name: string;
+  points: any[];
 }
 
 function JsonTextarea({ value, onChange, rows = 4 }: any) {
@@ -140,7 +140,7 @@ export default function NpcPage() {
     setCurrentRoute(record);
     routeForm.setFieldsValue({
       ...record,
-      waypoints: record.waypoints ? JSON.stringify(record.waypoints, null, 2) : '',
+      points: record.points ? JSON.stringify(record.points, null, 2) : '',
     });
     setRouteEditOpen(true);
   };
@@ -153,16 +153,16 @@ export default function NpcPage() {
 
   const handleRouteSubmit = async () => {
     const values = await routeForm.validateFields();
-    let waypoints = values.waypoints;
-    if (typeof waypoints === 'string') {
+    let points = values.points;
+    if (typeof points === 'string') {
       try {
-        waypoints = JSON.parse(waypoints);
+        points = JSON.parse(points);
       } catch {
-        message.error('waypoints 不是有效 JSON');
+        message.error('points 不是有效 JSON');
         return;
       }
     }
-    const payload = { ...values, waypoints };
+    const payload = { ...values, points };
     try {
       if (currentRoute) {
         await client.patch(`/admin/v1/world/npc-routes/${currentRoute.id}`, payload);
@@ -182,8 +182,8 @@ export default function NpcPage() {
   const ruleColumns: ColumnsType<NpcRule> = [
     { title: 'ID', dataIndex: 'id', width: 80 },
     { title: '场景 ID', dataIndex: 'sceneId', width: 100 },
-    { title: '模板 ID', dataIndex: 'templateId', width: 100 },
-    { title: '生成率', dataIndex: 'spawnRate', width: 100 },
+    { title: '模板 ID', dataIndex: 'npcTemplateId', width: 100 },
+    { title: '规则类型', dataIndex: 'ruleType', width: 120 },
     {
       title: '状态',
       dataIndex: 'isActive',
@@ -214,10 +214,10 @@ export default function NpcPage() {
 
   const routeColumns: ColumnsType<NpcRoute> = [
     { title: 'ID', dataIndex: 'id', width: 80 },
-    { title: '路径名', dataIndex: 'routeName' },
+    { title: '路径名', dataIndex: 'name' },
     {
       title: '航点',
-      dataIndex: 'waypoints',
+      dataIndex: 'points',
       render: (w) => (Array.isArray(w) ? `${w.length} 个点` : JSON.stringify(w).slice(0, 60)),
     },
     {
@@ -295,11 +295,11 @@ export default function NpcPage() {
           <Form.Item label="场景 ID" name="sceneId" rules={[{ required: true }]}>
             <InputNumber style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item label="模板 ID" name="templateId" rules={[{ required: true }]}>
+          <Form.Item label="模板 ID" name="npcTemplateId" rules={[{ required: true }]}>
             <InputNumber style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item label="生成率 (0-1)" name="spawnRate" rules={[{ required: true }]}>
-            <InputNumber min={0} max={1} step={0.01} style={{ width: '100%' }} />
+          <Form.Item label="规则类型" name="ruleType">
+            <Input />
           </Form.Item>
           <Form.Item label="是否启用" name="isActive" valuePropName="checked">
             <Form.Item name="isActive" noStyle>
@@ -320,11 +320,11 @@ export default function NpcPage() {
           <Form.Item label="场景 ID" name="sceneId" rules={[{ required: true }]}>
             <InputNumber style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item label="模板 ID" name="templateId" rules={[{ required: true }]}>
+          <Form.Item label="模板 ID" name="npcTemplateId" rules={[{ required: true }]}>
             <InputNumber style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item label="生成率 (0-1)" name="spawnRate" rules={[{ required: true }]}>
-            <InputNumber min={0} max={1} step={0.01} style={{ width: '100%' }} />
+          <Form.Item label="规则类型" name="ruleType">
+            <Input />
           </Form.Item>
         </Form>
       </Modal>
@@ -339,10 +339,10 @@ export default function NpcPage() {
         width={600}
       >
         <Form form={routeForm} layout="vertical">
-          <Form.Item label="路径名" name="routeName" rules={[{ required: true }]}>
+          <Form.Item label="路径名" name="name" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item label="航点 (JSON 数组)" name="waypoints">
+          <Form.Item label="航点 (JSON 数组)" name="points">
             <Input.TextArea rows={6} placeholder='[{"x":0,"y":0},{"x":10,"y":10}]' />
           </Form.Item>
         </Form>
@@ -357,10 +357,10 @@ export default function NpcPage() {
         width={600}
       >
         <Form form={routeForm} layout="vertical">
-          <Form.Item label="路径名" name="routeName" rules={[{ required: true }]}>
+          <Form.Item label="路径名" name="name" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item label="航点 (JSON 数组)" name="waypoints">
+          <Form.Item label="航点 (JSON 数组)" name="points">
             <Input.TextArea rows={6} placeholder='[{"x":0,"y":0},{"x":10,"y":10}]' />
           </Form.Item>
         </Form>

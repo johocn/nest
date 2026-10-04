@@ -48,6 +48,12 @@ function formatGeneratedAt(iso?: string): string {
 function fmtValue(v: any): string {
   if (v == null) return '—';
   if (typeof v === 'number') return v.toLocaleString();
+  if (typeof v === 'object') {
+    if (Array.isArray(v)) return v.map((x: any) => fmtValue(x)).join(', ');
+    return Object.entries(v)
+      .map(([k, val]) => `${k}:${fmtValue(val)}`)
+      .join(', ');
+  }
   return String(v);
 }
 

@@ -42,13 +42,14 @@ export class AnalyticsController {
   @Get('api/admin/v1/analytics/behavior/stats')
   @ApiOperation({ summary: '行为统计' })
   async getBehaviorStats(
-    @Query('start') start: string,
-    @Query('end') end: string,
+    @Query('start') start?: string,
+    @Query('end') end?: string,
   ) {
-    return this.analyticsService.getBehaviorStats(
-      new Date(start),
-      new Date(end),
-    );
+    const endDate = end ? new Date(end) : new Date();
+    const startDate = start
+      ? new Date(start)
+      : new Date(endDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+    return this.analyticsService.getBehaviorStats(startDate, endDate);
   }
 
   @UseGuards(AdminGuard)

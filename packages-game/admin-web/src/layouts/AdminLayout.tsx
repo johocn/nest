@@ -5,6 +5,9 @@ import {
   GlobalOutlined as GlobeOutlined,
   TeamOutlined,
   LineChartOutlined,
+  UserOutlined,
+  SafetyOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 
@@ -23,6 +26,8 @@ const menuItems: MenuItem[] = [
       { key: '/ladder', label: '天梯' },
       { key: '/room', label: 'Room' },
       { key: '/config', label: '配置中心' },
+      { key: '/player', label: '玩家管理', icon: <UserOutlined /> },
+      { key: '/risk', label: '风控', icon: <SafetyOutlined /> },
     ],
   },
   {
@@ -51,6 +56,15 @@ const menuItems: MenuItem[] = [
     children: [
       { key: '/analytics/dashboard', label: '运营看板' },
       { key: '/balance/audit', label: '经济审计' },
+    ],
+  },
+  {
+    key: 'gameconfig',
+    icon: <SettingOutlined />,
+    label: '游戏配置',
+    children: [
+      { key: '/realm', label: '境界模板' },
+      { key: '/inventory', label: '物品模板' },
     ],
   },
 ];
