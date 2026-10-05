@@ -1,7 +1,7 @@
-import { Module } from '@nestjs/common';
+﻿import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SkillService } from './skill.service';
-import { SkillController } from './skill.controller';
+import { SkillController } from './skill-admin.controller';
 import { SkillTemplate } from './entities';
 import { BuffModule } from '@modules/buff/buff.module';
 

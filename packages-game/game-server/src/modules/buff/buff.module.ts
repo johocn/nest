@@ -1,7 +1,7 @@
-import { Module } from '@nestjs/common';
+﻿import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BuffService } from './buff.service';
-import { BuffController } from './buff.controller';
+import { BuffController } from './buff-admin.controller';
 import { BuffTemplate } from './entities';
 
 @Module({

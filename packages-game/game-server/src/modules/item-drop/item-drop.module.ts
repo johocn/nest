@@ -1,7 +1,7 @@
-import { Module } from '@nestjs/common';
+﻿import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { DropService } from './drop.service';
-import { DropController } from './drop.controller';
+import { DropController } from './drop-admin.controller';
 import { DropTemplate } from './entities';
 import { InventoryModule } from '@modules/inventory/inventory.module';
 

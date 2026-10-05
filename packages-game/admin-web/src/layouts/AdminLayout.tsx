@@ -1,4 +1,4 @@
-﻿﻿import { Layout, Menu, Button } from 'antd';
+﻿import { Layout, Menu, Button } from 'antd';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   ThunderboltOutlined,
@@ -76,6 +76,7 @@ const menuItems: MenuItem[] = [
       { key: '/activity', label: '活动管理' },
       { key: '/achievement', label: '成就模板' },
       { key: '/vip', label: 'VIP配置' },
+      { key: '/giftcode', label: '礼包码' },
     ],
   },
 ];

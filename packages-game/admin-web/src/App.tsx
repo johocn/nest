@@ -1,4 +1,4 @@
-﻿﻿import { Navigate, Route, Routes } from 'react-router-dom';
+﻿import { Navigate, Route, Routes } from 'react-router-dom';
 import AdminLayout from './layouts/AdminLayout';
 import Login from './pages/Login';
 import GMCommand from './pages/GMCommand';
@@ -28,6 +28,7 @@ import ChatPage from './pages/Chat';
 import ActivityPage from './pages/Activity';
 import AchievementPage from './pages/Achievement';
 import VipPage from './pages/VIP';
+import GiftcodePage from './pages/Giftcode';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const token = localStorage.getItem('admin_token');
@@ -80,6 +81,7 @@ export default function App() {
         <Route path="activity" element={<ActivityPage />} />
         <Route path="achievement" element={<AchievementPage />} />
         <Route path="vip" element={<VipPage />} />
+        <Route path="giftcode" element={<GiftcodePage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
