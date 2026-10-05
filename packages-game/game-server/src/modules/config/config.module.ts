@@ -2,6 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigManageService } from './config.service';
 import { ConfigController } from './config.controller';
+import { ConfigAdminController } from './config-admin.controller';
 import { RemoteConfig, ConfigVersion } from './entities';
 import { AdminModule } from '@modules/admin/admin.module';
 
@@ -10,7 +11,7 @@ import { AdminModule } from '@modules/admin/admin.module';
     TypeOrmModule.forFeature([RemoteConfig, ConfigVersion]),
     forwardRef(() => AdminModule),
   ],
-  controllers: [ConfigController],
+  controllers: [ConfigController, ConfigAdminController],
   providers: [ConfigManageService],
   exports: [ConfigManageService],
 })

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CommunityService } from './community.service';
 import { CommunityController } from './community.controller';
+import { CommunityAdminController } from './community-admin.controller';
 import { FeedbackSuggestion, PlayerAmbassador } from './entities';
 import { PlayerReport } from '@modules/social/entities/player-report.entity';
 import { Player } from '@modules/player/entities/player.entity';
@@ -35,7 +36,7 @@ import { EconomyModule } from '@modules/economy/economy.module';
     SocialModule,
     EconomyModule,
   ],
-  controllers: [CommunityController],
+  controllers: [CommunityController, CommunityAdminController],
   providers: [CommunityService],
   exports: [CommunityService],
 })

@@ -2,25 +2,16 @@ import {
   Body,
   Controller,
   Get,
-  Param,
   Post,
-  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CommunityService } from './community.service';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
-import { AdminGuard } from '@common/guards/admin.guard';
 import { CurrentPlayer } from '@common/decorators/current-player.decorator';
-import { CurrentAdmin } from '@common/decorators/current-admin.decorator';
 import type { CurrentPlayerData } from '@common/decorators/current-player.decorator';
-import type { AdminJwtPayload } from '@common/guards/admin.guard';
 import {
-  AmbassadorStatus,
   FeedbackCategory,
-  FeedbackStatus,
-  ReportHandleAction,
-  ReportStatus,
 } from '@constants/enums';
 
 @ApiTags('Community')
@@ -52,134 +43,12 @@ export class CommunityController {
     return this.communityService.getMyFeedback(player.playerId);
   }
 
-  // ===== 建议箱（Admin） =====
-
-  @UseGuards(AdminGuard)
-  @Get('api/admin/v1/community/feedback/list')
-  @ApiOperation({ summary: '反馈列表（管理端）' })
-  async listFeedback(
-    @Query('status') status?: FeedbackStatus,
-    @Query('page') page = 1,
-    @Query('limit') limit = 20,
-  ) {
-    return this.communityService.listFeedback(
-      status,
-      Number(page),
-      Number(limit),
-    );
-  }
-
-  @UseGuards(AdminGuard)
-  @Post('api/admin/v1/community/feedback/:id/handle')
-  @ApiOperation({ summary: '处理反馈（采纳/驳回/完成 + 回复）' })
-  async handleFeedback(
-    @CurrentAdmin() admin: AdminJwtPayload,
-    @Param('id') id: string,
-    @Body() body: { status: FeedbackStatus; reply?: string },
-  ) {
-    return this.communityService.handleFeedback(
-      admin.adminId,
-      id,
-      body.status,
-      body.reply,
-    );
-  }
-
-  // ===== 玩家大使 =====
-
-  @UseGuards(AdminGuard)
-  @Post('api/admin/v1/community/ambassadors')
-  @ApiOperation({ summary: '任命玩家大使（自动发放江湖大使称号）' })
-  async appointAmbassador(
-    @CurrentAdmin() admin: AdminJwtPayload,
-    @Body() body: { playerId: string; remark?: string },
-  ) {
-    return this.communityService.appointAmbassador(
-      admin.adminId,
-      body.playerId,
-      body.remark,
-    );
-  }
-
-  @UseGuards(AdminGuard)
-  @Post('api/admin/v1/community/ambassadors/:id/revoke')
-  @ApiOperation({ summary: '撤销玩家大使' })
-  async revokeAmbassador(
-    @CurrentAdmin() admin: AdminJwtPayload,
-    @Param('id') id: string,
-  ) {
-    return this.communityService.revokeAmbassador(admin.adminId, id);
-  }
-
-  @UseGuards(AdminGuard)
-  @Get('api/admin/v1/community/ambassadors')
-  @ApiOperation({ summary: '大使列表（管理端，可按状态过滤）' })
-  async listAmbassadors(
-    @Query('status') status?: AmbassadorStatus,
-    @Query('page') page = 1,
-    @Query('limit') limit = 20,
-  ) {
-    return this.communityService.listAmbassadors(
-      status,
-      Number(page),
-      Number(limit),
-    );
-  }
+  // ===== 在任大使列表（客户端） =====
 
   @UseGuards(JwtAuthGuard)
   @Get('api/client/v1/community/ambassadors')
   @ApiOperation({ summary: '在任大使列表（客户端）' })
   async getActiveAmbassadors() {
     return this.communityService.getActiveAmbassadors();
-  }
-
-  // ===== 举报台账（阶段5批1） =====
-
-  @UseGuards(AdminGuard)
-  @Get('api/admin/v1/community/reports')
-  @ApiOperation({ summary: '举报台账（管理端，可按状态过滤）' })
-  async listReports(
-    @Query('status') status?: ReportStatus,
-    @Query('page') page = 1,
-    @Query('limit') limit = 20,
-  ) {
-    return this.communityService.listReports(
-      status,
-      Number(page),
-      Number(limit),
-    );
-  }
-
-  @UseGuards(AdminGuard)
-  @Post('api/admin/v1/community/reports/:id/handle')
-  @ApiOperation({ summary: '处置举报（忽略/警告/禁言/封禁）' })
-  async handleReport(
-    @CurrentAdmin() admin: AdminJwtPayload,
-    @Param('id') id: string,
-    @Body()
-    body: {
-      action: ReportHandleAction;
-      durationSeconds?: number;
-      remark?: string;
-    },
-  ) {
-    return this.communityService.handleReport(
-      admin.adminId,
-      admin.username,
-      id,
-      body.action,
-      body.remark,
-      body.durationSeconds,
-    );
-  }
-
-  @UseGuards(AdminGuard)
-  @Post('api/admin/v1/community/players/:playerId/social-cleanup')
-  @ApiOperation({ summary: '[管理] 历史封禁补执行社交后果' })
-  async socialCleanup(
-    @CurrentAdmin() admin: AdminJwtPayload,
-    @Param('playerId') playerId: string,
-  ) {
-    return this.communityService.socialCleanup(admin.adminId, playerId);
   }
 }

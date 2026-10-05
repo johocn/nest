@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { QuestService } from './quest.service';
 import { QuestController } from './quest.controller';
+import { QuestAdminController } from './quest-admin.controller';
 import { QuestEventListener } from './quest-event.listener';
 import { QuestTemplate, PlayerQuest, QuestHelpRequest } from './entities';
 import { EconomyModule } from '@modules/economy/economy.module';
@@ -17,7 +18,7 @@ import { PlayerModule } from '@modules/player/player.module';
     SocialModule,
     PlayerModule,
   ],
-  controllers: [QuestController],
+  controllers: [QuestController, QuestAdminController],
   providers: [QuestService, QuestEventListener],
   exports: [QuestService],
 })

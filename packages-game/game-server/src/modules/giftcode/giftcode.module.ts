@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { GiftCodeService } from './giftcode.service';
 import { GiftCodeController } from './giftcode.controller';
+import { GiftCodeAdminController } from './giftcode-admin.controller';
 import {
   GiftCode,
   GiftCodeTemplate,
@@ -20,7 +21,7 @@ import { EconomyModule } from '@modules/economy/economy.module';
     PlayerModule,
     EconomyModule,
   ],
-  controllers: [GiftCodeController],
+  controllers: [GiftCodeController, GiftCodeAdminController],
   providers: [GiftCodeService],
   exports: [GiftCodeService],
 })

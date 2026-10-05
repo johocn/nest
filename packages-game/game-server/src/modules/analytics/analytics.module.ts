@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AnalyticsService } from './analytics.service';
 import { AnalyticsController } from './analytics.controller';
+import { AnalyticsAdminController } from './analytics-admin.controller';
 import { BalanceAuditService } from './balance-audit.service';
 import { BalanceAuditController } from './balance-audit.controller';
 import { PlayerBehaviorLog, RetentionStat } from './entities';
@@ -29,7 +30,7 @@ import { ChatMessage } from '@modules/chat/entities/chat-message.entity';
       ChatMessage,
     ]),
   ],
-  controllers: [AnalyticsController, BalanceAuditController],
+  controllers: [AnalyticsController, AnalyticsAdminController, BalanceAuditController],
   providers: [AnalyticsService, BalanceAuditService],
   exports: [AnalyticsService, BalanceAuditService],
 })
