@@ -17,7 +17,7 @@ export class VipConfig {
   @Column({ type: 'varchar', length: 64, nullable: true })
   name: string | null;
 
-  @Column({ type: 'double', default: 1 })
+  @Column({ type: 'double precision', default: 1 })
   multiplier: number;
 
   @Column({ name: 'is_active', type: 'boolean', default: true })

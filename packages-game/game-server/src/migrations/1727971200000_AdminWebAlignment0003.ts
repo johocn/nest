@@ -1,6 +1,7 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+﻿import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class AdminWebAlignment0003 implements MigrationInterface {
+  name = 'AdminWebAlignment00031727971200000';
   public async up(queryRunner: QueryRunner): Promise<void> {
     // AchievementTemplate: type + is_active + condition_json
     await queryRunner.query(`ALTER TABLE achievement_templates ADD COLUMN IF NOT EXISTS "type" varchar(64)`);

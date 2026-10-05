@@ -1,7 +1,7 @@
-import type { MigrationInterface, QueryRunner } from 'typeorm';
+﻿import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class InitialSchema0001 implements MigrationInterface {
-  name = 'InitialSchema0001';
+  name = 'InitialSchema00011704067200000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // This is a placeholder migration.

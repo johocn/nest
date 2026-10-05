@@ -1,6 +1,7 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+﻿import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class ProductionReadinessSchema0002 implements MigrationInterface {
+  name = 'ProductionReadinessSchema00021725379200000';
   public async up(queryRunner: QueryRunner): Promise<void> {
     // This migration should be regenerated after database is available:
     // npx typeorm-ts-node-commonjs migration:generate src/migrations/0002_production_readiness_schema -d src/data-source.ts
