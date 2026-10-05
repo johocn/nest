@@ -1,4 +1,4 @@
-﻿﻿import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import {
   Button,
   Form,
@@ -253,10 +253,10 @@ export default function ScenePage() {
   const [form] = Form.useForm();
 
   const fetchList = (page: number, limit: number) =>
-    client.get('/admin/v1/world/scene/list', { params: { page, limit } });
+    client.get('/admin/v1/world/scenes', { params: { page, limit } });
 
-  const fetchSpawns = (id: number) => client.get(`/admin/v1/world/scene/${id}/spawns`);
-  const fetchTriggers = (id: number) => client.get(`/admin/v1/world/scene/${id}/triggers`);
+  const fetchSpawns = (id: number) => client.get(`/admin/v1/world/scenes/${id}/spawns`);
+  const fetchTriggers = (id: number) => client.get(`/admin/v1/world/scenes/${id}/triggers`);
 
   const triggerReload = () => setReloadKey((k) => k + 1);
 
@@ -279,7 +279,7 @@ export default function ScenePage() {
 
   const handleDelete = async (record: Scene) => {
     try {
-      await client.delete(`/admin/v1/world/scene/${record.id}`);
+      await client.delete(`/admin/v1/world/scenes/${record.id}`);
       message.success('删除成功');
       triggerReload();
     } catch {
@@ -290,7 +290,7 @@ export default function ScenePage() {
   const handleCreate = async () => {
     const values = await form.validateFields();
     try {
-      await client.post('/admin/v1/world/scene', values);
+      await client.post('/admin/v1/world/scenes', values);
       message.success('创建成功');
       setCreateOpen(false);
       form.resetFields();
@@ -303,7 +303,7 @@ export default function ScenePage() {
   const handleEdit = async () => {
     const values = await form.validateFields();
     try {
-      await client.put(`/admin/v1/world/scene/${current?.id}`, values);
+      await client.put(`/admin/v1/world/scenes/${current?.id}`, values);
       message.success('更新成功');
       setEditOpen(false);
       triggerReload();

@@ -53,6 +53,18 @@ export class WorldSceneAdminController {
     return this.worldService.getScene(id);
   }
 
+  @Get(':id/spawns')
+  @ApiOperation({ summary: '场景实体生成配置' })
+  async getSpawns(@Param('id') id: string) {
+    return this.worldService.getSceneSpawns(id);
+  }
+
+  @Get(':id/triggers')
+  @ApiOperation({ summary: '场景触发器列表' })
+  async getTriggers(@Param('id') id: string) {
+    return this.worldService.getSceneTriggers(id);
+  }
+
   @Post()
   @ApiOperation({ summary: '新建场景' })
   async createScene(
