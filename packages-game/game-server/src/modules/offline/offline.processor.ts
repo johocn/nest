@@ -14,7 +14,7 @@ export class OfflineProcessor extends WorkerHost implements OnModuleDestroy {
   }
 
   async onModuleDestroy() {
-    await this.worker?.close();
+    try { await (this as any).worker?.close?.(); } catch { /* worker 未初始化时忽略 */ }
   }
 
   async process(job: Job<{ playerId: string; message: any }>): Promise<any> {

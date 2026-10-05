@@ -1,4 +1,4 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+﻿import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import type { Job } from 'bullmq';
 import { MailService } from './mail.service';
@@ -14,7 +14,7 @@ export class MailBatchProcessor extends WorkerHost implements OnModuleDestroy {
   }
 
   async onModuleDestroy() {
-    await this.worker?.close();
+    try { await (this as any).worker?.close?.(); } catch { /* worker 未初始化时忽略 */ }
   }
 
   async process(
