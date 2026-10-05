@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TradeService } from './trade.service';
 import { TradeController } from './trade.controller';
+import { TradeAdminController } from './trade-admin.controller';
 import {
   TradeOrder,
   AuctionItem,
@@ -19,6 +20,7 @@ import { VipModule } from '@modules/vip/vip.module';
 import { RiskModule } from '@modules/risk/risk.module';
 import { InventoryModule } from '@modules/inventory/inventory.module';
 import { ConfigManageModule } from '@modules/config/config.module';
+import { AdminModule } from '@modules/admin/admin.module';
 
 @Module({
   imports: [
@@ -31,6 +33,7 @@ import { ConfigManageModule } from '@modules/config/config.module';
       CreditDebt,
       BarterDeal,
     ]),
+    AdminModule,
     EconomyModule,
     SocialModule,
     CharacterModule,
@@ -40,7 +43,7 @@ import { ConfigManageModule } from '@modules/config/config.module';
     InventoryModule,
     ConfigManageModule,
   ],
-  controllers: [TradeController],
+  controllers: [TradeController, TradeAdminController],
   providers: [TradeService],
   exports: [TradeService],
 })

@@ -9,11 +9,13 @@ import { Transaction } from './entities/transaction.entity';
 import { PlayerCurrency } from '@modules/player/entities/player-currency.entity';
 import { RiskRecoverRecord } from '@modules/risk/entities/risk-recover-record.entity';
 import { PlayerModule } from '@modules/player/player.module';
+import { AdminModule } from '@modules/admin/admin.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Transaction, PlayerCurrency, RiskRecoverRecord]),
     PlayerModule,
+    AdminModule,
   ],
   controllers: [EconomyController, EconomyClientController, EconomyAdminController],
   providers: [EconomyService, EconomyDashboardService],

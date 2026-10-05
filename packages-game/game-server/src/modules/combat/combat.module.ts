@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { CombatService } from './combat.service';
 import { CombatController } from './combat.controller';
 import { CombatClientController } from './combat.client.controller';
+import { CombatAdminController } from './combat-admin.controller';
 import { CombatLogProcessor } from './combat.processor';
 import {
   CombatLog,
@@ -24,6 +25,7 @@ import { EconomyModule } from '@modules/economy/economy.module';
 import { CharacterModule } from '@modules/character/character.module';
 import { SocialModule } from '@modules/social/social.module';
 import { PlayerModule } from '@modules/player/player.module';
+import { AdminModule } from '@modules/admin/admin.module';
 
 @Module({
   imports: [
@@ -35,6 +37,7 @@ import { PlayerModule } from '@modules/player/player.module';
       CombatLootLog,
       CombatArbitration,
     ]),
+    AdminModule,
     SkillModule,
     BuffModule,
     QueueModule,
@@ -43,7 +46,7 @@ import { PlayerModule } from '@modules/player/player.module';
     SocialModule,
     PlayerModule,
   ],
-  controllers: [CombatController, CombatClientController],
+  controllers: [CombatController, CombatClientController, CombatAdminController],
   providers: [
     CombatService,
     CombatLogProcessor,

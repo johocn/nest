@@ -3,6 +3,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { SocialService } from './social.service';
 import { SocialController } from './social.controller';
 import { SocialAdminController } from './social-admin.controller';
+import { SocialGuildAdminController } from './social-guild-admin.controller';
+import { SocialReportAdminController } from './social-report-admin.controller';
 import { SocialEconomyService } from './social-economy.service';
 import { SocialGuideService } from './social-guide.service';
 import { SocialEventListener } from './social-event.listener';
@@ -34,6 +36,7 @@ import { PlayerModule } from '@modules/player/player.module';
 import { ConfigManageModule } from '@modules/config/config.module';
 import { VipModule } from '@modules/vip/vip.module';
 import { RiskModule } from '@modules/risk/risk.module';
+import { AdminModule } from '@modules/admin/admin.module';
 
 @Module({
   imports: [
@@ -65,8 +68,9 @@ import { RiskModule } from '@modules/risk/risk.module';
     ConfigManageModule,
     VipModule,
     RiskModule,
+    AdminModule,
   ],
-  controllers: [SocialController, SocialAdminController],
+  controllers: [SocialController, SocialAdminController, SocialGuildAdminController, SocialReportAdminController],
   providers: [
     SocialService,
     SocialEconomyService,
