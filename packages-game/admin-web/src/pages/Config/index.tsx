@@ -190,7 +190,6 @@ interface BuffTemplate {
   statModifiers?: Record<string, number>;
   description?: string;
   iconKey?: string;
-  enabled?: boolean;
 }
 
 function BuffTemplateTab() {
@@ -314,14 +313,6 @@ function BuffTemplateTab() {
       width: 110,
     },
     {
-      title: '状态',
-      dataIndex: 'enabled',
-      key: 'enabled',
-      width: 100,
-      render: (v: boolean) =>
-        v ? <Tag color="green">启用</Tag> : <Tag color="default">禁用</Tag>,
-    },
-    {
       title: '操作',
       key: 'action',
       width: 180,
@@ -422,7 +413,6 @@ interface SkillTemplate {
   range: number;
   effectJson?: Record<string, unknown>;
   minLevel?: number;
-  enabled?: boolean;
 }
 
 function SkillTemplateTab() {
@@ -556,14 +546,6 @@ function SkillTemplateTab() {
       width: 80,
     },
     {
-      title: '状态',
-      dataIndex: 'enabled',
-      key: 'enabled',
-      width: 100,
-      render: (v: boolean) =>
-        v ? <Tag color="green">启用</Tag> : <Tag color="default">禁用</Tag>,
-    },
-    {
       title: '操作',
       key: 'action',
       width: 180,
@@ -678,7 +660,6 @@ interface DropTemplate {
   dropRate: number;
   maxDrops: number;
   dropItems: DropItem[];
-  enabled?: boolean;
 }
 
 function DropTemplateTab() {
@@ -800,14 +781,6 @@ function DropTemplateTab() {
       key: 'dropItems',
       width: 110,
       render: (v: DropItem[]) => `${Array.isArray(v) ? v.length : 0} 项`,
-    },
-    {
-      title: '状态',
-      dataIndex: 'enabled',
-      key: 'enabled',
-      width: 100,
-      render: (v: boolean) =>
-        v ? <Tag color="green">启用</Tag> : <Tag color="default">禁用</Tag>,
     },
     {
       title: '操作',
