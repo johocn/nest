@@ -77,6 +77,7 @@ const menuItems: MenuItem[] = [
       { key: '/achievement', label: '成就模板' },
       { key: '/vip', label: 'VIP配置' },
       { key: '/giftcode', label: '礼包码' },
+      { key: '/payment', label: '充值管理' },
     ],
   },
 ];

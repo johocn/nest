@@ -34,7 +34,7 @@ import type { CurrentPlayerData } from '@common/decorators/current-player.decora
 @ApiTags('Trade')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
-@Controller()
+@Controller('api/client/v1/trade')
 export class TradeController {
   constructor(private readonly tradeService: TradeService) {}
 
@@ -47,7 +47,7 @@ export class TradeController {
 
   // ===== Trade Order =====
 
-  @Post('api/client/v1/trade/order')
+  @Post('order')
   @ApiOperation({ summary: '上架交易' })
   async createOrder(
     @CurrentPlayer() player: CurrentPlayerData,
@@ -63,7 +63,7 @@ export class TradeController {
     });
   }
 
-  @Post('api/client/v1/trade/order/:id/buy')
+  @Post('order/:id/buy')
   @ApiOperation({ summary: '购买商品' })
   async buyItem(
     @CurrentPlayer() player: CurrentPlayerData,
@@ -72,7 +72,7 @@ export class TradeController {
     return this.tradeService.buyItem(player.playerId, this.assertId(id));
   }
 
-  @Post('api/client/v1/trade/order/:id/cancel')
+  @Post('order/:id/cancel')
   @ApiOperation({ summary: '取消交易' })
   async cancelOrder(
     @CurrentPlayer() player: CurrentPlayerData,
@@ -84,7 +84,7 @@ export class TradeController {
     );
   }
 
-  @Get('api/client/v1/trade/market')
+  @Get('market')
   @ApiOperation({ summary: '交易市场列表' })
   async getMarket(@Query('page') page = 1, @Query('limit') limit = 20) {
     return this.tradeService.getMarketList(Number(page), Number(limit));
@@ -92,7 +92,7 @@ export class TradeController {
 
   // ===== Auction =====
 
-  @Post('api/client/v1/trade/auction')
+  @Post('auction')
   @ApiOperation({ summary: '上架拍卖' })
   async listAuction(
     @CurrentPlayer() player: CurrentPlayerData,
@@ -109,7 +109,7 @@ export class TradeController {
     });
   }
 
-  @Post('api/client/v1/trade/auction/:id/bid')
+  @Post('auction/:id/bid')
   @ApiOperation({ summary: '竞拍出价' })
   async placeBid(
     @CurrentPlayer() player: CurrentPlayerData,
@@ -123,7 +123,7 @@ export class TradeController {
     );
   }
 
-  @Get('api/client/v1/trade/auction/list')
+  @Get('auction/list')
   @ApiOperation({ summary: '拍卖列表（可选 exclusive=true 只看专属拍卖室）' })
   async getAuctionList(
     @Query('page') page = 1,
@@ -139,7 +139,7 @@ export class TradeController {
 
   // ===== Negotiation =====
 
-  @Post('api/client/v1/trade/negotiations')
+  @Post('negotiations')
   @ApiOperation({ summary: '发起议价' })
   async startNegotiation(
     @CurrentPlayer() player: CurrentPlayerData,
@@ -152,7 +152,7 @@ export class TradeController {
     );
   }
 
-  @Post('api/client/v1/trade/negotiations/:id/reply')
+  @Post('negotiations/:id/reply')
   @ApiOperation({ summary: '卖家还价' })
   async replyNegotiation(
     @CurrentPlayer() player: CurrentPlayerData,
@@ -166,7 +166,7 @@ export class TradeController {
     );
   }
 
-  @Post('api/client/v1/trade/negotiations/:id/accept')
+  @Post('negotiations/:id/accept')
   @ApiOperation({ summary: '买家接受成交' })
   async acceptNegotiation(
     @CurrentPlayer() player: CurrentPlayerData,
@@ -178,7 +178,7 @@ export class TradeController {
     );
   }
 
-  @Post('api/client/v1/trade/negotiations/:id/reject')
+  @Post('negotiations/:id/reject')
   @ApiOperation({ summary: '买家拒绝议价' })
   async rejectNegotiation(
     @CurrentPlayer() player: CurrentPlayerData,
@@ -192,7 +192,7 @@ export class TradeController {
 
   // ===== Escrow =====
 
-  @Post('api/client/v1/trade/escrow')
+  @Post('escrow')
   @ApiOperation({ summary: '发起担保交易' })
   async createEscrow(
     @CurrentPlayer() player: CurrentPlayerData,
@@ -206,7 +206,7 @@ export class TradeController {
     );
   }
 
-  @Post('api/client/v1/trade/escrow/:id/inspect')
+  @Post('escrow/:id/inspect')
   @ApiOperation({ summary: '担保人验货放款' })
   async inspectGoods(
     @CurrentPlayer() player: CurrentPlayerData,
@@ -215,13 +215,13 @@ export class TradeController {
     return this.tradeService.inspectGoods(player.playerId, this.assertId(id));
   }
 
-  @Post('api/client/v1/trade/escrow/:id/penalize')
+  @Post('escrow/:id/penalize')
   @ApiOperation({ summary: '担保违约赔付' })
   async penalizeEscrow(@Param('id') id: string) {
     return this.tradeService.penalizeEscrow(this.assertId(id));
   }
 
-  @Get('api/client/v1/trade/escrow/:id')
+  @Get('escrow/:id')
   @ApiOperation({ summary: '担保记录详情' })
   async getEscrow(@Param('id') id: string) {
     return this.tradeService.getEscrow(this.assertId(id));
@@ -229,7 +229,7 @@ export class TradeController {
 
   // ===== Bounty =====
 
-  @Post('api/client/v1/trade/bounties')
+  @Post('bounties')
   @ApiOperation({ summary: '发布悬赏' })
   async createBounty(
     @CurrentPlayer() player: CurrentPlayerData,
@@ -245,7 +245,7 @@ export class TradeController {
     );
   }
 
-  @Post('api/client/v1/trade/bounties/:id/accept')
+  @Post('bounties/:id/accept')
   @ApiOperation({ summary: '接取悬赏' })
   async acceptBounty(
     @CurrentPlayer() player: CurrentPlayerData,
@@ -254,7 +254,7 @@ export class TradeController {
     return this.tradeService.acceptBounty(player.playerId, this.assertId(id));
   }
 
-  @Post('api/client/v1/trade/bounties/:id/complete')
+  @Post('bounties/:id/complete')
   @ApiOperation({ summary: '提交悬赏结算' })
   async completeBounty(
     @CurrentPlayer() player: CurrentPlayerData,
@@ -266,7 +266,7 @@ export class TradeController {
     );
   }
 
-  @Post('api/client/v1/trade/bounties/:id/cancel')
+  @Post('bounties/:id/cancel')
   @ApiOperation({ summary: '取消悬赏（托管金返还）' })
   async cancelBounty(
     @CurrentPlayer() player: CurrentPlayerData,
@@ -275,7 +275,7 @@ export class TradeController {
     return this.tradeService.cancelBounty(player.playerId, this.assertId(id));
   }
 
-  @Get('api/client/v1/trade/bounties')
+  @Get('bounties')
   @ApiOperation({ summary: '悬赏榜' })
   async getBountyBoard(
     @Query('page') page = 1,
@@ -286,7 +286,7 @@ export class TradeController {
 
   // ===== Credit =====
 
-  @Post('api/client/v1/trade/credit')
+  @Post('credit')
   @ApiOperation({ summary: '发起赊账借款' })
   async createCredit(
     @CurrentPlayer() player: CurrentPlayerData,
@@ -300,7 +300,7 @@ export class TradeController {
     );
   }
 
-  @Post('api/client/v1/trade/credit/:id/repay')
+  @Post('credit/:id/repay')
   @ApiOperation({ summary: '还款结清' })
   async repayCredit(
     @CurrentPlayer() player: CurrentPlayerData,
@@ -309,7 +309,7 @@ export class TradeController {
     return this.tradeService.repayCredit(player.playerId, this.assertId(id));
   }
 
-  @Get('api/client/v1/trade/credit/mine')
+  @Get('credit/mine')
   @ApiOperation({ summary: '我的赊账列表' })
   async getCreditList(@CurrentPlayer() player: CurrentPlayerData) {
     return this.tradeService.getCreditList(player.playerId);
@@ -317,7 +317,7 @@ export class TradeController {
 
   // ===== Barter =====
 
-  @Post('api/client/v1/trade/barter')
+  @Post('barter')
   @ApiOperation({ summary: '发起以物易物' })
   async createBarter(
     @CurrentPlayer() player: CurrentPlayerData,
@@ -330,7 +330,7 @@ export class TradeController {
     );
   }
 
-  @Post('api/client/v1/trade/barter/:id/accept')
+  @Post('barter/:id/accept')
   @ApiOperation({ summary: '接受易物并确认' })
   async acceptBarter(
     @CurrentPlayer() player: CurrentPlayerData,
@@ -344,7 +344,7 @@ export class TradeController {
     );
   }
 
-  @Get('api/client/v1/trade/barter/mine')
+  @Get('barter/mine')
   @ApiOperation({ summary: '我的易物列表' })
   async getBarterList(@CurrentPlayer() player: CurrentPlayerData) {
     return this.tradeService.getBarterList(player.playerId);
