@@ -5,6 +5,7 @@ import { Mail } from './entities';
 import { CacheService } from '@cache/cache.service';
 import { EventBusService } from '@event-bus/event-bus.service';
 import { MailSenderType } from '@constants/enums';
+import { Player } from '@modules/player/entities/player.entity';
 import type { Repository } from 'typeorm';
 
 describe('MailService', () => {
@@ -27,6 +28,18 @@ describe('MailService', () => {
               .mockImplementation((data: any) => Promise.resolve(data)),
             create: jest.fn((data: any) => ({ ...data, id: '1' })),
             findAndCount: jest.fn(),
+          },
+        },
+        // MailService index [1] — PlayerRepo（sendBatchWithTarget 使用）
+        {
+          provide: getRepositoryToken(Player),
+          useValue: {
+            find: jest.fn().mockResolvedValue([]),
+            createQueryBuilder: jest.fn(() => ({
+              where: jest.fn().mockReturnThis(),
+              select: jest.fn().mockReturnThis(),
+              getMany: jest.fn().mockResolvedValue([]),
+            })),
           },
         },
         {

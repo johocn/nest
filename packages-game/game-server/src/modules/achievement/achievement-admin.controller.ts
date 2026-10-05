@@ -11,6 +11,7 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AchievementService } from './achievement.service';
 import { AdminGuard } from '@common/guards/admin.guard';
+import { AchievementCondition } from '@constants/enums';
 
 /**
  * admin-web ↔ entity 字段映射层
@@ -40,14 +41,19 @@ const toEntityPayload = (dto: any): any => {
     delete out.reward;
   }
 
-  // condition: enum string → condition; JSON 对象 → conditionJson
+  // condition: enum string → condition; JSON 对象 → conditionJson; 都不传 → fallback
   if (dto.condition !== undefined) {
     if (isJsonObject(dto.condition)) {
       out.conditionJson = dto.condition;
+      // JSON 对象时给 condition enum 列一个默认值（enum 列非 nullable）
+      if (!out.condition) out.condition = AchievementCondition.REACH_LEVEL;
     } else {
       out.condition = dto.condition;
     }
     delete out.condition;
+  } else {
+    // admin-web 完全不传 condition 时，保证 enum 列有值
+    if (!out.condition) out.condition = AchievementCondition.REACH_LEVEL;
   }
 
   return out;
