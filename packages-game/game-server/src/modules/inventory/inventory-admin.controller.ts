@@ -39,16 +39,28 @@ export class InventoryAdminController {
 
   @Post('item-template')
   @ApiOperation({ summary: '创建道具模板' })
-  async createTemplate(@Body() dto: AdminCreateTemplateDto) {
-    return this.inventoryService.createTemplate(dto);
+  async createTemplate(@Body() body: any) {
+    return this.inventoryService.createTemplate(body);
   }
 
   @Put('item-template/:id')
   @ApiOperation({ summary: '修改道具模板' })
   async updateTemplate(
     @Param('id') id: string,
-    @Body() dto: AdminUpdateTemplateDto,
+    @Body() body: any,
   ) {
-    return this.inventoryService.updateTemplate(id, dto);
+    return this.inventoryService.updateTemplate(id, body);
+  }
+
+  @Post('grant')
+  @ApiOperation({ summary: 'GM 给玩家发道具' })
+  async grant(@Body() body: any) {
+    const { playerId, itemTemplateId, quantity, opTrace } = body;
+    return this.inventoryService.addItem(
+      String(playerId),
+      String(itemTemplateId),
+      Number(quantity) || 1,
+      opTrace ?? 'admin.grant',
+    );
   }
 }

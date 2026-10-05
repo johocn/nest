@@ -23,7 +23,8 @@ import {
 import { Transaction } from './entities/transaction.entity';
 import { PlayerCurrency } from '@modules/player/entities/player-currency.entity';
 import { RiskRecoverRecord } from '@modules/risk/entities/risk-recover-record.entity';
-import { RiskRecoverStatus } from '@constants/enums';
+import { RiskRecoverStatus, CurrencyType } from '@constants/enums';
+import { EconomyService } from './economy.service';
 
 @ApiTags('Admin-Economy')
 @ApiBearerAuth()
@@ -33,6 +34,7 @@ export class EconomyAdminController {
   constructor(
     private readonly economyDashboardService: EconomyDashboardService,
     private readonly adminService: AdminService,
+    private readonly economyService: EconomyService,
     @InjectRepository(Transaction)
     private readonly transactionRepo: Repository<Transaction>,
     @InjectRepository(PlayerCurrency)
@@ -160,5 +162,22 @@ export class EconomyAdminController {
       changeAfter: { status: saved.status, handledBy: saved.handledBy, note: body?.note },
     });
     return saved;
+  }
+
+  @Post('grant-currency')
+  @ApiOperation({ summary: 'GM 给玩家发货币' })
+  async grantCurrency(
+    @Body() body: any,
+    @CurrentAdmin() admin?: AdminJwtPayload,
+  ) {
+    const { playerId, currencyType, amount, opTrace } = body;
+    return this.economyService.addCurrency(
+      String(playerId),
+      String(currencyType) as CurrencyType,
+      Number(amount),
+      opTrace ?? 'admin.grant',
+      'admin.economy.grant',
+      admin?.adminId ?? 'unknown',
+    );
   }
 }

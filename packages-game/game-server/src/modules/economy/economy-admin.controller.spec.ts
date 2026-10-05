@@ -7,6 +7,7 @@ import { EconomyAdminController } from './economy-admin.controller';
 import { EconomyDashboardService } from './economy-dashboard.service';
 import { AdminSessionService } from '@modules/auth/admin-session.service';
 import { AdminService } from '@modules/admin/admin.service';
+import { EconomyService } from './economy.service';
 import { Transaction } from './entities/transaction.entity';
 import { PlayerCurrency } from '@modules/player/entities/player-currency.entity';
 import { RiskRecoverRecord } from '@modules/risk/entities/risk-recover-record.entity';
@@ -20,8 +21,8 @@ describe('EconomyAdminController', () => {
       controllers: [EconomyAdminController],
       providers: [
         { provide: EconomyDashboardService, useValue: svc },
-        // EconomyAdminController 扩展后新增的依赖
         { provide: AdminService, useValue: { logOperation: jest.fn().mockResolvedValue(null) } },
+        { provide: EconomyService, useValue: { addCurrency: jest.fn().mockResolvedValue({ balanceAfter: '100' }) } },
         {
           provide: getRepositoryToken(Transaction),
           useValue: { findAndCount: jest.fn(), findOne: jest.fn() },
@@ -34,7 +35,6 @@ describe('EconomyAdminController', () => {
           provide: getRepositoryToken(RiskRecoverRecord),
           useValue: { findAndCount: jest.fn(), findOne: jest.fn(), update: jest.fn() },
         },
-        // AdminGuard 依赖
         { provide: JwtService, useValue: { verify: jest.fn() } },
         { provide: ConfigService, useValue: { get: jest.fn(() => 'secret') } },
         {

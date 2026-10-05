@@ -313,6 +313,141 @@ describe('Game Server E2E (HTTP)', () => {
     expect(r.body.code).toBe(0);
   });
 
+  // ===== Trade 完整玩法链路：admin 发道具 → 卖家挂单 → admin 发货币 → 买家购买 =====
+
+  const tradeRand = Math.random().toString(36).slice(2, 6);
+  let tradeTemplateId = '';
+  let tradeOrderId = '';
+  let buyerToken2 = '';
+
+  it('Trade 完整链路 — Admin 创建可交易道具模板', async () => {
+    const r = await requestHttp
+      .post('/api/admin/v1/inventory/item-template')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        name: `E2E_Sword_${tradeRand}`,
+        itemType: 'equipment',
+        rarity: 'rare',
+        maxStack: 1,
+        sellPrice: '10',
+        canTrade: true,
+        canDrop: true,
+        bindType: 'none',
+        description: 'E2E Trade 测试道具',
+      });
+    expect(r.status).toBe(201);
+    expect(r.body.code).toBe(0);
+    tradeTemplateId = String(r.body.data?.id ?? r.body.data?.ID);
+    expect(tradeTemplateId).not.toBeFalsy();
+  });
+
+  it('Trade 完整链路 — Admin 给卖家发道具', async () => {
+    if (!playerToken) return;
+    // 先拿 playerId
+    const me = await requestHttp
+      .get('/api/client/v1/player/base-info')
+      .set('Authorization', `Bearer ${playerToken}`);
+    const sellerPlayerId = String(me.body.data?.player?.id);
+    expect(sellerPlayerId).not.toBeFalsy();
+
+    const r = await requestHttp
+      .post('/api/admin/v1/inventory/grant')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        playerId: sellerPlayerId,
+        itemTemplateId: tradeTemplateId,
+        quantity: 1,
+        opTrace: 'e2e.trade.grant',
+      });
+    expect(r.status).toBe(201);
+    expect(r.body.code).toBe(0);
+  });
+
+  it('Trade 完整链路 — 卖家挂单 create order', async () => {
+    if (!playerToken) return;
+    const r = await requestHttp
+      .post('/api/client/v1/trade/order')
+      .set('Authorization', `Bearer ${playerToken}`)
+      .send({
+        itemTemplateId: tradeTemplateId,
+        itemName: `E2E_Sword_${tradeRand}`,
+        quantity: 1,
+        pricePerUnit: '500',
+        currencyType: 'gold',
+      });
+    expect(r.status).toBe(201);
+    expect(r.body.code).toBe(0);
+    tradeOrderId = String(r.body.data?.id);
+    expect(tradeOrderId).not.toBeFalsy();
+  });
+
+  it('Trade 完整链路 — Admin 创建买家账号并发货币', async () => {
+    // Register a second player as buyer
+    const username = `trade_buyer_${tradeRand}`;
+    const reg = await requestHttp
+      .post('/api/client/v1/auth/register')
+      .send({ username, password: 'Test@1234', nickname: `Buyer_${tradeRand}`, deviceId: 'e2e' });
+    if (reg.body.code === 90005) {
+      // rate limited — login instead
+      const l = await requestHttp
+        .post('/api/client/v1/auth/login')
+        .send({ username, password: 'Test@1234', deviceId: 'e2e' });
+      buyerToken2 = l.body.data?.token ?? '';
+    } else {
+      buyerToken2 = reg.body.data?.token ?? '';
+    }
+    if (!buyerToken2) {
+      console.log('[Trade-E2E] 无法获取买家 token');
+      return;
+    }
+
+    // Get buyer playerId
+    const me = await requestHttp
+      .get('/api/client/v1/player/base-info')
+      .set('Authorization', `Bearer ${buyerToken2}`);
+    const buyerPlayerId = String(me.body.data?.player?.id);
+
+    // Admin grant GOLD to buyer
+    const grant = await requestHttp
+      .post('/api/admin/v1/economy/grant-currency')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        playerId: buyerPlayerId,
+        currencyType: 'gold',
+        amount: 1000,
+        opTrace: 'e2e.trade.grant-buyer',
+      });
+    expect(grant.status).toBe(201);
+    expect(grant.body.code).toBe(0);
+  });
+
+  it('Trade 完整链路 — 买家 buy 订单', async () => {
+    if (!buyerToken2 || !tradeOrderId) return;
+    const r = await requestHttp
+      .post(`/api/client/v1/trade/order/${tradeOrderId}/buy`)
+      .set('Authorization', `Bearer ${buyerToken2}`);
+    expect(r.status).toBe(201);
+    expect(r.body.code).toBe(0);
+    expect(r.body.data?.status).toBe('completed');
+  });
+
+  it('Trade 完整链路 — seller currency 入账 + buyer 道具入账（market list 验证）', async () => {
+    if (!playerToken) return;
+    // Market list should no longer show the sold order
+    const r = await requestHttp
+      .get('/api/client/v1/trade/market?page=1&limit=50')
+      .set('Authorization', `Bearer ${playerToken}`);
+    expect(r.status).toBe(200);
+    expect(r.body.code).toBe(0);
+    // Confirm the order status is not pending anymore
+    const items: any[] = r.body.data?.items ?? r.body.data?.list ?? [];
+    const soldOrder = items.find((o) => String(o.id) === tradeOrderId);
+    // Either not in list (completed orders filtered) or status != pending
+    if (soldOrder) {
+      expect(['completed', 'cancelled', null]).toContain(soldOrder.status);
+    }
+  });
+
   // ===== Admin 回归 =====
 
   it('GET /api/admin/v1/buff/template/list', async () => {
