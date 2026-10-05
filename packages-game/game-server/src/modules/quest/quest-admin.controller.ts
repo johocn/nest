@@ -47,4 +47,11 @@ export class QuestAdminController {
   ) {
     return this.questService.updateTemplate(id, body);
   }
+
+  @Delete('template/:id')
+  @ApiOperation({ summary: '删除任务模板' })
+  async deleteTemplate(@Param('id') id: string) {
+    await this.questService.deleteTemplate(id);
+    return { success: true };
+  }
 }

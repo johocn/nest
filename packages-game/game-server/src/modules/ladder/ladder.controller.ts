@@ -1,12 +1,16 @@
-import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { LadderService } from './ladder.service';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
-import { AdminGuard } from '@common/guards/admin.guard';
 import { CurrentPlayer } from '@common/decorators/current-player.decorator';
 import type { CurrentPlayerData } from '@common/decorators/current-player.decorator';
-import { CurrentAdmin } from '@common/decorators/current-admin.decorator';
-import type { CurrentAdminData } from '@common/decorators/current-admin.decorator';
 
 @ApiTags('Ladder')
 @ApiBearerAuth()
@@ -22,43 +26,8 @@ export class LadderController {
   }
 
   @Get('rank')
-  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: '天梯榜单' })
   async getTopN(@Query('limit') limit: number = 50) {
     return this.ladderService.getTopN(Number(limit));
-  }
-
-  @Post('admin/settle')
-  @UseGuards(AdminGuard)
-  @ApiOperation({ summary: '[管理] 赛季结算' })
-  async settleSeason(@Body() body: { adminId: string }) {
-    return this.ladderService.settleSeason(body.adminId);
-  }
-}
-
-@ApiTags('Admin-Ladder')
-@ApiBearerAuth()
-@UseGuards(AdminGuard)
-@Controller('api/admin/v1/ladder')
-export class AdminLadderController {
-  constructor(private readonly ladderService: LadderService) {}
-
-  @Get('top')
-  @ApiOperation({ summary: '[Admin] 天梯榜单 Top N' })
-  async getTopN(@Query('limit') limit: string) {
-    return this.ladderService.getTopN(Number(limit) || 50);
-  }
-
-  @Post('settle')
-  @ApiOperation({ summary: '[Admin] 赛季结算' })
-  async settleSeason(@CurrentAdmin() admin: CurrentAdminData) {
-    return this.ladderService.settleSeason(admin.adminId);
-  }
-
-  @Post('refresh')
-  @ApiOperation({ summary: '[Admin] 刷新 Redis ZSet 缓存' })
-  async refresh() {
-    const count = await this.ladderService.refreshSeasonCache();
-    return { refreshed: count };
   }
 }

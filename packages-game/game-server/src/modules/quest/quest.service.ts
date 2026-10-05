@@ -666,4 +666,8 @@ export class QuestService {
     Object.assign(template, data);
     return this.templateRepo.save(template);
   }
+
+  async deleteTemplate(id: string): Promise<void> {
+    await this.templateRepo.softDelete(id);
+  }
 }
