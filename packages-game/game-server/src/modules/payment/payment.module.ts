@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PaymentService } from './payment.service';
 import { PaymentController } from './payment.controller';
+import { PaymentAdminController } from './payment-admin.controller';
 import { RechargeOrder, RechargeProduct } from './entities';
 import { EconomyModule } from '@modules/economy/economy.module';
 import { PlayerModule } from '@modules/player/player.module';
@@ -16,7 +17,7 @@ import { ConfigManageModule } from '@modules/config/config.module';
     VipModule,
     ConfigManageModule,
   ],
-  controllers: [PaymentController],
+  controllers: [PaymentController, PaymentAdminController],
   providers: [PaymentService],
   exports: [PaymentService],
 })
