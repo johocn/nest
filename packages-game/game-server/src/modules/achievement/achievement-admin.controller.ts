@@ -26,6 +26,45 @@ import { AchievementCondition } from '@constants/enums';
 const isJsonObject = (v: any): boolean =>
   v !== null && typeof v === 'object' && !Array.isArray(v);
 
+/**
+ * 从 condition JSON 对象的 key 推断 AchievementCondition enum 值。
+ * key 来源：admin-web condition textarea 常见写法
+ *   {"kills": 100}     → KILL_COUNT
+ *   {"winCount": 50}   → WIN_COMBAT
+ *   {"questCount": 3}  → COMPLETE_QUEST
+ *   {"currencyEarned": 10000} → EARN_CURRENCY
+ *   {"guildId": 1}     → JOIN_GUILD
+ *   {"friendCount": 5} → ADD_FRIEND
+ *   {"target": 60}     → REACH_LEVEL
+ */
+const JSON_KEY_TO_ENUM: Record<string, AchievementCondition> = {
+  kills: AchievementCondition.KILL_COUNT,
+  killCount: AchievementCondition.KILL_COUNT,
+  target: AchievementCondition.REACH_LEVEL,
+  level: AchievementCondition.REACH_LEVEL,
+  questId: AchievementCondition.COMPLETE_QUEST,
+  questCount: AchievementCondition.COMPLETE_QUEST,
+  quests: AchievementCondition.COMPLETE_QUEST,
+  totalGold: AchievementCondition.EARN_CURRENCY,
+  currencyEarned: AchievementCondition.EARN_CURRENCY,
+  earn: AchievementCondition.EARN_CURRENCY,
+  guildId: AchievementCondition.JOIN_GUILD,
+  joinGuild: AchievementCondition.JOIN_GUILD,
+  friendCount: AchievementCondition.ADD_FRIEND,
+  friends: AchievementCondition.ADD_FRIEND,
+  wins: AchievementCondition.WIN_COMBAT,
+  winCount: AchievementCondition.WIN_COMBAT,
+  winCombat: AchievementCondition.WIN_COMBAT,
+};
+
+/** 给 JSON 对象的 keys 推断出最匹配的 AchievementCondition enum 值 */
+function inferConditionFromJson(json: Record<string, any>): AchievementCondition | null {
+  for (const key of Object.keys(json)) {
+    if (JSON_KEY_TO_ENUM[key]) return JSON_KEY_TO_ENUM[key];
+  }
+  return null;
+}
+
 const toEntityPayload = (dto: any): any => {
   const out: any = { ...dto };
 
@@ -41,12 +80,13 @@ const toEntityPayload = (dto: any): any => {
     delete out.reward;
   }
 
-  // condition: enum string → condition; JSON 对象 → conditionJson; 都不传 → fallback
+  // condition: enum string → condition; JSON 对象 → conditionJson + 推断 enum
   if (dto.condition !== undefined) {
     if (isJsonObject(dto.condition)) {
       out.conditionJson = dto.condition;
-      // JSON 对象时给 condition enum 列一个默认值（enum 列非 nullable）
-      if (!out.condition) out.condition = AchievementCondition.REACH_LEVEL;
+      // 从 JSON keys 推断 enum 值（让 advanceByCondition 能正确匹配）
+      const inferred = inferConditionFromJson(dto.condition);
+      out.condition = inferred ?? AchievementCondition.REACH_LEVEL;
     } else {
       out.condition = dto.condition;
     }
