@@ -275,6 +275,44 @@ describe('Game Server E2E (HTTP)', () => {
     expect(r.body.code).toBe(0);
   });
 
+  // ===== Trade 完整查询链路：market + auction + bounties + barter =====
+
+  it('GET /api/client/v1/trade/market 交易市场列表', async () => {
+    if (!playerToken) return;
+    const r = await requestHttp
+      .get('/api/client/v1/trade/market?page=1&limit=5')
+      .set('Authorization', `Bearer ${playerToken}`);
+    expect(r.status).toBe(200);
+    expect(r.body.code).toBe(0);
+  });
+
+  it('GET /api/client/v1/trade/auction/list 拍卖列表', async () => {
+    if (!playerToken) return;
+    const r = await requestHttp
+      .get('/api/client/v1/trade/auction/list?page=1&limit=5')
+      .set('Authorization', `Bearer ${playerToken}`);
+    expect(r.status).toBe(200);
+    expect(r.body.code).toBe(0);
+  });
+
+  it('GET /api/client/v1/trade/bounties 悬赏榜', async () => {
+    if (!playerToken) return;
+    const r = await requestHttp
+      .get('/api/client/v1/trade/bounties?page=1&limit=5')
+      .set('Authorization', `Bearer ${playerToken}`);
+    expect(r.status).toBe(200);
+    expect(r.body.code).toBe(0);
+  });
+
+  it('GET /api/client/v1/trade/barter/mine 我的易物（空数组）', async () => {
+    if (!playerToken) return;
+    const r = await requestHttp
+      .get('/api/client/v1/trade/barter/mine')
+      .set('Authorization', `Bearer ${playerToken}`);
+    expect(r.status).toBe(200);
+    expect(r.body.code).toBe(0);
+  });
+
   // ===== Admin 回归 =====
 
   it('GET /api/admin/v1/buff/template/list', async () => {
