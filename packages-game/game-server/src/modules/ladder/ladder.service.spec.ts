@@ -7,6 +7,8 @@ import { PlayerService } from '@modules/player/player.service';
 import { ConfigManageService } from '@modules/config/config.service';
 import { EventBusService } from '@event-bus/event-bus.service';
 import { AdminService } from '@modules/admin/admin.service';
+import { CacheService } from '@cache/cache.service';
+import { EconomyService } from '@modules/economy/economy.service';
 
 describe('LadderService', () => {
   let service: LadderService;
@@ -20,10 +22,14 @@ describe('LadderService', () => {
   const configService = { getConfig: jest.fn(), setConfig: jest.fn() };
   const eventBus = { emit: jest.fn() };
   const adminService = { logOperation: jest.fn() };
+  const cacheService = { zAdd: jest.fn().mockResolvedValue(1), zRange: jest.fn(), zRem: jest.fn(), zRevRank: jest.fn().mockResolvedValue(null), del: jest.fn() };
+  const economyService = { addCurrency: jest.fn().mockResolvedValue(null) };
 
   beforeEach(async () => {
     jest.clearAllMocks();
     configService.getConfig.mockResolvedValue({ value: '1' });
+    // getTopN 从 ZSet 取，mock 返回 top 榜单
+    cacheService.zRange.mockImplementation(async () => [{ score: 1500, playerId: '1' }]);
     const module = await Test.createTestingModule({
       providers: [
         LadderService,
@@ -32,6 +38,8 @@ describe('LadderService', () => {
         { provide: ConfigManageService, useValue: configService },
         { provide: EventBusService, useValue: eventBus },
         { provide: AdminService, useValue: adminService },
+        { provide: CacheService, useValue: cacheService },
+        { provide: EconomyService, useValue: economyService },
       ],
     }).compile();
     service = module.get(LadderService);
