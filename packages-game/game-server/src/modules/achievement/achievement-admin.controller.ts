@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -145,11 +146,25 @@ export class AchievementAdminController {
     return fromEntity(created);
   }
 
+  @Get('template/:id')
+  @ApiOperation({ summary: '成就模板详情' })
+  async getTemplate(@Param('id') id: string) {
+    const template = await this.achievementService.getTemplate(id);
+    return fromEntity(template);
+  }
+
   @Put('template/:id')
   @ApiOperation({ summary: '更新成就模板' })
   async updateTemplate(@Param('id') id: string, @Body() body: any) {
     const entityPayload = toEntityPayload(body);
     const updated = await this.achievementService.updateTemplate(id, entityPayload);
     return fromEntity(updated);
+  }
+
+  @Delete('template/:id')
+  @ApiOperation({ summary: '删除成就模板（软删）' })
+  async deleteTemplate(@Param('id') id: string) {
+    await this.achievementService.deleteTemplate(id);
+    return { success: true };
   }
 }

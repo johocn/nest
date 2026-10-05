@@ -1,18 +1,13 @@
 import {
   Body,
   Controller,
-  Delete,
   Get,
   Param,
   Post,
-  Put,
-  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { NoticeService } from './notice.service';
-import { CreateNoticeDto } from './dto/create-notice.dto';
-import { AdminGuard } from '@common/guards/admin.guard';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { CurrentPlayer } from '@common/decorators/current-player.decorator';
 import type { CurrentPlayerData } from '@common/decorators/current-player.decorator';
@@ -49,46 +44,5 @@ export class NoticeController {
   @ApiOperation({ summary: '公告互动计数' })
   async getReactions(@Param('id') id: string) {
     return this.noticeService.getReactions(id);
-  }
-
-  // ===== Admin =====
-
-  @UseGuards(AdminGuard)
-  @Get('api/admin/v1/notice/list')
-  @ApiOperation({ summary: '公告列表（管理端）' })
-  async getNoticeList(@Query('page') page = 1, @Query('limit') limit = 20) {
-    return this.noticeService.getNoticeList(Number(page), Number(limit));
-  }
-
-  @UseGuards(AdminGuard)
-  @Get('api/admin/v1/notice/:id')
-  @ApiOperation({ summary: '公告详情' })
-  async getNotice(@Param('id') id: string) {
-    return this.noticeService.getNotice(id);
-  }
-
-  @UseGuards(AdminGuard)
-  @Post('api/admin/v1/notice')
-  @ApiOperation({ summary: '创建公告' })
-  async createNotice(@Body() dto: CreateNoticeDto) {
-    return this.noticeService.createNotice(dto);
-  }
-
-  @UseGuards(AdminGuard)
-  @Put('api/admin/v1/notice/:id')
-  @ApiOperation({ summary: '修改公告' })
-  async updateNotice(
-    @Param('id') id: string,
-    @Body() dto: Partial<CreateNoticeDto>,
-  ) {
-    return this.noticeService.updateNotice(id, dto);
-  }
-
-  @UseGuards(AdminGuard)
-  @Delete('api/admin/v1/notice/:id')
-  @ApiOperation({ summary: '删除公告' })
-  async deleteNotice(@Param('id') id: string) {
-    await this.noticeService.deleteNotice(id);
-    return { removed: id };
   }
 }

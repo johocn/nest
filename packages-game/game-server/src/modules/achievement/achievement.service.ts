@@ -343,6 +343,11 @@ export class AchievementService {
     return this.templateRepo.findOne({ where: { id } });
   }
 
+  async deleteTemplate(id: string): Promise<void> {
+    const template = await this.templateRepo.findOne({ where: { id } });
+    if (template) await this.templateRepo.softRemove(template);
+  }
+
   // ===== Admin: PlayerAchievement =====
 
   async listPlayerAchievements(
