@@ -27,6 +27,12 @@ export class Notice {
   })
   noticeType: NoticeType;
 
+  @Column({ name: 'scope', type: 'varchar', length: 32, default: 'global' })
+  scope: string;
+
+  @Column({ name: 'priority', type: 'varchar', length: 16, default: 'normal' })
+  priority: string;
+
   @Column({ name: 'is_active', type: 'boolean', default: true })
   isActive: boolean;
 

@@ -14,6 +14,15 @@ export class VipConfig {
   @Column({ type: 'int', unique: true })
   level: number;
 
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  name: string | null;
+
+  @Column({ type: 'double', default: 1 })
+  multiplier: number;
+
+  @Column({ name: 'is_active', type: 'boolean', default: true })
+  isActive: boolean;
+
   @Column({ name: 'required_exp', type: 'int' })
   requiredExp: number;
 

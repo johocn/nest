@@ -13,6 +13,64 @@ import { ActivityService } from './activity.service';
 import { AdminGuard } from '@common/guards/admin.guard';
 import { CurrentAdmin } from '@common/decorators/current-admin.decorator';
 
+/**
+ * admin-web ↔ entity 字段映射层
+ *
+ * admin-web 字段: name / activityType / priority / isActive / startTime / endTime /
+ *                  rules / conditions / rewards
+ * entity 字段:     name / activityType / priority / isActive / startAt / endAt /
+ *                  rulesJson / conditionJson / rewardJson
+ */
+
+const isJsonObject = (v: any): boolean =>
+  v !== null && typeof v === 'object' && !Array.isArray(v);
+
+const toEntityPayload = (dto: any): any => {
+  const out: any = { ...dto };
+
+  // startTime / endTime (ISO 字符串) → startAt / endAt (Date)
+  if (dto.startTime !== undefined) {
+    out.startAt = dto.startTime ? new Date(dto.startTime) : undefined;
+    delete out.startTime;
+  }
+  if (dto.endTime !== undefined) {
+    out.endAt = dto.endTime ? new Date(dto.endTime) : undefined;
+    delete out.endTime;
+  }
+
+  // conditions → conditionJson
+  if (dto.conditions !== undefined) {
+    out.conditionJson = isJsonObject(dto.conditions) ? dto.conditions : {};
+    delete out.conditions;
+  }
+
+  // rewards → rewardJson
+  if (dto.rewards !== undefined) {
+    out.rewardJson = isJsonObject(dto.rewards) ? dto.rewards : {};
+    delete out.rewards;
+  }
+
+  // rules → rulesJson
+  if (dto.rules !== undefined) {
+    out.rulesJson = isJsonObject(dto.rules) ? dto.rules : {};
+    delete out.rules;
+  }
+
+  return out;
+};
+
+const fromEntity = (e: any): any => {
+  if (!e) return e;
+  return {
+    ...e,
+    startTime: e.startAt,
+    endTime: e.endAt,
+    conditions: e.conditionJson,
+    rewards: e.rewardJson,
+    rules: e.rulesJson,
+  };
+};
+
 /** 活动模板管理 + 发布/灰度/回滚（admin-web 路由前缀 api/admin/v1/activity） */
 @ApiTags('Admin-Activity')
 @ApiBearerAuth()
@@ -29,7 +87,7 @@ export class ActivityAdminController {
     @Query('page') page = 1,
     @Query('limit') limit = 20,
   ) {
-    return this.activityService.listTemplatesWithFilter(
+    const result = await this.activityService.listTemplatesWithFilter(
       {
         status: status as any,
         activityType: activityType as any,
@@ -37,6 +95,10 @@ export class ActivityAdminController {
       Number(page),
       Number(limit),
     );
+    return {
+      ...result,
+      items: result.items.map(fromEntity),
+    };
   }
 
   @Get(':id/dashboard')
@@ -51,13 +113,17 @@ export class ActivityAdminController {
   @Post('template')
   @ApiOperation({ summary: '创建活动模板' })
   async createTemplate(@Body() body: any) {
-    return this.activityService.createTemplate(body);
+    const entityPayload = toEntityPayload(body);
+    const created = await this.activityService.createTemplate(entityPayload);
+    return fromEntity(created);
   }
 
   @Put('template/:id')
   @ApiOperation({ summary: '更新活动模板' })
   async updateTemplate(@Param('id') id: string, @Body() body: any) {
-    return this.activityService.updateTemplate(id, body);
+    const entityPayload = toEntityPayload(body);
+    const updated = await this.activityService.updateTemplate(id, entityPayload);
+    return fromEntity(updated);
   }
 
   @Post(':id/publish')
@@ -67,11 +133,12 @@ export class ActivityAdminController {
     @Param('id') id: string,
     @Body() body?: { grayWhitelist?: unknown },
   ) {
-    return this.activityService.publishActivity(
+    const result = await this.activityService.publishActivity(
       admin.adminId,
       id,
       body?.grayWhitelist,
     );
+    return fromEntity(result);
   }
 
   @Post(':id/gray-verify')
@@ -80,7 +147,8 @@ export class ActivityAdminController {
     @CurrentAdmin() admin: { adminId: string },
     @Param('id') id: string,
   ) {
-    return this.activityService.grayVerifyActivity(admin.adminId, id, true);
+    const result = await this.activityService.grayVerifyActivity(admin.adminId, id, true);
+    return fromEntity(result);
   }
 
   @Post(':id/rollback')
@@ -89,6 +157,7 @@ export class ActivityAdminController {
     @CurrentAdmin() admin: { adminId: string },
     @Param('id') id: string,
   ) {
-    return this.activityService.rollbackActivity(admin.adminId, id);
+    const result = await this.activityService.rollbackActivity(admin.adminId, id);
+    return fromEntity(result);
   }
 }

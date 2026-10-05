@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Mail } from './entities';
+import { Player } from '@modules/player/entities/player.entity';
 import { CacheService } from '@cache/cache.service';
 import { EventBusService } from '@event-bus/event-bus.service';
 import { GameEvents } from '@event-bus/game-events';
@@ -32,6 +33,7 @@ export interface BatchMailResult {
 export class MailService {
   constructor(
     @InjectRepository(Mail) private readonly mailRepo: Repository<Mail>,
+    @InjectRepository(Player) private readonly playerRepo: Repository<Player>,
     private readonly cacheService: CacheService,
     private readonly eventBus: EventBusService,
   ) {}
@@ -167,5 +169,86 @@ export class MailService {
   async deleteMail(id: string): Promise<boolean> {
     const result = await this.mailRepo.delete(id);
     return (result.affected ?? 0) > 0;
+  }
+
+  /**
+   * 面向 admin-web 的增强版批量发送：
+   * 支持 targetType: all / level / vip / playerIds / online
+   */
+  async sendBatchWithTarget(dto: {
+    targetType: 'all' | 'level' | 'vip' | 'playerIds' | 'online';
+    targetValue?: string | number;
+    senderType: MailSenderType;
+    title: string;
+    content: string;
+    attachmentJson?: Record<string, any>;
+  }): Promise<BatchMailResult> {
+    const batchId = `batch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    let playerIds: string[] = [];
+
+    switch (dto.targetType) {
+      case 'all': {
+        const players = await this.playerRepo.find({
+          select: { id: true } as any,
+        });
+        playerIds = players.map((p) => p.id);
+        break;
+      }
+      case 'online': {
+        playerIds = await this.cacheService.sMembers('online:players');
+        break;
+      }
+      case 'level': {
+        const range = String(dto.targetValue ?? '1');
+        const [min, max] = range.includes('-')
+          ? range.split('-').map(Number)
+          : [Number(range), Number(range)];
+        const players = await this.playerRepo
+          .createQueryBuilder('p')
+          .where('p.level BETWEEN :min AND :max', { min, max })
+          .select('p.id')
+          .getMany();
+        playerIds = players.map((p) => p.id);
+        break;
+      }
+      case 'vip': {
+        const vipLevel =
+          Number(String(dto.targetValue ?? '1').replace(/\D/g, '')) || 1;
+        const players = await this.playerRepo
+          .createQueryBuilder('p')
+          .where('p.vip_level >= :vipLevel', { vipLevel })
+          .select('p.id')
+          .getMany();
+        playerIds = players.map((p) => p.id);
+        break;
+      }
+      case 'playerIds': {
+        playerIds = String(dto.targetValue ?? '')
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+        break;
+      }
+    }
+
+    if (playerIds.length === 0) {
+      return { count: 0, batchId };
+    }
+
+    // 批量创建并保存
+    const mails = this.mailRepo.create(
+      playerIds.map((pid) => ({
+        recipientId: pid,
+        senderType: dto.senderType,
+        title: dto.title,
+        content: dto.content,
+        attachmentJson: dto.attachmentJson ?? {},
+        batchId,
+      })),
+    );
+    await this.mailRepo.save(mails);
+
+    return { count: mails.length, batchId };
   }
 }

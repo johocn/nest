@@ -37,6 +37,15 @@ export class AchievementTemplate {
   @Column({ name: 'sort_order', type: 'int', default: 0 })
   sortOrder: number;
 
+  @Column({ name: 'type', type: 'varchar', length: 64, nullable: true })
+  type: string | null;
+
+  @Column({ name: 'is_active', type: 'boolean', default: true })
+  isActive: boolean;
+
+  @Column({ name: 'condition_json', type: 'jsonb', default: '{}' })
+  conditionJson: Record<string, any>;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

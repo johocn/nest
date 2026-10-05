@@ -11,6 +11,42 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ChatService } from './chat.service';
 import { AdminGuard } from '@common/guards/admin.guard';
 import { CurrentAdmin } from '@common/decorators/current-admin.decorator';
+import type { ChatMessage, SupportTicket } from './entities';
+
+/**
+ * admin-web ↔ entity 字段映射层
+ *
+ * ChatMessage entity → admin-web ChatLog:
+ *   channel → channelType,  senderName → sender,  recipientId → target,
+ *   content → message,  createdAt → sentAt
+ *
+ * SupportTicket entity → admin-web SupportTicket:
+ *   channel → category,  content → question
+ */
+
+const mapChatMessage = (m: ChatMessage): Record<string, any> => ({
+  id: m.id,
+  channelType: m.channel,
+  sender: m.senderName,
+  target: m.recipientId,
+  guildId: m.guildId,
+  message: m.content,
+  sentAt: m.createdAt,
+});
+
+const mapTicket = (t: SupportTicket): Record<string, any> => ({
+  id: t.id,
+  playerId: t.playerId,
+  category: t.channel,
+  keyword: t.keyword,
+  question: t.content,
+  status: t.status,
+  autoReply: t.autoReply,
+  gmReply: t.gmReply,
+  adminId: t.adminId,
+  handledAt: t.handledAt,
+  createdAt: t.createdAt,
+});
 
 /** 聊天日志 + 客服工单 + 幸运星抽奖（admin-web 路由前缀 api/admin/v1/chat） */
 @ApiTags('Admin-Chat')
@@ -29,11 +65,15 @@ export class ChatAdminController {
     @Query('page') page = 1,
     @Query('limit') limit = 20,
   ) {
-    return this.chatService.searchMessages(
+    const result = await this.chatService.searchMessages(
       { channel: channel as any, senderId, keyword },
       Number(page),
       Number(limit),
     );
+    return {
+      ...result,
+      items: result.items.map(mapChatMessage),
+    };
   }
 
   @Get('support/list')
@@ -43,11 +83,15 @@ export class ChatAdminController {
     @Query('page') page = 1,
     @Query('limit') limit = 20,
   ) {
-    return this.chatService.listTickets(
+    const result = await this.chatService.listTickets(
       status as any,
       Number(page),
       Number(limit),
     );
+    return {
+      ...result,
+      items: result.items.map(mapTicket),
+    };
   }
 
   @Post('support/:id/reply')
@@ -57,7 +101,8 @@ export class ChatAdminController {
     @Param('id') id: string,
     @Body() body: { reply: string },
   ) {
-    return this.chatService.replyTicket(admin.adminId, id, body.reply);
+    const ticket = await this.chatService.replyTicket(admin.adminId, id, body.reply);
+    return mapTicket(ticket);
   }
 
   @Post('lucky-star/draw')
