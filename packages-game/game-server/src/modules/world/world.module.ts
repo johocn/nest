@@ -5,6 +5,8 @@ import { WorldController } from './world.controller';
 import { WorldClientController } from './world.client.controller';
 import { NpcAdminController } from './npc-admin.controller';
 import { DialogueAdminController } from './dialogue-admin.controller';
+import { WorldSceneAdminController } from './world-scene-admin.controller';
+import { WorldMonsterAdminController } from './world-monster-admin.controller';
 import { EconomyModule } from '@modules/economy/economy.module';
 import { CharacterModule } from '@modules/character/character.module';
 import { AdminModule } from '@modules/admin/admin.module';
@@ -84,6 +86,8 @@ import { BuildingScheduler } from './building/building.scheduler';
     WorldClientController,
     NpcAdminController,
     DialogueAdminController,
+    WorldSceneAdminController,
+    WorldMonsterAdminController,
   ],
   providers: [
     WorldService,

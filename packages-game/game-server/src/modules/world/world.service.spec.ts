@@ -211,7 +211,7 @@ describe('WorldService', () => {
   describe('getScenes', () => {
     it('should return paginated scenes', async () => {
       sceneRepo.findAndCount.mockResolvedValue([[makeScene()], 1]);
-      const result = await service.getScenes(1, 20);
+      const result = await service.getScenes({ page: 1, limit: 20 });
       expect(result.items).toHaveLength(1);
       expect(result.total).toBe(1);
     });

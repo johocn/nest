@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { ILike, Repository } from 'typeorm';
 import {
   Scene,
   NpcTemplate,
@@ -112,16 +112,109 @@ export class WorldService {
     return scene;
   }
 
-  async getScenes(
-    page: number,
-    limit: number,
-  ): Promise<{ items: Scene[]; total: number }> {
+  async getScenes(filter: {
+    name?: string;
+    sceneType?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{ items: Scene[]; total: number; page: number; limit: number }> {
+    const page = filter.page ?? 1;
+    const limit = filter.limit ?? 20;
+    const where: any = {};
+    if (filter.name) where.name = ILike(`%${filter.name}%`);
+    if (filter.sceneType) where.sceneType = filter.sceneType;
+    if (filter.status) where.status = filter.status;
     const [items, total] = await this.sceneRepo.findAndCount({
+      where,
       skip: (page - 1) * limit,
       take: limit,
       order: { createdAt: 'DESC' },
     });
-    return { items, total };
+    return { items, total, page, limit };
+  }
+
+  async deleteScene(sceneId: string): Promise<void> {
+    const scene = await this.sceneRepo.findOne({ where: { id: sceneId } });
+    if (!scene) {
+      throw new GameException(
+        ErrorCodes.PARAM_INVALID,
+        `场景 ${sceneId} 不存在`,
+      );
+    }
+    await this.sceneRepo.softRemove(scene);
+  }
+
+  async getMonsterTemplates(filter: {
+    name?: string;
+    aiType?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{
+    items: MonsterTemplate[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const page = filter.page ?? 1;
+    const limit = filter.limit ?? 20;
+    const where: any = {};
+    if (filter.name) where.name = ILike(`%${filter.name}%`);
+    if (filter.aiType) where.aiType = filter.aiType;
+    const [items, total] = await this.monsterRepo.findAndCount({
+      where,
+      skip: (page - 1) * limit,
+      take: limit,
+      order: { createdAt: 'DESC' },
+    });
+    return { items, total, page, limit };
+  }
+
+  async createMonsterTemplate(
+    dto: Partial<MonsterTemplate>,
+  ): Promise<MonsterTemplate> {
+    if (
+      dto.attr !== undefined &&
+      dto.attr !== null &&
+      typeof dto.attr !== 'object'
+    ) {
+      dto.attr = JSON.parse(String(dto.attr));
+    }
+    const entity = this.monsterRepo.create(dto);
+    return this.monsterRepo.save(entity);
+  }
+
+  async updateMonsterTemplate(
+    id: string,
+    dto: Partial<MonsterTemplate>,
+  ): Promise<MonsterTemplate> {
+    const existing = await this.monsterRepo.findOne({ where: { id } });
+    if (!existing) {
+      throw new GameException(
+        ErrorCodes.PARAM_INVALID,
+        `MonsterTemplate ${id} 不存在`,
+      );
+    }
+    if (
+      dto.attr !== undefined &&
+      dto.attr !== null &&
+      typeof dto.attr !== 'object'
+    ) {
+      dto.attr = JSON.parse(String(dto.attr));
+    }
+    Object.assign(existing, dto);
+    return this.monsterRepo.save(existing);
+  }
+
+  async deleteMonsterTemplate(id: string): Promise<void> {
+    const m = await this.monsterRepo.findOne({ where: { id } });
+    if (!m) {
+      throw new GameException(
+        ErrorCodes.PARAM_INVALID,
+        `MonsterTemplate ${id} 不存在`,
+      );
+    }
+    await this.monsterRepo.softRemove(m);
   }
 
   async createScene(data: Partial<Scene>): Promise<Scene> {

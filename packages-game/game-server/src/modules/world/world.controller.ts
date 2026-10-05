@@ -43,7 +43,10 @@ export class WorldController {
   @Get('scene/list')
   @ApiOperation({ summary: '场景列表' })
   async listScenes(@Query() query: AdminSceneQueryDto) {
-    return this.worldService.getScenes(query.page ?? 1, query.limit ?? 20);
+    return this.worldService.getScenes({
+      page: query.page,
+      limit: query.limit,
+    });
   }
 
   @Get('scene/:id')
