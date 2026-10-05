@@ -338,6 +338,18 @@ export class CharacterService {
     return this.charRepo.findOne({ where: { id } });
   }
 
+  async listCharacters(
+    page = 1,
+    limit = 20,
+  ): Promise<{ items: Character[]; total: number }> {
+    const [items, total] = await this.charRepo.findAndCount({
+      order: { createdAt: 'DESC' },
+      take: limit,
+      skip: (page - 1) * limit,
+    });
+    return { items, total };
+  }
+
   // ===== Sub-table update methods =====
 
   async updateAttribute(

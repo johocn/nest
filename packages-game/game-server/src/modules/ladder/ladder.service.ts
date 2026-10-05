@@ -287,16 +287,19 @@ export class LadderService {
     // 3) 刷新新赛季 ZSet（空的，玩家打第一场自动初始化 record）
     await this.cacheService.del(this.ZSET_KEY(season));
 
+    const rewarded = top.filter((t) => t.score >= 1300).length;
+
     this.eventBus.emit(GameEvents.LADDER_SEASON_SETTLED, {
       season,
       nextSeason,
+      rewarded,
       rewardsSent,
     });
 
-    this.logger.log(`[Ladder] Season ${season} settled → ${nextSeason}, rewarded=${rewardsSent}`);
+    this.logger.log(`[Ladder] Season ${season} settled → ${nextSeason}, rewarded=${rewarded}`);
     return {
       newSeason: nextSeason,
-      rewarded: top.filter((t) => t.score >= 1300).length,
+      rewarded,
       rewardsSent,
     };
   }

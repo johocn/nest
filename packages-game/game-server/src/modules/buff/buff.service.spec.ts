@@ -22,7 +22,7 @@ describe('BuffService', () => {
           useValue: {
             findOne: jest.fn(),
             find: jest.fn(),
-            save: jest.fn(),
+            save: jest.fn().mockImplementation((e) => Promise.resolve(e)),
             create: jest.fn((data: any) => ({ ...data, id: '1' })),
             findAndCount: jest.fn(),
           },
@@ -30,18 +30,18 @@ describe('BuffService', () => {
         {
           provide: CacheService,
           useValue: {
+            set: jest.fn().mockResolvedValue('OK'),
+            get: jest.fn(),
+            del: jest.fn().mockResolvedValue(1),
+            sAdd: jest.fn().mockResolvedValue(1),
+            sRem: jest.fn().mockResolvedValue(1),
+            sMembers: jest.fn(),
             hSet: jest.fn(),
             hGet: jest.fn(),
             hGetAll: jest.fn(),
             hDel: jest.fn(),
-            del: jest.fn(),
             expire: jest.fn(),
             exists: jest.fn(),
-            set: jest.fn(),
-            get: jest.fn(),
-            sAdd: jest.fn(),
-            sRem: jest.fn(),
-            sMembers: jest.fn(),
             zAdd: jest.fn(),
             zRange: jest.fn(),
             zRem: jest.fn(),
@@ -74,18 +74,22 @@ describe('BuffService', () => {
     }) as BuffTemplate;
 
   describe('applyBuff', () => {
-    it('should store active buff in Redis hash with TTL', async () => {
+    it('should store per-buff String + active Set member', async () => {
       buffRepo.findOne.mockResolvedValue(makeBuff());
 
       const result = await service.applyBuff('c1', '1');
 
       expect(result.applied).toBe(true);
-      expect(cacheService.hSet).toHaveBeenCalledWith(
-        'buff:character:c1',
-        '1',
+      // set per-buff String with TTL + sAdd active Set
+      expect(cacheService.set).toHaveBeenCalledWith(
+        'buff:character:c1:1',
         expect.any(String),
+        10,
       );
-      expect(cacheService.expire).toHaveBeenCalledWith('buff:character:c1', 10);
+      expect(cacheService.sAdd).toHaveBeenCalledWith(
+        'buff:character:c1:active',
+        '1',
+      );
     });
 
     it('should throw when buff template not found', async () => {
@@ -96,28 +100,38 @@ describe('BuffService', () => {
   });
 
   describe('removeBuff', () => {
-    it('should remove buff from Redis hash', async () => {
+    it('should remove both per-buff String and active Set member', async () => {
       await service.removeBuff('c1', '1');
 
-      expect(cacheService.hDel).toHaveBeenCalledWith('buff:character:c1', '1');
+      expect(cacheService.del).toHaveBeenCalledWith('buff:character:c1:1');
+      expect(cacheService.sRem).toHaveBeenCalledWith(
+        'buff:character:c1:active',
+        '1',
+      );
     });
   });
 
   describe('getActiveBuffs', () => {
     it('should return all active buffs for character', async () => {
-      cacheService.hGetAll.mockResolvedValue({
-        '1': JSON.stringify({
-          id: '1',
-          name: '攻击增益',
-          statModifiers: { strength: 20 },
-          expiresAt: '9999999999999',
-        }),
-        '2': JSON.stringify({
-          id: '2',
-          name: '防御减益',
-          statModifiers: { defense: -10 },
-          expiresAt: '9999999999999',
-        }),
+      cacheService.sMembers.mockResolvedValue(['1', '2']);
+      cacheService.get.mockImplementation(async (key: string) => {
+        if (key === 'buff:character:c1:1')
+          return JSON.stringify({
+            id: '1',
+            name: '攻击增益',
+            statModifiers: { strength: 20 },
+            expiresAt: '9999999999999',
+            duration: 10,
+          });
+        if (key === 'buff:character:c1:2')
+          return JSON.stringify({
+            id: '2',
+            name: '防御减益',
+            statModifiers: { defense: -10 },
+            expiresAt: '9999999999999',
+            duration: 5,
+          });
+        return null;
       });
 
       const result = await service.getActiveBuffs('c1');
@@ -127,19 +141,30 @@ describe('BuffService', () => {
     });
 
     it('should return empty array when no active buffs', async () => {
-      cacheService.hGetAll.mockResolvedValue({});
+      cacheService.sMembers.mockResolvedValue([]);
 
       const result = await service.getActiveBuffs('c1');
-
       expect(result).toEqual([]);
     });
   });
 
   describe('calculateModifiedStats', () => {
     it('should apply buff modifiers to base stats', async () => {
-      cacheService.hGetAll.mockResolvedValue({
-        '1': JSON.stringify({ statModifiers: { strength: 20, defense: 5 } }),
-        '2': JSON.stringify({ statModifiers: { strength: -10 } }),
+      cacheService.sMembers.mockResolvedValue(['1', '2']);
+      cacheService.get.mockImplementation(async (key: string) => {
+        if (key === 'buff:character:c1:1')
+          return JSON.stringify({
+            statModifiers: { strength: 20, defense: 5 },
+            expiresAt: '9999999999999',
+            duration: 10,
+          });
+        if (key === 'buff:character:c1:2')
+          return JSON.stringify({
+            statModifiers: { strength: -10 },
+            expiresAt: '9999999999999',
+            duration: 5,
+          });
+        return null;
       });
 
       const baseStats = {
@@ -158,7 +183,7 @@ describe('BuffService', () => {
     });
 
     it('should return base stats when no active buffs', async () => {
-      cacheService.hGetAll.mockResolvedValue({});
+      cacheService.sMembers.mockResolvedValue([]);
 
       const baseStats = {
         strength: 50,
@@ -171,24 +196,6 @@ describe('BuffService', () => {
       const result = await service.calculateModifiedStats('c1', baseStats);
 
       expect(result).toEqual(baseStats);
-    });
-  });
-
-  describe('cleanExpiredBuffs', () => {
-    it('should remove expired buffs from Redis hash', async () => {
-      const now = Date.now();
-      cacheService.hGetAll.mockResolvedValue({
-        '1': JSON.stringify({ expiresAt: (now - 1000).toString() }),
-        '2': JSON.stringify({ expiresAt: (now + 10000).toString() }),
-      });
-
-      await service.cleanExpiredBuffs('c1');
-
-      expect(cacheService.hDel).toHaveBeenCalledWith('buff:character:c1', '1');
-      expect(cacheService.hDel).not.toHaveBeenCalledWith(
-        'buff:character:c1',
-        '2',
-      );
     });
   });
 

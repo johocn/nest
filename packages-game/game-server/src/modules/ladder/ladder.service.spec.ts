@@ -22,7 +22,7 @@ describe('LadderService', () => {
   const configService = { getConfig: jest.fn(), setConfig: jest.fn() };
   const eventBus = { emit: jest.fn() };
   const adminService = { logOperation: jest.fn() };
-  const cacheService = { zAdd: jest.fn().mockResolvedValue(1), zRange: jest.fn(), zRem: jest.fn(), zRevRank: jest.fn().mockResolvedValue(null), del: jest.fn() };
+  const cacheService = { zAdd: jest.fn().mockResolvedValue(1), zRange: jest.fn(), zRangeWithScores: jest.fn(), zRem: jest.fn(), zRevRank: jest.fn().mockResolvedValue(null), del: jest.fn() };
   const economyService = { addCurrency: jest.fn().mockResolvedValue(null) };
 
   beforeEach(async () => {
@@ -98,6 +98,9 @@ describe('LadderService', () => {
       { playerId: '1', season: '1', score: 1500 } as LadderRecord,
     ]);
     configService.setConfig.mockResolvedValue({});
+    cacheService.zRangeWithScores.mockResolvedValue([
+      { value: '1', score: 1500 },
+    ]);
     const r = await service.settleSeason('a1');
     expect(r.newSeason).toBe('2');
     expect(r.rewarded).toBe(1);

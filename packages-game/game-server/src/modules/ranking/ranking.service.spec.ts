@@ -19,7 +19,7 @@ describe('RankingService', () => {
           provide: getRepositoryToken(RankingRecord),
           useValue: {
             find: jest.fn(),
-            save: jest.fn(),
+            save: jest.fn().mockImplementation((rows) => Promise.resolve(rows)),
             create: jest.fn((data: any) => ({ ...data, id: '1' })),
             findAndCount: jest.fn(),
           },
@@ -27,17 +27,20 @@ describe('RankingService', () => {
         {
           provide: CacheService,
           useValue: {
-            zAdd: jest.fn(),
+            zAdd: jest.fn().mockResolvedValue(1),
             zRange: jest.fn(),
             zRangeWithScores: jest.fn(),
-            zRem: jest.fn(),
             zRevRank: jest.fn(),
-            get: jest.fn(),
-            set: jest.fn(),
-            hSet: jest.fn(),
+            zRem: jest.fn(),
+            zScore: jest.fn(),
+            hSet: jest.fn().mockResolvedValue(1),
             hGet: jest.fn(),
             hGetAll: jest.fn(),
-            hDel: jest.fn(),
+            hDel: jest.fn().mockResolvedValue(1),
+            get: jest.fn(),
+            set: jest.fn(),
+            getRawClient: jest.fn(() => ({ zScore: jest.fn() })),
+            hDel: jest.fn().mockResolvedValue(1),
             del: jest.fn(),
             exists: jest.fn(),
             sAdd: jest.fn(),
@@ -55,13 +58,18 @@ describe('RankingService', () => {
   });
 
   describe('updateScore', () => {
-    it('should add player score to Redis ZSet', async () => {
+    it('should update both ZSet score and Hash playerName', async () => {
       await service.updateScore(RankingType.POWER, 'p1', '张三', 5000);
 
       expect(cacheService.zAdd).toHaveBeenCalledWith(
-        'ranking:power',
+        'ranking:z:power',
         5000,
-        JSON.stringify({ playerId: 'p1', playerName: '张三' }),
+        'p1',
+      );
+      expect(cacheService.hSet).toHaveBeenCalledWith(
+        'ranking:names:power',
+        'p1',
+        '张三',
       );
     });
   });
@@ -69,20 +77,18 @@ describe('RankingService', () => {
   describe('getTopN', () => {
     it('should return top N players with real scores, highest first', async () => {
       cacheService.zRangeWithScores.mockResolvedValue([
-        {
-          value: JSON.stringify({ playerId: 'p2', playerName: '李四' }),
-          score: 900,
-        },
-        {
-          value: JSON.stringify({ playerId: 'p1', playerName: '张三' }),
-          score: 500,
-        },
+        { value: 'p2', score: 900 },
+        { value: 'p1', score: 500 },
       ]);
+      cacheService.hGet.mockImplementation(async (_key: string, id: string) => {
+        const map: Record<string, string> = { p1: '张三', p2: '李四' };
+        return map[id] ?? '';
+      });
 
       const result = await service.getTopN(RankingType.POWER, 10);
 
       expect(cacheService.zRangeWithScores).toHaveBeenCalledWith(
-        'ranking:power',
+        'ranking:z:power',
         0,
         9,
         true,
@@ -101,78 +107,52 @@ describe('RankingService', () => {
       );
     });
 
-    it('should skip malformed members and keep rank contiguous', async () => {
+    it('should use empty string when name not in hash', async () => {
       cacheService.zRangeWithScores.mockResolvedValue([
-        { value: 'not-json', score: 900 },
-        {
-          value: JSON.stringify({ playerId: 'p1', playerName: '张三' }),
-          score: 500,
-        },
+        { value: 'p1', score: 500 },
       ]);
+      cacheService.hGet.mockResolvedValue(null);
 
       const result = await service.getTopN(RankingType.POWER, 10);
-
-      expect(result).toEqual([
-        { playerId: 'p1', playerName: '张三', rank: 1, score: 500 },
-      ]);
+      expect(result[0].playerName).toBe('');
     });
   });
 
   describe('getPlayerRank', () => {
-    it('should return rank number for player', async () => {
-      cacheService.zRange.mockResolvedValue([
-        JSON.stringify({ playerId: 'p1', playerName: '张三' }),
-        JSON.stringify({ playerId: 'p2', playerName: '李四' }),
-        JSON.stringify({ playerId: 'p3', playerName: '王五' }),
-      ]);
+    it('should return rank number using zRevRank', async () => {
+      cacheService.zRevRank.mockResolvedValue(1);
 
-      const result = await service.getPlayerRank(RankingType.POWER, 'p2');
+      const result = await service.getPlayerRank(RankingType.POWER, 'p1');
 
-      expect(result).toBe(2);
+      expect(cacheService.zRevRank).toHaveBeenCalledWith(
+        'ranking:z:power',
+        'p1',
+      );
+      expect(result).toBe(2); // 0-based → 1-based
+    });
+
+    it('should return 0 when player not in ZSet', async () => {
+      cacheService.zRevRank.mockResolvedValue(null);
+
+      const result = await service.getPlayerRank(RankingType.POWER, 'p1');
+      expect(result).toBe(0);
     });
   });
 
   describe('removePlayer', () => {
-    it('should remove matching player from Redis ZSet', async () => {
-      cacheService.zRange.mockResolvedValue([
-        JSON.stringify({ playerId: 'p1', playerName: '张三' }),
-        JSON.stringify({ playerId: 'p2', playerName: '李四' }),
-      ]);
-
+    it('should remove from both ZSet and Hash', async () => {
       await service.removePlayer(RankingType.POWER, 'p1');
 
-      expect(cacheService.zRem).toHaveBeenCalledWith(
-        'ranking:power',
-        JSON.stringify({ playerId: 'p1', playerName: '张三' }),
+      expect(cacheService.zRem).toHaveBeenCalledWith('ranking:z:power', 'p1');
+      expect(cacheService.hDel).toHaveBeenCalledWith(
+        'ranking:names:power',
+        'p1',
       );
-    });
-
-    it('should skip zRem when player not in ZSet', async () => {
-      cacheService.zRange.mockResolvedValue([
-        JSON.stringify({ playerId: 'p2', playerName: '李四' }),
-      ]);
-
-      await service.removePlayer(RankingType.POWER, 'p1');
-
-      expect(cacheService.zRem).not.toHaveBeenCalled();
-    });
-
-    it('should skip malformed members without throwing', async () => {
-      cacheService.zRange.mockResolvedValue(['not-json', '123']);
-
-      await expect(
-        service.removePlayer(RankingType.POWER, 'p1'),
-      ).resolves.toBeUndefined();
-      expect(cacheService.zRem).not.toHaveBeenCalled();
     });
   });
 
   describe('removePlayerFromAll', () => {
     it('should remove player from every ranking type', async () => {
-      cacheService.zRange.mockResolvedValue([
-        JSON.stringify({ playerId: 'p1', playerName: '张三' }),
-      ]);
-
       const removed = await service.removePlayerFromAll('p1');
 
       expect(removed).toEqual(Object.values(RankingType));
@@ -181,17 +161,15 @@ describe('RankingService', () => {
   });
 
   describe('createSnapshot', () => {
-    it('should persist real integer scores to DB', async () => {
+    it('should persist top entries to DB with integer scores', async () => {
       cacheService.zRangeWithScores.mockResolvedValue([
-        {
-          value: JSON.stringify({ playerId: 'p1', playerName: '张三' }),
-          score: 5000.7,
-        },
+        { value: 'p1', score: 5000.7 },
       ]);
+      cacheService.hGet.mockResolvedValue('张三');
 
       await service.createSnapshot(RankingType.POWER);
 
-      expect(rankingRepo.save).toHaveBeenCalledWith(
+      expect(rankingRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({
           rankingType: RankingType.POWER,
           playerId: 'p1',
