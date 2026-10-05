@@ -34,6 +34,25 @@ export class AchievementService {
     private readonly economyService: EconomyService,
   ) {}
 
+  /**
+   * AchievementCondition → conditionJson 可能包含的 JSON keys。
+   * 与 admin controller 的 JSON_KEY_TO_ENUM 对称：Service 层用它在
+   * conditionJson 里做包含匹配，确保 admin-web 创建的模板（condition
+   * enum 列 fallback 成 REACH_LEVEL 或推断不到）也能被正确推进。
+   */
+  private static readonly CONDITION_TO_JSON_KEYS: Record<
+    AchievementCondition,
+    string[]
+  > = {
+    [AchievementCondition.KILL_COUNT]: ['kills', 'killCount'],
+    [AchievementCondition.REACH_LEVEL]: ['target', 'level'],
+    [AchievementCondition.COMPLETE_QUEST]: ['questId', 'questCount', 'quests'],
+    [AchievementCondition.EARN_CURRENCY]: ['totalGold', 'currencyEarned', 'earn'],
+    [AchievementCondition.JOIN_GUILD]: ['guildId', 'joinGuild'],
+    [AchievementCondition.ADD_FRIEND]: ['friendCount', 'friends'],
+    [AchievementCondition.WIN_COMBAT]: ['wins', 'winCount', 'winCombat'],
+  };
+
   async updateProgress(
     playerId: string,
     achievementId: string,
@@ -82,6 +101,11 @@ export class AchievementService {
   /**
    * 按成就条件推进进度：命中同一 condition 的所有模板逐一推进。
    * 单条模板失败只记日志，不阻断其余模板与调用方主流程。
+   *
+   * 模板匹配走两条路径然后去重合并：
+   *   ① condition enum 列精确匹配 —— 正常流程（手写 migration / service 创建）
+   *   ② conditionJson 包含匹配   —— admin-web 创建的模板 fallback
+   *      （condition enum 列可能被推断或 fallback 成非期望值）
    */
   async advanceByCondition(
     playerId: string,
@@ -91,7 +115,32 @@ export class AchievementService {
   ): Promise<void> {
     if (!Number.isFinite(value) || value <= 0) return;
 
-    const templates = await this.templateRepo.find({ where: { condition } });
+    // ① enum 精确匹配
+    const templatesByEnum = await this.templateRepo.find({ where: { condition } });
+
+    // ② conditionJson 包含匹配（Postgres JSONB 的 ? 操作符检查顶层 key 是否存在）
+    const jsonKeys = AchievementService.CONDITION_TO_JSON_KEYS[condition] ?? [];
+    const templatesByJson =
+      jsonKeys.length > 0
+        ? await this.templateRepo
+            .createQueryBuilder('t')
+            .where(
+              jsonKeys.map((k) => `t.condition_json::jsonb @> :json_${k}`).join(' OR '),
+              Object.fromEntries(
+                jsonKeys.map((k) => [`json_${k}`, JSON.stringify({ [k]: null })]),
+              ),
+            )
+            .getMany()
+        : [];
+
+    // 去重合并
+    const seen = new Set<string>();
+    const templates = [...templatesByEnum, ...templatesByJson].filter((t) => {
+      if (seen.has(t.id)) return false;
+      seen.add(t.id);
+      return true;
+    });
+
     for (const template of templates) {
       try {
         await this.applyProgress(playerId, template, value, mode);

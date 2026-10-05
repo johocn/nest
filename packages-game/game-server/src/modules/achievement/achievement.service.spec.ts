@@ -35,6 +35,11 @@ describe('AchievementService', () => {
             save: jest
               .fn()
               .mockImplementation((data: any) => Promise.resolve(data)),
+            // advanceByCondition 的 conditionJson fallback 查询需要
+            createQueryBuilder: jest.fn(() => ({
+              where: jest.fn().mockReturnThis(),
+              getMany: jest.fn().mockResolvedValue([]),
+            })),
           },
         },
         {
