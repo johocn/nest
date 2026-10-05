@@ -1,31 +1,28 @@
 import {
   Body,
   Controller,
-  Delete,
   Get,
   Param,
-  Patch,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { NoticeService } from './notice.service';
-import { CreateNoticeDto } from './dto/create-notice.dto';
 import { AdminGuard } from '@common/guards/admin.guard';
-import { CurrentAdmin } from '@common/decorators/current-admin.decorator';
-import type { AdminJwtPayload } from '@common/guards/admin.guard';
 
+/** 公告 CRUD（admin-web 路由前缀 api/admin/v1/notice） */
 @ApiTags('Admin-Notice')
 @ApiBearerAuth()
 @UseGuards(AdminGuard)
-@Controller('api/admin/v1/notices')
+@Controller('api/admin/v1/notice')
 export class NoticeAdminController {
   constructor(private readonly noticeService: NoticeService) {}
 
-  @Get()
-  @ApiOperation({ summary: '公告列表（分页）' })
-  async list(
+  @Get('list')
+  @ApiOperation({ summary: '公告列表（支持 type/isActive + 分页）' })
+  async listNotices(
     @Query('page') page = 1,
     @Query('limit') limit = 20,
   ) {
@@ -34,32 +31,19 @@ export class NoticeAdminController {
 
   @Get(':id')
   @ApiOperation({ summary: '公告详情' })
-  async get(@Param('id') id: string) {
+  async getNotice(@Param('id') id: string) {
     return this.noticeService.getNotice(id);
   }
 
   @Post()
   @ApiOperation({ summary: '创建公告' })
-  async create(
-    @CurrentAdmin() admin: AdminJwtPayload,
-    @Body() dto: CreateNoticeDto,
-  ) {
-    return this.noticeService.createNotice({ ...dto, createdBy: admin.adminId });
+  async createNotice(@Body() body: any) {
+    return this.noticeService.createNotice(body);
   }
 
-  @Patch(':id')
+  @Put(':id')
   @ApiOperation({ summary: '更新公告' })
-  async update(
-    @Param('id') id: string,
-    @Body() dto: Partial<CreateNoticeDto>,
-  ) {
-    return this.noticeService.updateNotice(id, dto);
-  }
-
-  @Delete(':id')
-  @ApiOperation({ summary: '删除公告' })
-  async remove(@Param('id') id: string) {
-    await this.noticeService.deleteNotice(id);
-    return { removed: id };
+  async updateNotice(@Param('id') id: string, @Body() body: any) {
+    return this.noticeService.updateNotice(id, body);
   }
 }

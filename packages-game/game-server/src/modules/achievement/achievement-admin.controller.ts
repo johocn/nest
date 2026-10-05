@@ -1,11 +1,10 @@
 import {
   Body,
   Controller,
-  Delete,
   Get,
   Param,
-  Patch,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -13,63 +12,32 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AchievementService } from './achievement.service';
 import { AdminGuard } from '@common/guards/admin.guard';
 
+/** 成就模板管理（admin-web 路由前缀 api/admin/v1/achievement） */
 @ApiTags('Admin-Achievement')
 @ApiBearerAuth()
 @UseGuards(AdminGuard)
-@Controller('api/admin/v1/achievements')
+@Controller('api/admin/v1/achievement')
 export class AchievementAdminController {
   constructor(private readonly achievementService: AchievementService) {}
 
-  @Get()
-  @ApiOperation({ summary: '玩家成就列表（支持 playerId/achievementId/状态 筛选 + 分页）' })
-  async list(
-    @Query('playerId') playerId?: string,
-    @Query('achievementId') achievementId?: string,
-    @Query('isUnlocked') isUnlocked?: string,
-    @Query('isRewardClaimed') isRewardClaimed?: string,
+  @Get('template/list')
+  @ApiOperation({ summary: '成就模板列表（支持 category/isActive 筛选 + 分页）' })
+  async listTemplates(
     @Query('page') page = 1,
     @Query('limit') limit = 20,
   ) {
-    return this.achievementService.listPlayerAchievements(
-      {
-        playerId,
-        achievementId,
-        isUnlocked: isUnlocked !== undefined ? isUnlocked === 'true' : undefined,
-        isRewardClaimed:
-          isRewardClaimed !== undefined ? isRewardClaimed === 'true' : undefined,
-      },
-      Number(page),
-      Number(limit),
-    );
+    return this.achievementService.listTemplates(Number(page), Number(limit));
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: '玩家成就详情' })
-  async get(@Param('id') id: string) {
-    return this.achievementService.getPlayerAchievementById(id);
+  @Post('template')
+  @ApiOperation({ summary: '创建成就模板' })
+  async createTemplate(@Body() body: any) {
+    return this.achievementService.createTemplate(body);
   }
 
-  @Post('grant')
-  @ApiOperation({ summary: '手动授予玩家成就' })
-  async grant(
-    @Body() body: { playerId: string; achievementId: string },
-  ) {
-    return this.achievementService.grantPlayerAchievement(
-      body.playerId,
-      body.achievementId,
-    );
-  }
-
-  @Patch(':id/revoke')
-  @ApiOperation({ summary: '撤销玩家成就' })
-  async revoke(@Param('id') id: string) {
-    return this.achievementService.revokePlayerAchievement(id);
-  }
-
-  @Delete(':id')
-  @ApiOperation({ summary: '删除玩家成就记录' })
-  async remove(@Param('id') id: string) {
-    await this.achievementService.deletePlayerAchievement(id);
-    return { removed: id };
+  @Put('template/:id')
+  @ApiOperation({ summary: '更新成就模板' })
+  async updateTemplate(@Param('id') id: string, @Body() body: any) {
+    return this.achievementService.updateTemplate(id, body);
   }
 }

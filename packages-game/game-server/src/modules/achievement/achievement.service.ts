@@ -262,6 +262,17 @@ export class AchievementService {
     return { items, total };
   }
 
+  /**
+   * Admin 模板列表（与 getTemplates 等价，预留 filter 扩展位）。
+   * admin-web 路由 GET /admin/v1/achievement/template/list 直接复用。
+   */
+  async listTemplates(
+    page = 1,
+    limit = 20,
+  ): Promise<{ items: AchievementTemplate[]; total: number }> {
+    return this.getTemplates(page, limit);
+  }
+
   async createTemplate(
     data: Partial<AchievementTemplate>,
   ): Promise<AchievementTemplate> {
