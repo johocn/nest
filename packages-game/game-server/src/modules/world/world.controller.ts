@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -10,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { WorldService } from './world.service';
+import { AdminService } from '@modules/admin/admin.service';
 import { CreateSceneDto } from './dto/create-scene.dto';
 import { UpdateSceneDto } from './dto/update-scene.dto';
 import { AdminSceneQueryDto } from './dto/admin-scene-query.dto';
@@ -38,6 +40,7 @@ export class WorldController {
     private readonly worldService: WorldService,
     private readonly sceneConfigService: SceneConfigService,
     private readonly buildingAdminService: BuildingAdminService,
+    private readonly adminService: AdminService,
   ) {}
 
   @Get('scene/list')
@@ -172,6 +175,32 @@ export class WorldController {
     @Body() dto: ToggleBuildingTemplateDto,
   ) {
     return this.buildingAdminService.toggleTemplate(id, dto.isActive);
+  }
+
+  @Get('building-templates/:id')
+  @ApiOperation({ summary: '建筑蓝图详情' })
+  async getBuildingTemplate(@Param('id') id: string) {
+    return this.buildingAdminService.getTemplate(id);
+  }
+
+  @Delete('building-templates/:id')
+  @ApiOperation({ summary: '删除建筑蓝图' })
+  async deleteBuildingTemplate(
+    @Param('id') id: string,
+    @CurrentAdmin() admin?: AdminJwtPayload,
+  ) {
+    const before = await this.buildingAdminService.getTemplate(id);
+    await this.buildingAdminService.deleteTemplate(id);
+    await this.adminService.logOperation({
+      adminId: admin?.adminId ?? 'unknown',
+      operation: 'buildingTemplate.delete',
+      changeBefore: {
+        id: before.id,
+        name: before.name,
+        category: before.category,
+      },
+      changeAfter: { deleted: true },
+    });
   }
 
   @Put('scenes/:sceneId/build-rule')
