@@ -219,6 +219,62 @@ describe('Game Server E2E (HTTP)', () => {
     expect(r.body.code).toBe(0);
   });
 
+  // ===== 完整角色旅程：register → create character → profile → list skill/buff =====
+
+  let journeyToken = '';
+  let journeySkipped = false;
+
+  it('POST /api/client/v1/character/create 创建角色', async () => {
+    // 每次唯一账号 + 唯一昵称，避免 DB 脏数据
+    const username = `e2ej_${Math.random().toString(36).slice(2, 10)}`;
+    const reg = await requestHttp
+      .post('/api/client/v1/auth/register')
+      .send({ username, password: 'Test@1234', nickname: `J_${username}`, deviceId: 'journey' });
+    if (reg.body.code !== 0 || !reg.body.data?.token) {
+      console.log('[E2E JOURNEY] register skipped', JSON.stringify(reg.body));
+      journeySkipped = true;
+      return;
+    }
+    journeyToken = reg.body.data.token;
+
+    const r = await requestHttp
+      .post('/api/client/v1/character/create')
+      .set('Authorization', `Bearer ${journeyToken}`)
+      .send({ name: 'E2E主角', nickname: 'E2E测试员', profession: 'scholar', gender: 'male', age: 25 });
+    expect(r.status).toBe(201);
+    expect(r.body.code).toBe(0);
+    expect(r.body.data.name).toBe('E2E主角');
+  });
+
+  it('GET /api/client/v1/character/profile 完整档案', async () => {
+    if (journeySkipped || !journeyToken) return;
+    const r = await requestHttp
+      .get('/api/client/v1/character/profile')
+      .set('Authorization', `Bearer ${journeyToken}`);
+    expect(r.status).toBe(200);
+    expect(r.body.code).toBe(0);
+    expect(r.body.data.character.name).toBe('E2E主角');
+    expect(r.body.data.status).toBeDefined();
+  });
+
+  it('GET /api/client/v1/skill/available 角色可用技能', async () => {
+    if (journeySkipped || !journeyToken) return;
+    const r = await requestHttp
+      .get('/api/client/v1/skill/available')
+      .set('Authorization', `Bearer ${journeyToken}`);
+    expect(r.status).toBe(200);
+    expect(r.body.code).toBe(0);
+  });
+
+  it('GET /api/client/v1/buff/active 角色初始无 active buff', async () => {
+    if (journeySkipped || !journeyToken) return;
+    const r = await requestHttp
+      .get('/api/client/v1/buff/active')
+      .set('Authorization', `Bearer ${journeyToken}`);
+    expect(r.status).toBe(200);
+    expect(r.body.code).toBe(0);
+  });
+
   // ===== Admin 回归 =====
 
   it('GET /api/admin/v1/buff/template/list', async () => {

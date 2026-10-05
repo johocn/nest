@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { Card, Table, Button, Space, Tag, Modal, message } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
+import { useState } from 'react';
+import { Button, Space, Tag, Modal, message } from 'antd';
+import AdminTable from '../../components/AdminTable';
 import client from '../../api/client';
 
 interface LadderPlayer {
@@ -18,27 +18,15 @@ const tierColor: Record<string, string> = {
 };
 
 export default function Ladder() {
-  const [data, setData] = useState<LadderPlayer[]>([]);
-  const [loading, setLoading] = useState(false);
   const [settling, setSettling] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const triggerReload = () => setReloadKey((k) => k + 1);
 
-  const load = async () => {
-    setLoading(true);
-    try {
-      const res = await client.get('/admin/v1/ladder/top', {
-        params: { limit: 50 },
-      });
-      setData(res.data?.data ?? []);
-    } catch {
-      // 拦截器已处理
-    } finally {
-      setLoading(false);
-    }
+  const fetchTop = async () => {
+    const res = await client.get('/admin/v1/ladder/top', { params: { limit: 50 } });
+    // 返回数组 → hook 自动: data=list, total=list.length
+    return res.data?.data ?? [];
   };
-
-  useEffect(() => {
-    load();
-  }, []);
 
   const handleSettle = () => {
     Modal.confirm({
@@ -53,68 +41,35 @@ export default function Ladder() {
           const res = await client.post('/admin/v1/ladder/settle');
           const rewardsSent = res.data?.data?.rewardsSent ?? 0;
           message.success(`结算完成，已发放 ${rewardsSent} 份奖励`);
-          load();
-        } catch {
-          // 拦截器已处理
-        } finally {
-          setSettling(false);
-        }
+          triggerReload();
+        } catch { /* 拦截器已处理 */ }
+        finally { setSettling(false); }
       },
     });
   };
 
-  const columns = [
-    {
-      title: '排名',
-      dataIndex: 'rank',
-      width: 80,
-      render: (r: number) => (
-        <span style={{ fontWeight: 600 }}>#{r}</span>
-      ),
-    },
-    {
-      title: '玩家 ID',
-      dataIndex: 'playerId',
-    },
-    {
-      title: '分数',
-      dataIndex: 'score',
-      width: 120,
-      sorter: (a: LadderPlayer, b: LadderPlayer) => a.score - b.score,
-    },
-    {
-      title: '段位',
-      dataIndex: 'tier',
-      width: 120,
-      render: (t: string) => (
-        <Tag color={tierColor[t] ?? 'default'}>{t}</Tag>
-      ),
-    },
-  ];
-
   return (
     <div style={{ padding: 24 }}>
-      <Card
-        title="天梯排行榜（Redis ZSet 实时）"
+      <AdminTable<LadderPlayer>
+        rowKey="playerId"
+        title="天梯排行榜（Redis ZSet 实时 TOP 50）"
+        fetchFn={fetchTop}
+        deps={[reloadKey]}
+        pagination={{ pageSize: 50, showSizeChanger: false, showTotal: (t) => `共 TOP ${t} 位` }}
         extra={
           <Space>
-            <Button icon={<ReloadOutlined />} onClick={load} loading={loading}>
-              刷新
-            </Button>
             <Button danger onClick={handleSettle} loading={settling}>
               赛季结算
             </Button>
           </Space>
         }
-      >
-        <Table
-          rowKey="playerId"
-          columns={columns}
-          dataSource={data}
-          loading={loading}
-          pagination={{ pageSize: 20, showSizeChanger: false }}
-        />
-      </Card>
+        columns={[
+          { title: '排名', dataIndex: 'rank', width: 80, render: (r: number) => <span style={{ fontWeight: 600 }}>#{r}</span> },
+          { title: '玩家 ID', dataIndex: 'playerId' },
+          { title: '分数', dataIndex: 'score', width: 120, sorter: (a: LadderPlayer, b: LadderPlayer) => a.score - b.score },
+          { title: '段位', dataIndex: 'tier', width: 120, render: (t: string) => <Tag color={tierColor[t] ?? 'default'}>{t}</Tag> },
+        ]}
+      />
     </div>
   );
 }

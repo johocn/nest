@@ -16,6 +16,14 @@ export class RateLimitGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    // 测试环境 / BYPASS_RATE_LIMIT 时跳过（E2E 会频繁触发 register/login）
+    if (
+      process.env.NODE_ENV === 'test' ||
+      process.env.BYPASS_RATE_LIMIT === 'true'
+    ) {
+      return true;
+    }
+
     const options = this.reflector.get<RateLimitOptions>(
       RATE_LIMIT_KEY,
       context.getHandler(),

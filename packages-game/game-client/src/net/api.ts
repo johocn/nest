@@ -292,4 +292,122 @@ export const Api = {
       { token, body: {} },
     );
   },
+
+  // ===== Buff 玩家端（路径与后端 buff.client.controller 逐字一致）=====
+
+  /** 主动触发 buff（战斗系统也会调此接口） */
+  applyBuff(buffTemplateId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/buff/apply', {
+      token, body: { buffTemplateId },
+    });
+  },
+
+  /** 当前角色所有 active buff（Redis 缓存优先） */
+  getActiveBuffs(token: string | null): Promise<any[]> {
+    return httpJson<any[]>('GET', '/api/client/v1/buff/active', { token });
+  },
+
+  /** 主动移除某个 buff（按 templateId） */
+  removeBuff(buffTemplateId: string, token: string | null): Promise<{ success: boolean }> {
+    return httpJson<{ success: boolean }>(
+      'DELETE',
+      `/api/client/v1/buff/${buffTemplateId}`,
+      { token },
+    );
+  },
+
+  /** 计算 buff 修正后的角色属性（传入 baseStats 返回 modifiedStats） */
+  calculateBuffStats(baseStats: Record<string, number>, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/buff/stats', {
+      token, body: { baseStats },
+    });
+  },
+
+  // ===== Skill 玩家端 =====
+
+  /** 施放技能（attacker 自动取当前玩家角色；defenderCharacterId/baseStats/currentMp 由前端传入） */
+  castSkill(
+    skillTemplateId: string,
+    defenderCharacterId: string | null,
+    baseStats: Record<string, number> | null,
+    currentMp: number | null,
+    token: string | null,
+  ): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/skill/cast', {
+      token,
+      body: { skillTemplateId, defenderCharacterId, baseStats, currentMp },
+    });
+  },
+
+  /** 可用技能模板列表 */
+  getAvailableSkills(token: string | null): Promise<any[]> {
+    return httpJson<any[]>('GET', '/api/client/v1/skill/available', { token });
+  },
+
+  /** 查询技能是否在冷却中 */
+  checkSkillCooldown(skillTemplateId: string, token: string | null): Promise<{ onCooldown: boolean }> {
+    return httpJson<{ onCooldown: boolean }>('POST', '/api/client/v1/skill/cooldown', {
+      token, body: { skillTemplateId },
+    });
+  },
+
+  // ===== Drop 玩家端 =====
+
+  /** 触发一次掉落（自动入背包，rollDrop 内部调 inventoryService.addItem） */
+  rollDrop(dropTemplateId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/drop/roll', {
+      token, body: { dropTemplateId },
+    });
+  },
+
+  /** 掉落表详情（玩家端可看掉落配置） */
+  getDropTemplate(id: string, token: string | null): Promise<any> {
+    return httpJson<any>('GET', `/api/client/v1/drop/template/${id}`, { token });
+  },
+
+  /** 掉落表列表（分页） */
+  listDropTemplates(
+    page = 1,
+    limit = 50,
+    token: string | null,
+  ): Promise<any> {
+    const query = `?page=${page}&limit=${limit}`;
+    return httpJson<any>('GET', `/api/client/v1/drop/templates${query}`, { token });
+  },
+
+  // ===== Trade 玩家端 =====
+
+  /** 交易市场列表 */
+  getTradeMarket(page = 1, limit = 20, token: string | null): Promise<any> {
+    const query = `?page=${page}&limit=${limit}`;
+    return httpJson<any>('GET', `/api/client/v1/trade/market${query}`, { token });
+  },
+
+  /** 拍卖列表（exclusive=true 只看专属拍卖室） */
+  getTradeAuctions(
+    page = 1,
+    limit = 20,
+    exclusive?: boolean,
+    token?: string | null,
+  ): Promise<any> {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    if (exclusive !== undefined) params.set('exclusive', String(exclusive));
+    return httpJson<any>('GET', `/api/client/v1/trade/auction/list?${params}`, { token });
+  },
+
+  /** 我的赊账列表 */
+  getTradeCreditMine(token: string | null): Promise<any> {
+    return httpJson<any>('GET', '/api/client/v1/trade/credit/mine', { token });
+  },
+
+  /** 悬赏榜 */
+  getTradeBounties(page = 1, limit = 20, token: string | null): Promise<any> {
+    const query = `?page=${page}&limit=${limit}`;
+    return httpJson<any>('GET', `/api/client/v1/trade/bounties${query}`, { token });
+  },
+
+  /** 我的易物列表 */
+  getTradeBarterMine(token: string | null): Promise<any> {
+    return httpJson<any>('GET', '/api/client/v1/trade/barter/mine', { token });
+  },
 };
