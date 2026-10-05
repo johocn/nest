@@ -23,7 +23,7 @@ import { AchievementCondition } from '@constants/enums';
  * condition 兼容：enum string 存 condition；JSON 对象存 conditionJson
  */
 
-const isJsonObject = (v: any): boolean =>
+export const isJsonObject = (v: any): boolean =>
   v !== null && typeof v === 'object' && !Array.isArray(v);
 
 /**
@@ -37,7 +37,7 @@ const isJsonObject = (v: any): boolean =>
  *   {"friendCount": 5} → ADD_FRIEND
  *   {"target": 60}     → REACH_LEVEL
  */
-const JSON_KEY_TO_ENUM: Record<string, AchievementCondition> = {
+export const JSON_KEY_TO_ENUM: Record<string, AchievementCondition> = {
   kills: AchievementCondition.KILL_COUNT,
   killCount: AchievementCondition.KILL_COUNT,
   target: AchievementCondition.REACH_LEVEL,
@@ -58,14 +58,14 @@ const JSON_KEY_TO_ENUM: Record<string, AchievementCondition> = {
 };
 
 /** 给 JSON 对象的 keys 推断出最匹配的 AchievementCondition enum 值 */
-function inferConditionFromJson(json: Record<string, any>): AchievementCondition | null {
+export function inferConditionFromJson(json: Record<string, any>): AchievementCondition | null {
   for (const key of Object.keys(json)) {
     if (JSON_KEY_TO_ENUM[key]) return JSON_KEY_TO_ENUM[key];
   }
   return null;
 }
 
-const toEntityPayload = (dto: any): any => {
+export const toEntityPayload = (dto: any): any => {
   const out: any = { ...dto };
 
   // target → targetValue
@@ -90,7 +90,6 @@ const toEntityPayload = (dto: any): any => {
     } else {
       out.condition = dto.condition;
     }
-    delete out.condition;
   } else {
     // admin-web 完全不传 condition 时，保证 enum 列有值
     if (!out.condition) out.condition = AchievementCondition.REACH_LEVEL;
@@ -99,7 +98,7 @@ const toEntityPayload = (dto: any): any => {
   return out;
 };
 
-const fromEntity = (e: any): any => {
+export const fromEntity = (e: any): any => {
   if (!e) return e;
   return {
     ...e,

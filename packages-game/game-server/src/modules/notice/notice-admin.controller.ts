@@ -23,20 +23,20 @@ import { AdminGuard } from '@common/guards/admin.guard';
  */
 
 /** admin-web type → NoticeType enum 的映射 */
-const TYPE_TO_ENUM: Record<string, string> = {
+export const TYPE_TO_ENUM: Record<string, string> = {
   announcement: 'popup',   // 公告 → 弹窗
   maintenance: 'banner',   // 维护 → 横幅
   activity: 'login',       // 活动 → 登录公告
 };
 
 /** NoticeType enum → admin-web type 的反向映射 */
-const ENUM_TO_TYPE: Record<string, string> = {
+export const ENUM_TO_TYPE: Record<string, string> = {
   popup: 'announcement',
   banner: 'maintenance',
   login: 'activity',
 };
 
-const toEntityPayload = (dto: any): any => {
+export const toEntityPayload = (dto: any): any => {
   const out: any = { ...dto };
 
   // type → noticeType（经过值映射）
@@ -48,7 +48,7 @@ const toEntityPayload = (dto: any): any => {
   return out;
 };
 
-const fromEntity = (e: any): any => {
+export const fromEntity = (e: any): any => {
   if (!e) return e;
   return {
     ...e,
