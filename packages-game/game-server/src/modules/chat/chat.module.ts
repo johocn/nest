@@ -2,6 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ChatService } from './chat.service';
 import { ChatController } from './chat.controller';
+import { ChatAdminController } from './chat-admin.controller';
 import {
   ChatMessage,
   ChatPlayerStat,
@@ -34,7 +35,7 @@ import { SocialModule } from '@modules/social/social.module';
     AuthModule,
     SocialModule,
   ],
-  controllers: [ChatController],
+  controllers: [ChatController, ChatAdminController],
   providers: [ChatService],
   exports: [ChatService],
 })

@@ -278,4 +278,75 @@ export class AchievementService {
     Object.assign(template, data);
     return this.templateRepo.save(template);
   }
+
+  async getTemplate(id: string): Promise<AchievementTemplate | null> {
+    return this.templateRepo.findOne({ where: { id } });
+  }
+
+  // ===== Admin: PlayerAchievement =====
+
+  async listPlayerAchievements(
+    filter: { playerId?: string; achievementId?: string; isUnlocked?: boolean; isRewardClaimed?: boolean },
+    page: number,
+    limit: number,
+  ): Promise<{ items: PlayerAchievement[]; total: number }> {
+    const where: any = {};
+    if (filter.playerId) where.playerId = filter.playerId;
+    if (filter.achievementId) where.achievementId = filter.achievementId;
+    if (filter.isUnlocked !== undefined) where.isUnlocked = filter.isUnlocked;
+    if (filter.isRewardClaimed !== undefined) where.isRewardClaimed = filter.isRewardClaimed;
+    const [items, total] = await this.playerAchievementRepo.findAndCount({
+      where,
+      skip: (page - 1) * limit,
+      take: limit,
+      order: { createdAt: 'DESC' },
+    });
+    return { items, total };
+  }
+
+  async getPlayerAchievementById(id: string): Promise<PlayerAchievement | null> {
+    return this.playerAchievementRepo.findOne({ where: { id } });
+  }
+
+  async grantPlayerAchievement(
+    playerId: string,
+    achievementId: string,
+  ): Promise<PlayerAchievement> {
+    const template = await this.templateRepo.findOne({ where: { id: achievementId } });
+    if (!template) {
+      throw new GameException(ErrorCodes.ACHIEVEMENT_NOT_FOUND, '成就模板不存在');
+    }
+    let record = await this.playerAchievementRepo.findOne({
+      where: { playerId, achievementId },
+    });
+    if (!record) {
+      record = this.playerAchievementRepo.create({
+        playerId,
+        achievementId,
+        currentValue: template.targetValue,
+        isUnlocked: true,
+        isRewardClaimed: false,
+        unlockedAt: new Date(),
+      });
+    } else {
+      record.currentValue = template.targetValue;
+      record.isUnlocked = true;
+      record.unlockedAt = record.unlockedAt ?? new Date();
+    }
+    return this.playerAchievementRepo.save(record);
+  }
+
+  async revokePlayerAchievement(id: string): Promise<PlayerAchievement | null> {
+    const record = await this.playerAchievementRepo.findOne({ where: { id } });
+    if (!record) return null;
+    record.isUnlocked = false;
+    record.currentValue = 0;
+    record.unlockedAt = null;
+    record.isRewardClaimed = false;
+    return this.playerAchievementRepo.save(record);
+  }
+
+  async deletePlayerAchievement(id: string): Promise<void> {
+    await this.playerAchievementRepo.delete(id);
+  }
 }

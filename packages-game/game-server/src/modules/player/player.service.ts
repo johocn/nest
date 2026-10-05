@@ -128,6 +128,20 @@ export class PlayerService {
     return { items, total };
   }
 
+  async findByVipLevel(
+    level: number,
+    page: number,
+    limit: number,
+  ): Promise<{ items: Player[]; total: number }> {
+    const [items, total] = await this.playerRepo.findAndCount({
+      where: { vipLevel: level },
+      skip: (page - 1) * limit,
+      take: limit,
+      order: { createdAt: 'DESC' },
+    });
+    return { items, total };
+  }
+
   async getCurrency(
     playerId: string,
     currencyType: CurrencyType,

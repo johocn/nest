@@ -17,6 +17,7 @@ import {
   FriendStatus,
   SupportTicketStatus,
   VoiceRoomType,
+  PenaltyLevel,
 } from '@constants/enums';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
@@ -725,5 +726,96 @@ export class ChatService {
     } catch {
       return fallback;
     }
+  }
+
+  // ===== Admin =====
+
+  async searchMessages(
+    filter: {
+      channel?: ChatChannel;
+      senderId?: string;
+      keyword?: string;
+    },
+    page: number,
+    limit: number,
+  ): Promise<{ items: ChatMessage[]; total: number }> {
+    const qb = this.chatRepo.createQueryBuilder('m');
+    if (filter.channel) {
+      qb.where('m.channel = :channel', { channel: filter.channel });
+    }
+    if (filter.senderId) {
+      qb.andWhere('m.sender_id = :senderId', { senderId: filter.senderId });
+    }
+    if (filter.keyword) {
+      qb.andWhere('m.content ILIKE :kw', { kw: `%${filter.keyword}%` });
+    }
+    qb.orderBy('m.created_at', 'DESC');
+
+    const total = await qb.getCount();
+    const items = await qb
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+    return { items, total };
+  }
+
+  async getMessage(id: string): Promise<ChatMessage | null> {
+    return this.chatRepo.findOne({ where: { id } });
+  }
+
+  async deleteMessage(id: string): Promise<boolean> {
+    const result = await this.chatRepo.delete(id);
+    return (result.affected ?? 0) > 0;
+  }
+
+  async getChannelStats(): Promise<
+    Record<string, { total: number; today: number; uniqueSenders: number }>
+  > {
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+    const channels = Object.values(ChatChannel);
+    const result: Record<string, { total: number; today: number; uniqueSenders: number }> = {};
+    for (const ch of channels) {
+      const [total, todayCount, senders] = await Promise.all([
+        this.chatRepo.count({ where: { channel: ch } }),
+        this.chatRepo
+          .createQueryBuilder('m')
+          .where('m.channel = :ch', { ch })
+          .andWhere("to_char(m.created_at, 'YYYY-MM-DD') = :today", { today })
+          .getCount(),
+        this.chatRepo
+          .createQueryBuilder('m')
+          .where('m.channel = :ch', { ch })
+          .select('COUNT(DISTINCT m.sender_id)', 'cnt')
+          .getRawOne(),
+      ]);
+      result[ch] = {
+        total,
+        today: todayCount,
+        uniqueSenders: Number((senders as any)?.cnt ?? 0),
+      };
+    }
+    return result;
+  }
+
+  async blockPlayer(
+    adminUsername: string,
+    playerId: string,
+    durationMinutes: number,
+    reason: string,
+  ) {
+    const player = await this.playerRepo.findOne({ where: { id: playerId } });
+    if (!player) {
+      throw new GameException(ErrorCodes.PLAYER_NOT_FOUND, '玩家不存在');
+    }
+    const durationSeconds = durationMinutes * 60;
+    return this.authService.applyPenalty(
+      adminUsername,
+      playerId,
+      player.accountId,
+      PenaltyLevel.MUTE,
+      reason,
+      durationSeconds,
+    );
   }
 }

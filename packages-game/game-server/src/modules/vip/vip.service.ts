@@ -180,4 +180,16 @@ export class VipService {
     const result = await this.configRepo.delete({ level });
     return { deleted: (result.affected ?? 0) > 0 };
   }
+
+  async getConfigDetail(level: number): Promise<VipConfig | null> {
+    return this.configRepo.findOne({ where: { level } });
+  }
+
+  async getPlayersByVipLevel(
+    level: number,
+    page: number,
+    limit: number,
+  ) {
+    return this.playerService.findByVipLevel(level, page, limit);
+  }
 }

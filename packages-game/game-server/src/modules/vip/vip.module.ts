@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { VipService } from './vip.service';
 import { VipController } from './vip.controller';
+import { VipAdminController } from './vip-admin.controller';
 import { VipEventListener } from './vip-event.listener';
 import { VipConfig } from './entities/vip-config.entity';
 import { Character, CharacterTitle } from '@modules/character/entities';
@@ -14,7 +15,7 @@ import { EconomyModule } from '@modules/economy/economy.module';
     PlayerModule,
     EconomyModule,
   ],
-  controllers: [VipController],
+  controllers: [VipController, VipAdminController],
   providers: [VipService, VipEventListener],
   exports: [VipService],
 })

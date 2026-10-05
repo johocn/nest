@@ -129,4 +129,43 @@ export class MailService {
     });
     return { items, total };
   }
+
+  async listMailsWithFilter(
+    filter: {
+      senderType?: MailSenderType;
+      recipientId?: string;
+      isRead?: boolean;
+      isClaimed?: boolean;
+    },
+    page: number,
+    limit: number,
+  ): Promise<{ items: Mail[]; total: number }> {
+    const where: any = {};
+    if (filter.senderType) where.senderType = filter.senderType;
+    if (filter.recipientId) where.recipientId = filter.recipientId;
+    if (filter.isRead !== undefined) where.isRead = filter.isRead;
+    if (filter.isClaimed !== undefined) where.isClaimed = filter.isClaimed;
+    const [items, total] = await this.mailRepo.findAndCount({
+      where,
+      skip: (page - 1) * limit,
+      take: limit,
+      order: { createdAt: 'DESC' },
+    });
+    return { items, total };
+  }
+
+  async updateMail(
+    id: string,
+    data: Partial<Pick<Mail, 'title' | 'content' | 'attachmentJson' | 'expiredAt'>>,
+  ): Promise<Mail | null> {
+    const mail = await this.mailRepo.findOne({ where: { id } });
+    if (!mail) return null;
+    Object.assign(mail, data);
+    return this.mailRepo.save(mail);
+  }
+
+  async deleteMail(id: string): Promise<boolean> {
+    const result = await this.mailRepo.delete(id);
+    return (result.affected ?? 0) > 0;
+  }
 }

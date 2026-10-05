@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ActivityService } from './activity.service';
 import { ActivityController } from './activity.controller';
+import { ActivityAdminController } from './activity-admin.controller';
 import { ActivityTemplate, PlayerActivity, SignInRecord } from './entities';
 import { Player } from '@modules/player/entities/player.entity';
 import { PlayerBehaviorLog } from '@modules/analytics/entities/player-behavior-log.entity';
@@ -24,7 +25,7 @@ import { SocialModule } from '@modules/social/social.module';
     CharacterModule,
     SocialModule,
   ],
-  controllers: [ActivityController],
+  controllers: [ActivityController, ActivityAdminController],
   providers: [ActivityService],
   exports: [ActivityService],
 })

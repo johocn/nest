@@ -631,4 +631,39 @@ export class ActivityService {
     Object.assign(template, data);
     return this.templateRepo.save(template);
   }
+
+  async getTemplate(id: string): Promise<ActivityTemplate | null> {
+    return this.templateRepo.findOne({ where: { id } });
+  }
+
+  async listTemplatesWithFilter(
+    filter: { status?: ActivityStatus; activityType?: ActivityType },
+    page: number,
+    limit: number,
+  ): Promise<{ items: ActivityTemplate[]; total: number }> {
+    const where: any = {};
+    if (filter.status) where.status = filter.status;
+    if (filter.activityType) where.activityType = filter.activityType;
+    const [items, total] = await this.templateRepo.findAndCount({
+      where,
+      skip: (page - 1) * limit,
+      take: limit,
+      order: { createdAt: 'DESC' },
+    });
+    return { items, total };
+  }
+
+  async getParticipants(
+    activityId: string,
+    page: number,
+    limit: number,
+  ): Promise<{ items: PlayerActivity[]; total: number }> {
+    const [items, total] = await this.playerActivityRepo.findAndCount({
+      where: { activityId },
+      skip: (page - 1) * limit,
+      take: limit,
+      order: { joinedAt: 'DESC' },
+    });
+    return { items, total };
+  }
 }
