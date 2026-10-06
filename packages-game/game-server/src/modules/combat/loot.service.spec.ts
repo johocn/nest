@@ -211,5 +211,13 @@ describe('LootService', () => {
       );
       expect(result).toMatchObject({ id: '9' });
     });
+
+    it('should throw LOOT_NOT_FOUND when log missing', async () => {
+      lootLogRepo.findOne.mockResolvedValue(null as unknown as CombatLootLog);
+
+      await expect(service.getLootLog('999')).rejects.toMatchObject({
+        response: { code: ErrorCodes.LOOT_NOT_FOUND },
+      });
+    });
   });
 });

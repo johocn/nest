@@ -21,6 +21,8 @@ import { CurrentAdmin } from '@common/decorators/current-admin.decorator';
 import { AdminService } from '@modules/admin/admin.service';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
+import { FaceService } from './face.service';
+import { FaceAdjustDto } from './dto/face-adjust.dto';
 
 @ApiTags('Admin-Combat')
 @ApiBearerAuth()
@@ -35,6 +37,7 @@ export class CombatAdminController {
     @InjectRepository(CombatArbitration)
     private readonly arbitrationRepo: Repository<CombatArbitration>,
     private readonly adminService: AdminService,
+    private readonly faceService: FaceService,
   ) {}
 
   // ---------- CombatLog ----------
@@ -211,5 +214,25 @@ export class CombatAdminController {
       changeAfter: { status: saved.status, result: saved.result },
     });
     return saved;
+  }
+
+  // ---------- Face ----------
+
+  @Post('face/adjust')
+  @ApiOperation({ summary: '颜面调整（GM）' })
+  async adjustFace(
+    @Body() dto: FaceAdjustDto,
+    @CurrentAdmin() admin: AdminJwtPayload,
+  ) {
+    if (!/^\d+$/.test(dto.playerId)) {
+      throw new GameException(ErrorCodes.PARAM_INVALID, '参数不合法');
+    }
+    const result = await this.faceService.adjustFace(dto.playerId, dto.delta, dto.reason);
+    await this.adminService.logOperation({
+      adminId: admin.adminId,
+      operation: 'combat.face.adjust',
+      changeAfter: { playerId: dto.playerId, delta: dto.delta, reason: dto.reason },
+    });
+    return result;
   }
 }

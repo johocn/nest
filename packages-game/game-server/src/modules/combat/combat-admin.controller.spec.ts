@@ -10,6 +10,8 @@ import { Formation } from './entities/formation.entity';
 import { CombatArbitration } from './entities/combat-arbitration.entity';
 import { AdminSessionService } from '@modules/auth/admin-session.service';
 import { AdminService } from '@modules/admin/admin.service';
+import { FaceService } from './face.service';
+import { ErrorCodes } from '@constants/error-codes';
 
 describe('CombatAdminController', () => {
   let ctrl: CombatAdminController;
@@ -50,6 +52,7 @@ describe('CombatAdminController', () => {
           },
         },
         { provide: AdminService, useValue: { logOperation: jest.fn().mockResolvedValue(null) } },
+        { provide: FaceService, useValue: { adjustFace: jest.fn().mockResolvedValue({ playerId: '1001', face: 10 }) } },
         { provide: JwtService, useValue: { verify: jest.fn() } },
         { provide: ConfigService, useValue: { get: jest.fn(() => 'secret') } },
         { provide: AdminSessionService, useValue: { validate: jest.fn().mockResolvedValue(true) } },
@@ -168,5 +171,24 @@ describe('CombatAdminController', () => {
     const res = await ctrl.resolveArbitration('a1', { status: 'RESOLVED', result: 'WIN_A' }, admin as any);
     expect(res.status).toBe('RESOLVED');
     expect(adminService.logOperation).toHaveBeenCalled();
+  });
+
+  // ---------- Face ----------
+
+  it('adjustFace 调整并记操作', async () => {
+    const faceService = ctrl['faceService'] as any;
+    const res = await ctrl.adjustFace({ playerId: '1001', delta: 10, reason: 'gm' } as any, admin as any);
+    expect(faceService.adjustFace).toHaveBeenCalledWith('1001', 10, 'gm');
+    expect(adminService.logOperation).toHaveBeenCalledWith(
+      expect.objectContaining({ operation: 'combat.face.adjust' }),
+    );
+    expect(res).toMatchObject({ playerId: '1001' });
+  });
+
+  it('adjustFace 拒绝非数字 playerId', async () => {
+    await expect(
+      ctrl.adjustFace({ playerId: 'abc', delta: 10, reason: 'gm' } as any, admin as any),
+    ).rejects.toMatchObject({ response: { code: ErrorCodes.PARAM_INVALID } });
+    expect(adminService.logOperation).not.toHaveBeenCalled();
   });
 });

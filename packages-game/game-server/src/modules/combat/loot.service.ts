@@ -125,10 +125,14 @@ export class LootService {
     }));
   }
 
-  async getLootLog(combatLogId: string): Promise<CombatLootLog | null> {
+  async getLootLog(combatLogId: string): Promise<CombatLootLog> {
     if (!/^\d+$/.test(combatLogId)) {
       throw new GameException(ErrorCodes.PARAM_INVALID, '参数不合法');
     }
-    return this.lootLogRepo.findOne({ where: { combatLogId } });
+    const log = await this.lootLogRepo.findOne({ where: { combatLogId } });
+    if (!log) {
+      throw new GameException(ErrorCodes.LOOT_NOT_FOUND, '战利品分配记录不存在');
+    }
+    return log;
   }
 }

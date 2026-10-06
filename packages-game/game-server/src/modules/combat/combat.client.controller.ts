@@ -27,7 +27,6 @@ import { GrudgeDto } from './dto/grudge.dto';
 import { LootDto } from './dto/loot.dto';
 import { ArbitrationDto } from './dto/arbitration.dto';
 import { ArbitrationResolveDto } from './dto/arbitration-resolve.dto';
-import { FaceAdjustDto } from './dto/face-adjust.dto';
 
 @ApiTags('Combat')
 @ApiBearerAuth()
@@ -141,16 +140,6 @@ export class CombatClientController {
   }
 
   // ===== 颜面 =====
-
-  @Post('face/adjust')
-  @ApiOperation({ summary: '颜面调整（GM 占位）' })
-  async adjustFace(@Body() dto: FaceAdjustDto) {
-    return this.faceService.adjustFace(
-      this.assertId(dto.playerId),
-      dto.delta,
-      dto.reason,
-    );
-  }
 
   @Post('shame')
   @ApiOperation({ summary: '公开羞辱' })

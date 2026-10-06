@@ -1136,13 +1136,6 @@ export const Api = {
     return httpJson<any>('GET', '/api/client/v1/combat/rescue/logs', { token });
   },
 
-  /** 颜面调整（GM 占位；playerId 纯数字，delta 整数正负均可） */
-  adjustFace(playerId: string, delta: number, reason: string, token: string | null): Promise<any> {
-    return httpJson<any>('POST', '/api/client/v1/combat/face/adjust', {
-      token, body: { playerId, delta, reason },
-    });
-  },
-
   /** 公开羞辱（targetId 为目标玩家纯数字 id） */
   publicShame(targetId: string, token: string | null): Promise<any> {
     return httpJson<any>('POST', '/api/client/v1/combat/shame', {
