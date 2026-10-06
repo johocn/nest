@@ -738,4 +738,473 @@ export const Api = {
       token, body: { choice },
     });
   },
+
+  // ===== Social 社交端（路径与后端 social.controller 逐字一致）=====
+
+  /** 好友申请（friendId 为对方 players.id；不能添加自己） */
+  applyFriend(friendId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/social/friend/apply', {
+      token, body: { friendId },
+    });
+  },
+
+  /** 接受好友申请（friendId 为申请发起方 playerId） */
+  acceptFriend(friendId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', `/api/client/v1/social/friend/accept/${friendId}`, {
+      token, body: {},
+    });
+  },
+
+  /** 好友列表 */
+  listFriends(token: string | null): Promise<any> {
+    return httpJson<any>('GET', '/api/client/v1/social/friend/list', { token });
+  },
+
+  /** 删除好友 */
+  removeFriend(friendId: string, token: string | null): Promise<any> {
+    return httpJson<any>('DELETE', `/api/client/v1/social/friend/${friendId}`, { token });
+  },
+
+  /** 创建公会（name 1-64 字符） */
+  createGuild(name: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/social/guild/create', {
+      token, body: { name },
+    });
+  },
+
+  /** 加入公会 */
+  joinGuild(guildId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/social/guild/join', {
+      token, body: { guildId },
+    });
+  },
+
+  /** 公会信息 */
+  getGuildInfo(guildId: string, token: string | null): Promise<any> {
+    return httpJson<any>('GET', `/api/client/v1/social/guild/${guildId}`, { token });
+  },
+
+  /** 公会成员列表 */
+  getGuildMembers(guildId: string, token: string | null): Promise<any> {
+    return httpJson<any>('GET', `/api/client/v1/social/guild/${guildId}/members`, { token });
+  },
+
+  /** 公会捐献（donateType: 'gold'|'diamond'|'item'；amount 为 bigint 走字符串） */
+  donateToGuild(
+    guildId: string,
+    donateType: string,
+    amount: string,
+    token: string | null,
+  ): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/social/guild/donate', {
+      token, body: { guildId, donateType, amount },
+    });
+  },
+
+  /** 任命职位（帮主/副帮主可任命；role: 'leader'|'vice_leader'|'hall_master'|'incense_master'|'officer'|'elite'|'member'） */
+  setGuildRole(guildId: string, playerId: string, role: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/social/guild/role', {
+      token, body: { guildId, playerId, role },
+    });
+  },
+
+  /** 发起弹劾（帮主 7 日未上线才可发起） */
+  impeachLeader(guildId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/social/guild/impeach', {
+      token, body: { guildId },
+    });
+  },
+
+  /** 联署弹劾 */
+  endorseImpeach(impeachmentId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/social/guild/impeach/endorse', {
+      token, body: { impeachmentId },
+    });
+  },
+
+  /** 查询进行中的弹劾 */
+  getGuildImpeachment(guildId: string, token: string | null): Promise<any> {
+    return httpJson<any>('GET', `/api/client/v1/social/guild/${guildId}/impeachment`, { token });
+  },
+
+  /** 帮派操作日志 */
+  getGuildLog(guildId: string, token: string | null): Promise<any> {
+    return httpJson<any>('GET', `/api/client/v1/social/guild/${guildId}/log`, { token });
+  },
+
+  /** 建设/升级驻地建筑（buildingType: 'meeting_hall'|'training_room'|'scripture_library'|'blacksmith'|'herb_garden'） */
+  buildGuildBuilding(guildId: string, buildingType: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/social/guild/build', {
+      token, body: { guildId, buildingType },
+    });
+  },
+
+  /** 驻地建筑列表 */
+  getGuildBuildings(guildId: string, token: string | null): Promise<any> {
+    return httpJson<any>('GET', `/api/client/v1/social/guild/${guildId}/buildings`, { token });
+  },
+
+  /** 调整帮派资金（amount 整数 -1e8~1e8，负数为支出，需权限） */
+  adjustGuildFund(guildId: string, amount: number, reason: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/social/guild/fund', {
+      token, body: { guildId, amount, reason },
+    });
+  },
+
+  /** 帮派资金流水（分页） */
+  getGuildFundLogs(guildId: string, page = 1, limit = 20, token?: string | null): Promise<any> {
+    const query = `?page=${page}&limit=${limit}`;
+    return httpJson<any>('GET', `/api/client/v1/social/guild/${guildId}/fund-logs${query}`, { token });
+  },
+
+  /** 创建帮派活动（activityType: 'banquet'|'quiz'|'instance'|'expedition'；scheduleAt 为 ISO8601 字符串） */
+  createGuildActivity(
+    guildId: string,
+    activityType: string,
+    scheduleAt: string,
+    token: string | null,
+  ): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/social/guild/activities', {
+      token, body: { guildId, activityType, scheduleAt },
+    });
+  },
+
+  /** 帮派活动日历 */
+  getGuildActivities(guildId: string, token: string | null): Promise<any> {
+    return httpJson<any>('GET', `/api/client/v1/social/guild/${guildId}/activities`, { token });
+  },
+
+  /** 建立/更新帮派外交（relation: 'friendly'|'neutral'|'hostile'） */
+  setGuildDiplomacy(
+    guildId: string,
+    targetGuildId: string,
+    relation: string,
+    token: string | null,
+  ): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/social/guild/diplomacy', {
+      token, body: { guildId, targetGuildId, relation },
+    });
+  },
+
+  /** 帮派外交列表 */
+  getGuildDiplomacies(guildId: string, token: string | null): Promise<any> {
+    return httpJson<any>('GET', `/api/client/v1/social/guild/${guildId}/diplomacies`, { token });
+  },
+
+  /** 帮贡商店兑换（rewardType: 'skill_point'|'resource_pack'|'title'） */
+  exchangeGuildShop(guildId: string, rewardType: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/social/guild/shop/exchange', {
+      token, body: { guildId, rewardType },
+    });
+  },
+
+  /** 结算周薪（帮主/副帮主触发） */
+  payGuildSalaries(guildId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/social/guild/salary', {
+      token, body: { guildId },
+    });
+  },
+
+  /** 帮贡贡献排行 */
+  getGuildContributionRank(guildId: string, token: string | null): Promise<any> {
+    return httpJson<any>('GET', `/api/client/v1/social/guild/${guildId}/contribution-rank`, { token });
+  },
+
+  /** 刺探情报（targetId 为目标玩家 id） */
+  spyIntel(targetId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/social/intel/spy', {
+      token, body: { targetId },
+    });
+  },
+
+  /** 打听情报（topic 最长 128 字符） */
+  inquireIntel(topic: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/social/intel/inquire', {
+      token, body: { topic },
+    });
+  },
+
+  /** 窃听情报（targetId 为目标玩家 id） */
+  eavesdropIntel(targetId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/social/intel/eavesdrop', {
+      token, body: { targetId },
+    });
+  },
+
+  /** 我的情报 */
+  getMyIntel(token: string | null): Promise<any> {
+    return httpJson<any>('GET', '/api/client/v1/social/intel/mine', { token });
+  },
+
+  /** 挂单出售情报（price 整数 ≥1） */
+  listIntelForSale(intelId: string, price: number, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/social/intel/list', {
+      token, body: { intelId, price },
+    });
+  },
+
+  /** 情报市场（分页） */
+  getIntelMarket(page = 1, limit = 20, token?: string | null): Promise<any> {
+    const query = `?page=${page}&limit=${limit}`;
+    return httpJson<any>('GET', `/api/client/v1/social/intel/market${query}`, { token });
+  },
+
+  /** 购买情报 */
+  buyIntel(intelId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/social/intel/buy', {
+      token, body: { intelId },
+    });
+  },
+
+  /** 送礼（itemId 为背包物品 id） */
+  sendGift(targetId: string, itemId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/social/gift/send', {
+      token, body: { targetId, itemId },
+    });
+  },
+
+  /** 回礼 */
+  reciprocateGift(targetId: string, itemId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/social/gift/reciprocate', {
+      token, body: { targetId, itemId },
+    });
+  },
+
+  /** 缔结亲缘（type: 'sworn'|'master'|'couple'；memberIds 为成员 playerId 数组；name 可选 1-32 字） */
+  formKinship(type: string, memberIds: string[], name: string | null, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/social/kinship/form', {
+      token, body: { type, memberIds, name: name ?? undefined },
+    });
+  },
+
+  /** 解除亲缘 */
+  breakKinship(kinshipId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/social/kinship/break', {
+      token, body: { kinshipId },
+    });
+  },
+
+  /** 师徒出师 */
+  graduateKinship(kinshipId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/social/kinship/graduate', {
+      token, body: { kinshipId },
+    });
+  },
+
+  /** 我的亲缘列表 */
+  listKinships(token: string | null): Promise<any> {
+    return httpJson<any>('GET', '/api/client/v1/social/kinships', { token });
+  },
+
+  /** 关系总览（好友+亲缘+好感） */
+  getSocialRelationships(token: string | null): Promise<any> {
+    return httpJson<any>('GET', '/api/client/v1/social/relationships', { token });
+  },
+
+  /** 七日引导（含进度与奖励） */
+  getDailyGuide(token: string | null): Promise<any> {
+    return httpJson<any>('GET', '/api/client/v1/social/guide/daily', { token });
+  },
+
+  /** 领取引导任务奖励 */
+  claimGuideReward(taskId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', `/api/client/v1/social/guide/tasks/${taskId}/claim`, {
+      token, body: {},
+    });
+  },
+
+  /**
+   * 提交举报（targetType: 'player'|'chat_message'|'guild'；
+   * reason: 'abuse'|'ad'|'fraud'|'cheat'|'other'；content 可选）
+   */
+  submitReport(
+    targetType: string,
+    targetId: string,
+    reason: string,
+    content: string | null,
+    token: string | null,
+  ): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/social/report', {
+      token, body: { targetType, targetId, reason, content: content ?? undefined },
+    });
+  },
+
+  /** 拉黑玩家 */
+  blockPlayer(playerId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/social/block', {
+      token, body: { playerId },
+    });
+  },
+
+  /** 取消拉黑 */
+  unblockPlayer(playerId: string, token: string | null): Promise<any> {
+    return httpJson<any>('DELETE', `/api/client/v1/social/block/${playerId}`, { token });
+  },
+
+  /** 我的拉黑列表（分页） */
+  listBlocked(page = 1, limit = 20, token?: string | null): Promise<any> {
+    const query = `?page=${page}&limit=${limit}`;
+    return httpJson<any>('GET', `/api/client/v1/social/block/list${query}`, { token });
+  },
+
+  /** 好友推荐（图谱协同，limit 缺省 10） */
+  getRecommendedFriends(limit = 10, token?: string | null): Promise<any> {
+    return httpJson<any>('GET', `/api/client/v1/social/recommend/friends?limit=${limit}`, { token });
+  },
+
+  /** 社交积分信息 */
+  getPointInfo(token: string | null): Promise<any> {
+    return httpJson<any>('GET', '/api/client/v1/social/point/info', { token });
+  },
+
+  /** 社交积分流水（分页，参数名是 pageSize） */
+  getPointRecords(page = 1, pageSize = 20, token?: string | null): Promise<any> {
+    const query = `?page=${page}&pageSize=${pageSize}`;
+    return httpJson<any>('GET', `/api/client/v1/social/point/records${query}`, { token });
+  },
+
+  /** 积分兑换宝箱（tier 为宝箱档位整数） */
+  exchangePointChest(tier: number, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/social/point/exchange', {
+      token, body: { tier },
+    });
+  },
+
+  /** 领取上周活跃宝箱 */
+  claimWeeklyChest(token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/social/chest/weekly/claim', {
+      token, body: {},
+    });
+  },
+
+  /** 开启宝箱（id 为兑换所得宝箱记录 id） */
+  openChest(id: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', `/api/client/v1/social/chest/${id}/open`, {
+      token, body: {},
+    });
+  },
+
+  // ===== Combat 战斗端（路径与后端 combat.client.controller 逐字一致）=====
+
+  /** 创建阵法（formationId 为阵法模板 id） */
+  createFormation(formationId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/combat/formations', {
+      token, body: { formationId },
+    });
+  },
+
+  /** 加入阵法（id 为阵法记录纯数字 id；playerId 纯数字；position 1-7） */
+  joinFormation(id: string, playerId: string, position: number, token: string | null): Promise<any> {
+    return httpJson<any>('POST', `/api/client/v1/combat/formations/${id}/join`, {
+      token, body: { playerId, position },
+    });
+  },
+
+  /** 离开阵法（id 为阵法记录纯数字 id） */
+  leaveFormation(id: string, token: string | null): Promise<any> {
+    return httpJson<any>('DELETE', `/api/client/v1/combat/formations/${id}/leave`, { token });
+  },
+
+  /** 激活阵法（id 为阵法记录纯数字 id） */
+  activateFormation(id: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', `/api/client/v1/combat/formations/${id}/activate`, {
+      token, body: {},
+    });
+  },
+
+  /** 阵法详情（id 为阵法记录纯数字 id） */
+  getFormation(id: string, token: string | null): Promise<any> {
+    return httpJson<any>('GET', `/api/client/v1/combat/formations/${id}`, { token });
+  },
+
+  /** 合击（partnerId 纯数字；combatLogId 可选纯数字） */
+  performCombo(partnerId: string, combatLogId: string | null, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/combat/combo', {
+      token, body: { partnerId, combatLogId: combatLogId ?? undefined },
+    });
+  },
+
+  /** 援护（targetId 为被援护玩家纯数字 id） */
+  attemptRescue(targetId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/combat/rescue', {
+      token, body: { targetId },
+    });
+  },
+
+  /** 援护记录与今日次数 */
+  getRescueLogs(token: string | null): Promise<any> {
+    return httpJson<any>('GET', '/api/client/v1/combat/rescue/logs', { token });
+  },
+
+  /** 颜面调整（GM 占位；playerId 纯数字，delta 整数正负均可） */
+  adjustFace(playerId: string, delta: number, reason: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/combat/face/adjust', {
+      token, body: { playerId, delta, reason },
+    });
+  },
+
+  /** 公开羞辱（targetId 为目标玩家纯数字 id） */
+  publicShame(targetId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/combat/shame', {
+      token, body: { targetId },
+    });
+  },
+
+  /** 雪耻宣言（targetId 为目标玩家纯数字 id） */
+  declareGrudge(targetId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/combat/grudge/declare', {
+      token, body: { targetId },
+    });
+  },
+
+  /** 战利品分配（combatLogId 纯数字；mode: 'contribution'|'roll'|'captain'|'equal'；itemsJson 可选对象） */
+  distributeLoot(
+    combatLogId: string,
+    mode: string,
+    itemsJson: Record<string, any> | null,
+    token: string | null,
+  ): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/combat/loot/distribute', {
+      token, body: { combatLogId, mode, itemsJson: itemsJson ?? undefined },
+    });
+  },
+
+  /** 战利品分配记录（combatLogId 纯数字） */
+  getLootLog(combatLogId: string, token: string | null): Promise<any> {
+    return httpJson<any>('GET', `/api/client/v1/combat/loot/${combatLogId}`, { token });
+  },
+
+  /** 发起仲裁（combatLogId 纯数字；partiesJson/claimsJson 为对象） */
+  startArbitration(
+    combatLogId: string,
+    partiesJson: Record<string, any>,
+    claimsJson: Record<string, any>,
+    token: string | null,
+  ): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/combat/arbitration', {
+      token, body: { combatLogId, partiesJson, claimsJson },
+    });
+  },
+
+  /** 仲裁结算（id 为仲裁记录纯数字 id；result 为结算结果字符串） */
+  resolveArbitration(id: string, result: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', `/api/client/v1/combat/arbitration/${id}/resolve`, {
+      token, body: { result },
+    });
+  },
+
+  /** 仲裁详情（id 为仲裁记录纯数字 id） */
+  getArbitration(id: string, token: string | null): Promise<any> {
+    return httpJson<any>('GET', `/api/client/v1/combat/arbitration/${id}`, { token });
+  },
+
+  /** 战报（combatLogId 纯数字） */
+  getBattleReport(combatLogId: string, token: string | null): Promise<any> {
+    return httpJson<any>('GET', `/api/client/v1/combat/battle-report/${combatLogId}`, { token });
+  },
+
+  /** 当前战斗 Buff 状态 */
+  getCombatBuffs(token: string | null): Promise<any> {
+    return httpJson<any>('GET', '/api/client/v1/combat/buffs', { token });
+  },
 };
