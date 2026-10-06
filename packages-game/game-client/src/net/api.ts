@@ -151,6 +151,70 @@ export interface DemolishResult {
   refunded: boolean;
 }
 
+// ===== Ladder / Activity / Achievement / Notice / Vip / World 玩法视图（字段与后端 service 返回逐字一致）=====
+
+/** 天梯信息（无记录服务端会建默认档） */
+export interface LadderInfo {
+  season: string;
+  score: number;
+  tier: string;
+  wins: number;
+  losses: number;
+  streak: number;
+  rank: number;
+}
+
+/** 天梯榜单条目 */
+export interface LadderRankEntry {
+  playerId: string;
+  score: number;
+  tier: string;
+  rank: number;
+}
+
+/** 活动/成就领奖通用返回（reward 为服务端 rewardJson 原样下发） */
+export interface ClaimRewardResult {
+  reward: Record<string, any>;
+  isRewardClaimed: boolean;
+}
+
+/** 公告互动计数 */
+export interface NoticeReactionsResult {
+  noticeId: string;
+  likes: number;
+  acks: number;
+}
+
+/** 公告互动结果（reactionType: 'like' | 'ack'；同一公告同类型仅可互动一次） */
+export interface NoticeReactResult extends NoticeReactionsResult {
+  reactionType: string;
+}
+
+/** VIP 信息 */
+export interface VipInfo {
+  vipLevel: number;
+  vipExp: number;
+  requiredExp: number;
+  privilege: Record<string, any>;
+}
+
+/** VIP 每日奖励领取结果（重复领取服务端报 VIP_DAILY_REWARD_CLAIMED） */
+export interface VipDailyRewardResult {
+  reward: Record<string, any>;
+  delivered: boolean;
+}
+
+/** 街头玩法围观下注结果（betPool 为 bigint 字符串） */
+export interface StreetGameBetResult {
+  betPool: string;
+}
+
+/** 街头玩法结算结果（仅房主可结算；payout 为 95% 奖池 bigint 字符串） */
+export interface StreetGameFinishResult {
+  winner: string;
+  payout: string;
+}
+
 export const Api = {
   /** login 不能带 nickname（DTO 无该字段，forbidNonWhitelisted 会 400） */
   login(username: string, password: string): Promise<AuthResult> {
@@ -1199,5 +1263,169 @@ export const Api = {
   /** 当前战斗 Buff 状态 */
   getCombatBuffs(token: string | null): Promise<any> {
     return httpJson<any>('GET', '/api/client/v1/combat/buffs', { token });
+  },
+
+  // ===== World 玩法补充（路径与后端 world.client.controller 逐字一致）=====
+
+  /** 获得/切换坐骑（MountActionDto：mountId 必填；ride 可选但 equip 分支不消费，不下发避免歧义） */
+  equipMount(mountId: string, token: string | null): Promise<MountResult> {
+    return httpJson<MountResult>('POST', '/api/client/v1/world/mounts/equip', {
+      token, body: { mountId },
+    });
+  },
+
+  /** 开局街头玩法（房主下注；betAmount 为整数且须在玩法 betRange 内）；返回对局 session */
+  startStreetGame(gameId: string, betAmount: number, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/world/games/start', {
+      token, body: { gameId, betAmount },
+    });
+  },
+
+  /** 围观下注（sessionId 为对局 id，即 startStreetGame 返回的 id） */
+  betStreetGame(
+    sessionId: string,
+    betAmount: number,
+    token: string | null,
+  ): Promise<StreetGameBetResult> {
+    return httpJson<StreetGameBetResult>('POST', '/api/client/v1/world/games/bet', {
+      token, body: { sessionId, betAmount },
+    });
+  },
+
+  /** 结算对局（仅房主；winnerPlayerId 领取 95% 奖池，5% 场景税） */
+  finishStreetGame(
+    sessionId: string,
+    winnerPlayerId: string,
+    token: string | null,
+  ): Promise<StreetGameFinishResult> {
+    return httpJson<StreetGameFinishResult>('POST', '/api/client/v1/world/games/finish', {
+      token, body: { sessionId, winnerPlayerId },
+    });
+  },
+
+  /** 路牌/地标留言（content 1-100 字；landmarkId 为地标 objectId） */
+  leaveLandmarkMessage(
+    landmarkId: string,
+    content: string,
+    token: string | null,
+  ): Promise<any> {
+    return httpJson<any>(
+      'POST',
+      `/api/client/v1/world/landmarks/${landmarkId}/message`,
+      { token, body: { content } },
+    );
+  },
+
+  /** 地标留言列表（最近 50 条） */
+  listLandmarkMessages(landmarkId: string, token: string | null): Promise<any[]> {
+    return httpJson<any[]>(
+      'GET',
+      `/api/client/v1/world/landmarks/${landmarkId}/messages`,
+      { token },
+    );
+  },
+
+  // ===== Ladder 天梯端（路径与后端 ladder.controller 逐字一致）=====
+
+  /** 我的天梯信息（rank 可能返回 0：ZSet 冷缓存回退未命中） */
+  getLadderInfo(token: string | null): Promise<LadderInfo> {
+    return httpJson<LadderInfo>('GET', '/api/client/v1/ladder/info', { token });
+  },
+
+  /** 天梯榜单（limit 服务端钳制 1-100，缺省 50；此接口无鉴权） */
+  getLadderRank(limit = 50, token?: string | null): Promise<LadderRankEntry[]> {
+    return httpJson<LadderRankEntry[]>(
+      'GET',
+      `/api/client/v1/ladder/rank?limit=${limit}`,
+      { token },
+    );
+  },
+
+  // ===== Activity 活动端（controller 无前缀装饰器，路由为完整路径，与后端逐字一致）=====
+
+  /** 当前活动列表（灰度活动仅白名单玩家可见）；id 为活动模板 id，join/sign-in/claim 均用同一 id */
+  listActivities(token: string | null): Promise<any[]> {
+    return httpJson<any[]>('GET', '/api/client/v1/activity/list', { token });
+  },
+
+  /** 我的活动参与记录 */
+  getMyActivities(token: string | null): Promise<any[]> {
+    return httpJson<any[]>('GET', '/api/client/v1/activity/my', { token });
+  },
+
+  /** 参加活动（activityId 是活动模板 id 不是参与记录 id；重复参加服务端报错） */
+  joinActivity(activityId: string, token: string | null): Promise<any> {
+    return httpJson<any>(`POST`, `/api/client/v1/activity/${activityId}/join`, { token });
+  },
+
+  /** 活动签到（返回签到记录） */
+  signInActivity(activityId: string, token: string | null): Promise<any> {
+    return httpJson<any>(`POST`, `/api/client/v1/activity/${activityId}/sign-in`, { token });
+  },
+
+  /** 领取活动奖励（未参加/已领取服务端报错） */
+  claimActivityReward(activityId: string, token: string | null): Promise<ClaimRewardResult> {
+    return httpJson<ClaimRewardResult>(`POST`, `/api/client/v1/activity/${activityId}/claim`, { token });
+  },
+
+  // ===== Achievement 成就端（controller 无前缀装饰器，路由为完整路径）=====
+
+  /** 成就模板列表（category 可选过滤，取 AchievementCategory 枚举值） */
+  listAchievements(category: string | null, token: string | null): Promise<any[]> {
+    const query = category ? `?category=${encodeURIComponent(category)}` : '';
+    return httpJson<any[]>('GET', `/api/client/v1/achievement/list${query}`, { token });
+  },
+
+  /** 我的成就进度 */
+  getMyAchievements(token: string | null): Promise<any[]> {
+    return httpJson<any[]>('GET', '/api/client/v1/achievement/my', { token });
+  },
+
+  /** 领取成就奖励（achievementId 是成就模板 id；未解锁/已领取服务端报错） */
+  claimAchievementReward(achievementId: string, token: string | null): Promise<ClaimRewardResult> {
+    return httpJson<ClaimRewardResult>(
+      'POST',
+      `/api/client/v1/achievement/${achievementId}/claim`,
+      { token },
+    );
+  },
+
+  // ===== Notice 公告端（controller 无前缀装饰器，路由为完整路径）=====
+
+  /** 登录公告列表（服务端按时间窗过滤后的生效公告） */
+  listNotices(token: string | null): Promise<any[]> {
+    return httpJson<any[]>('GET', '/api/client/v1/notice/list', { token });
+  },
+
+  /** 公告互动（type: 'like' | 'ack'；同一公告同类型仅一次，重复报错） */
+  reactNotice(
+    noticeId: string,
+    type: 'like' | 'ack',
+    token: string | null,
+  ): Promise<NoticeReactResult> {
+    return httpJson<NoticeReactResult>(`POST`, `/api/client/v1/notice/${noticeId}/react`, {
+      token, body: { type },
+    });
+  },
+
+  /** 公告互动计数 */
+  getNoticeReactions(noticeId: string, token: string | null): Promise<NoticeReactionsResult> {
+    return httpJson<NoticeReactionsResult>(
+      'GET',
+      `/api/client/v1/notice/${noticeId}/reactions`,
+      { token },
+    );
+  },
+
+  // ===== Vip 玩家端（controller 无前缀装饰器，路由为完整路径）=====
+
+  /** 我的 VIP 信息 */
+  getVipInfo(token: string | null): Promise<VipInfo> {
+    return httpJson<VipInfo>('GET', '/api/client/v1/vip/info', { token });
+  },
+
+  /** 领取 VIP 每日奖励（每日一次，重复领取服务端报错） */
+  claimVipDailyReward(token: string | null): Promise<VipDailyRewardResult> {
+    return httpJson<VipDailyRewardResult>('POST', '/api/client/v1/vip/daily-reward', { token });
   },
 };
