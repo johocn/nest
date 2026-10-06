@@ -52,6 +52,16 @@ export interface InteractResult {
   reward?: { type?: string; currencyType?: string; amount?: number } | null;
 }
 
+/** 角色创建入参（profession/gender 用服务端枚举小写值，如 'farmer' / 'male'） */
+export interface CharacterCreateReq {
+  name: string;
+  nickname: string;
+  profession: string;
+  gender: string;
+  age: number;
+  birthday?: string;
+}
+
 /** 机关激活结果（world.service.activateTrigger） */
 export interface TriggerActivateResult {
   unlocked: boolean;
@@ -409,5 +419,323 @@ export const Api = {
   /** 我的易物列表 */
   getTradeBarterMine(token: string | null): Promise<any> {
     return httpJson<any>('GET', '/api/client/v1/trade/barter/mine', { token });
+  },
+
+  // ===== Player 玩家端 =====
+
+  /** 玩家基础信息 */
+  getPlayerBaseInfo(token: string | null): Promise<any> {
+    return httpJson<any>('GET', '/api/client/v1/player/base-info', { token });
+  },
+
+  /** 修改昵称（2-16 字符） */
+  changeNickname(nickname: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/player/change-nickname', {
+      token, body: { nickname },
+    });
+  },
+
+  /** 新手保护期状态 */
+  getPlayerProtection(token: string | null): Promise<any> {
+    return httpJson<any>('GET', '/api/client/v1/player/protection', { token });
+  },
+
+  // ===== Character 角色端 =====
+
+  /** 创建角色（登录后无角色必须先调用） */
+  createCharacter(req: CharacterCreateReq, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/character/create', {
+      token, body: req,
+    });
+  },
+
+  /** 角色完整档案（未建角报 PLAYER_NOT_FOUND） */
+  getCharacterProfile(token: string | null): Promise<any> {
+    return httpJson<any>('GET', '/api/client/v1/character/profile', { token });
+  },
+
+  /** 更新角色属性（全可选；combatPower 为 bigint 字符串） */
+  updateCharacterAttribute(
+    attrs: Partial<{
+      strength: number;
+      speed: number;
+      defense: number;
+      intelligence: number;
+      comprehension: number;
+      loyalty: number;
+      combatPower: string;
+    }>,
+    token: string | null,
+  ): Promise<any> {
+    return httpJson<any>('PUT', '/api/client/v1/character/attribute', {
+      token, body: attrs,
+    });
+  },
+
+  /** 更新角色位置（region 用服务端 Region 枚举值，如 'central_city'） */
+  updateCharacterLocation(
+    loc: Partial<{
+      mapId: string;
+      landId: string;
+      region: string;
+      posX: number;
+      posY: number;
+      posZ: number;
+      building: string;
+      indoors: boolean;
+    }>,
+    token: string | null,
+  ): Promise<any> {
+    return httpJson<any>('PUT', '/api/client/v1/character/location', {
+      token, body: loc,
+    });
+  },
+
+  /** 更新角色状态（health/reputation/season 为整数，wealth 为 bigint 字符串） */
+  updateCharacterStatus(
+    status: Partial<{
+      health: number;
+      wealth: string;
+      reputation: number;
+      isAlive: boolean;
+      deathCause: string;
+      season: number;
+    }>,
+    token: string | null,
+  ): Promise<any> {
+    return httpJson<any>('PUT', '/api/client/v1/character/status', {
+      token, body: status,
+    });
+  },
+
+  /** 更新阵营（faction: 'righteous' | 'evil' | 'neutral'） */
+  updateCharacterFaction(
+    faction: Partial<{ faction: string; factionName: string; factionLevel: number }>,
+    token: string | null,
+  ): Promise<any> {
+    return httpJson<any>('PUT', '/api/client/v1/character/faction', {
+      token, body: faction,
+    });
+  },
+
+  /** 更新角色物资（全可选整数） */
+  updateCharacterResource(
+    res: Partial<{ food: number; wood: number; iron: number; herb: number; gold: number }>,
+    token: string | null,
+  ): Promise<any> {
+    return httpJson<any>('PUT', '/api/client/v1/character/resource', {
+      token, body: res,
+    });
+  },
+
+  /** 更新/创建武学（artType: 'fist'|'palm'|'leg'|'weapon'，level 0-100） */
+  upsertCharacterMartialArt(
+    artType: string,
+    level: number,
+    skills: any | null,
+    token: string | null,
+  ): Promise<any> {
+    return httpJson<any>('PUT', '/api/client/v1/character/martial-art', {
+      token, body: { artType, level, skills: skills ?? undefined },
+    });
+  },
+
+  /** 武学列表 */
+  getCharacterMartialArts(token: string | null): Promise<any> {
+    return httpJson<any>('GET', '/api/client/v1/character/martial-arts', { token });
+  },
+
+  /** 添加关系（favorability -1000~1000） */
+  addCharacterRelationship(
+    targetId: string,
+    favorability: number,
+    token: string | null,
+  ): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/character/relationship', {
+      token, body: { targetId, favorability },
+    });
+  },
+
+  /** 关系列表 */
+  getCharacterRelationships(token: string | null): Promise<any> {
+    return httpJson<any>('GET', '/api/client/v1/character/relationships', { token });
+  },
+
+  /** 设置名号/诗号（alias 1-24 字，poem 1-64 字，均可选） */
+  updateCharacterCard(
+    card: Partial<{ alias: string; poem: string }>,
+    token: string | null,
+  ): Promise<any> {
+    return httpJson<any>('PUT', '/api/client/v1/character/card', {
+      token, body: card,
+    });
+  },
+
+  /** 装备/卸下称号 */
+  equipCharacterTitle(titleId: string, equip: boolean, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/character/titles/equip', {
+      token, body: { titleId, equip },
+    });
+  },
+
+  /** 我的称号列表 */
+  getCharacterTitles(token: string | null): Promise<any> {
+    return httpJson<any>('GET', '/api/client/v1/character/titles', { token });
+  },
+
+  /** 查看他人名片（characterId 为 characters.id） */
+  getCharacterCard(characterId: string, token: string | null): Promise<any> {
+    return httpJson<any>('GET', `/api/client/v1/character/card/${characterId}`, { token });
+  },
+
+  // ===== Inventory 背包端 =====
+
+  /** 背包列表 */
+  getInventory(token: string | null): Promise<any> {
+    return httpJson<any>('GET', '/api/client/v1/inventory/list', { token });
+  },
+
+  /** 使用消耗品 */
+  useItem(itemTemplateId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/inventory/use', {
+      token, body: { itemTemplateId },
+    });
+  },
+
+  /** 穿戴装备（characterId 为 characters.id，可从角色档案取） */
+  equipItem(characterId: string, inventoryItemId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/inventory/equip', {
+      token, body: { characterId, inventoryItemId },
+    });
+  },
+
+  /** 卸下装备（slot: 'weapon'|'helmet'|'armor'|'boots'|'accessory'） */
+  unequipItem(characterId: string, slot: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/inventory/unequip', {
+      token, body: { characterId, slot },
+    });
+  },
+
+  // ===== Quest 任务端（questTemplateId 为纯数字模板 id）=====
+
+  /** 玩家任务列表 */
+  listQuests(token: string | null): Promise<any> {
+    return httpJson<any>('GET', '/api/client/v1/quest/list', { token });
+  },
+
+  /** 接取任务 */
+  acceptQuest(questTemplateId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/quest/accept', {
+      token, body: { questTemplateId },
+    });
+  },
+
+  /** 提交任务领奖 */
+  submitQuest(questTemplateId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/quest/submit', {
+      token, body: { questTemplateId },
+    });
+  },
+
+  /** 领取任务奖励（auto_reward=false 的任务走这里） */
+  claimQuestReward(questTemplateId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/quest/claim', {
+      token, body: { questTemplateId },
+    });
+  },
+
+  /** 发起卡关求助（questTemplateId 必须纯数字，否则 400） */
+  requestQuestHelp(questTemplateId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/quest/help/request', {
+      token, body: { questTemplateId },
+    });
+  },
+
+  /** 我的求助与可协助列表 */
+  listQuestHelp(token: string | null): Promise<any> {
+    return httpJson<any>('GET', '/api/client/v1/quest/help/mine', { token });
+  },
+
+  /** 协助他人任务（helpId 为求助记录纯数字 id） */
+  respondQuestHelp(helpId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', `/api/client/v1/quest/help/${helpId}/respond`, { token });
+  },
+
+  // ===== Mail 邮件端 =====
+
+  /** 邮件列表 */
+  listMail(token: string | null): Promise<any> {
+    return httpJson<any>('GET', '/api/client/v1/mail/list', { token });
+  },
+
+  /** 标记已读 */
+  readMail(mailId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', `/api/client/v1/mail/${mailId}/read`, { token });
+  },
+
+  /** 领取附件 */
+  claimMailAttachment(mailId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', `/api/client/v1/mail/${mailId}/claim`, { token });
+  },
+
+  // ===== Economy 经济端 =====
+
+  /** 社交货币余额（人情值/帮贡/颜面） */
+  getSocialBalances(token: string | null): Promise<any> {
+    return httpJson<any>('GET', '/api/client/v1/economy/social/balances', { token });
+  },
+
+  /** 货币兑换（仅钻石↔绑定钻；from/to 取 CurrencyType 小写值：gold/diamond/bound_diamond/favor/guild_contrib/face/infamy） */
+  exchangeCurrency(from: string, to: string, amount: number, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/economy/exchange', {
+      token, body: { from, to, amount },
+    });
+  },
+
+  // ===== Realm 境界端 =====
+
+  /** 我的境界（境界/修为/下一档模板） */
+  getMyRealm(token: string | null): Promise<any> {
+    return httpJson<any>('GET', '/api/client/v1/realm/my', { token });
+  },
+
+  /** 投入修为（amount ≥ 1） */
+  cultivateRealm(amount: number, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/realm/cultivate', {
+      token, body: { amount },
+    });
+  },
+
+  /** 境界突破（达标→消耗→升级→里程碑发奖） */
+  breakthroughRealm(token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/realm/breakthrough', { token, body: {} });
+  },
+
+  // ===== Explore 探索端 =====
+
+  /** 当前昼夜 / 天气 */
+  getWorldState(token: string | null): Promise<any> {
+    return httpJson<any>('GET', '/api/client/v1/explore/state', { token });
+  },
+
+  /** 探索足迹：点亮场景（首探发里程碑奖，幂等 times 递加） */
+  discoverScene(sceneId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', `/api/client/v1/explore/scene/${sceneId}/discover`, {
+      token, body: {},
+    });
+  },
+
+  /** 奇遇触发：按触发率/CD/一次性判定，命中返回选项 */
+  triggerEncounter(sceneId: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', `/api/client/v1/explore/scene/${sceneId}/encounter`, {
+      token, body: {},
+    });
+  },
+
+  /** 奇遇结算：choice 为所选选项 id（幂等防重复） */
+  resolveEncounter(encounterId: string, choice: string, token: string | null): Promise<any> {
+    return httpJson<any>('POST', `/api/client/v1/explore/encounter/${encounterId}/resolve`, {
+      token, body: { choice },
+    });
   },
 };

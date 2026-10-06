@@ -21,7 +21,7 @@ export interface Envelope<T> {
  * 因此必须优先看 body.code，而不是 HTTP status。
  */
 export async function httpJson<T>(
-  method: 'GET' | 'POST',
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
   path: string,
   opts: { token?: string | null; body?: unknown } = {},
 ): Promise<T> {

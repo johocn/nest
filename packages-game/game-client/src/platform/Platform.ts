@@ -12,7 +12,7 @@ import { LoginView } from '../ui/LoginView';
 
 /** Platform.request 入参：只暴露业务代码真正需要的最小集 */
 export interface PlatformRequestOptions {
-  method: 'GET' | 'POST';
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
   url: string;
   headers?: Record<string, string>;
   body?: string;
