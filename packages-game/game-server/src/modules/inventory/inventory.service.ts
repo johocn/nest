@@ -309,6 +309,65 @@ export class InventoryService {
     };
   }
 
+  /**
+   * 丢弃物品（玩家主动销毁，不退款不返还）。
+   * 绑定物品与 canDrop=false 的模板不可丢弃；行内部分丢弃扣数量，整堆软删。
+   */
+  async dropItem(
+    playerId: string,
+    inventoryItemId: string,
+    quantity: number,
+  ): Promise<{ dropped: number; remaining: number }> {
+    if (!/^\d+$/.test(inventoryItemId)) {
+      throw new GameException(ErrorCodes.ITEM_NOT_FOUND, '道具不存在');
+    }
+    // playerId 并入 where：天然防越权（他人的物品行查不到）
+    const item = await this.itemRepo.findOne({
+      where: { id: inventoryItemId, playerId },
+    });
+    if (!item) {
+      throw new GameException(ErrorCodes.ITEM_NOT_FOUND, '道具不存在');
+    }
+    if (item.quantity < quantity) {
+      throw new GameException(ErrorCodes.ITEM_NOT_ENOUGH, '道具数量不足');
+    }
+    if (item.bindStatus === BindStatus.BOUND) {
+      throw new GameException(ErrorCodes.ITEM_CANNOT_DROP, '绑定物品不可丢弃');
+    }
+
+    const template = await this.templateRepo.findOne({
+      where: { id: item.itemTemplateId },
+    });
+    if (!template) {
+      throw new GameException(ErrorCodes.ITEM_NOT_FOUND, '道具模板不存在');
+    }
+    if (!template.canDrop) {
+      throw new GameException(ErrorCodes.ITEM_CANNOT_DROP, '该道具不可丢弃');
+    }
+
+    let remaining: number;
+    if (item.quantity === quantity) {
+      remaining = 0;
+      await this.itemRepo.softRemove(item);
+    } else {
+      item.quantity -= quantity;
+      remaining = (await this.itemRepo.save(item)).quantity;
+    }
+
+    await this.logRepo.save(
+      this.logRepo.create({
+        playerId,
+        itemTemplateId: item.itemTemplateId,
+        changeType: ItemChangeType.DESTROY,
+        quantity: -quantity,
+        opTrace: 'drop_item',
+        balanceAfter: remaining,
+      }),
+    );
+
+    return { dropped: quantity, remaining };
+  }
+
   async equipItem(
     characterId: string,
     inventoryItemId: string,
