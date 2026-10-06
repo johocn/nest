@@ -9,6 +9,7 @@ import type {
 } from '../net/api';
 import { ApiError } from '../net/http';
 import { Session } from '../net/Session';
+import { ChatPanel } from '../ui/ChatPanel';
 import { Hud } from '../ui/Hud';
 import {
   DEFAULT_GRID_SIZE,
@@ -332,6 +333,7 @@ export class BuildPanel {
   // ── 交互 ────────────────────────────────────────────────────────────────
 
   private static onKeyDown(e: Laya.Event): void {
+    if (ChatPanel.isOpen) return; // 聊天输入打开时忽略 B/Q/E 等（防打字误触建造面板）
     const key = String((e as unknown as { key?: string }).key ?? '').toLowerCase();
     if (!BuildPanel.opened) {
       if (key === 'b') BuildPanel.toggle();

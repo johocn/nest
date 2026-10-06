@@ -8,6 +8,7 @@ import { Api } from '../net/api';
 import type { DialogueQuestMarks } from '../net/api';
 import { ApiError } from '../net/http';
 import { Session } from '../net/Session';
+import { ChatPanel } from '../ui/ChatPanel';
 import { DialogueView, normalizeChoose } from '../ui/DialogueView';
 import type { DialogueNodeView } from '../ui/DialogueView';
 import { Hud } from '../ui/Hud';
@@ -81,6 +82,7 @@ export class InteractController {
     e.kind === 'npc' ? AppConfig.interactRadiusNpc : AppConfig.interactRadiusObject;
 
   private async onKeyDown(e: Laya.Event): Promise<void> {
+    if (ChatPanel.isOpen) return; // 聊天输入打开时忽略 F（防打字误触交互）
     const key = String((e as unknown as { key?: string }).key ?? '').toLowerCase();
 
     // 注：建造键 B 的监听**只在 BuildPanel.onKeyDown 一处**（两个处理器都监听 stage 的 KEY_DOWN，

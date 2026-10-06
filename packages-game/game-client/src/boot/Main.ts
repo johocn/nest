@@ -13,6 +13,7 @@ import { RemoteInterp } from '../entity/components/RemoteInterp';
 import { EntityRegistry } from '../entity/EntityRegistry';
 import { Api } from '../net/api';
 import type { BuildRuleView, BuildingTemplate, BuildingView } from '../net/api';
+import { attachChat, getRecentChatMessages, sendChat } from '../net/chat';
 import { Session } from '../net/Session';
 import { WsClient } from '../net/ws';
 import { Platform } from '../platform/Platform';
@@ -26,6 +27,7 @@ import { toBuildingSpawn, upsertBuildingEntity, viewToSpawn } from '../world/bui
 import { remotePlayerAdapter } from '../world/entity-pool-adapter';
 import { Toast } from '../ui/Toast';
 import { Hud } from '../ui/Hud';
+import { ChatPanel } from '../ui/ChatPanel';
 import { DialogueView } from '../ui/DialogueView';
 import { TouchControls } from '../ui/TouchControls';
 import { injectGMPanel } from '../gm-panel';
@@ -51,6 +53,13 @@ interface EnterSceneSync {
   triggers: Array<{ id: string; triggerType: string }>;
   /** S4 新增：NPC 实例（含巡逻路点）；旧客户端可缺失，按空数组处理（风险 #4） */
   npcs?: NpcInstanceConfig[];
+}
+
+/** ChatPanel 的发送回调：读当前 state.ws，world 频道（private/guild 网络层已支持，UI 本期不做） */
+async function chatSender(content: string): Promise<void> {
+  const ws = state.ws;
+  if (!ws) throw new Error('WS 未连接');
+  await sendChat(ws, { channel: 'world', content });
 }
 
 /** S9：进场景前批量预加载（静态物件 + 固定 NPC + 场景背景）；缺图归一为回退占位贴图，不阻塞 */
@@ -87,6 +96,12 @@ async function afterLogin(): Promise<void> {
   const ws = new WsClient();
   await ws.connect(Session.token!);
   state.ws = ws;
+
+  // ②a 聊天：注册 chat.message / chat.support_reply 广播（重登后 init 幂等重建面板），
+  //    并把缓冲里最近的消息回喂给消息条（首登为空数组）
+  ChatPanel.init(chatSender);
+  attachChat(ws, { onMessage: (m) => ChatPanel.push(m) });
+  for (const m of getRecentChatMessages()) ChatPanel.push(m);
 
   // ③ 进场景（应答 cmd 为 world.enter_scene_sync）
   const sync = await ws.send<EnterSceneSync>('world.enter-scene', { sceneId: cfg.sceneId });
@@ -258,6 +273,7 @@ export function shutdownClient(
   playerControl?.detach();
   interactControl?.detach();
   BuildPanel.destroy();
+  ChatPanel.destroy();
   state.ws?.disconnect();
   state.ws = null;
   state.me = null;
@@ -348,6 +364,8 @@ async function main(): Promise<void> {
   Hud.init();
   // S5 对话框（同为引擎内自绘，屏幕空间，zOrder 高于 HUD）
   DialogueView.init();
+  // 聊天面板（底部消息条 + Enter 输入，zOrder 高于 HUD）
+  ChatPanel.init(chatSender);
   // S6 建造面板（引擎内自绘，zOrder 高于 HUD/对话框）
   BuildPanel.init();
   // S8 质量分级 + 性能面板（面板 zOrder 须高于 login；F3 开关）

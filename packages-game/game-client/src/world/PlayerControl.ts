@@ -1,5 +1,6 @@
 import { AppConfig } from '../config/AppConfig';
 import type { Entity } from '../entity/Entity';
+import { ChatPanel } from '../ui/ChatPanel';
 import type { WsClient } from '../net/ws';
 import { clampToMapBounds, moveDelta } from './move-step';
 
@@ -47,6 +48,7 @@ export class PlayerControl {
   }
 
   private onKeyDown(e: Laya.Event): void {
+    if (ChatPanel.isOpen) return; // 聊天输入打开时忽略按键（防打字触发移动）
     this.pressed.add(PlayerControl.normKey(e));
   }
 
@@ -78,6 +80,11 @@ export class PlayerControl {
    */
   private onFrame(): void {
     const p = this.pressed;
+    // 聊天输入打开：清空残留按键并停走（防止开输入前按住的键持续移动）
+    if (ChatPanel.isOpen) {
+      if (p.size > 0) p.clear();
+      return;
+    }
     let dx = 0;
     let dy = 0;
     if (p.has(KEY_LEFT) || p.has(KEY_ARROW_LEFT)) dx -= 1;
