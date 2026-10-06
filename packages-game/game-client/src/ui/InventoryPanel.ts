@@ -151,6 +151,7 @@ export class InventoryPanel {
       return;
     }
     if (key === 'u') void InventoryPanel.doUse();
+    if (key === 'd') void InventoryPanel.doDrop();
   }
 
   /** 拉取背包列表并重绘（打开面板与操作后刷新共用） */
@@ -185,6 +186,27 @@ export class InventoryPanel {
     try {
       await Api.useItem(item.itemTemplateId, Session.token ?? '');
       Toast.info('使用成功');
+      await InventoryPanel.refresh();
+    } catch (err) {
+      Toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      InventoryPanel.busy = false;
+    }
+  }
+
+  /** 丢弃整堆（服务端拒绝绑定/不可丢弃时 Toast 错误信息） */
+  private static async doDrop(): Promise<void> {
+    if (InventoryPanel.busy) return;
+    const item = InventoryPanel.items[InventoryPanel.selected];
+    if (!item) {
+      Toast.info('请先选择物品');
+      return;
+    }
+    InventoryPanel.busy = true;
+    try {
+      await Api.dropItem(item.id, item.quantity, Session.token ?? '');
+      Toast.info('丢弃成功');
+      InventoryPanel.selected = -1;
       await InventoryPanel.refresh();
     } catch (err) {
       Toast.error(err instanceof Error ? err.message : String(err));
@@ -268,6 +290,12 @@ export class InventoryPanel {
         color: IP.okColor,
         button: true,
         onClick: () => void InventoryPanel.doUse(),
+      });
+      rows.push({
+        text: '丢弃（D，整堆）',
+        color: IP.warnColor,
+        button: true,
+        onClick: () => void InventoryPanel.doDrop(),
       });
     } else {
       rows.push({ text: '点击物品行选中后可操作', color: IP.dimColor });

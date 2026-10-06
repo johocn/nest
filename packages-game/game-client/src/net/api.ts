@@ -666,6 +666,13 @@ export const Api = {
     });
   },
 
+  /** 丢弃物品（inventoryItemId 为背包行 id；绑定/canDrop=false 服务端会拒绝） */
+  dropItem(inventoryItemId: string, quantity: number, token: string | null): Promise<any> {
+    return httpJson<any>('POST', '/api/client/v1/inventory/drop', {
+      token, body: { inventoryItemId, quantity },
+    });
+  },
+
   /** 穿戴装备（characterId 为 characters.id，可从角色档案取） */
   equipItem(characterId: string, inventoryItemId: string, token: string | null): Promise<any> {
     return httpJson<any>('POST', '/api/client/v1/inventory/equip', {
