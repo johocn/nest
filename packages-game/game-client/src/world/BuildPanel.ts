@@ -339,7 +339,10 @@ export class BuildPanel {
     if (ChatPanel.isOpen || MatchPanel.isOpen || InventoryPanel.isOpen || MailPanel.isOpen) return; // 聊天输入/匹配/背包/邮件面板打开时忽略 B/Q/E 等（防误触建造面板）
     const key = String((e as unknown as { key?: string }).key ?? '').toLowerCase();
     if (!BuildPanel.opened) {
-      if (key === 'b') BuildPanel.toggle();
+      if (key === 'b') {
+        if (!Session.token) return; // 登录页门禁：未登录不打开
+        BuildPanel.toggle();
+      }
       return;
     }
     switch (key) {

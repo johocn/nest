@@ -412,8 +412,7 @@ async function main(): Promise<void> {
   Hud.init();
   // S5 对话框（同为引擎内自绘，屏幕空间，zOrder 高于 HUD）
   DialogueView.init();
-  // 聊天面板（底部消息条 + Enter 输入，zOrder 高于 HUD）
-  ChatPanel.init(chatSender);
+  // 聊天面板在 afterLogin 里 init —— 登录页不显示聊天条（登录页门禁）
   // 匹配面板（三态：idle/matching/matched，M 开关，zOrder 高于 HUD/聊天/建造）
   MatchPanel.init();
   // 背包面板（打开时懒加载 GET /inventory/list，I 开关，zOrder 最高）

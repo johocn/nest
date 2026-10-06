@@ -205,6 +205,7 @@ export class MatchPanel {
     if (ChatPanel.isOpen) return; // 聊天输入打开时忽略（防打字误触匹配操作）
     const key = String((e as unknown as { key?: string }).key ?? '').toLowerCase();
     if (key === 'm') {
+      if (!Session.token) return; // 登录页门禁：未登录不打开
       MatchPanel.toggle();
       return;
     }

@@ -2,6 +2,7 @@ import { AppConfig } from '../config/AppConfig';
 import { Platform } from '../platform/Platform';
 import { keyTokenFromEvent } from './login-logic';
 import { Toast } from './Toast';
+import { Session } from '../net/Session';
 import type { ChatMessageView } from '../net/chat';
 
 /** 聊天 UI 常量：与 hud/dialogue 同风格集中在此（仅本面板使用，不进 AppConfig） */
@@ -177,6 +178,7 @@ export class ChatPanel {
     }
     const key = String((e as unknown as { key?: string }).key ?? '').toLowerCase();
     if (key === 'enter') {
+      if (!Session.token) return; // 登录页门禁：未登录不打开输入框
       ChatPanel.inputOpen = true;
       ChatPanel.inputText = '';
       ChatPanel.rebuild();

@@ -149,6 +149,7 @@ export class MailPanel {
     if (ChatPanel.isOpen) return; // 聊天输入打开时忽略（防打字误触邮件操作）
     const key = String((e as unknown as { key?: string }).key ?? '').toLowerCase();
     if (key === 'l') {
+      if (!Session.token) return; // 登录页门禁：未登录不打开
       MailPanel.toggle();
       return;
     }
