@@ -37,6 +37,7 @@ import { Hud } from '../ui/Hud';
 import { ChatPanel } from '../ui/ChatPanel';
 import { MatchPanel } from '../ui/MatchPanel';
 import { InventoryPanel } from '../ui/InventoryPanel';
+import { MailPanel } from '../ui/MailPanel';
 import { DialogueView } from '../ui/DialogueView';
 import { TouchControls } from '../ui/TouchControls';
 import { injectGMPanel } from '../gm-panel';
@@ -320,6 +321,7 @@ export function shutdownClient(
   ChatPanel.destroy();
   MatchPanel.destroy();
   InventoryPanel.destroy();
+  MailPanel.destroy();
   state.ws?.disconnect();
   state.ws = null;
   state.me = null;
@@ -416,6 +418,8 @@ async function main(): Promise<void> {
   MatchPanel.init();
   // 背包面板（打开时懒加载 GET /inventory/list，I 开关，zOrder 最高）
   InventoryPanel.init();
+  // 邮件面板（打开时懒加载 GET /mail/list，L 开关，zOrder 高于背包）
+  MailPanel.init();
   // S6 建造面板（引擎内自绘，zOrder 高于 HUD/对话框）
   BuildPanel.init();
   // S8 质量分级 + 性能面板（面板 zOrder 须高于 login；F3 开关）

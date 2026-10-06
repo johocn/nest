@@ -3,6 +3,7 @@ import type { Entity } from '../entity/Entity';
 import { ChatPanel } from '../ui/ChatPanel';
 import { MatchPanel } from '../ui/MatchPanel';
 import { InventoryPanel } from '../ui/InventoryPanel';
+import { MailPanel } from '../ui/MailPanel';
 import type { WsClient } from '../net/ws';
 import { clampToMapBounds, moveDelta } from './move-step';
 
@@ -50,7 +51,7 @@ export class PlayerControl {
   }
 
   private onKeyDown(e: Laya.Event): void {
-    if (ChatPanel.isOpen || MatchPanel.isOpen || InventoryPanel.isOpen) return; // 聊天输入/匹配/背包面板打开时忽略按键（防误触移动）
+    if (ChatPanel.isOpen || MatchPanel.isOpen || InventoryPanel.isOpen || MailPanel.isOpen) return; // 聊天输入/匹配/背包/邮件面板打开时忽略按键（防误触移动）
     this.pressed.add(PlayerControl.normKey(e));
   }
 
@@ -83,7 +84,7 @@ export class PlayerControl {
   private onFrame(): void {
     const p = this.pressed;
     // 聊天输入/匹配/背包面板打开：清空残留按键并停走（防止开面板前按住的键持续移动）
-    if (ChatPanel.isOpen || MatchPanel.isOpen || InventoryPanel.isOpen) {
+    if (ChatPanel.isOpen || MatchPanel.isOpen || InventoryPanel.isOpen || MailPanel.isOpen) {
       if (p.size > 0) p.clear();
       return;
     }
