@@ -1,6 +1,7 @@
 import { AppConfig } from '../config/AppConfig';
 import type { DialogueQuestMarks, DialogueStepResult, NpcTalkResult } from '../net/api';
 import { ChatPanel } from './ChatPanel';
+import { MatchPanel } from './MatchPanel';
 
 const D = AppConfig.dialogue;
 const T = AppConfig.touch;
@@ -329,7 +330,7 @@ export class DialogueView {
   }
 
   private static onKeyDown(e: Laya.Event): void {
-    if (!DialogueView.opened || ChatPanel.isOpen) return; // 聊天输入打开时忽略 Esc/数字（防打字误选对话选项）
+    if (!DialogueView.opened || ChatPanel.isOpen || MatchPanel.isOpen) return; // 聊天输入/匹配面板打开时忽略 Esc/数字（防误选对话选项）
     const key = String((e as unknown as { key?: string }).key ?? '').toLowerCase();
     if (key === 'escape') {
       DialogueView.close();

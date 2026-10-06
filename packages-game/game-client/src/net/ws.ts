@@ -23,6 +23,7 @@ export class WsClient {
   private seq = 0;
   private readonly pending = new Map<number, Pending>();
   private readonly handlers = new Map<string, (m: WsMessage) => void>();
+  private readonly rawHandlers = new Map<string, (payload: any) => void>();
 
   async connect(token: string): Promise<void> {
     if (typeof io !== 'function') {
@@ -34,6 +35,8 @@ export class WsClient {
       query: { token },
       reconnection: true,
     });
+    // onRaw 在 connect 前注册过的事件，connect 后补挂到 socket
+    for (const [event, handler] of this.rawHandlers) this.socket.on(event, handler);
 
     await new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('WS 连接超时（8s）')), ACK_TIMEOUT_MS);
@@ -84,6 +87,16 @@ export class WsClient {
   }
 
   /**
+   * 注册「裸事件」下行广播（matchmaking:matched / room:update / room:destroyed 等不走
+   * 'message' 包裹的事件，payload 直接是数据对象，无 cmd/seq）。connect 前调用可容错：
+   * 先存入 rawHandlers，connect 成功后统一补挂到 socket。
+   */
+  onRaw(event: string, handler: (payload: any) => void): void {
+    this.rawHandlers.set(event, handler);
+    this.socket?.on(event, handler);
+  }
+
+  /**
    * 发送请求。事件名即 cmd（服务端用 @SubscribeMessage(cmd) 订阅）。
    * expectAck=false 时不登记 pending（用于 world.move 这类高频上报）。
    *
@@ -112,6 +125,35 @@ export class WsClient {
         timer,
       });
       this.socket.emit(cmd, { cmd, seq, data }, (ack: WsMessage) => this.dispatch(ack));
+    });
+  }
+
+  /**
+   * 裸契约上行（匹配模块用）：payload 直接是数据对象，不包 {cmd, seq, data}
+   * （matchmaking gateway 的 handler 直读 {mode}/{roomId}，服务端 E2E 同款发法）。
+   * ack 回包无 seq，直接在回调里 resolve，不走 dispatch/pending 匹配。
+   */
+  sendRaw<T = any>(cmd: string, data: unknown): Promise<WsMessage & { data: T }> {
+    if (!this.socket) throw new Error('WS 未连接');
+    bumpUp(cmd);
+    const seq = ++this.seq;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(seq);
+        reject(new Error(`WS 请求超时：${cmd}`));
+      }, ACK_TIMEOUT_MS);
+      this.pending.set(seq, {
+        resolve: resolve as (m: WsMessage) => void,
+        reject,
+        timer,
+      });
+      this.socket.emit(cmd, data, (ack: WsMessage) => {
+        const p = this.pending.get(seq);
+        if (!p) return;
+        this.pending.delete(seq);
+        clearTimeout(p.timer);
+        p.resolve(ack);
+      });
     });
   }
 

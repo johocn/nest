@@ -14,6 +14,13 @@ import { EntityRegistry } from '../entity/EntityRegistry';
 import { Api } from '../net/api';
 import type { BuildRuleView, BuildingTemplate, BuildingView } from '../net/api';
 import { attachChat, getRecentChatMessages, sendChat } from '../net/chat';
+import {
+  attachMatchmaking,
+  cancelQueue,
+  joinQueue,
+  leaveRoom,
+  setRoomReady,
+} from '../net/matchmaking';
 import { Session } from '../net/Session';
 import { WsClient } from '../net/ws';
 import { Platform } from '../platform/Platform';
@@ -28,6 +35,7 @@ import { remotePlayerAdapter } from '../world/entity-pool-adapter';
 import { Toast } from '../ui/Toast';
 import { Hud } from '../ui/Hud';
 import { ChatPanel } from '../ui/ChatPanel';
+import { MatchPanel } from '../ui/MatchPanel';
 import { DialogueView } from '../ui/DialogueView';
 import { TouchControls } from '../ui/TouchControls';
 import { injectGMPanel } from '../gm-panel';
@@ -60,6 +68,16 @@ async function chatSender(content: string): Promise<void> {
   const ws = state.ws;
   if (!ws) throw new Error('WS 未连接');
   await sendChat(ws, { channel: 'world', content });
+}
+
+/** 心跳间隔：对齐服务端 GAME_WS_HEARTBEAT_INTERVAL（30s） */
+const HEARTBEAT_INTERVAL_MS = 30000;
+
+/** 应答式心跳：失败只记日志，由下一次循环重试 */
+function heartbeatTick(): void {
+  state.ws
+    ?.send('player.heartbeat', {})
+    .catch((err) => console.warn(`[WS] 心跳失败：${String(err)}`));
 }
 
 /** S9：进场景前批量预加载（静态物件 + 固定 NPC + 场景背景）；缺图归一为回退占位贴图，不阻塞 */
@@ -102,6 +120,29 @@ async function afterLogin(): Promise<void> {
   ChatPanel.init(chatSender);
   attachChat(ws, { onMessage: (m) => ChatPanel.push(m) });
   for (const m of getRecentChatMessages()) ChatPanel.push(m);
+
+  // ②a-2 匹配：注册三个裸广播（matchmaking:matched / room:update / room:destroyed）+ 注入上行动作
+  attachMatchmaking(ws, {
+    onMatched: (p) => MatchPanel.onMatched(p),
+    onRoomUpdate: (room) => MatchPanel.onRoomUpdate(room),
+    onRoomDestroyed: (p) => MatchPanel.onRoomDestroyed(p),
+  });
+  MatchPanel.setActions({
+    join: (mode) => joinQueue(ws, mode),
+    cancel: (mode) => cancelQueue(ws, mode),
+    ready: (roomId, ready) => setRoomReady(ws, roomId, ready),
+    leave: (roomId, reason) => leaveRoom(ws, roomId, reason),
+  });
+
+  // ②b 心跳（30s，对齐服务端 GAME_WS_HEARTBEAT_INTERVAL）+ 离线数据推送监听
+  ws.on('offline:data', (m) => {
+    const d = m?.data ?? {};
+    console.log('[WS] 离线数据推送', d);
+    if (d.lastOnline) Toast.info(`欢迎回来，上次在线：${d.lastOnline}`);
+  });
+  // 先 clear 再 loop：防「重进场景」叠加多个心跳 timer（与 shutdownLoops 同幂等模式）
+  Laya.timer.clear(null, heartbeatTick);
+  Laya.timer.loop(HEARTBEAT_INTERVAL_MS, null, heartbeatTick);
 
   // ③ 进场景（应答 cmd 为 world.enter_scene_sync）
   const sync = await ws.send<EnterSceneSync>('world.enter-scene', { sceneId: cfg.sceneId });
@@ -253,11 +294,13 @@ async function afterLogin(): Promise<void> {
 /** 清理 Main.afterLogin 注册的三个全局逐帧 loop —— 支持重进场景/退出登录 */
 function shutdownLoops(): void {
   const l = state.loops;
-  if (!l) return;
-  Laya.timer.clear(null, l.updateAll);
-  Laya.timer.clear(null, l.cull);
-  Laya.timer.clear(null, l.resort);
-  state.loops = null;
+  if (l) {
+    Laya.timer.clear(null, l.updateAll);
+    Laya.timer.clear(null, l.cull);
+    Laya.timer.clear(null, l.resort);
+    state.loops = null;
+  }
+  Laya.timer.clear(null, heartbeatTick);
 }
 
 /**
@@ -274,6 +317,7 @@ export function shutdownClient(
   interactControl?.detach();
   BuildPanel.destroy();
   ChatPanel.destroy();
+  MatchPanel.destroy();
   state.ws?.disconnect();
   state.ws = null;
   state.me = null;
@@ -366,6 +410,8 @@ async function main(): Promise<void> {
   DialogueView.init();
   // 聊天面板（底部消息条 + Enter 输入，zOrder 高于 HUD）
   ChatPanel.init(chatSender);
+  // 匹配面板（三态：idle/matching/matched，M 开关，zOrder 高于 HUD/聊天/建造）
+  MatchPanel.init();
   // S6 建造面板（引擎内自绘，zOrder 高于 HUD/对话框）
   BuildPanel.init();
   // S8 质量分级 + 性能面板（面板 zOrder 须高于 login；F3 开关）
