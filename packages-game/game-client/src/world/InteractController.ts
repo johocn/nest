@@ -10,6 +10,7 @@ import { ApiError } from '../net/http';
 import { Session } from '../net/Session';
 import { ChatPanel } from '../ui/ChatPanel';
 import { MatchPanel } from '../ui/MatchPanel';
+import { InventoryPanel } from '../ui/InventoryPanel';
 import { DialogueView, normalizeChoose } from '../ui/DialogueView';
 import type { DialogueNodeView } from '../ui/DialogueView';
 import { Hud } from '../ui/Hud';
@@ -83,7 +84,7 @@ export class InteractController {
     e.kind === 'npc' ? AppConfig.interactRadiusNpc : AppConfig.interactRadiusObject;
 
   private async onKeyDown(e: Laya.Event): Promise<void> {
-    if (ChatPanel.isOpen || MatchPanel.isOpen) return; // 聊天输入/匹配面板打开时忽略 F（防误触交互）
+    if (ChatPanel.isOpen || MatchPanel.isOpen || InventoryPanel.isOpen) return; // 聊天输入/匹配/背包面板打开时忽略 F（防误触交互）
     const key = String((e as unknown as { key?: string }).key ?? '').toLowerCase();
 
     // 注：建造键 B 的监听**只在 BuildPanel.onKeyDown 一处**（两个处理器都监听 stage 的 KEY_DOWN，
