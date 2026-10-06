@@ -387,7 +387,11 @@ export class InventoryService {
   }
 
   async getInventory(playerId: string): Promise<InventoryItem[]> {
-    return this.itemRepo.find({ where: { playerId } });
+    // 带出模板供客户端显示物品名（多字段向后兼容；模板字段小，背包行数 ≤ bagMaxSlots）
+    return this.itemRepo.find({
+      where: { playerId },
+      relations: { itemTemplate: true },
+    });
   }
 
   async getEquipment(characterId: string): Promise<CharacterEquipment[]> {
