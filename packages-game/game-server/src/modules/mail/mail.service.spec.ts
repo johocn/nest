@@ -6,6 +6,9 @@ import { CacheService } from '@cache/cache.service';
 import { EventBusService } from '@event-bus/event-bus.service';
 import { MailSenderType } from '@constants/enums';
 import { Player } from '@modules/player/entities/player.entity';
+import { InventoryService } from '@modules/inventory/inventory.service';
+import { EconomyService } from '@modules/economy/economy.service';
+import { ErrorCodes } from '@constants/error-codes';
 import type { Repository } from 'typeorm';
 
 describe('MailService', () => {
@@ -13,6 +16,8 @@ describe('MailService', () => {
   let mailRepo: jest.Mocked<Repository<Mail>>;
   let cacheService: jest.Mocked<CacheService>;
   let eventBus: jest.Mocked<EventBusService>;
+  let inventoryService: jest.Mocked<InventoryService>;
+  let economyService: jest.Mocked<EconomyService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -50,6 +55,18 @@ describe('MailService', () => {
           },
         },
         { provide: EventBusService, useValue: { emit: jest.fn() } },
+        {
+          provide: InventoryService,
+          useValue: { addItem: jest.fn().mockResolvedValue({}) },
+        },
+        {
+          provide: EconomyService,
+          useValue: {
+            addCurrency: jest
+              .fn()
+              .mockResolvedValue({ balanceAfter: '100' }),
+          },
+        },
       ],
     }).compile();
 
@@ -57,6 +74,8 @@ describe('MailService', () => {
     mailRepo = module.get(getRepositoryToken(Mail));
     cacheService = module.get(CacheService);
     eventBus = module.get(EventBusService);
+    inventoryService = module.get(InventoryService);
+    economyService = module.get(EconomyService);
   });
 
   const makeMail = (overrides: Partial<Mail> = {}): Mail =>
@@ -114,21 +133,81 @@ describe('MailService', () => {
   });
 
   describe('claimAttachment', () => {
-    it('should return attachment and mark as claimed', async () => {
+    it('should grant items then mark as claimed', async () => {
       mailRepo.findOne.mockResolvedValue(makeMail({ isClaimed: false }));
 
       const result = await service.claimAttachment('p1', '1');
 
+      expect(inventoryService.addItem).toHaveBeenCalledWith(
+        'p1',
+        '1001',
+        5,
+        'mail_claim',
+      );
+      expect(mailRepo.save).toHaveBeenCalled();
       expect(result.attachment).toEqual({
         items: [{ templateId: '1001', quantity: 5 }],
       });
       expect(result.isClaimed).toBe(true);
     });
 
+    it('should grant currencies when attachment has them', async () => {
+      mailRepo.findOne.mockResolvedValue(
+        makeMail({
+          attachmentJson: {
+            currencies: [{ currencyType: 'gold', amount: 100 }],
+          },
+        }),
+      );
+
+      const result = await service.claimAttachment('p1', '1');
+
+      expect(economyService.addCurrency).toHaveBeenCalledWith(
+        'p1',
+        'gold',
+        100,
+        'mail',
+        'claim_attachment',
+        '1',
+      );
+      expect(inventoryService.addItem).not.toHaveBeenCalled();
+      expect(result.isClaimed).toBe(true);
+    });
+
+    it('should not mark claimed when granting fails', async () => {
+      mailRepo.findOne.mockResolvedValue(makeMail({ isClaimed: false }));
+      inventoryService.addItem.mockRejectedValueOnce(
+        new Error('BAG_FULL mock'),
+      );
+
+      await expect(service.claimAttachment('p1', '1')).rejects.toThrow();
+      expect(mailRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('should throw when mail has no attachment', async () => {
+      mailRepo.findOne.mockResolvedValue(
+        makeMail({ attachmentJson: {} }),
+      );
+
+      await expect(service.claimAttachment('p1', '1')).rejects.toMatchObject({
+        response: { code: ErrorCodes.MAIL_NO_ATTACHMENT },
+      });
+    });
+
     it('should throw when attachment already claimed', async () => {
       mailRepo.findOne.mockResolvedValue(makeMail({ isClaimed: true }));
 
-      await expect(service.claimAttachment('p1', '1')).rejects.toThrow();
+      await expect(service.claimAttachment('p1', '1')).rejects.toMatchObject({
+        response: { code: ErrorCodes.MAIL_ATTACHMENT_CLAIMED },
+      });
+    });
+
+    it('should throw when mail not found', async () => {
+      mailRepo.findOne.mockResolvedValue(null);
+
+      await expect(service.claimAttachment('p1', '999')).rejects.toMatchObject({
+        response: { code: ErrorCodes.MAIL_NOT_FOUND },
+      });
     });
   });
 

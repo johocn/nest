@@ -254,6 +254,10 @@ export const ErrorCodes = {
   BUILD_NOT_FOUND: 44004, // 建筑实例不存在或不可操作
   COOP_NOT_READY: 44005, // 共建未达人数/投料门槛
   COOP_EXPIRED: 44006, // 共建已超时
+  // 邮件系统 45001-45099
+  MAIL_NOT_FOUND: 45001, // 邮件不存在（或非本人收件箱）
+  MAIL_ATTACHMENT_CLAIMED: 45002, // 附件已领取过
+  MAIL_NO_ATTACHMENT: 45003, // 邮件无可领取附件
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
