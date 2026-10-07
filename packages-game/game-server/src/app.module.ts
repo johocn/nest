@@ -37,7 +37,7 @@ import { PaymentModule } from '@modules/payment/payment.module';
 import { VipModule } from '@modules/vip/vip.module';
 import { SandboxModule } from '@modules/sandbox/sandbox.module';
 import { MatchmakingModule } from '@modules/matchmaking/matchmaking.module';
-import { MahjongModule } from '@modules/mahjong/mahjong.module';
+import { SichuanMahjongModule } from '@modules/sichuanmajiang/sichuanmajiang.module';
 import { OfflineModule } from '@modules/offline/offline.module';
 import { EcoModule } from '@modules/eco/eco.module';
 import { LadderModule } from '@modules/ladder/ladder.module';
@@ -97,7 +97,7 @@ import { RateLimitGuard } from '@common/guards/rate-limit.guard';
     VipModule,
     SandboxModule,
     MatchmakingModule,
-    MahjongModule,
+    SichuanMahjongModule,
     OfflineModule,
     EcoModule,
     LadderModule,

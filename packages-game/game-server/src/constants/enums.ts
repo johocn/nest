@@ -806,6 +806,21 @@ export enum GiftCodeClaimLimit {
   ONE_PER_PLAYER = 'one_per_player',
 }
 
+// ===== 四川麻将（血战到底）模块枚举 =====
+
+/** 麻将对局模式：ai=房主建房+AI 补位；net=联网房（坐满开局） */
+export enum SichuanMahjongMode {
+  AI = 'ai',
+  NET = 'net',
+}
+
+/** 麻将牌桌状态 */
+export enum SichuanMahjongTableStatus {
+  WAITING = 'waiting',
+  PLAYING = 'playing',
+  FINISHED = 'finished',
+}
+
 // ===== 社交经济枚举（阶段5批2） =====
 
 export enum SocialPointType {

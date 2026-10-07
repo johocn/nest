@@ -251,6 +251,13 @@ export const ErrorCodes = {
   BUILD_FORBIDDEN: 44001, // 该场景不允许建造（无规则或 mode=forbidden）
   PLOT_OCCUPIED: 44002, // 目标地块已被占用
   BUILD_LIMIT_REACHED: 44003, // 玩家在该场景的建造数量已达上限
+
+  // 四川麻将（血战到底）80001-80099
+  SICHUANMAJIANG_TABLE_NOT_FOUND: 80001, // 牌桌不存在或已解散
+  SICHUANMAJIANG_TABLE_FULL: 80002, // 牌桌已满（4 人）
+  SICHUANMAJIANG_NOT_YOUR_TURN: 80003, // 不是你的操作时机 / 不在该牌桌
+  SICHUANMAJIANG_INVALID_ACTION: 80004, // 非法动作
+  SICHUANMAJIANG_ALREADY_QUEUED: 80005, // 已定缺或不在定缺阶段
   BUILD_NOT_FOUND: 44004, // 建筑实例不存在或不可操作
   COOP_NOT_READY: 44005, // 共建未达人数/投料门槛
   COOP_EXPIRED: 44006, // 共建已超时

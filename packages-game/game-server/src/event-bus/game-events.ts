@@ -142,6 +142,12 @@ export const GameEvents = {
   EXPLORE_SCENE_DISCOVERED: 'explore.scene.discovered',
   ENCOUNTER_TRIGGERED: 'explore.encounter.triggered',
   ENCOUNTER_RESOLVED: 'explore.encounter.resolved',
+
+  // 四川麻将（血战到底）模块事件
+  SICHUANMAJIANG_TABLE_CREATED: 'sichuanmajiang.table.created',
+  SICHUANMAJIANG_TABLE_UPDATED: 'sichuanmajiang.table.updated',
+  SICHUANMAJIANG_TABLE_FINISHED: 'sichuanmajiang.table.finished',
+  SICHUANMAJIANG_TABLE_TIMEOUT: 'sichuanmajiang.table.timeout',
 } as const;
 
 export type GameEvent = (typeof GameEvents)[keyof typeof GameEvents];
