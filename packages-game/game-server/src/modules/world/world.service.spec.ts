@@ -32,6 +32,8 @@ import { EconomyService } from '../economy/economy.service';
 import { NpcPresenceService } from './npc/npc-presence.service';
 import { DialogueService } from './dialogue/dialogue.service';
 import type { Repository } from 'typeorm';
+import { visibleTo } from '@shared/content-scope';
+import { expectScopedFind } from '../../testing/content-scope-contract.shared';
 
 describe('WorldService', () => {
   let service: WorldService;
@@ -200,6 +202,7 @@ describe('WorldService', () => {
       sceneRepo.findOne.mockResolvedValue(makeScene());
       const result = await service.getScene('1');
       expect(result.name).toBe('中央城');
+      expectScopedFind(sceneRepo.findOne as jest.Mock);
     });
 
     it('should throw when scene not found', async () => {
@@ -214,6 +217,7 @@ describe('WorldService', () => {
       const result = await service.getScenes({ page: 1, limit: 20 });
       expect(result.items).toHaveLength(1);
       expect(result.total).toBe(1);
+      expectScopedFind(sceneRepo.findAndCount as jest.Mock);
     });
   });
 
@@ -236,6 +240,7 @@ describe('WorldService', () => {
       sceneRepo.save.mockResolvedValue({ ...scene, name: '新名称' });
       const result = await service.updateScene('1', { name: '新名称' });
       expect(result.name).toBe('新名称');
+      expectScopedFind(sceneRepo.findOne as jest.Mock);
     });
   });
 
@@ -260,6 +265,7 @@ describe('WorldService', () => {
       spawnRepo.find.mockResolvedValue(spawns as any);
       const result = await service.getSceneSpawns('1');
       expect(result).toHaveLength(2);
+      expectScopedFind(spawnRepo.find as jest.Mock);
     });
   });
 
@@ -268,6 +274,7 @@ describe('WorldService', () => {
       triggerRepo.find.mockResolvedValue([{ id: '1' } as any]);
       const result = await service.getSceneTriggers('1');
       expect(result).toHaveLength(1);
+      expectScopedFind(triggerRepo.find as jest.Mock);
     });
 
     it('只返回该场景的触发器（按 sceneId 过滤）', async () => {
@@ -276,7 +283,7 @@ describe('WorldService', () => {
       await service.getSceneTriggers('7');
 
       expect(triggerRepo.find).toHaveBeenCalledWith({
-        where: { sceneId: '7' },
+        where: { sceneId: '7', ...visibleTo(null) },
       });
     });
   });
@@ -428,6 +435,7 @@ describe('WorldService', () => {
       ).rejects.toMatchObject({
         response: { code: ErrorCodes.TRIGGER_NOT_READY },
       });
+      expectScopedFind(triggerRepo.findOne as jest.Mock);
     });
 
     it('街头玩法：下注计入奖池', async () => {
@@ -486,6 +494,8 @@ describe('WorldService', () => {
       expect(result.code).toBeUndefined();
       expect(result.nodeKey).toBeUndefined();
       expect(dialogueService.startById).toHaveBeenCalledWith('2', 3);
+      expectScopedFind(spawnRepo.findOne as jest.Mock);
+      expectScopedFind(npcRepo.findOne as jest.Mock);
     });
 
     it('接入对话树：text 为节点正文，options 为过滤后可选项（next/index 分离）', async () => {
@@ -587,6 +597,7 @@ describe('WorldService', () => {
 
       const view = await service.triggerStory('1', '2');
       expect(view.nodeKey).toBe('root');
+      expectScopedFind(triggerRepo.findOne as jest.Mock);
       expect(cacheService.acquireLock).toHaveBeenCalledWith(
         'world:story:once:2',
         31536000,

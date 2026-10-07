@@ -24,6 +24,7 @@ import { EconomyService } from '@modules/economy/economy.service';
 import { CacheService } from '@cache/cache.service';
 import { PlayerService } from '@modules/player/player.service';
 import type { Repository } from 'typeorm';
+import { expectScopedFind } from '../../testing/content-scope-contract.shared';
 
 describe('QuestService', () => {
   let service: QuestService;
@@ -182,6 +183,7 @@ describe('QuestService', () => {
         'quest.accepted',
         expect.any(Object),
       );
+      expectScopedFind(questTemplateRepo.findOne as jest.Mock);
     });
 
     it('should throw when quest template not found', async () => {
@@ -449,6 +451,7 @@ describe('QuestService', () => {
         'quest.completed',
         expect.any(Object),
       );
+      expectScopedFind(questTemplateRepo.findOne as jest.Mock);
     });
 
     it('should throw when quest not in progress', async () => {
@@ -553,6 +556,7 @@ describe('QuestService', () => {
       );
       expect(economyService.addCurrency).toHaveBeenCalled();
       expect(result.reward).toEqual({ gold: 50 });
+      expectScopedFind(questTemplateRepo.findOne as jest.Mock);
     });
 
     it('claimQuestReward 重复领取（affected=0）拒绝', async () => {
@@ -594,6 +598,7 @@ describe('QuestService', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].template.name).toBe('初入江湖');
+      expectScopedFind(questTemplateRepo.findOne as jest.Mock);
     });
 
     it('should return empty array when no quests', async () => {
@@ -618,6 +623,7 @@ describe('QuestService', () => {
 
       expect(result.progress).toBe(10);
       expect(result.status).toBe(QuestStatus.COMPLETED);
+      expectScopedFind(questTemplateRepo.findOne as jest.Mock);
     });
   });
 
@@ -638,6 +644,7 @@ describe('QuestService', () => {
       expect(playerQuestRepo.save).toHaveBeenCalled();
       const saved = (playerQuestRepo.save as jest.Mock).mock.calls[0][0];
       expect(saved.progress).toBe(3);
+      expectScopedFind(questTemplateRepo.findOne as jest.Mock);
     });
 
     it('should do nothing when no matching quests', async () => {
@@ -698,6 +705,7 @@ describe('QuestService', () => {
         'quest.completed',
         expect.any(Object),
       );
+      expectScopedFind(questTemplateRepo.findOne as jest.Mock);
     });
 
     it('should do nothing silently when no matching quests', async () => {
@@ -888,6 +896,7 @@ describe('QuestService', () => {
         'quest.completed',
         expect.any(Object),
       );
+      expectScopedFind(questTemplateRepo.findOne as jest.Mock);
     });
 
     it('should grant helper guild contrib on respond', async () => {

@@ -14,6 +14,7 @@ import { EventBusService } from '@event-bus/event-bus.service';
 import { GameEvents } from '@event-bus/game-events';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
+import { visibleTo } from '@shared/content-scope';
 import { CurrencyType } from '@constants/enums';
 
 export interface WorldState {
@@ -110,7 +111,9 @@ export class ExploreService {
 
   /** 探索足迹：幂等 upsert + times 递增，首探经既有效益通道发里程碑奖 */
   async discover(playerId: string, sceneId: string): Promise<DiscoverResult> {
-    const scene = await this.sceneRepo.findOne({ where: { id: sceneId } });
+    const scene = await this.sceneRepo.findOne({
+      where: { id: sceneId, ...visibleTo(null) },
+    });
     if (!scene) {
       throw new GameException(ErrorCodes.PARAM_INVALID, '场景不存在');
     }

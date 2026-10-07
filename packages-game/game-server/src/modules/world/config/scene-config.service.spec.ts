@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { FindOperator } from 'typeorm';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -19,6 +20,7 @@ import {
 } from '../entities';
 import { AdminService } from '@modules/admin/admin.service';
 import { GameException } from '@common/exceptions/game.exception';
+import { expectScopedFind } from '../../../testing/content-scope-contract.shared';
 import {
   EntityType,
   ObjectType,
@@ -32,10 +34,15 @@ const MANIFEST_FILE = 'manifest.json';
 
 type Row = Record<string, any>;
 
-/** 行匹配（只支持等值 where，与单测用到的查询一致） */
+/** 行匹配（只支持等值 where + appScope 的 In 过滤，与单测用到的查询一致） */
 function matches(row: Row, where?: Row): boolean {
   if (!where) return true;
-  return Object.entries(where).every(([key, value]) => row[key] === value);
+  return Object.entries(where).every(([key, value]) => {
+    if (value instanceof FindOperator) {
+      return (value.value as string[]).includes(row[key]);
+    }
+    return row[key] === value;
+  });
 }
 
 function sortRows(rows: Row[], order?: Row): Row[] {
@@ -119,6 +126,7 @@ function sceneFixture(overrides: Partial<Scene> = {}): Scene {
     minLevel: 1,
     maxPlayers: 50,
     status: SceneStatus.OPEN,
+    appScope: 'common',
     ...overrides,
   } as unknown as Scene;
 }
@@ -153,6 +161,7 @@ function npcTemplateFixture(
     moveRange: 0,
     isAutoWander: false,
     attr: {},
+    appScope: 'common',
     ...overrides,
   } as unknown as NpcTemplate;
 }
@@ -171,6 +180,7 @@ function spawnFixture(
     spawnCount: 1,
     spawnRadius: 0,
     isActive: true,
+    appScope: 'common',
     ...overrides,
   } as unknown as SceneEntitySpawn;
 }
@@ -188,6 +198,7 @@ function triggerFixture(overrides: Partial<SceneTrigger> = {}): SceneTrigger {
     storyId: null,
     condition: null,
     onceOnly: false,
+    appScope: 'common',
     ...overrides,
   } as unknown as SceneTrigger;
 }
@@ -390,6 +401,10 @@ describe('SceneConfigService（S2 配置包导出/发布/回滚）', () => {
       expect(v2.filePath).toBe('scene-1-v2.json');
       expect(existsSync(join(tmpDir, 'scene-1-v2.json'))).toBe(true);
       expect(versionRepo.rows).toHaveLength(2);
+      expectScopedFind(sceneRepo.findOne);
+      expectScopedFind(spawnRepo.find);
+      expectScopedFind(triggerRepo.find);
+      expectScopedFind(npcRepo.find);
     });
 
     it('写出的文件：file_path 可读回、hash = 文件文本 sha256、包内 hash = payloadHash 且为最后一个键', async () => {
@@ -518,6 +533,7 @@ describe('SceneConfigService（S2 配置包导出/发布/回滚）', () => {
         name: '新手村（Spike）',
         published: { version: 2, file: 'scene-1-v2.json' },
       });
+      expectScopedFind(sceneRepo.find);
     });
 
     it('导出/发布/回滚均写操作日志', async () => {

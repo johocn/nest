@@ -9,6 +9,7 @@ import {
 } from '@constants/enums';
 import { ErrorCodes } from '@constants/error-codes';
 import { GameException } from '@common/exceptions/game.exception';
+import { visibleTo } from '@shared/content-scope';
 import { Scene } from '../entities/scene.entity';
 import { SceneBuildRule } from '../entities/scene-build-rule.entity';
 import { SceneLandPlot } from '../entities/scene-land-plot.entity';
@@ -176,7 +177,9 @@ export class BuildRuleService {
     }
 
     // 2. 场景边界（格数 = floor(mapWidth / 每格边长)）
-    const scene = await this.sceneRepo.findOne({ where: { id: sceneId } });
+    const scene = await this.sceneRepo.findOne({
+      where: { id: sceneId, ...visibleTo(null) },
+    });
     if (!scene) {
       throw new GameException(ErrorCodes.PARAM_INVALID, '场景不存在');
     }

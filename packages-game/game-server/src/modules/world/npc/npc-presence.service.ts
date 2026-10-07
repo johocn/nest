@@ -13,6 +13,7 @@ import { NpcPatrolRoute } from '../entities/npc-patrol-route.entity';
 import { NpcSpawnRule } from '../entities/npc-spawn-rule.entity';
 import { NpcTemplate } from '../entities/npc-template.entity';
 import { SceneEntitySpawn } from '../entities/scene-entity-spawn.entity';
+import { visibleTo } from '@shared/content-scope';
 
 /** 巡逻路点（与 npc_patrol_routes.points 元素一一对应） */
 export interface NpcPatrolPoint {
@@ -146,7 +147,7 @@ export class NpcPresenceService {
     if (cached) return cached;
 
     const rules = await this.spawnRuleRepo.find({
-      where: { sceneId, isActive: true },
+      where: { sceneId, isActive: true, ...visibleTo(null) },
     });
 
     const instances: SceneNpcInstance[] = [];
@@ -160,7 +161,12 @@ export class NpcPresenceService {
       }
     }
     const spawns = await this.spawnRepo.find({
-      where: { sceneId, entityType: EntityType.NPC, isActive: true },
+      where: {
+        sceneId,
+        entityType: EntityType.NPC,
+        isActive: true,
+        ...visibleTo(null),
+      },
     });
     for (const spawn of spawns) {
       const template = await this.loadTemplate(
@@ -329,7 +335,7 @@ export class NpcPresenceService {
   ): Promise<NpcTemplate | null> {
     if (cache.has(templateId)) return cache.get(templateId) ?? null;
     const template = await this.npcRepo.findOne({
-      where: { id: templateId },
+      where: { id: templateId, ...visibleTo(null) },
     });
     cache.set(templateId, template);
     return template;

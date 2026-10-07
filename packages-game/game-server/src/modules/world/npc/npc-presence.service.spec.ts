@@ -5,6 +5,7 @@ import {
   QuestStatus,
 } from '@constants/enums';
 import { NpcPresenceService } from './npc-presence.service';
+import { expectScopedFind } from '../../../testing/content-scope-contract.shared';
 
 /**
  * 单测直接 new 出服务（mocked repository），不连真实数据库。
@@ -120,6 +121,8 @@ describe('NpcPresenceService', () => {
     // 不携带内部字段
     expect((list[0] as any).condition).toBeUndefined();
     expect((list[0] as any).isFixed).toBeUndefined();
+    expectScopedFind(spawnRepo.find);
+    expectScopedFind(npcRepo.findOne);
   });
 
   it('random 分支：按 spawn_count 生成实例，寻址 npcs:<ruleId>:<slot>', async () => {
@@ -136,6 +139,7 @@ describe('NpcPresenceService', () => {
       'npcs:9:1',
     ]);
     expect(list.every((n) => n.route === undefined)).toBe(true);
+    expectScopedFind(spawnRuleRepo.find);
   });
 
   it('patrol 分支：初始位置 = 第一个路点，带 route.points/cursor=0', async () => {

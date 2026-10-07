@@ -29,6 +29,7 @@ import {
   EntityType,
   NpcInteractType,
 } from '@constants/enums';
+import { visibleTo } from '@shared/content-scope';
 import { EconomyService } from '../economy/economy.service';
 import { ResourceBalancePolicy } from './resource-balance.policy';
 import {
@@ -105,7 +106,9 @@ export class WorldService {
   ) {}
 
   async getScene(id: string): Promise<Scene> {
-    const scene = await this.sceneRepo.findOne({ where: { id } });
+    const scene = await this.sceneRepo.findOne({
+      where: { id, ...visibleTo(null) },
+    });
     if (!scene) {
       throw new GameException(ErrorCodes.PARAM_INVALID, '场景不存在');
     }
@@ -126,7 +129,7 @@ export class WorldService {
     if (filter.sceneType) where.sceneType = filter.sceneType;
     if (filter.status) where.status = filter.status;
     const [items, total] = await this.sceneRepo.findAndCount({
-      where,
+      where: { ...where, ...visibleTo(null) },
       skip: (page - 1) * limit,
       take: limit,
       order: { createdAt: 'DESC' },
@@ -135,7 +138,9 @@ export class WorldService {
   }
 
   async deleteScene(sceneId: string): Promise<void> {
-    const scene = await this.sceneRepo.findOne({ where: { id: sceneId } });
+    const scene = await this.sceneRepo.findOne({
+      where: { id: sceneId, ...visibleTo(null) },
+    });
     if (!scene) {
       throw new GameException(
         ErrorCodes.PARAM_INVALID,
@@ -223,7 +228,9 @@ export class WorldService {
   }
 
   async updateScene(id: string, data: Partial<Scene>): Promise<Scene> {
-    const scene = await this.sceneRepo.findOne({ where: { id } });
+    const scene = await this.sceneRepo.findOne({
+      where: { id, ...visibleTo(null) },
+    });
     if (!scene) {
       throw new GameException(ErrorCodes.PARAM_INVALID, '场景不存在');
     }
@@ -232,11 +239,15 @@ export class WorldService {
   }
 
   async getSceneSpawns(sceneId: string): Promise<SceneEntitySpawn[]> {
-    return this.spawnRepo.find({ where: { sceneId, isActive: true } });
+    return this.spawnRepo.find({
+      where: { sceneId, isActive: true, ...visibleTo(null) },
+    });
   }
 
   async getSceneTriggers(sceneId: string): Promise<SceneTrigger[]> {
-    return this.triggerRepo.find({ where: { sceneId } });
+    return this.triggerRepo.find({
+      where: { sceneId, ...visibleTo(null) },
+    });
   }
 
   async checkEnterRequirement(
@@ -295,7 +306,9 @@ export class WorldService {
   }
 
   async getNpcTemplate(id: string): Promise<NpcTemplate | null> {
-    return this.npcRepo.findOne({ where: { id } });
+    return this.npcRepo.findOne({
+      where: { id, ...visibleTo(null) },
+    });
   }
 
   async getMonsterTemplate(id: string): Promise<MonsterTemplate | null> {
@@ -315,13 +328,15 @@ export class WorldService {
    *   保证老 NPC 与 S1 冒烟不回归（风险 #1/#4）。
    */
   async talkNpc(playerId: string, spawnId: string): Promise<NpcTalkResult> {
-    const spawn = await this.spawnRepo.findOne({ where: { id: spawnId } });
+    const spawn = await this.spawnRepo.findOne({
+      where: { id: spawnId, ...visibleTo(null) },
+    });
     if (!spawn || spawn.entityType !== EntityType.NPC) {
       throw new GameException(ErrorCodes.PARAM_INVALID, 'NPC 不存在');
     }
 
     const template = await this.npcRepo.findOne({
-      where: { id: spawn.templateId },
+      where: { id: spawn.templateId, ...visibleTo(null) },
     });
     if (!template) {
       throw new GameException(ErrorCodes.PARAM_INVALID, 'NPC 模板不存在');
@@ -406,7 +421,7 @@ export class WorldService {
     triggerId: string,
   ): Promise<DialogueView> {
     const trigger = await this.triggerRepo.findOne({
-      where: { id: triggerId },
+      where: { id: triggerId, ...visibleTo(null) },
     });
     if (!trigger) {
       throw new GameException(ErrorCodes.PARAM_INVALID, '触发器不存在');
@@ -511,7 +526,7 @@ export class WorldService {
     memberIds: string[] = [],
   ): Promise<{ unlocked: boolean; members: string[] }> {
     const trigger = await this.triggerRepo.findOne({
-      where: { id: triggerId },
+      where: { id: triggerId, ...visibleTo(null) },
     });
     if (!trigger) {
       throw new GameException(ErrorCodes.PARAM_INVALID, '机关不存在');

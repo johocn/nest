@@ -17,11 +17,11 @@ export abstract class ContentScopedEntity {
   appScope: string;
 }
 
-/** find/findOne 形态的 scope 条件（展开进 where 对象） */
-export function visibleTo(appCode: string | null): FindOptionsWhere<never> {
+/** find/findOne 形态的 scope 条件（展开进 where 对象；any 使跨实体展开类型兼容） */
+export function visibleTo(appCode: string | null): FindOptionsWhere<any> {
   return {
     appScope: In(appCode ? [COMMON_SCOPE, appCode] : [COMMON_SCOPE]),
-  } as FindOptionsWhere<never>;
+  } as FindOptionsWhere<any>;
 }
 
 /** QueryBuilder 形态的 scope 条件 */

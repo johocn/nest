@@ -23,6 +23,7 @@ import { SocialService } from '@modules/social/social.service';
 import { PlayerService } from '@modules/player/player.service';
 import { EconomyService } from '@modules/economy/economy.service';
 import { CacheService } from '@cache/cache.service';
+import { visibleTo } from '@shared/content-scope';
 
 export interface QuestWithTemplate {
   playerQuest: PlayerQuest;
@@ -78,7 +79,7 @@ export class QuestService {
     questTemplateId: string,
   ): Promise<PlayerQuest> {
     const template = await this.templateRepo.findOne({
-      where: { id: questTemplateId },
+      where: { id: questTemplateId, ...visibleTo(null) },
     });
     if (!template) {
       throw new GameException(ErrorCodes.QUEST_NOT_ACCEPTED, '任务模板不存在');
@@ -251,7 +252,7 @@ export class QuestService {
     }
 
     const template = await this.templateRepo.findOne({
-      where: { id: questTemplateId },
+      where: { id: questTemplateId, ...visibleTo(null) },
     });
     if (!template) {
       throw new GameException(ErrorCodes.QUEST_NOT_ACCEPTED, '任务模板不存在');
@@ -329,7 +330,7 @@ export class QuestService {
     }
 
     const template = await this.templateRepo.findOne({
-      where: { id: questTemplateId },
+      where: { id: questTemplateId, ...visibleTo(null) },
     });
     if (!template) {
       throw new GameException(ErrorCodes.QUEST_NOT_ACCEPTED, '任务模板不存在');
@@ -417,7 +418,7 @@ export class QuestService {
     const results: QuestWithTemplate[] = [];
     for (const pq of playerQuests) {
       const template = await this.templateRepo.findOne({
-        where: { id: pq.questTemplateId },
+        where: { id: pq.questTemplateId, ...visibleTo(null) },
       });
       if (template) {
         results.push({ playerQuest: pq, template });
@@ -441,7 +442,7 @@ export class QuestService {
     playerQuest.progress = progress;
 
     const template = await this.templateRepo.findOne({
-      where: { id: questTemplateId },
+      where: { id: questTemplateId, ...visibleTo(null) },
     });
     if (template) {
       const targetCount =
@@ -463,7 +464,7 @@ export class QuestService {
     });
     for (const quest of activeQuests) {
       const template = await this.templateRepo.findOne({
-        where: { id: quest.questTemplateId },
+        where: { id: quest.questTemplateId, ...visibleTo(null) },
       });
       if (template?.targetJson?.monsterId === monsterTemplateId) {
         quest.progress += 1;
@@ -494,7 +495,7 @@ export class QuestService {
 
     for (const quest of activeQuests) {
       const template = await this.templateRepo.findOne({
-        where: { id: quest.questTemplateId },
+        where: { id: quest.questTemplateId, ...visibleTo(null) },
       });
       if (template?.targetType !== targetType) continue;
 
@@ -607,7 +608,7 @@ export class QuestService {
     });
     if (playerQuest && playerQuest.status === QuestStatus.IN_PROGRESS) {
       const template = await this.templateRepo.findOne({
-        where: { id: request.questTemplateId },
+        where: { id: request.questTemplateId, ...visibleTo(null) },
       });
       playerQuest.progress += 1;
       const targetCount =

@@ -12,6 +12,7 @@ import { CacheService } from '@cache/cache.service';
 import { EventBusService } from '@event-bus/event-bus.service';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
+import { expectScopedFind } from '../../testing/content-scope-contract.shared';
 
 describe('ExploreService', () => {
   let service: ExploreService;
@@ -146,6 +147,7 @@ describe('ExploreService', () => {
       expect(explRepo.save).toHaveBeenCalledWith(
         expect.objectContaining({ playerId: 'p1', sceneId: 's1', times: 1 }),
       );
+      expectScopedFind(sceneRepo.findOne as jest.Mock);
     });
 
     it('重复 discover 幂等：times 递增且不重复发奖', async () => {

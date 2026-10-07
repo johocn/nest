@@ -5,6 +5,8 @@ import {
   GameExceptionResponse,
 } from '@common/exceptions/game.exception';
 import { DialogueService } from './dialogue.service';
+import { visibleTo } from '@shared/content-scope';
+import { expectScopedFind } from '../../../testing/content-scope-contract.shared';
 
 /**
  * 单测直接 new 出服务（mocked repository / 各依赖服务），不连真实数据库或 redis。
@@ -424,10 +426,11 @@ describe('DialogueService.executeAction / choose / start', () => {
       }),
     );
     expect(res.code).toBe(ErrorCodes.DIALOGUE_NOT_FOUND);
-    // 查询条件必须带上 isActive:true（停用即不可选）
+    // 查询条件必须带上 isActive:true（停用即不可选）+ appScope 过滤
     expect(mocks.dialogueRepo.findOne).toHaveBeenCalledWith({
-      where: { code: 'missing_dialogue', isActive: true },
+      where: { code: 'missing_dialogue', isActive: true, ...visibleTo(null) },
     });
+    expectScopedFind(mocks.dialogueRepo.findOne);
   });
 
   it('选项条件不满足（重放被隐藏选项）→ DIALOGUE_CONDITION_NOT_MET', async () => {
@@ -598,10 +601,11 @@ describe('DialogueService.executeAction / choose / start', () => {
     const view = await service.startById(PLAYER_ID, 1);
 
     expect(mocks.dialogueRepo.findOne).toHaveBeenCalledWith({
-      where: { id: '1', isActive: true },
+      where: { id: '1', isActive: true, ...visibleTo(null) },
     });
     expect(view.nodeKey).toBe('root');
     expect(view.node?.text).toBe('客官要打点什么？');
+    expectScopedFind(mocks.dialogueRepo.findOne);
   });
 
   it('startById：id 悬空/已停用 → DIALOGUE_NOT_FOUND（业务码，不抛 500）', async () => {
@@ -640,6 +644,7 @@ describe('DialogueService.buildQuestMarks（D8）', () => {
 
     expect(marks.available).toEqual(['1', '4']);
     expect(marks.submittable).toEqual(['3']);
+    expectScopedFind(mocks.questTemplateRepo.find);
   });
 
   it('无任务模板/无任务记录时返回两个空数组', async () => {

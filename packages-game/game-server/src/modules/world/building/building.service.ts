@@ -11,6 +11,7 @@ import { ErrorCodes } from '@constants/error-codes';
 import { GameException } from '@common/exceptions/game.exception';
 import { EventBusService } from '@event-bus/event-bus.service';
 import { GameEvents } from '@event-bus/game-events';
+import { visibleTo } from '@shared/content-scope';
 import { InventoryService } from '@modules/inventory/inventory.service';
 import { EconomyService } from '@modules/economy/economy.service';
 import { Scene } from '../entities/scene.entity';
@@ -146,7 +147,9 @@ export class BuildingService {
     const h = template.footprintH ?? 1;
 
     // 3. 矩形越界校验（assertCanBuild 只校验锚点）
-    const scene = await this.sceneRepo.findOne({ where: { id: sceneId } });
+    const scene = await this.sceneRepo.findOne({
+      where: { id: sceneId, ...visibleTo(null) },
+    });
     if (!scene) {
       throw new GameException(ErrorCodes.PARAM_INVALID, '场景不存在');
     }
@@ -260,7 +263,9 @@ export class BuildingService {
     const h = template.footprintH ?? 1;
 
     // 3. 矩形越界校验（assertCanBuild 只校验锚点）
-    const scene = await this.sceneRepo.findOne({ where: { id: sceneId } });
+    const scene = await this.sceneRepo.findOne({
+      where: { id: sceneId, ...visibleTo(null) },
+    });
     if (!scene) {
       throw new GameException(ErrorCodes.PARAM_INVALID, '场景不存在');
     }

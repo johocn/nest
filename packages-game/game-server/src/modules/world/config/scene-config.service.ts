@@ -16,6 +16,7 @@ import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
 import { SceneConfigStatus } from '@constants/enums';
 import { AdminService } from '@modules/admin/admin.service';
+import { visibleTo } from '@shared/content-scope';
 
 const MANIFEST_FILE = 'manifest.json';
 
@@ -80,7 +81,9 @@ export class SceneConfigService {
     sceneId: string,
     adminId: string,
   ): Promise<SceneConfigVersion> {
-    const scene = await this.sceneRepo.findOne({ where: { id: sceneId } });
+    const scene = await this.sceneRepo.findOne({
+      where: { id: sceneId, ...visibleTo(null) },
+    });
     if (!scene) {
       throw new GameException(
         ErrorCodes.PARAM_INVALID,
@@ -97,15 +100,15 @@ export class SceneConfigService {
     const [spawns, triggers, objectTemplates, npcTemplates] =
       await Promise.all([
         this.spawnRepo.find({
-          where: { sceneId: scene.id, isActive: true },
+          where: { sceneId: scene.id, isActive: true, ...visibleTo(null) },
           order: { id: 'ASC' },
         }),
         this.triggerRepo.find({
-          where: { sceneId: scene.id },
+          where: { sceneId: scene.id, ...visibleTo(null) },
           order: { id: 'ASC' },
         }),
         this.objectRepo.find(),
-        this.npcRepo.find(),
+        this.npcRepo.find({ where: { ...visibleTo(null) } }),
       ]);
 
     const { payload, payloadHash } = buildScenePayload({
@@ -283,7 +286,10 @@ export class SceneConfigService {
     items: SceneConfigListItem[];
     total: number;
   }> {
-    const scenes = await this.sceneRepo.find({ order: { id: 'ASC' } });
+    const scenes = await this.sceneRepo.find({
+      where: { ...visibleTo(null) },
+      order: { id: 'ASC' },
+    });
     const published = await this.versionRepo.find({
       where: { status: SceneConfigStatus.PUBLISHED },
     });

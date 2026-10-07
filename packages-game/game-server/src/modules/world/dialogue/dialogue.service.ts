@@ -13,6 +13,7 @@ import { InventoryItem } from '@modules/inventory/entities/inventory-item.entity
 import { InventoryService } from '@modules/inventory/inventory.service';
 import { EconomyService } from '@modules/economy/economy.service';
 import { Dialogue } from '../entities/dialogue.entity';
+import { visibleTo } from '@shared/content-scope';
 import {
   DialogueContext,
   ResolvedNode,
@@ -185,7 +186,7 @@ export class DialogueService {
     dialogueId: number | string,
   ): Promise<DialogueView> {
     const dialogue = await this.dialogueRepo.findOne({
-      where: { id: String(dialogueId), isActive: true },
+      where: { id: String(dialogueId), isActive: true, ...visibleTo(null) },
     });
     if (!dialogue) {
       throw new GameException(
@@ -224,7 +225,7 @@ export class DialogueService {
   async buildQuestMarks(playerId: string): Promise<DialogueQuestMarks> {
     const [ctx, templates] = await Promise.all([
       this.buildContext(playerId),
-      this.questTemplateRepo.find(),
+      this.questTemplateRepo.find({ where: { ...visibleTo(null) } }),
     ]);
 
     const available: string[] = [];
@@ -473,7 +474,7 @@ export class DialogueService {
   /** 查启用中的对话；不存在/停用 → DIALOGUE_NOT_FOUND（业务码而非 500） */
   private async findActiveDialogue(code: string): Promise<Dialogue> {
     const dialogue = await this.dialogueRepo.findOne({
-      where: { code, isActive: true },
+      where: { code, isActive: true, ...visibleTo(null) },
     });
     if (!dialogue) {
       throw new GameException(

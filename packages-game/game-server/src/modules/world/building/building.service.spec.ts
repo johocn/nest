@@ -12,6 +12,7 @@ import { InventoryService } from '@modules/inventory/inventory.service';
 import { EconomyService } from '@modules/economy/economy.service';
 import { EventBusService } from '@event-bus/event-bus.service';
 import { GameEvents } from '@event-bus/game-events';
+import { expectScopedFind } from '../../../testing/content-scope-contract.shared';
 import {
   BuildMode,
   BuildingOwnerType,
@@ -414,6 +415,7 @@ describe('BuildingService', () => {
         w: 1,
         h: 1,
       });
+      expectScopedFind(sceneRepo.findOne);
     });
 
     it('2×2 footprint 占用 4 格，锚点格记录 2×2', async () => {
