@@ -8,6 +8,7 @@ import {
   Index,
 } from 'typeorm';
 import { EntityType } from '@constants/enums';
+import { COMMON_SCOPE } from '@shared/content-scope';
 
 @Entity('scene_entity_spawns')
 @Index('idx_spawn_scene', ['sceneId'])
@@ -50,4 +51,7 @@ export class SceneEntitySpawn {
 
   @DeleteDateColumn({ name: 'deleted_at' })
   deletedAt: Date | null;
+
+  @Column({ name: 'app_scope', type: 'varchar', length: 32, default: COMMON_SCOPE })
+  appScope: string;
 }

@@ -7,6 +7,7 @@ import {
   DeleteDateColumn,
 } from 'typeorm';
 import { QuestType } from '@constants/enums';
+import { COMMON_SCOPE } from '@shared/content-scope';
 
 @Entity('quest_templates')
 export class QuestTemplate {
@@ -62,4 +63,7 @@ export class QuestTemplate {
 
   @DeleteDateColumn({ name: 'deleted_at' })
   deletedAt: Date | null;
+
+  @Column({ name: 'app_scope', type: 'varchar', length: 32, default: COMMON_SCOPE })
+  appScope: string;
 }

@@ -8,6 +8,7 @@ import {
   Index,
 } from 'typeorm';
 import { TriggerType } from '@constants/enums';
+import { COMMON_SCOPE } from '@shared/content-scope';
 
 @Entity('scene_triggers')
 @Index('idx_trigger_scene', ['sceneId'])
@@ -53,4 +54,7 @@ export class SceneTrigger {
 
   @DeleteDateColumn({ name: 'deleted_at' })
   deletedAt: Date | null;
+
+  @Column({ name: 'app_scope', type: 'varchar', length: 32, default: COMMON_SCOPE })
+  appScope: string;
 }

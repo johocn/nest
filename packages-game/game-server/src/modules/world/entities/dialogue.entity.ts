@@ -7,6 +7,7 @@ import {
   DeleteDateColumn,
   Index,
 } from 'typeorm';
+import { COMMON_SCOPE } from '@shared/content-scope';
 
 /**
  * 对话树（S5）
@@ -16,7 +17,7 @@ import {
  * 其中 condition 可出现在节点与选项两处（玩家级条件）；next 为空表示对话结束。
  */
 @Entity('dialogues')
-@Index('uq_dialogue_code', ['code'], { unique: true })
+@Index('uq_dialogue_code', ['appScope', 'code'], { unique: true })
 export class Dialogue {
   @PrimaryGeneratedColumn({ type: 'bigint' })
   id: string;
@@ -44,4 +45,7 @@ export class Dialogue {
 
   @DeleteDateColumn({ name: 'deleted_at' })
   deletedAt: Date | null;
+
+  @Column({ name: 'app_scope', type: 'varchar', length: 32, default: COMMON_SCOPE })
+  appScope: string;
 }

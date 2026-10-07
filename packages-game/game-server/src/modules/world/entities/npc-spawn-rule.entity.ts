@@ -8,6 +8,7 @@ import {
   Index,
 } from 'typeorm';
 import { NpcSpawnRuleType } from '@constants/enums';
+import { COMMON_SCOPE } from '@shared/content-scope';
 
 @Entity('npc_spawn_rules')
 @Index('idx_npc_spawn_rule_scene', ['sceneId', 'isActive'])
@@ -65,4 +66,7 @@ export class NpcSpawnRule {
 
   @DeleteDateColumn({ name: 'deleted_at' })
   deletedAt: Date | null;
+
+  @Column({ name: 'app_scope', type: 'varchar', length: 32, default: COMMON_SCOPE })
+  appScope: string;
 }
