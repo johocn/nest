@@ -10,6 +10,8 @@ import {
 } from './entities';
 import { QuizAdminService } from './quiz-admin.service';
 import { QuizAdminController } from './quiz-admin.controller';
+import { QuizService } from './quiz.service';
+import { QuizController } from './quiz.controller';
 
 @Module({
   imports: [
@@ -22,8 +24,8 @@ import { QuizAdminController } from './quiz-admin.controller';
       QuizAnswer,
     ]),
   ],
-  controllers: [QuizAdminController],
-  providers: [QuizAdminService],
-  exports: [TypeOrmModule],
+  controllers: [QuizAdminController, QuizController],
+  providers: [QuizAdminService, QuizService],
+  exports: [TypeOrmModule, QuizService],
 })
 export class QuizModule {}
