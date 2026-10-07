@@ -4,12 +4,13 @@ import {
   Get,
   Post,
   Query,
-  Redirect,
   UseGuards,
   Ip,
   Headers,
+  Res,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -56,10 +57,13 @@ export class AuthController {
 
   @Public()
   @Get('sso/login')
-  @Redirect()
   @ApiOperation({ summary: 'SSO 授权登录跳转' })
-  async ssoLogin(@Query('redirect') redirect?: string) {
-    return { url: this.authService.buildSsoLoginUrl(redirect), statusCode: 302 };
+  async ssoLogin(
+    @Res() res: Response,
+    @Query('redirect') redirect?: string,
+  ): Promise<void> {
+    // 注意：不用 @Redirect() 装饰器——Nest 11 下对象覆盖不生效导致 Location 为空
+    return res.redirect(302, this.authService.buildSsoLoginUrl(redirect));
   }
 
   @Public()
