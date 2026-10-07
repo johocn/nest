@@ -1,9 +1,15 @@
 import { AppConfig } from '../config/AppConfig';
-import type { DialogueQuestMarks, DialogueStepResult, NpcTalkResult } from '../net/api';
+import type {
+  DialogueQuestMarks,
+  DialogueQuizHandout,
+  DialogueStepResult,
+  NpcTalkResult,
+} from '../net/api';
 import { ChatPanel } from './ChatPanel';
 import { MatchPanel } from './MatchPanel';
 import { InventoryPanel } from './InventoryPanel';
 import { MailPanel } from './MailPanel';
+import { QuizPanel } from './QuizPanel';
 
 const D = AppConfig.dialogue;
 const T = AppConfig.touch;
@@ -37,6 +43,8 @@ export interface DialogueNodeView {
   error?: string | null;
   /** D8：服务端权威下发的任务标记（仅 talk 返回；客户端不推断） */
   questMarks?: DialogueQuestMarks;
+  /** 对话 quiz/assess action 附带的答题数据（仅 choose 返回；服务端已脱敏） */
+  quiz?: DialogueQuizHandout;
 }
 
 /**
@@ -115,6 +123,8 @@ export function normalizeChoose(res: DialogueStepResult): DialogueNodeView {
       options: [],
       finished: true,
       error: null,
+      // finished 分支也透传：服务端在对话结束（finished）时同样可能挂 quiz handout
+      quiz: res.quiz,
     };
   }
   return {
@@ -125,6 +135,7 @@ export function normalizeChoose(res: DialogueStepResult): DialogueNodeView {
     options: (res.node.options ?? []).map((opt) => ({ index: opt.index, text: opt.text })),
     finished: false,
     error: null,
+    quiz: res.quiz,
   };
 }
 
@@ -332,7 +343,7 @@ export class DialogueView {
   }
 
   private static onKeyDown(e: Laya.Event): void {
-    if (!DialogueView.opened || ChatPanel.isOpen || MatchPanel.isOpen || InventoryPanel.isOpen || MailPanel.isOpen) return; // 聊天输入/匹配/背包/邮件面板打开时忽略 Esc/数字（防误选对话选项）
+    if (!DialogueView.opened || ChatPanel.isOpen || MatchPanel.isOpen || InventoryPanel.isOpen || MailPanel.isOpen || QuizPanel.isOpen) return; // 聊天输入/匹配/背包/邮件/答题面板打开时忽略 Esc/数字（防误选对话选项）
     const key = String((e as unknown as { key?: string }).key ?? '').toLowerCase();
     if (key === 'escape') {
       DialogueView.close();

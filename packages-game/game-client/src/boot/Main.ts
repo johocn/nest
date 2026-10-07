@@ -38,6 +38,7 @@ import { ChatPanel } from '../ui/ChatPanel';
 import { MatchPanel } from '../ui/MatchPanel';
 import { InventoryPanel } from '../ui/InventoryPanel';
 import { MailPanel } from '../ui/MailPanel';
+import { QuizPanel } from '../ui/QuizPanel';
 import { DialogueView } from '../ui/DialogueView';
 import { TouchControls } from '../ui/TouchControls';
 import { injectGMPanel } from '../gm-panel';
@@ -122,6 +123,9 @@ async function afterLogin(): Promise<void> {
   ChatPanel.init(chatSender);
   attachChat(ws, { onMessage: (m) => ChatPanel.push(m) });
   for (const m of getRecentChatMessages()) ChatPanel.push(m);
+
+  // ②a-3 答题面板（对话 choose 响应的 quiz handout 打开；init 幂等，重登无副作用）
+  QuizPanel.init();
 
   // ②a-2 匹配：注册三个裸广播（matchmaking:matched / room:update / room:destroyed）+ 注入上行动作
   attachMatchmaking(ws, {
@@ -322,6 +326,7 @@ export function shutdownClient(
   MatchPanel.destroy();
   InventoryPanel.destroy();
   MailPanel.destroy();
+  QuizPanel.destroy();
   state.ws?.disconnect();
   state.ws = null;
   state.me = null;

@@ -45,7 +45,54 @@ export interface DialogueStepResult {
   nodeKey: string | null;
   node: DialogueNodeResult | null;
   finished: boolean;
+  /** 对话 quiz/assess action 附带的数据（payload 均已脱敏；推进与结束分支都可能出现） */
+  quiz?: DialogueQuizHandout;
 }
+
+// ===== Quiz 知识问答 / 测评（字段与后端 quiz.service 返回逐字一致，勿改）=====
+
+/** 服务端脱敏后的题目（answer/score/goto/explain 已剥离） */
+export interface SanitizedQuizQuestion {
+  id: string;
+  code: string;
+  kind: string;
+  content: string;
+  multiSelect: boolean;
+  options: Array<{ text: string }>;
+}
+
+/** POST /quiz/draw 返回 */
+export interface QuizDrawResult {
+  questions: SanitizedQuizQuestion[];
+}
+
+/** POST /quiz/submit 返回（answerIndexes 为正确答案下标，答错时客户端据此提示） */
+export interface QuizSubmitResult {
+  correct: boolean;
+  answerIndexes: number[];
+  explain?: string;
+  reward?: { currencyType: string; amount: number };
+}
+
+/** POST /quiz/assessments/:code/start 返回 */
+export interface AssessmentStartResult {
+  sessionId: string;
+  question: SanitizedQuizQuestion;
+}
+
+/** POST /quiz/sessions/:id/answer 返回（finished=false 下一题 / true 结果页） */
+export type AssessmentAnswerResult =
+  | { finished: false; question: SanitizedQuizQuestion }
+  | {
+      finished: true;
+      result: { code: string; title: string; content: string };
+      reward?: { currencyType: string; amount: number };
+    };
+
+/** choose 响应可选 quiz 字段（dialogue quiz/assess action 的附带数据，均已脱敏） */
+export type DialogueQuizHandout =
+  | { kind: 'knowledge'; questions: SanitizedQuizQuestion[] }
+  | { kind: 'assessment'; sessionId: string; question: SanitizedQuizQuestion };
 
 export interface InteractResult {
   ok: boolean;
@@ -364,6 +411,50 @@ export const Api = {
       'POST',
       `/api/client/v1/world/buildings/${buildingId}/demolish`,
       { token, body: {} },
+    );
+  },
+
+  // ===== Quiz 玩家端（路径与后端 quiz.controller 逐字一致）=====
+
+  /** 抽知识题（count 服务端钳制 1-20，缺省 1；category 可选过滤） */
+  quizDraw(
+    body: { category?: string; count?: number },
+    token: string | null,
+  ): Promise<QuizDrawResult> {
+    return httpJson<QuizDrawResult>('POST', '/api/client/v1/quiz/draw', {
+      token, body,
+    });
+  },
+
+  /** 知识题作答（selected 为选项下标数组，从 0 起；服务端判定对错并首发奖励） */
+  quizSubmit(
+    body: { questionId: string; selected: number[] },
+    token: string | null,
+  ): Promise<QuizSubmitResult> {
+    return httpJson<QuizSubmitResult>('POST', '/api/client/v1/quiz/submit', {
+      token, body,
+    });
+  },
+
+  /** 开始测评（普通 start：已完成可重开新会话；对话 assess 走 handout，不调这里） */
+  assessmentStart(code: string, token: string | null): Promise<AssessmentStartResult> {
+    return httpJson<AssessmentStartResult>(
+      'POST',
+      `/api/client/v1/quiz/assessments/${encodeURIComponent(code)}/start`,
+      { token, body: {} },
+    );
+  },
+
+  /** 测评答题（必须提交当前题 questionId；返回下一题或结算结果） */
+  assessmentAnswer(
+    sessionId: string,
+    body: { questionId: string; selected: number[] },
+    token: string | null,
+  ): Promise<AssessmentAnswerResult> {
+    return httpJson<AssessmentAnswerResult>(
+      'POST',
+      `/api/client/v1/quiz/sessions/${encodeURIComponent(sessionId)}/answer`,
+      { token, body },
     );
   },
 
