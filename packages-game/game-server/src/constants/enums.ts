@@ -954,3 +954,74 @@ export enum GuandanTableStatus {
   PLAYING = 'playing',
   FINISHED = 'finished',
 }
+
+// ===== 三国杀（标准身份局）模块枚举 =====
+
+/** 对局模式：ai=房主建房+AI 补位；net=联网房（空位由 AI 补位） */
+export enum SanguoshaMode {
+  AI = 'ai',
+  NET = 'net',
+}
+
+/** 牌桌状态 */
+export enum SanguoshaTableStatus {
+  WAITING = 'waiting',
+  PLAYING = 'playing',
+  FINISHED = 'finished',
+}
+
+/** 身份（标准身份局） */
+export enum Identity {
+  LORD = 'lord', // 主公
+  LOYALIST = 'loyalist', // 忠臣
+  REBEL = 'rebel', // 反贼
+  SPY = 'spy', // 内奸
+}
+
+/** 回合阶段 */
+export enum SgsPhase {
+  PREPARE = 'prepare', // 回合开始
+  JUDGE = 'judge', // 判定
+  DRAW = 'draw', // 摸牌
+  PLAY = 'play', // 出牌
+  DISCARD = 'discard', // 弃牌
+  END = 'end', // 结束
+}
+
+/** 卡牌大类 */
+export enum SgsCardType {
+  BASIC = 'basic', // 基本牌（杀/闪/桃）
+  TRICK = 'trick', // 锦囊
+  EQUIPMENT = 'equipment', // 装备
+}
+
+/** 卡牌花色 */
+export enum SgsSuit {
+  SPADE = 'spade', // 黑桃 ♠
+  HEART = 'heart', // 红桃 ♥
+  CLUB = 'club', // 梅花 ♣
+  DIAMOND = 'diamond', // 方块 ♦
+}
+
+/** 装备子类 */
+export enum SgsEquipType {
+  WEAPON = 'weapon', // 武器（决定攻击距离/次数）
+  ARMOR = 'armor', // 防具（如八卦阵）
+  HORSE_PLUS = 'horse_plus', // +1 马（防御距离）
+  HORSE_MINUS = 'horse_minus', // -1 马（进攻距离）
+}
+
+// ===== 四川麻将（血战到底）模块枚举 =====
+
+/** 麻将对局模式：ai=房主建房+AI 补位；net=联网房（坐满开局） */
+export enum SichuanMahjongMode {
+  AI = 'ai',
+  NET = 'net',
+}
+
+/** 麻将牌桌状态 */
+export enum SichuanMahjongTableStatus {
+  WAITING = 'waiting',
+  PLAYING = 'playing',
+  FINISHED = 'finished',
+}

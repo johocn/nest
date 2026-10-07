@@ -142,6 +142,24 @@ export const GameEvents = {
   EXPLORE_SCENE_DISCOVERED: 'explore.scene.discovered',
   ENCOUNTER_TRIGGERED: 'explore.encounter.triggered',
   ENCOUNTER_RESOLVED: 'explore.encounter.resolved',
+
+  // 四川麻将（血战到底）模块事件
+  SICHUANMAJIANG_TABLE_CREATED: 'sichuanmajiang.table.created',
+  SICHUANMAJIANG_TABLE_UPDATED: 'sichuanmajiang.table.updated',
+  SICHUANMAJIANG_TABLE_FINISHED: 'sichuanmajiang.table.finished',
+  SICHUANMAJIANG_TABLE_TIMEOUT: 'sichuanmajiang.table.timeout',
+
+  // 掼蛋模块事件
+  GUANDAN_TABLE_CREATED: 'guandan.table.created',
+  GUANDAN_TABLE_UPDATED: 'guandan.table.updated',
+  GUANDAN_TABLE_FINISHED: 'guandan.table.finished',
+  GUANDAN_TABLE_TIMEOUT: 'guandan.table.timeout',
+
+  // 三国杀（标准身份局）模块事件
+  SANGUOSHA_TABLE_CREATED: 'sanguosha.table.created',
+  SANGUOSHA_TABLE_UPDATED: 'sanguosha.table.updated',
+  SANGUOSHA_TABLE_FINISHED: 'sanguosha.table.finished',
+  SANGUOSHA_TABLE_TIMEOUT: 'sanguosha.table.timeout',
 } as const;
 
 export type GameEvent = (typeof GameEvents)[keyof typeof GameEvents];

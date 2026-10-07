@@ -275,6 +275,38 @@ export const ErrorCodes = {
   APP_API_KEY_INVALID: 46101, // x-api-key 无效或对应 app 已停用
   APP_CODE_EXISTS: 46102, // app code 已存在
   APP_NOT_FOUND: 46103, // app 不存在
+
+  // 掼蛋模块 95001-95099
+  GUANDAN_TABLE_NOT_FOUND: 95001, // 牌桌不存在或已解散
+  GUANDAN_TABLE_FULL: 95002, // 牌桌已满（4 人）
+  GUANDAN_NOT_YOUR_TURN: 95003, // 不是你的操作时机 / 不在该牌桌
+  GUANDAN_INVALID_ACTION: 95004, // 非法动作
+  GUANDAN_NOT_HOST: 95005, // 仅房主可执行
+  GUANDAN_ALREADY_PLAYED: 95006, // 本回合已出牌
+  GUANDAN_GAME_ENDED: 95007, // 对局已结束
+  GUANDAN_PLAYER_NOT_IN_TABLE: 95008, // 玩家不在该牌桌
+  GUANDAN_ILLEGAL_COMBO: 95009, // 牌型非法或无法压制上家
+  GUANDAN_LEVEL_INVALID: 95010, // 级数非法
+
+  // 三国杀（标准身份局）96001-96099
+  SANGUOSHA_TABLE_NOT_FOUND: 96001, // 牌桌不存在或已解散
+  SANGUOSHA_TABLE_FULL: 96002, // 牌桌已满（8 人）
+  SANGUOSHA_NOT_YOUR_TURN: 96003, // 不是你的操作时机 / 不在该牌桌
+  SANGUOSHA_INVALID_ACTION: 96004, // 非法动作
+  SANGUOSHA_NOT_HOST: 96005, // 仅房主可执行
+  SANGUOSHA_GAME_ENDED: 96006, // 对局已结束
+  SANGUOSHA_PLAYER_NOT_IN_TABLE: 96007, // 玩家不在该牌桌
+  SANGUOSHA_NOT_ENOUGH_CARDS: 96008, // 牌堆不足
+  SANGUOSHA_TARGET_INVALID: 96009, // 目标非法
+  SANGUOSHA_CANNOT_RESPOND: 96010, // 当前无法响应
+  SANGUOSHA_TENANT_MISMATCH: 96011, // 租户不匹配（运营商隔离）
+
+  // 四川麻将（血战到底）80001-80099
+  SICHUANMAJIANG_TABLE_NOT_FOUND: 80001, // 牌桌不存在或已解散
+  SICHUANMAJIANG_TABLE_FULL: 80002, // 牌桌已满（4 人）
+  SICHUANMAJIANG_NOT_YOUR_TURN: 80003, // 不是你的操作时机 / 不在该牌桌
+  SICHUANMAJIANG_INVALID_ACTION: 80004, // 非法动作
+  SICHUANMAJIANG_ALREADY_QUEUED: 80005, // 已定缺或不在定缺阶段
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

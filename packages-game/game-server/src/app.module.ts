@@ -46,6 +46,7 @@ import { ReconcileModule } from '@modules/reconcile/reconcile.module';
 import { RealmModule } from '@modules/realm/realm.module';
 import { ExploreModule } from '@modules/explore/explore.module';
 import { GiftCodeModule } from '@modules/giftcode/giftcode.module';
+import { GuandanModule } from '@modules/guandan/guandan.module';
 import { TraceModule } from '@common/trace/trace.module';
 import { SchedulerModule } from '@scheduler/scheduler.module';
 import { HealthModule } from '@health/health.module';
@@ -106,6 +107,7 @@ import { RateLimitGuard } from '@common/guards/rate-limit.guard';
     RealmModule,
     ExploreModule,
     GiftCodeModule,
+    GuandanModule,
 
     // 可观测性
     TraceModule,
