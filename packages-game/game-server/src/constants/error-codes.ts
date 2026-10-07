@@ -270,6 +270,11 @@ export const ErrorCodes = {
   QUIZ_SESSION_FINISHED: 46008, // 会话已完成
   QUIZ_FLOW_INVALID: 46009, // 测评卷流程校验失败（死链/死循环/不可达终点）
   QUIZ_CODE_EXISTS: 46010, // code 在同 scope 下已存在
+
+  // apps 接入层 46101-46199
+  APP_API_KEY_INVALID: 46101, // x-api-key 无效或对应 app 已停用
+  APP_CODE_EXISTS: 46102, // app code 已存在
+  APP_NOT_FOUND: 46103, // app 不存在
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
