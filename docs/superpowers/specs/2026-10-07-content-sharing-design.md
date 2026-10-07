@@ -157,7 +157,7 @@ quiz_questions（题目池） --< quiz_assessment_items >-- quiz_assessments（�
 | 阶段 | 内容 | 验证 |
 |---|---|---|
 | 1. scope 基础设施 | apps 表 + 基类 + helper + 契约测试基类 + 现有内容 service 查询改造 | 既有全量测试绿 + 新契约测试 |
-| 2. quiz 模块 | 题目池/卷/结果/会话全套 + 两类 API + admin CRUD（含流程校验） | 单测 + curl 冒烟（含越权用例） |
+| 2. quiz 模块 | 题目池/卷/结果/会话全套 + 两类 API + admin CRUD（含流程校验） | 单测 + curl 冒烟（含越权用例）。已实施（2026-10-07，计划 2026-10-07-quiz-phase2.md，提交链 bb42fb076..本提交） |
 | 3. 接入层 | client API 封装 + 对话 action + 独立客户端凭证（apps.api_key） | UI 实测 + API 冒烟 |
 
 已定决策：独立客户端复用本框架账号体系（auth/player 通用 HTTP）；阶段 2 admin 页面顺带按 app 过滤改造。

@@ -9,6 +9,7 @@ import { MatchMode } from '@constants/enums';
 import { RiskWashService } from '@modules/risk/risk-wash.service';
 import { ReconcileService } from '@modules/reconcile/reconcile.service';
 import { TradeService } from '@modules/trade/trade.service';
+import { QuizService } from '@modules/quiz/quiz.service';
 
 @Injectable()
 export class SchedulerService {
@@ -22,6 +23,7 @@ export class SchedulerService {
     private readonly riskWashService: RiskWashService,
     private readonly reconcileService: ReconcileService,
     private readonly tradeService: TradeService,
+    private readonly quizService: QuizService,
   ) {}
 
   @Cron('0 0 * * *')
@@ -107,6 +109,16 @@ export class SchedulerService {
       }
     } catch (err) {
       this.logger.error('Risk scan failed', (err as Error).message);
+    }
+  }
+
+  @Cron(CronExpression.EVERY_HOUR)
+  async cleanupExpiredQuizSessions() {
+    try {
+      const n = await this.quizService.cleanupExpiredSessions();
+      if (n > 0) this.logger.log(`Quiz session cleanup: ${n} expired`);
+    } catch (err) {
+      this.logger.error('Quiz session cleanup failed', (err as Error).message);
     }
   }
 

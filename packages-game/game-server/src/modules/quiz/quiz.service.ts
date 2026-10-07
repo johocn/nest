@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, LessThan, Repository } from 'typeorm';
 import {
   QuizAnswer,
   QuizAssessment,
@@ -344,6 +344,17 @@ export class QuizService {
       ...(explain ? { explain } : {}),
       ...(reward ? { reward } : {}),
     };
+  }
+
+  // ===== 会话清理 =====
+
+  /** 删除过期会话：in_progress 且 startedAt 超 24h（调度器每小时调用） */
+  async cleanupExpiredSessions(): Promise<number> {
+    const result = await this.sessionRepo.delete({
+      status: QuizSessionStatus.IN_PROGRESS,
+      startedAt: LessThan(new Date(Date.now() - SESSION_TTL_MS)),
+    });
+    return result.affected ?? 0;
   }
 
   // ===== 内部 =====

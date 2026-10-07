@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { FindOperator } from 'typeorm';
 import type { Repository } from 'typeorm';
 import { QuizService } from './quiz.service';
 import {
@@ -62,6 +63,7 @@ describe('QuizService（玩家测评流）', () => {
             findOne: jest.fn(),
             create: jest.fn((data: any) => ({ ...data, id: '100' })),
             save: jest.fn(async (data: any) => data),
+            delete: jest.fn(),
           },
         },
         {
@@ -566,6 +568,35 @@ describe('QuizService（玩家测评流）', () => {
 
       expect(res.questions).toEqual([]);
       expect(quizAnswerRepo.find).not.toHaveBeenCalled();
+    });
+  });
+
+  // ===== cleanupExpiredSessions（会话清理）=====
+
+  describe('cleanupExpiredSessions', () => {
+    it('删除 in_progress 且 startedAt 超 24h 的会话，返回受影响行数', async () => {
+      (sessionRepo.delete as jest.Mock).mockResolvedValue({ affected: 3 });
+
+      const n = await service.cleanupExpiredSessions();
+
+      expect(n).toBe(3);
+      expect(sessionRepo.delete).toHaveBeenCalledTimes(1);
+      const criteria = (sessionRepo.delete as jest.Mock).mock.calls[0][0];
+      expect(criteria.status).toBe(QuizSessionStatus.IN_PROGRESS);
+      expect(criteria.startedAt).toBeInstanceOf(FindOperator);
+      expect(criteria.startedAt.type).toBe('lessThan');
+      const threshold: number = criteria.startedAt.value.getTime();
+      const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
+      expect(threshold).toBeLessThanOrEqual(dayAgo);
+      expect(threshold).toBeGreaterThan(dayAgo - 5000);
+    });
+
+    it('无过期会话 → affected 为空返回 0', async () => {
+      (sessionRepo.delete as jest.Mock).mockResolvedValue({ affected: null });
+
+      const n = await service.cleanupExpiredSessions();
+
+      expect(n).toBe(0);
     });
   });
 
