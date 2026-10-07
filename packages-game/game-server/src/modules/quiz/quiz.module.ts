@@ -13,6 +13,7 @@ import { QuizAdminController } from './quiz-admin.controller';
 import { QuizService } from './quiz.service';
 import { QuizController } from './quiz.controller';
 import { AppsModule } from '@modules/apps/apps.module';
+import { EconomyModule } from '@modules/economy/economy.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { AppsModule } from '@modules/apps/apps.module';
       QuizAnswer,
     ]),
     AppsModule, // AppScopeGuard 依赖 AppsService（由 AppsModule exports）
+    EconomyModule, // QuizService 的奖励发放依赖 EconomyService
   ],
   controllers: [QuizAdminController, QuizController],
   providers: [QuizAdminService, QuizService],
