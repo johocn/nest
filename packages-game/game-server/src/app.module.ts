@@ -5,6 +5,7 @@ import { LoggerModule } from '@logger/logger.module';
 import { CacheModule } from '@cache/cache.module';
 import { EventBusModule } from '@event-bus/event-bus.module';
 import { EventListenersModule } from '@event-bus/event-listeners.module';
+import { AppsModule } from '@modules/apps/apps.module';
 import { AuthModule } from '@modules/auth/auth.module';
 import { AdminSessionModule } from '@modules/auth/admin-session.module';
 import { PlayerModule } from '@modules/player/player.module';
@@ -35,6 +36,7 @@ import { PaymentModule } from '@modules/payment/payment.module';
 import { VipModule } from '@modules/vip/vip.module';
 import { SandboxModule } from '@modules/sandbox/sandbox.module';
 import { MatchmakingModule } from '@modules/matchmaking/matchmaking.module';
+import { MahjongModule } from '@modules/mahjong/mahjong.module';
 import { OfflineModule } from '@modules/offline/offline.module';
 import { EcoModule } from '@modules/eco/eco.module';
 import { LadderModule } from '@modules/ladder/ladder.module';
@@ -63,6 +65,7 @@ import { RateLimitGuard } from '@common/guards/rate-limit.guard';
     AdminSessionModule,
 
     // 第三层：功能模块（后续阶段逐步添加）
+    AppsModule,
     AuthModule,
     PlayerModule,
     EconomyModule,
@@ -92,6 +95,7 @@ import { RateLimitGuard } from '@common/guards/rate-limit.guard';
     VipModule,
     SandboxModule,
     MatchmakingModule,
+    MahjongModule,
     OfflineModule,
     EcoModule,
     LadderModule,
