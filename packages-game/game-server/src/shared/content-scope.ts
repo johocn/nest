@@ -8,6 +8,9 @@ import {
 /** 公共内容归属值：所有游戏可见 */
 export const COMMON_SCOPE = 'common';
 
+/** 主游戏默认 app 标识（apps 表 code；阶段 3 接入层解析前的缺省归属） */
+export const DEFAULT_APP_CODE = 'main';
+
 /**
  * 内容归属基类：scenes/scene_entity_spawns/scene_triggers/npc_templates/
  * npc_spawn_rules/dialogues/quest_templates 及 quiz 系列实体继承。

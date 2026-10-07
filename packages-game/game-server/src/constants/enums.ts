@@ -920,3 +920,20 @@ export enum PlotState {
   OCCUPIED = 'occupied',
   LOCKED = 'locked',
 }
+
+// ===== quiz 题库模块枚举 =====
+
+export enum QuizQuestionKind {
+  KNOWLEDGE = 'knowledge', // 有对错，服务端判定
+  ASSESSMENT = 'assessment', // 无对错，计分 + 分支
+}
+
+export enum QuizAssessmentStatus {
+  DRAFT = 'draft',
+  PUBLISHED = 'published',
+}
+
+export enum QuizSessionStatus {
+  IN_PROGRESS = 'in_progress',
+  FINISHED = 'finished',
+}

@@ -19,6 +19,7 @@ import { SkillModule } from '@modules/skill/skill.module';
 import { BuffModule } from '@modules/buff/buff.module';
 import { CombatModule } from '@modules/combat/combat.module';
 import { QuestModule } from '@modules/quest/quest.module';
+import { QuizModule } from '@modules/quiz/quiz.module';
 import { MailModule } from '@modules/mail/mail.module';
 import { SocialModule } from '@modules/social/social.module';
 import { AdminModule } from '@modules/admin/admin.module';
@@ -78,6 +79,7 @@ import { RateLimitGuard } from '@common/guards/rate-limit.guard';
     BuffModule,
     CombatModule,
     QuestModule,
+    QuizModule,
     MailModule,
     SocialModule,
     AdminModule,

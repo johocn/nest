@@ -258,6 +258,18 @@ export const ErrorCodes = {
   MAIL_NOT_FOUND: 45001, // 邮件不存在（或非本人收件箱）
   MAIL_ATTACHMENT_CLAIMED: 45002, // 附件已领取过
   MAIL_NO_ATTACHMENT: 45003, // 邮件无可领取附件
+
+  // quiz 题库 46001-46099
+  QUIZ_ASSESSMENT_NOT_FOUND: 46001, // 测评卷不存在或未发布
+  QUIZ_SESSION_NOT_FOUND: 46002, // 会话不存在或非本人
+  QUIZ_SESSION_EXPIRED: 46003, // 会话已过期（超 24h）
+  QUIZ_QUESTION_MISMATCH: 46004, // 提交的不是当前题目
+  QUIZ_OPTION_INVALID: 46005, // 选项序号非法
+  QUIZ_QUESTION_NOT_FOUND: 46006, // 题目不存在
+  QUIZ_RESULT_NOT_RESOLVED: 46007, // 得分未命中任何结果区间
+  QUIZ_SESSION_FINISHED: 46008, // 会话已完成
+  QUIZ_FLOW_INVALID: 46009, // 测评卷流程校验失败（死链/死循环/不可达终点）
+  QUIZ_CODE_EXISTS: 46010, // code 在同 scope 下已存在
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
