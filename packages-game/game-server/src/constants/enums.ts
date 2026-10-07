@@ -237,6 +237,8 @@ export enum DialogueActionType {
   TAKE_ITEM = 'take_item',
   ADD_CURRENCY = 'add_currency',
   SET_FLAG = 'set_flag',
+  QUIZ = 'quiz', // 知识问答：下发抽题结果，客户端进入答题 UI
+  ASSESS = 'assess', // 启动测评：startOrResume，下发 sessionId + 首题
 }
 
 export enum ObjectType {
@@ -935,5 +937,20 @@ export enum QuizAssessmentStatus {
 
 export enum QuizSessionStatus {
   IN_PROGRESS = 'in_progress',
+  FINISHED = 'finished',
+}
+
+// ===== 掼蛋模块枚举 =====
+
+/** 掼蛋对局模式：ai=房主建房+AI 补位（1-4 真人同台）；net=联网房（空位由 AI 补位） */
+export enum GuandanMode {
+  AI = 'ai',
+  NET = 'net',
+}
+
+/** 掼蛋牌桌状态 */
+export enum GuandanTableStatus {
+  WAITING = 'waiting',
+  PLAYING = 'playing',
   FINISHED = 'finished',
 }

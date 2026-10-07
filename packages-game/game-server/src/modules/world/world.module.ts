@@ -39,6 +39,7 @@ import { QuestTemplate } from '@modules/quest/entities/quest-template.entity';
 import { InventoryItem } from '@modules/inventory/entities/inventory-item.entity';
 import { PlayerModule } from '@modules/player/player.module';
 import { QuestModule } from '@modules/quest/quest.module';
+import { QuizModule } from '@modules/quiz/quiz.module';
 import { InventoryModule } from '@modules/inventory/inventory.module';
 import { NpcPresenceService } from './npc/npc-presence.service';
 import { NpcTickService } from './npc/npc-tick.service';
@@ -80,6 +81,7 @@ import { BuildingScheduler } from './building/building.scheduler';
     AdminModule,
     PlayerModule,
     QuestModule,
+    QuizModule,
     InventoryModule,
   ],
   controllers: [

@@ -12,8 +12,10 @@ import { QuestService } from '@modules/quest/quest.service';
 import { InventoryItem } from '@modules/inventory/entities/inventory-item.entity';
 import { InventoryService } from '@modules/inventory/inventory.service';
 import { EconomyService } from '@modules/economy/economy.service';
+import { QuizService } from '@modules/quiz/quiz.service';
+import { DrawQuizDto } from '@modules/quiz/dto/quiz-draw.dto';
 import { Dialogue } from '../entities/dialogue.entity';
-import { visibleTo } from '@shared/content-scope';
+import { COMMON_SCOPE, visibleTo } from '@shared/content-scope';
 import {
   DialogueContext,
   ResolvedNode,
@@ -24,6 +26,7 @@ import {
 import {
   DialogueActionArgs,
   DialogueNode,
+  DialogueQuizHandout,
   assertDialogueNodes,
 } from './dialogue.types';
 
@@ -32,7 +35,7 @@ import {
  *
  * 职责：
  *  1. 组装玩家上下文（buildContext）：等级/任务态/背包数量/redis 旗标 → 纯数据结构；
- *  2. 动作执行器（executeAction）：6 个白名单动作**一律走既有服务**，失败即中止不推进节点（D3）；
+ *  2. 动作执行器（executeAction）：白名单动作**一律走既有服务**，失败即中止不推进节点（D3）；
  *  3. 对话推进（start / choose）：服务端权威解析节点、条件过滤、防重放（D2/D4/D7）。
  *
  * 错误语义（计划 §1.2/§3）：
@@ -58,6 +61,8 @@ export interface DialogueView {
   nodeKey: string | null;
   node: ResolvedNode | null;
   finished: boolean;
+  /** quiz/assess 动作随 choose 下发的脱敏题目 */
+  quiz?: DialogueQuizHandout;
 }
 
 /** D8：NPC 头顶任务标记（服务端权威计算，客户端不得自行推断） */
@@ -86,6 +91,7 @@ export class DialogueService {
     private readonly questService: QuestService,
     private readonly inventoryService: InventoryService,
     private readonly economyService: EconomyService,
+    private readonly quizService: QuizService,
   ) {}
 
   /**
@@ -295,18 +301,31 @@ export class DialogueService {
     }
 
     const opTrace = `dialogue:choose:${dialogue.code}:${node.key}`;
+    // quiz/assess 可见域随对话归属：common 卷传 null（只见公共内容），自有卷传自身 code
+    const scopeAppCode =
+      dialogue.appScope && dialogue.appScope !== COMMON_SCOPE
+        ? dialogue.appScope
+        : null;
+    let handout: DialogueQuizHandout | null = null;
     if (option.action) {
-      await this.executeAction(
+      handout = await this.executeAction(
         playerId,
         option.action,
         option.actionArgs ?? {},
         opTrace,
+        scopeAppCode,
       );
     }
 
     // option.next 为空 → 对话结束
     if (!option.next) {
-      return { code: dialogue.code, nodeKey: null, node: null, finished: true };
+      return {
+        code: dialogue.code,
+        nodeKey: null,
+        node: null,
+        finished: true,
+        ...(handout ? { quiz: handout } : {}),
+      };
     }
 
     // 动作已改变玩家状态（如刚接任务），必须重新求值 next 节点的可见性
@@ -324,11 +343,12 @@ export class DialogueService {
       nodeKey: nextNode.key,
       node: nextNode,
       finished: false,
+      ...(handout ? { quiz: handout } : {}),
     };
   }
 
   /**
-   * 执行单个对话动作（计划 §1.4 白名单 6 个）。
+   * 执行单个对话动作（白名单见 DialogueActionType）。
    *
    * 硬约束：**一律走既有服务**（QuestService / InventoryService / EconomyService / redis 旗标），
    * 不在对话模块内写第二套经济或背包逻辑。
@@ -341,13 +361,20 @@ export class DialogueService {
     action: DialogueActionType,
     args: DialogueActionArgs = {},
     opTrace?: string,
-  ): Promise<void> {
+    scopeAppCode: string | null = null,
+  ): Promise<DialogueQuizHandout | null> {
     const trace =
       opTrace && opTrace.trim() !== ''
         ? opTrace
         : `dialogue:action:${action}`;
     try {
-      await this.dispatchAction(playerId, action, args ?? {}, trace);
+      return await this.dispatchAction(
+        playerId,
+        action,
+        args ?? {},
+        trace,
+        scopeAppCode,
+      );
     } catch (err) {
       if (err instanceof GameException) throw err; // 原样上抛，不吞
       this.logger.error(
@@ -366,17 +393,18 @@ export class DialogueService {
     action: DialogueActionType,
     args: DialogueActionArgs,
     opTrace: string,
-  ): Promise<void> {
+    scopeAppCode: string | null,
+  ): Promise<DialogueQuizHandout | null> {
     switch (action) {
       case DialogueActionType.ACCEPT_QUEST: {
         const questTemplateId = this.requireString(args, 'questTemplateId', action);
         await this.questService.acceptQuest(playerId, questTemplateId);
-        return;
+        return null;
       }
       case DialogueActionType.SUBMIT_QUEST: {
         const questTemplateId = this.requireString(args, 'questTemplateId', action);
         await this.questService.submitQuest(playerId, questTemplateId);
-        return;
+        return null;
       }
       case DialogueActionType.GIVE_ITEM: {
         const itemTemplateId = this.requireString(args, 'itemTemplateId', action);
@@ -387,7 +415,7 @@ export class DialogueService {
           quantity,
           opTrace,
         );
-        return;
+        return null;
       }
       case DialogueActionType.TAKE_ITEM: {
         const itemTemplateId = this.requireString(args, 'itemTemplateId', action);
@@ -398,7 +426,7 @@ export class DialogueService {
           quantity,
           opTrace,
         );
-        return;
+        return null;
       }
       case DialogueActionType.ADD_CURRENCY: {
         const currencyType = this.requireString(args, 'currencyType', action);
@@ -410,12 +438,38 @@ export class DialogueService {
           'dialogue',
           opTrace,
         );
-        return;
+        return null;
       }
       case DialogueActionType.SET_FLAG: {
         const flag = this.requireString(args, 'flag', action);
         await this.cacheService.set(this.flagKey(playerId, flag), '1');
-        return;
+        return null;
+      }
+      case DialogueActionType.ASSESS: {
+        const assessmentCode = this.requireString(args, 'assessmentCode', action);
+        return this.quizService
+          .startOrResume(playerId, assessmentCode, scopeAppCode)
+          .then(
+            (r): DialogueQuizHandout => ({
+              kind: 'assessment',
+              sessionId: r.sessionId,
+              question: r.question,
+            }),
+          );
+      }
+      case DialogueActionType.QUIZ: {
+        const dto: DrawQuizDto = {
+          ...(args.category ? { category: args.category } : {}),
+          ...(args.count ? { count: args.count } : {}),
+        };
+        return this.quizService
+          .draw(playerId, scopeAppCode, dto)
+          .then(
+            (r): DialogueQuizHandout => ({
+              kind: 'knowledge',
+              questions: r.questions,
+            }),
+          );
       }
       default:
         throw new GameException(

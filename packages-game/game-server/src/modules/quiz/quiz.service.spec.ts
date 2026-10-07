@@ -256,6 +256,80 @@ describe('QuizService（玩家测评流）', () => {
     });
   });
 
+  // ===== startOrResume（对话 assess 入口，阶段 3）=====
+
+  describe('startOrResume', () => {
+    const setupStart = () => {
+      assessmentRepo.findOne.mockResolvedValue(makeAssessment());
+      itemRepo.find.mockResolvedValue([
+        makeItem({ questionId: '1', sortOrder: 1 }),
+      ]);
+      questionRepo.findOne.mockResolvedValue(makeQuestion());
+    };
+
+    it('无未完成会话 → 走 start 新建（resumed:false），会话查询含本人+卷+in_progress', async () => {
+      setupStart();
+      sessionRepo.findOne.mockResolvedValue(null);
+
+      const res = await service.startOrResume('p1', 'assess-1', null);
+
+      expect(sessionRepo.findOne).toHaveBeenCalledWith({
+        where: {
+          playerId: 'p1',
+          assessmentId: '10',
+          status: QuizSessionStatus.IN_PROGRESS,
+        },
+        order: { startedAt: 'DESC' },
+      });
+      expect(sessionRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ playerId: 'p1', assessmentId: '10' }),
+      );
+      expect(res.resumed).toBe(false);
+      expect(res.sessionId).toBe('100');
+      // assessment 查询与 start 相同的 scope 契约
+      expectScopedFind(assessmentRepo.findOne, [COMMON_SCOPE]);
+    });
+
+    it('已有 in_progress 会话 → 复用返回指针题（resumed:true），不新建会话', async () => {
+      setupStart();
+      sessionRepo.findOne.mockResolvedValue(
+        makeSession({ id: '77', currentQuestionId: '9' }),
+      );
+      questionRepo.findOne.mockResolvedValue(
+        makeQuestion({ id: '9', code: 'q9' }),
+      );
+
+      const res = await service.startOrResume('p1', 'assess-1', null);
+
+      expect(res.resumed).toBe(true);
+      expect(res.sessionId).toBe('77');
+      expect(questionRepo.findOne).toHaveBeenCalledWith({
+        where: { id: '9' },
+      });
+      expect(res.question.options).toEqual([
+        { text: 'A' },
+        { text: 'B' },
+        { text: 'C' },
+      ]);
+      expect(sessionRepo.create).not.toHaveBeenCalled();
+      expect(sessionRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('in_progress 会话指针为空（防御分支）→ 46008', async () => {
+      setupStart();
+      sessionRepo.findOne.mockResolvedValue(
+        makeSession({ id: '77', currentQuestionId: null }),
+      );
+
+      await expect(
+        service.startOrResume('p1', 'assess-1', null),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.QUIZ_SESSION_FINISHED },
+      });
+      expect(sessionRepo.create).not.toHaveBeenCalled();
+    });
+  });
+
   // ===== answer 校验链 =====
 
   describe('answer 校验链', () => {

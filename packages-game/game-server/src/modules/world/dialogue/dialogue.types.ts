@@ -51,7 +51,15 @@ export interface DialogueActionArgs {
   currencyType?: string;
   amount?: number;
   flag?: string;
+  assessmentCode?: string; // assess 用：测评卷 code
+  category?: string; // quiz 用：抽题分类（可选）
+  count?: number; // quiz 用：抽题数量（可选，服务端钳制 1-20）
 }
+
+/** 对话动作附带数据（choose 响应的可选 quiz 字段；payload 均已脱敏） */
+export type DialogueQuizHandout =
+  | { kind: 'knowledge'; questions: Array<Record<string, any>> }
+  | { kind: 'assessment'; sessionId: string; question: Record<string, any> };
 
 /** 结构校验结果 */
 export type DialogueNodesAssertResult =

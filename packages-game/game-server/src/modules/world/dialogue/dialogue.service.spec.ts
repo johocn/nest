@@ -26,6 +26,7 @@ interface ServiceMocks {
   questService: { acceptQuest: jest.Mock; submitQuest: jest.Mock };
   inventoryService: { addItem: jest.Mock; removeItem: jest.Mock };
   economyService: { addCurrency: jest.Mock };
+  quizService: { startOrResume: jest.Mock; draw: jest.Mock };
 }
 
 function createService(): ServiceMocks {
@@ -49,6 +50,12 @@ function createService(): ServiceMocks {
     removeItem: jest.fn().mockResolvedValue({}),
   };
   const economyService = { addCurrency: jest.fn().mockResolvedValue({}) };
+  const quizService = {
+    startOrResume: jest
+      .fn()
+      .mockResolvedValue({ sessionId: 'sess-1', question: { id: 'q1' } }),
+    draw: jest.fn().mockResolvedValue({ questions: [{ id: 'q1' }] }),
+  };
 
   const service = new DialogueService(
     playerQuestRepo as any,
@@ -60,6 +67,7 @@ function createService(): ServiceMocks {
     questService as any,
     inventoryService as any,
     economyService as any,
+    quizService as any,
   );
 
   return {
@@ -73,6 +81,7 @@ function createService(): ServiceMocks {
     questService,
     inventoryService,
     economyService,
+    quizService,
   };
 }
 
@@ -614,6 +623,144 @@ describe('DialogueService.executeAction / choose / start', () => {
       service.startById(PLAYER_ID, 999),
     );
     expect(res.code).toBe(ErrorCodes.DIALOGUE_NOT_FOUND);
+  });
+
+  // ===== quiz / assess 动作（阶段 3：handout 随 choose 下发）=====
+
+  it('assess：以 (playerId, assessmentCode, scopeAppCode) 调 startOrResume，common 对话 scope=null，finished 分支带 assessment handout', async () => {
+    mockDialogue([
+      {
+        key: 'root',
+        text: '做个测评？',
+        options: [
+          {
+            text: '开始',
+            action: DialogueActionType.ASSESS,
+            actionArgs: { assessmentCode: 'assess-1' },
+          },
+        ],
+      },
+    ]);
+    mocks.quizService.startOrResume.mockResolvedValue({
+      sessionId: 'sess-9',
+      question: { id: 'q1' },
+      resumed: false,
+    });
+
+    const view = await service.choose(PLAYER_ID, {
+      code: 'npc_blacksmith_main',
+      nodeKey: 'root',
+      optionIndex: 0,
+    });
+
+    // mockDialogue 未设 appScope → common 卷 → scopeAppCode=null
+    expect(mocks.quizService.startOrResume).toHaveBeenCalledWith(
+      PLAYER_ID,
+      'assess-1',
+      null,
+    );
+    expect(view.finished).toBe(true);
+    expect(view.quiz).toEqual({
+      kind: 'assessment',
+      sessionId: 'sess-9',
+      question: { id: 'q1' },
+    });
+  });
+
+  it('assess 缺 assessmentCode → PARAM_INVALID 且不调 quizService', async () => {
+    mockDialogue([
+      {
+        key: 'root',
+        text: '做个测评？',
+        options: [
+          { text: '开始', action: DialogueActionType.ASSESS, actionArgs: {} },
+        ],
+      },
+    ]);
+
+    const res = await catchGameException(() =>
+      service.choose(PLAYER_ID, {
+        code: 'npc_blacksmith_main',
+        nodeKey: 'root',
+        optionIndex: 0,
+      }),
+    );
+
+    expect(res.code).toBe(ErrorCodes.PARAM_INVALID);
+    expect(mocks.quizService.startOrResume).not.toHaveBeenCalled();
+  });
+
+  it('quiz：组装 DrawQuizDto 下发 knowledge handout（推进分支也附带 quiz）', async () => {
+    mockDialogue([
+      {
+        key: 'root',
+        text: '来答个题？',
+        options: [
+          {
+            text: '来',
+            next: 'after',
+            action: DialogueActionType.QUIZ,
+            actionArgs: { category: 'history', count: 3 },
+          },
+        ],
+      },
+      { key: 'after', text: '答完再聊。', options: [{ text: '嗯' }] },
+    ]);
+    mocks.quizService.draw.mockResolvedValue({
+      questions: [{ id: 'k1' }, { id: 'k2' }],
+    });
+
+    const view = await service.choose(PLAYER_ID, {
+      code: 'npc_blacksmith_main',
+      nodeKey: 'root',
+      optionIndex: 0,
+    });
+
+    expect(mocks.quizService.draw).toHaveBeenCalledWith(PLAYER_ID, null, {
+      category: 'history',
+      count: 3,
+    });
+    expect(view.finished).toBe(false);
+    expect(view.nodeKey).toBe('after');
+    expect(view.quiz).toEqual({
+      kind: 'knowledge',
+      questions: [{ id: 'k1' }, { id: 'k2' }],
+    });
+  });
+
+  it('自有 appScope 对话（gameB）：quiz 动作以对话自身 appScope 作为 scope 调用', async () => {
+    mocks.dialogueRepo.findOne.mockResolvedValue({
+      id: '2',
+      code: 'npc_gameB',
+      nodes: [
+        {
+          key: 'root',
+          text: '...',
+          options: [
+            {
+              text: '来',
+              action: DialogueActionType.QUIZ,
+              actionArgs: { count: 2 },
+            },
+          ],
+        },
+      ],
+      isActive: true,
+      appScope: 'gameB',
+    });
+    mocks.quizService.draw.mockResolvedValue({ questions: [] });
+
+    await service.choose(PLAYER_ID, {
+      code: 'npc_gameB',
+      nodeKey: 'root',
+      optionIndex: 0,
+    });
+
+    expect(mocks.quizService.draw).toHaveBeenCalledWith(
+      PLAYER_ID,
+      'gameB',
+      { count: 2 },
+    );
   });
 });
 

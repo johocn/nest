@@ -109,6 +109,51 @@ export class QuizService {
     return { sessionId: session.id, question: this.sanitizeQuestion(question) };
   }
 
+  /**
+   * 对话 assess 入口：复用本人未完成会话（续答指针），否则新建。
+   * 普通 start API 保持原语义不变（不自动复用）。
+   */
+  async startOrResume(playerId: string, code: string, appCode: string | null) {
+    const assessment = await this.assessmentRepo.findOne({
+      where: {
+        code,
+        status: QuizAssessmentStatus.PUBLISHED,
+        ...visibleTo(appCode),
+      },
+    });
+    if (!assessment) {
+      throw new GameException(
+        ErrorCodes.QUIZ_ASSESSMENT_NOT_FOUND,
+        '测评卷不存在或未发布',
+      );
+    }
+    const existing = await this.sessionRepo.findOne({
+      where: {
+        playerId,
+        assessmentId: assessment.id,
+        status: QuizSessionStatus.IN_PROGRESS,
+      },
+      order: { startedAt: 'DESC' },
+    });
+    if (existing) {
+      if (existing.currentQuestionId) {
+        const question = await this.questionRepo.findOne({
+          where: { id: existing.currentQuestionId },
+        });
+        if (question) {
+          return {
+            sessionId: existing.id,
+            question: this.sanitizeQuestion(question),
+            resumed: true,
+          };
+        }
+      }
+      // 指针为空的防御分支：in_progress 却无当前题，视为异常会话
+      throw new GameException(ErrorCodes.QUIZ_SESSION_FINISHED, '会话已完成');
+    }
+    return { ...(await this.start(playerId, code, appCode)), resumed: false };
+  }
+
   // ===== 答题 =====
 
   async answer(
