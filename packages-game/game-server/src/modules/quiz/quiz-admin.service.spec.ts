@@ -1,16 +1,26 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
+import { getDataSourceToken, getRepositoryToken } from '@nestjs/typeorm';
 import type { Repository } from 'typeorm';
 import { QuizAdminService } from './quiz-admin.service';
-import { QuizQuestion, QuizResult } from './entities';
+import {
+  QuizAssessment,
+  QuizAssessmentItem,
+  QuizQuestion,
+  QuizResult,
+} from './entities';
 import { ErrorCodes } from '@constants/error-codes';
-import { QuizQuestionKind } from '@constants/enums';
+import { QuizAssessmentStatus, QuizQuestionKind } from '@constants/enums';
 import { COMMON_SCOPE } from '@shared/content-scope';
 
 describe('QuizAdminService', () => {
   let service: QuizAdminService;
   let questionRepo: jest.Mocked<Repository<QuizQuestion>>;
   let resultRepo: jest.Mocked<Repository<QuizResult>>;
+  let assessmentRepo: jest.Mocked<Repository<QuizAssessment>>;
+  let itemRepo: jest.Mocked<Repository<QuizAssessmentItem>>;
+  let dataSource: { transaction: jest.Mock };
+  let txAssessmentRepo: any;
+  let txItemRepo: any;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -20,6 +30,7 @@ describe('QuizAdminService', () => {
           provide: getRepositoryToken(QuizQuestion),
           useValue: {
             findOne: jest.fn(),
+            find: jest.fn(),
             findAndCount: jest.fn(),
             create: jest.fn((data: any) => ({ ...data, id: '1' })),
             save: jest
@@ -32,6 +43,7 @@ describe('QuizAdminService', () => {
           provide: getRepositoryToken(QuizResult),
           useValue: {
             findOne: jest.fn(),
+            find: jest.fn(),
             findAndCount: jest.fn(),
             create: jest.fn((data: any) => ({ ...data, id: '1' })),
             save: jest
@@ -40,12 +52,55 @@ describe('QuizAdminService', () => {
             softRemove: jest.fn().mockResolvedValue(undefined),
           },
         },
+        {
+          provide: getRepositoryToken(QuizAssessment),
+          useValue: {
+            findOne: jest.fn(),
+            findAndCount: jest.fn(),
+            create: jest.fn((data: any) => ({ ...data, id: '10' })),
+            save: jest.fn(async (data: any) => data),
+            softRemove: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: getRepositoryToken(QuizAssessmentItem),
+          useValue: {
+            find: jest.fn().mockResolvedValue([]),
+            create: jest.fn((data: any) => ({ ...data, id: '20' })),
+            save: jest.fn(async (data: any) => data),
+            delete: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: getDataSourceToken(),
+          useValue: { transaction: jest.fn() },
+        },
       ],
     }).compile();
 
     service = module.get(QuizAdminService);
     questionRepo = module.get(getRepositoryToken(QuizQuestion));
     resultRepo = module.get(getRepositoryToken(QuizResult));
+    assessmentRepo = module.get(getRepositoryToken(QuizAssessment));
+    itemRepo = module.get(getRepositoryToken(QuizAssessmentItem));
+    dataSource = module.get(getDataSourceToken());
+
+    txAssessmentRepo = {
+      findOne: jest.fn().mockResolvedValue(null),
+      create: jest.fn((data: any) => ({ ...data, id: '10' })),
+      save: jest.fn(async (data: any) => data),
+    };
+    txItemRepo = {
+      delete: jest.fn().mockResolvedValue(undefined),
+      create: jest.fn((data: any) => ({ ...data, id: '20' })),
+      save: jest.fn(async (data: any) => data),
+    };
+    dataSource.transaction.mockImplementation(async (cb: any) =>
+      cb({
+        getRepository: (e: any) =>
+          e === QuizAssessment ? txAssessmentRepo : txItemRepo,
+      }),
+    );
   });
 
   const makeQuestion = (
@@ -82,6 +137,42 @@ describe('QuizAdminService', () => {
       deletedAt: null,
       ...overrides,
     }) as QuizResult;
+
+  const makeAssessment = (
+    overrides: Partial<QuizAssessment> = {},
+  ): QuizAssessment =>
+    ({
+      id: '10',
+      code: 'as1',
+      title: '性格测评',
+      description: null,
+      status: QuizAssessmentStatus.DRAFT,
+      scoringRule: {},
+      startQuestionId: null,
+      appScope: COMMON_SCOPE,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      deletedAt: null,
+      ...overrides,
+    }) as QuizAssessment;
+
+  const assessmentBody = (overrides: any = {}) => ({
+    code: 'as1',
+    title: '性格测评',
+    scoringRule: { mode: 'total', results: [{ min: 0, max: 10, result: 'r1' }] },
+    startQuestionCode: 'q1',
+    items: [{ questionId: '1', sortOrder: 1 }],
+    ...overrides,
+  });
+
+  const mockAssessmentQuestion = () =>
+    makeQuestion({
+      id: '1',
+      code: 'q1',
+      kind: QuizQuestionKind.ASSESSMENT,
+      content: '你喜欢独处吗？',
+      options: [{ text: 'A', score: 2 }],
+    });
 
   describe('listQuestions', () => {
     it('分页返回 {items,total} 且 kind/category 过滤进 where', async () => {
@@ -303,6 +394,291 @@ describe('QuizAdminService', () => {
       await expect(service.deleteResult('99')).rejects.toMatchObject({
         response: { code: ErrorCodes.QUIZ_ASSESSMENT_NOT_FOUND },
       });
+    });
+  });
+
+  // ===== 测评卷 =====
+
+  describe('listAssessments', () => {
+    it('分页返回 {items,total}', async () => {
+      assessmentRepo.findAndCount.mockResolvedValue([[makeAssessment()], 1]);
+
+      const result = await service.listAssessments(1, 20);
+
+      expect(result.items).toHaveLength(1);
+      expect(result.total).toBe(1);
+      expect(assessmentRepo.findAndCount).toHaveBeenCalledWith({
+        skip: 0,
+        take: 20,
+        order: { createdAt: 'DESC' },
+      });
+    });
+  });
+
+  describe('getAssessment', () => {
+    it('返回卷 + items 按 sortOrder 排序 + 每项带 question 摘要', async () => {
+      assessmentRepo.findOne.mockResolvedValue(makeAssessment());
+      itemRepo.find.mockResolvedValue([
+        {
+          id: '20',
+          assessmentId: '10',
+          questionId: '1',
+          sortOrder: 1,
+          nextQuestionId: null,
+          dimension: null,
+        } as QuizAssessmentItem,
+      ]);
+      questionRepo.find.mockResolvedValue([mockAssessmentQuestion()]);
+
+      const detail = await service.getAssessment('10');
+
+      expect(detail.items[0].question).toEqual({
+        id: '1',
+        code: 'q1',
+        kind: QuizQuestionKind.ASSESSMENT,
+        content: '你喜欢独处吗？',
+      });
+      expect(itemRepo.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { assessmentId: '10' },
+          order: { sortOrder: 'ASC' },
+        }),
+      );
+    });
+
+    it('卷不存在 → 46001', async () => {
+      assessmentRepo.findOne.mockResolvedValue(null);
+
+      await expect(service.getAssessment('99')).rejects.toMatchObject({
+        response: { code: ErrorCodes.QUIZ_ASSESSMENT_NOT_FOUND },
+      });
+    });
+  });
+
+  describe('createAssessment', () => {
+    it('合法保存体 → 事务内保存卷 + 全量替换 items，startQuestionCode 转 id', async () => {
+      questionRepo.find.mockResolvedValue([mockAssessmentQuestion()]);
+      resultRepo.find.mockResolvedValue([makeResult({ code: 'r1' })]);
+
+      const saved = await service.createAssessment(assessmentBody());
+
+      expect(saved).toMatchObject({
+        code: 'as1',
+        title: '性格测评',
+        startQuestionId: '1',
+        appScope: COMMON_SCOPE,
+      });
+      expect(txAssessmentRepo.save).toHaveBeenCalled();
+      expect(txItemRepo.delete).toHaveBeenCalledWith({ assessmentId: '10' });
+      expect(txItemRepo.save).toHaveBeenCalledWith([
+        expect.objectContaining({
+          assessmentId: '10',
+          questionId: '1',
+          sortOrder: 1,
+          nextQuestionId: null,
+          dimension: null,
+        }),
+      ]);
+    });
+
+    it('questionId 查不足 → 46006', async () => {
+      questionRepo.find.mockResolvedValue([]);
+      resultRepo.find.mockResolvedValue([]);
+
+      await expect(
+        service.createAssessment(assessmentBody()),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.QUIZ_QUESTION_NOT_FOUND },
+      });
+      expect(txAssessmentRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('流程校验失败（goto 死链）→ 46009 且消息合并错误列表', async () => {
+      questionRepo.find.mockResolvedValue([
+        makeQuestion({
+          id: '1',
+          code: 'q1',
+          kind: QuizQuestionKind.ASSESSMENT,
+          options: [{ text: 'A', goto: 'ghost' }],
+        }),
+      ]);
+      resultRepo.find.mockResolvedValue([makeResult({ code: 'r1' })]);
+
+      await expect(
+        service.createAssessment(assessmentBody()),
+      ).rejects.toMatchObject({
+        response: {
+          code: ErrorCodes.QUIZ_FLOW_INVALID,
+          msg: expect.stringContaining('ghost'),
+        },
+      });
+      expect(txAssessmentRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('startQuestionCode 不在卷内 → 46009', async () => {
+      questionRepo.find.mockResolvedValue([mockAssessmentQuestion()]);
+      resultRepo.find.mockResolvedValue([makeResult({ code: 'r1' })]);
+
+      await expect(
+        service.createAssessment(assessmentBody({ startQuestionCode: 'nope' })),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.QUIZ_FLOW_INVALID },
+      });
+    });
+
+    it('code 冲突（含软删行）→ 46010', async () => {
+      questionRepo.find.mockResolvedValue([mockAssessmentQuestion()]);
+      resultRepo.find.mockResolvedValue([makeResult({ code: 'r1' })]);
+      txAssessmentRepo.findOne.mockResolvedValue(makeAssessment());
+
+      await expect(
+        service.createAssessment(assessmentBody()),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.QUIZ_CODE_EXISTS },
+      });
+      expect(txAssessmentRepo.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({ withDeleted: true }),
+      );
+    });
+
+    it('结果引用按 scope 过滤：非 common 且非卷 scope 的结果视为不存在 → 46009', async () => {
+      questionRepo.find.mockResolvedValue([mockAssessmentQuestion()]);
+      resultRepo.find.mockResolvedValue([
+        makeResult({ code: 'r1', appScope: COMMON_SCOPE }),
+        makeResult({ id: '2', code: 'r2', appScope: 'other-app' }),
+      ]);
+
+      await expect(
+        service.createAssessment(
+          assessmentBody({
+            scoringRule: {
+              mode: 'total',
+              results: [{ min: 0, max: 9, result: 'r2' }],
+            },
+          }),
+        ),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.QUIZ_FLOW_INVALID },
+      });
+    });
+  });
+
+  describe('updateAssessment', () => {
+    it('卷不存在 → 46001', async () => {
+      assessmentRepo.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.updateAssessment('99', assessmentBody()),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.QUIZ_ASSESSMENT_NOT_FOUND },
+      });
+    });
+
+    it('存在则事务内更新并全量替换 items', async () => {
+      assessmentRepo.findOne.mockResolvedValue(makeAssessment());
+      questionRepo.find.mockResolvedValue([mockAssessmentQuestion()]);
+      resultRepo.find.mockResolvedValue([makeResult({ code: 'r1' })]);
+
+      const saved = await service.updateAssessment(
+        '10',
+        assessmentBody({ title: '新卷名' }),
+      );
+
+      expect(saved.title).toBe('新卷名');
+      expect(txAssessmentRepo.save).toHaveBeenCalled();
+      expect(txItemRepo.delete).toHaveBeenCalledWith({ assessmentId: '10' });
+      expect(txItemRepo.save).toHaveBeenCalled();
+    });
+  });
+
+  describe('deleteAssessment', () => {
+    it('软删目标卷', async () => {
+      assessmentRepo.findOne.mockResolvedValue(makeAssessment());
+
+      await service.deleteAssessment('10');
+
+      expect(assessmentRepo.softRemove).toHaveBeenCalledWith(
+        expect.objectContaining({ id: '10' }),
+      );
+    });
+
+    it('卷不存在 → 46001', async () => {
+      assessmentRepo.findOne.mockResolvedValue(null);
+
+      await expect(service.deleteAssessment('99')).rejects.toMatchObject({
+        response: { code: ErrorCodes.QUIZ_ASSESSMENT_NOT_FOUND },
+      });
+    });
+  });
+
+  describe('publishAssessment', () => {
+    it('重跑校验通过 → status 置 PUBLISHED', async () => {
+      assessmentRepo.findOne.mockResolvedValue(makeAssessment());
+      itemRepo.find.mockResolvedValue([
+        {
+          id: '20',
+          assessmentId: '10',
+          questionId: '1',
+          sortOrder: 1,
+          nextQuestionId: null,
+          dimension: null,
+        } as QuizAssessmentItem,
+      ]);
+      questionRepo.find.mockResolvedValue([mockAssessmentQuestion()]);
+      resultRepo.find.mockResolvedValue([makeResult({ code: 'r1' })]);
+
+      const saved = await service.publishAssessment('10');
+
+      expect(saved.status).toBe(QuizAssessmentStatus.PUBLISHED);
+      expect(assessmentRepo.save).toHaveBeenCalled();
+    });
+
+    it('已发布再 publish → 幂等成功（不再加载题目校验）', async () => {
+      assessmentRepo.findOne.mockResolvedValue(
+        makeAssessment({ status: QuizAssessmentStatus.PUBLISHED }),
+      );
+
+      const saved = await service.publishAssessment('10');
+
+      expect(saved.status).toBe(QuizAssessmentStatus.PUBLISHED);
+      expect(itemRepo.find).not.toHaveBeenCalled();
+      expect(questionRepo.find).not.toHaveBeenCalled();
+    });
+
+    it('卷不存在 → 46001', async () => {
+      assessmentRepo.findOne.mockResolvedValue(null);
+
+      await expect(service.publishAssessment('99')).rejects.toMatchObject({
+        response: { code: ErrorCodes.QUIZ_ASSESSMENT_NOT_FOUND },
+      });
+    });
+
+    it('题目已被改动导致校验失败（goto 死链）→ 46009 且不落 status', async () => {
+      assessmentRepo.findOne.mockResolvedValue(makeAssessment());
+      itemRepo.find.mockResolvedValue([
+        {
+          id: '20',
+          assessmentId: '10',
+          questionId: '1',
+          sortOrder: 1,
+          nextQuestionId: null,
+          dimension: null,
+        } as QuizAssessmentItem,
+      ]);
+      questionRepo.find.mockResolvedValue([
+        makeQuestion({
+          id: '1',
+          code: 'q1',
+          kind: QuizQuestionKind.ASSESSMENT,
+          options: [{ text: 'A', goto: 'ghost' }],
+        }),
+      ]);
+      resultRepo.find.mockResolvedValue([]);
+
+      await expect(service.publishAssessment('10')).rejects.toMatchObject({
+        response: { code: ErrorCodes.QUIZ_FLOW_INVALID },
+      });
+      expect(assessmentRepo.save).not.toHaveBeenCalled();
     });
   });
 });

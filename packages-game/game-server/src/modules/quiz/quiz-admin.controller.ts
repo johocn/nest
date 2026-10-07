@@ -105,4 +105,43 @@ export class QuizAdminController {
     await this.quizAdminService.deleteResult(this.assertId(id));
     return { success: true };
   }
+
+  // ===== 测评卷 =====
+
+  @Get('assessment/list')
+  @ApiOperation({ summary: '测评卷列表' })
+  async listAssessments(@Query('page') page = 1, @Query('limit') limit = 20) {
+    return this.quizAdminService.listAssessments(Number(page), Number(limit));
+  }
+
+  @Get('assessment/:id')
+  @ApiOperation({ summary: '测评卷详情（items 按 sortOrder 排序 + 题目摘要）' })
+  async getAssessment(@Param('id') id: string) {
+    return this.quizAdminService.getAssessment(this.assertId(id));
+  }
+
+  @Post('assessment')
+  @ApiOperation({ summary: '创建测评卷（保存前做流程连通性校验）' })
+  async createAssessment(@Body() body: any) {
+    return this.quizAdminService.createAssessment(body);
+  }
+
+  @Put('assessment/:id')
+  @ApiOperation({ summary: '修改测评卷（items 全量替换）' })
+  async updateAssessment(@Param('id') id: string, @Body() body: any) {
+    return this.quizAdminService.updateAssessment(this.assertId(id), body);
+  }
+
+  @Delete('assessment/:id')
+  @ApiOperation({ summary: '删除测评卷（软删）' })
+  async deleteAssessment(@Param('id') id: string) {
+    await this.quizAdminService.deleteAssessment(this.assertId(id));
+    return { success: true };
+  }
+
+  @Post('assessment/:id/publish')
+  @ApiOperation({ summary: '发布测评卷（发布前重跑流程校验）' })
+  async publishAssessment(@Param('id') id: string) {
+    return this.quizAdminService.publishAssessment(this.assertId(id));
+  }
 }
