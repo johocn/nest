@@ -39,12 +39,14 @@ export class QuizAdminController {
     @Query('limit') limit = 20,
     @Query('kind') kind?: string,
     @Query('category') category?: string,
+    @Query('appScope') appScope?: string,
   ) {
     return this.quizAdminService.listQuestions(
       Number(page),
       Number(limit),
       kind,
       category,
+      appScope,
     );
   }
 
@@ -77,8 +79,16 @@ export class QuizAdminController {
 
   @Get('result/list')
   @ApiOperation({ summary: '结果列表' })
-  async listResults(@Query('page') page = 1, @Query('limit') limit = 20) {
-    return this.quizAdminService.listResults(Number(page), Number(limit));
+  async listResults(
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
+    @Query('appScope') appScope?: string,
+  ) {
+    return this.quizAdminService.listResults(
+      Number(page),
+      Number(limit),
+      appScope,
+    );
   }
 
   @Get('result/:id')
@@ -110,8 +120,16 @@ export class QuizAdminController {
 
   @Get('assessment/list')
   @ApiOperation({ summary: '测评卷列表' })
-  async listAssessments(@Query('page') page = 1, @Query('limit') limit = 20) {
-    return this.quizAdminService.listAssessments(Number(page), Number(limit));
+  async listAssessments(
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
+    @Query('appScope') appScope?: string,
+  ) {
+    return this.quizAdminService.listAssessments(
+      Number(page),
+      Number(limit),
+      appScope,
+    );
   }
 
   @Get('assessment/:id')

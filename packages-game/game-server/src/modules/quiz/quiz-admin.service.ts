@@ -40,8 +40,11 @@ export class QuizAdminService {
     limit: number,
     kind?: string,
     category?: string,
+    appScope?: string,
   ): Promise<{ items: QuizQuestion[]; total: number }> {
-    const where: Record<string, any> = {};
+    const where: Record<string, any> = {
+      ...(appScope && appScope.trim() !== '' ? { appScope: appScope.trim() } : {}),
+    };
     if (kind) where.kind = kind;
     if (category) where.category = category;
     const [items, total] = await this.questionRepo.findAndCount({
@@ -95,10 +98,14 @@ export class QuizAdminService {
   async listResults(
     page: number,
     limit: number,
+    appScope?: string,
   ): Promise<{ items: QuizResult[]; total: number }> {
     const [items, total] = await this.resultRepo.findAndCount({
       skip: (page - 1) * limit,
       take: limit,
+      ...(appScope && appScope.trim() !== ''
+        ? { where: { appScope: appScope.trim() } }
+        : {}),
       order: { createdAt: 'DESC' },
     });
     return { items, total };
@@ -163,10 +170,14 @@ export class QuizAdminService {
   async listAssessments(
     page: number,
     limit: number,
+    appScope?: string,
   ): Promise<{ items: QuizAssessment[]; total: number }> {
     const [items, total] = await this.assessmentRepo.findAndCount({
       skip: (page - 1) * limit,
       take: limit,
+      ...(appScope && appScope.trim() !== ''
+        ? { where: { appScope: appScope.trim() } }
+        : {}),
       order: { createdAt: 'DESC' },
     });
     return { items, total };

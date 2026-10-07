@@ -7,10 +7,12 @@ import { SubmitQuizDto } from './dto/quiz-submit.dto';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { CurrentPlayer } from '@common/decorators/current-player.decorator';
 import type { CurrentPlayerData } from '@common/decorators/current-player.decorator';
+import { AppScopeGuard } from '@modules/apps/app-scope.guard';
+import { CurrentAppCode } from '@modules/apps/current-app-code.decorator';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
 
-/** quiz 玩家测评流（appCode 阶段 2 显式传 null，真实解析留阶段 3） */
+/** quiz 玩家测评流（阶段 3 已接真实解析：x-api-key → AppScopeGuard → req.appCode，无凭证回退 DEFAULT_APP_CODE） */
 @ApiTags('Quiz')
 @ApiBearerAuth()
 @Controller()
@@ -24,21 +26,23 @@ export class QuizController {
     return id;
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AppScopeGuard)
   @Post('api/client/v1/quiz/assessments/:code/start')
   @ApiOperation({ summary: '开始测评' })
   async startAssessment(
     @CurrentPlayer() player: CurrentPlayerData,
+    @CurrentAppCode() appCode: string,
     @Param('code') code: string,
   ) {
-    return this.quizService.start(player.playerId, code, null);
+    return this.quizService.start(player.playerId, code, appCode);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AppScopeGuard)
   @Post('api/client/v1/quiz/sessions/:id/answer')
   @ApiOperation({ summary: '测评答题' })
   async answerSession(
     @CurrentPlayer() player: CurrentPlayerData,
+    @CurrentAppCode() appCode: string,
     @Param('id') id: string,
     @Body() dto: AnswerSessionDto,
   ) {
@@ -47,32 +51,34 @@ export class QuizController {
       this.assertId(id),
       dto.questionId,
       dto.selected,
-      null,
+      appCode,
     );
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AppScopeGuard)
   @Post('api/client/v1/quiz/draw')
   @ApiOperation({ summary: '抽知识题' })
   async drawQuestions(
     @CurrentPlayer() player: CurrentPlayerData,
+    @CurrentAppCode() appCode: string,
     @Body() dto: DrawQuizDto,
   ) {
-    return this.quizService.draw(player.playerId, null, dto);
+    return this.quizService.draw(player.playerId, appCode, dto);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AppScopeGuard)
   @Post('api/client/v1/quiz/submit')
   @ApiOperation({ summary: '知识题作答' })
   async submitAnswer(
     @CurrentPlayer() player: CurrentPlayerData,
+    @CurrentAppCode() appCode: string,
     @Body() dto: SubmitQuizDto,
   ) {
     return this.quizService.submit(
       player.playerId,
       this.assertId(dto.questionId),
       dto.selected,
-      null,
+      appCode,
     );
   }
 }

@@ -12,6 +12,7 @@ import { QuizAdminService } from './quiz-admin.service';
 import { QuizAdminController } from './quiz-admin.controller';
 import { QuizService } from './quiz.service';
 import { QuizController } from './quiz.controller';
+import { AppsModule } from '@modules/apps/apps.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { QuizController } from './quiz.controller';
       QuizSession,
       QuizAnswer,
     ]),
+    AppsModule, // AppScopeGuard 依赖 AppsService（由 AppsModule exports）
   ],
   controllers: [QuizAdminController, QuizController],
   providers: [QuizAdminService, QuizService],

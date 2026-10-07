@@ -194,6 +194,28 @@ describe('QuizAdminService', () => {
         order: { createdAt: 'DESC' },
       });
     });
+
+    it('appScope 过滤进 where（trim 后空串视为未传）', async () => {
+      questionRepo.findAndCount.mockResolvedValue([[makeQuestion()], 1]);
+
+      await service.listQuestions(1, 20, undefined, undefined, '  gameB ');
+
+      expect(questionRepo.findAndCount).toHaveBeenCalledWith({
+        skip: 0,
+        take: 20,
+        where: { appScope: 'gameB' },
+        order: { createdAt: 'DESC' },
+      });
+
+      await service.listQuestions(1, 20, undefined, undefined, '   ');
+
+      expect(questionRepo.findAndCount).toHaveBeenLastCalledWith({
+        skip: 0,
+        take: 20,
+        where: {},
+        order: { createdAt: 'DESC' },
+      });
+    });
   });
 
   describe('createQuestion', () => {
