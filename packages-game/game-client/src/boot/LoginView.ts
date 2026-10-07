@@ -29,6 +29,14 @@ export class LoginView {
         Toast.info(`登录成功：playerId=${result.playerId}`);
         onLoggedIn();
       },
+      onSsoLogin: async (username, password) => {
+        // SSO 账密直登：不自动注册（sso-user 在 h.joho.cn 侧注册），失败直接提示
+        const result = await Api.ssoLogin(username, password);
+        Session.save(result);
+        Platform.ui.hideLogin();
+        Toast.info(`SSO 登录成功：playerId=${result.playerId}`);
+        onLoggedIn();
+      },
     });
   }
 }

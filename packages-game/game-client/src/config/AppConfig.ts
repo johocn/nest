@@ -221,6 +221,13 @@ export const AppConfig = {
     buttonDisabledColor: '#8b949e',
     buttonIdleText: '登录 / 自动注册',
     buttonBusyText: '登录中…',
+    /** SSO 登录按钮（主按钮下方的次要按钮） */
+    gapBeforeSsoButton: 8,
+    ssoButtonHeight: 30,
+    ssoButtonFontSize: 13,
+    ssoButtonColor: '#8b949e',
+    ssoButtonBgColor: 'rgba(255,255,255,0.06)',
+    ssoButtonBusyText: 'SSO 登录中…',
     /** 错误行（校验失败 / 提交异常） */
     gapBeforeError: 10,
     errorHeight: 18,

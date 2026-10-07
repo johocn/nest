@@ -73,6 +73,14 @@ export class AuthController {
     return this.authService.handleSsoCallback(code);
   }
 
+  @Public()
+  @Post('sso/password-login')
+  @ApiOperation({ summary: 'SSO 账密直登（password-authorize 换 code 后统一换发 game JWT）' })
+  @RateLimit({ windowSeconds: 60, maxRequests: 5 })
+  ssoPasswordLogin(@Body() dto: LoginDto) {
+    return this.authService.ssoPasswordLogin(dto.username, dto.password);
+  }
+
   @UseGuards(JwtAuthGuard)
   @Post('security/verify')
   @ApiOperation({ summary: '风控确认（记录本人确认事件）' })

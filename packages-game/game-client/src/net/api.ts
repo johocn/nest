@@ -276,6 +276,13 @@ export const Api = {
     });
   },
 
+  /** SSO 账密直登：服务端 password-authorize 换 code 后统一换发 game JWT */
+  ssoLogin(username: string, password: string): Promise<AuthResult> {
+    return httpJson<AuthResult>('POST', '/api/client/v1/auth/sso/password-login', {
+      body: { username, password, deviceId: AppConfig.deviceId },
+    });
+  },
+
   /** objectTemplateId 是 object_templates.id（不是 spawnId），与后端 interactObject 契约一致 */
   interactObject(
     objectTemplateId: number,

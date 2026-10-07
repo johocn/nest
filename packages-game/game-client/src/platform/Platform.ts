@@ -185,7 +185,10 @@ export const Platform = {
      * 登录页双端分派：小游戏端走引擎内自绘 `ui/LoginView`（无 DOM），H5 走既有 DOM 表单。
      * 定好「对象字面量内不自引用」：这里一律用 `Platform.xxx` 延迟到调用期取值。
      */
-    showLogin(handlers: { onSubmit: (username: string, password: string) => Promise<void> }): void {
+    showLogin(handlers: {
+      onSubmit: (username: string, password: string) => Promise<void>;
+      onSsoLogin: (username: string, password: string) => Promise<void>;
+    }): void {
       if (Platform.isMiniGame()) LoginView.show(handlers);
       else Platform.showLoginForm(handlers);
     },
@@ -271,6 +274,7 @@ export const Platform = {
   // `showLoginForm` / `hideLoginForm` 是 H5 特有能力的适配，保留在此。
   showLoginForm(handlers: {
     onSubmit: (username: string, password: string) => Promise<void>;
+    onSsoLogin: (username: string, password: string) => Promise<void>;
   }): void {
     if (typeof document === 'undefined') {
       throw new Error('当前平台不支持 DOM 登录表单');
@@ -285,6 +289,7 @@ export const Platform = {
       <label for="s1-pass">密码（6-64 位）</label>
       <input id="s1-pass" type="password" value="spike123456" autocomplete="current-password" />
       <button id="s1-submit">登录 / 自动注册</button>
+      <button id="s1-sso" type="button">SSO 账号登录</button>
       <div class="err" id="s1-err"></div>
     `;
     document.body.appendChild(box);
@@ -293,21 +298,25 @@ export const Platform = {
     const pass = box.querySelector('#s1-pass') as HTMLInputElement;
     const err = box.querySelector('#s1-err') as HTMLDivElement;
     const btn = box.querySelector('#s1-submit') as HTMLButtonElement;
+    const ssoBtn = box.querySelector('#s1-sso') as HTMLButtonElement;
 
-    btn.addEventListener('click', () => {
+    const runWith = (action: (u: string, p: string) => Promise<void>, trigger: HTMLButtonElement) => {
       err.textContent = '';
-      btn.disabled = true;
+      trigger.disabled = true;
       // tsconfig 的 lib 为 ES2017（无 Promise.prototype.finally），故用 try/finally 等价实现
       void (async () => {
         try {
-          await handlers.onSubmit(user.value.trim(), pass.value);
+          await action(user.value.trim(), pass.value);
         } catch (e: unknown) {
           err.textContent = e instanceof Error ? e.message : String(e);
         } finally {
-          btn.disabled = false;
+          trigger.disabled = false;
         }
       })();
-    });
+    };
+
+    btn.addEventListener('click', () => runWith(handlers.onSubmit, btn));
+    ssoBtn.addEventListener('click', () => runWith(handlers.onSsoLogin, ssoBtn));
   },
 
   hideLoginForm(): void {
