@@ -194,6 +194,12 @@ export class AuthService {
     return `${this.ssoBaseUrl}/api/zhao-sso/v1/auth/authorize?app_code=game&redirect_uri=${redirectUri}&response_type=code`;
   }
 
+  /** SSO 账密直登：password-authorize 换一次性 code → 走统一回调换发 game JWT */
+  async ssoPasswordLogin(username: string, password: string): Promise<AuthResult> {
+    const code = await this.passwordAuthorize(username, password);
+    return this.handleSsoCallback(code);
+  }
+
   async handleSsoCallback(code: string): Promise<AuthResult> {
     const ssoUser = await this.exchangeSsoCode(code);
     let account = await this.accountRepo.findOne({
@@ -286,6 +292,43 @@ export class AuthService {
       ssoId: String(data.user.uuid),
       username: String(data.user.username ?? ''),
     };
+  }
+
+  /** 账密换一次性 code（zhao-sso 降级密码登录 code 模式），失败一律抛 SSO_AUTH_FAILED */
+  private async passwordAuthorize(
+    identifier: string,
+    password: string,
+  ): Promise<string> {
+    let response: globalThis.Response;
+    try {
+      response = await fetch(
+        `${this.ssoBaseUrl}/api/zhao-sso/v1/auth/password-authorize`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            app_code: 'game',
+            identifier,
+            password,
+            redirect_uri: this.ssoCallbackUrl,
+            state: '',
+          }),
+          signal: AbortSignal.timeout(2000),
+        },
+      );
+    } catch {
+      throw new GameException(ErrorCodes.SSO_AUTH_FAILED, 'SSO 认证服务不可用');
+    }
+    if (!response.ok) {
+      throw new GameException(ErrorCodes.SSO_AUTH_FAILED, 'SSO 账号或密码错误');
+    }
+    const data = (await response.json().catch(() => null)) as {
+      code?: string;
+    } | null;
+    if (!data?.code) {
+      throw new GameException(ErrorCodes.SSO_AUTH_FAILED, 'SSO 换码失败');
+    }
+    return data.code;
   }
 
   async validateToken(payload: JwtPayload): Promise<boolean> {

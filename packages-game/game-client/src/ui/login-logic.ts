@@ -140,11 +140,12 @@ export interface LoginLayout {
   passLabel: LoginRect;
   passBox: LoginRect;
   button: LoginRect;
+  ssoButton: LoginRect;
   error: LoginRect;
 }
 
 /**
- * 布局计算（纯函数）：面板居中，内部自上而下为 标题 / 账号(标签+框) / 密码(标签+框) / 按钮 / 错误行。
+ * 布局计算（纯函数）：面板居中，内部自上而下为 标题 / 账号(标签+框) / 密码(标签+框) / 主按钮 / SSO 按钮 / 错误行。
  * 全宽元素左右各留 `padX`；面板高度由内容累加得出，故不会与控件脱节。
  */
 export function loginLayout(stageWidth: number, stageHeight: number): LoginLayout {
@@ -162,6 +163,8 @@ export function loginLayout(stageWidth: number, stageHeight: number): LoginLayou
     L.gapBetweenFields +
     L.gapBeforeButton +
     L.buttonHeight +
+    L.gapBeforeSsoButton +
+    L.ssoButtonHeight +
     L.gapBeforeError +
     L.errorHeight;
 
@@ -184,7 +187,10 @@ export function loginLayout(stageWidth: number, stageHeight: number): LoginLayou
   y += L.inputHeight + L.gapBeforeButton;
 
   const button: LoginRect = { x: contentX, y, w: contentWidth, h: L.buttonHeight };
-  y += L.buttonHeight + L.gapBeforeError;
+  y += L.buttonHeight + L.gapBeforeSsoButton;
+
+  const ssoButton: LoginRect = { x: contentX, y, w: contentWidth, h: L.ssoButtonHeight };
+  y += L.ssoButtonHeight + L.gapBeforeError;
 
   const error: LoginRect = { x: contentX, y, w: contentWidth, h: L.errorHeight };
 
@@ -197,6 +203,7 @@ export function loginLayout(stageWidth: number, stageHeight: number): LoginLayou
     passLabel,
     passBox,
     button,
+    ssoButton,
     error,
   };
 }
