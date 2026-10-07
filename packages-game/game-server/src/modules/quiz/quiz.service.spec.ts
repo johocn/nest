@@ -5,6 +5,7 @@ import { QuizService } from './quiz.service';
 import {
   QuizAssessment,
   QuizAssessmentItem,
+  QuizAnswer,
   QuizQuestion,
   QuizResult,
   QuizSession,
@@ -14,6 +15,7 @@ import { ErrorCodes } from '@constants/error-codes';
 import {
   CurrencyType,
   QuizAssessmentStatus,
+  QuizQuestionKind,
   QuizSessionStatus,
 } from '@constants/enums';
 import { COMMON_SCOPE } from '@shared/content-scope';
@@ -26,6 +28,7 @@ describe('QuizService（玩家测评流）', () => {
   let assessmentRepo: jest.Mocked<Repository<QuizAssessment>>;
   let itemRepo: jest.Mocked<Repository<QuizAssessmentItem>>;
   let sessionRepo: jest.Mocked<Repository<QuizSession>>;
+  let quizAnswerRepo: jest.Mocked<Repository<QuizAnswer>>;
   let economyService: jest.Mocked<EconomyService>;
 
   beforeEach(async () => {
@@ -61,6 +64,15 @@ describe('QuizService（玩家测评流）', () => {
             save: jest.fn(async (data: any) => data),
           },
         },
+        {
+          provide: getRepositoryToken(QuizAnswer),
+          useValue: {
+            findOne: jest.fn(),
+            find: jest.fn(),
+            create: jest.fn((data: any) => ({ ...data, id: '300' })),
+            save: jest.fn(async (data: any) => data),
+          },
+        },
         { provide: EconomyService, useValue: economyService },
       ],
     }).compile();
@@ -71,6 +83,7 @@ describe('QuizService（玩家测评流）', () => {
     assessmentRepo = module.get(getRepositoryToken(QuizAssessment));
     itemRepo = module.get(getRepositoryToken(QuizAssessmentItem));
     sessionRepo = module.get(getRepositoryToken(QuizSession));
+    quizAnswerRepo = module.get(getRepositoryToken(QuizAnswer));
   });
 
   const makeAssessment = (
@@ -165,6 +178,17 @@ describe('QuizService（玩家测评流）', () => {
       deletedAt: null,
       ...overrides,
     }) as QuizResult;
+
+  const makeAnswer = (overrides: Partial<QuizAnswer> = {}): QuizAnswer =>
+    ({
+      id: '300',
+      playerId: 'p1',
+      questionId: '1',
+      isCorrect: true,
+      appCode: 'main',
+      createdAt: new Date(),
+      ...overrides,
+    }) as QuizAnswer;
 
   // ===== start =====
 
@@ -480,6 +504,192 @@ describe('QuizService（玩家测评流）', () => {
       });
       expect(sessionRepo.save).not.toHaveBeenCalled();
       expect(economyService.addCurrency).not.toHaveBeenCalled();
+    });
+  });
+
+  // ===== draw（知识问答抽题）=====
+
+  describe('draw', () => {
+    it('返回剥离 answer/score/goto/explain 的题目；题目查询命中 scope 契约', async () => {
+      questionRepo.find.mockResolvedValue([
+        makeQuestion({
+          kind: QuizQuestionKind.KNOWLEDGE,
+          options: [
+            { text: 'A', answer: true, explain: '因为A' },
+            { text: 'B', score: 3, goto: 'q2' },
+          ],
+        }),
+      ]);
+      quizAnswerRepo.find.mockResolvedValue([]);
+
+      const res = await service.draw('p1', null, {});
+
+      expectScopedFind(questionRepo.find, [COMMON_SCOPE]);
+      expect(questionRepo.find).toHaveBeenCalledWith({
+        where: expect.objectContaining({ kind: QuizQuestionKind.KNOWLEDGE }),
+      });
+      expect(res.questions).toHaveLength(1);
+      expect(res.questions[0].id).toBe('1');
+      for (const option of res.questions[0].options) {
+        expect(Object.keys(option)).toEqual(['text']);
+      }
+    });
+
+    it('优先抽未答过的题（按已答流水过滤）', async () => {
+      const answered = makeQuestion({ id: '1', code: 'q1', kind: QuizQuestionKind.KNOWLEDGE });
+      const fresh = makeQuestion({ id: '2', code: 'q2', kind: QuizQuestionKind.KNOWLEDGE });
+      questionRepo.find.mockResolvedValue([answered, fresh]);
+      quizAnswerRepo.find.mockResolvedValue([makeAnswer({ questionId: '1' })]);
+
+      const res = await service.draw('p1', null, { count: 1 });
+
+      expect(quizAnswerRepo.find).toHaveBeenCalledWith({
+        where: { playerId: 'p1' },
+      });
+      expect(res.questions.map((q) => q.id)).toEqual(['2']);
+    });
+
+    it('未答不足 count 时回退全池', async () => {
+      const only = makeQuestion({ id: '1', code: 'q1', kind: QuizQuestionKind.KNOWLEDGE });
+      questionRepo.find.mockResolvedValue([only]);
+      quizAnswerRepo.find.mockResolvedValue([makeAnswer({ questionId: '1' })]);
+
+      const res = await service.draw('p1', null, { count: 1 });
+
+      expect(res.questions.map((q) => q.id)).toEqual(['1']);
+    });
+
+    it('题池为空返回空数组', async () => {
+      questionRepo.find.mockResolvedValue([]);
+
+      const res = await service.draw('p1', null, {});
+
+      expect(res.questions).toEqual([]);
+      expect(quizAnswerRepo.find).not.toHaveBeenCalled();
+    });
+  });
+
+  // ===== submit（知识问答判定）=====
+
+  describe('submit', () => {
+    const knowledge = (overrides: Partial<QuizQuestion> = {}) =>
+      makeQuestion({
+        kind: QuizQuestionKind.KNOWLEDGE,
+        options: [
+          { text: 'A', answer: true, explain: 'A对' },
+          { text: 'B' },
+          { text: 'C' },
+        ],
+        ...overrides,
+      });
+
+    it('单选答对 → correct + answerIndexes + explain + 首发奖励（opTrace=quiz_q:{qid}:{pid}）+ 流水 app_code 兜底 main', async () => {
+      questionRepo.findOne.mockResolvedValue(
+        knowledge({ rewardJson: { currencyType: CurrencyType.GOLD, amount: 5 } }),
+      );
+      quizAnswerRepo.findOne.mockResolvedValue(null);
+
+      const res = await service.submit('p1', '1', [0], null);
+
+      expectScopedFind(questionRepo.findOne, [COMMON_SCOPE]);
+      expect(res.correct).toBe(true);
+      expect(res.answerIndexes).toEqual([0]);
+      expect(res.explain).toBe('A对');
+      expect(res.reward).toEqual({ currencyType: CurrencyType.GOLD, amount: 5 });
+      expect(economyService.getTxByOpTrace).toHaveBeenCalledWith('quiz_q:1:p1');
+      expect(economyService.addCurrency).toHaveBeenCalledWith(
+        'p1',
+        CurrencyType.GOLD,
+        5,
+        'quiz',
+        'quiz_q:1:p1',
+      );
+      expect(quizAnswerRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          playerId: 'p1',
+          questionId: '1',
+          isCorrect: true,
+          appCode: 'main',
+        }),
+      );
+    });
+
+    it('单选答错 → correct:false + 落 isCorrect=false 流水 + 不查历史不发奖', async () => {
+      questionRepo.findOne.mockResolvedValue(
+        knowledge({ rewardJson: { currencyType: CurrencyType.GOLD, amount: 5 } }),
+      );
+
+      const res = await service.submit('p1', '1', [1], null);
+
+      expect(res.correct).toBe(false);
+      expect(res.answerIndexes).toEqual([0]);
+      expect(res.reward).toBeUndefined();
+      expect(quizAnswerRepo.findOne).not.toHaveBeenCalled();
+      expect(economyService.addCurrency).not.toHaveBeenCalled();
+      expect(quizAnswerRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ isCorrect: false }),
+      );
+    });
+
+    it('多选集合比较顺序无关', async () => {
+      questionRepo.findOne.mockResolvedValue(
+        knowledge({
+          multiSelect: true,
+          options: [
+            { text: 'A', answer: true },
+            { text: 'B' },
+            { text: 'C', answer: true },
+          ],
+        }),
+      );
+
+      const res = await service.submit('p1', '1', [2, 0], null);
+
+      expect(res.correct).toBe(true);
+      expect(res.answerIndexes).toEqual([0, 2]);
+    });
+
+    it('题目不存在 → 46006', async () => {
+      questionRepo.findOne.mockResolvedValue(null);
+
+      await expect(service.submit('p1', '99', [0], null)).rejects.toMatchObject({
+        response: { code: ErrorCodes.QUIZ_QUESTION_NOT_FOUND },
+      });
+    });
+
+    it('选项越界 → 46005', async () => {
+      questionRepo.findOne.mockResolvedValue(knowledge());
+
+      await expect(service.submit('p1', '1', [3], null)).rejects.toMatchObject({
+        response: { code: ErrorCodes.QUIZ_OPTION_INVALID },
+      });
+    });
+
+    it('非 multiSelect 提交多个下标 → 46005', async () => {
+      questionRepo.findOne.mockResolvedValue(knowledge());
+
+      await expect(
+        service.submit('p1', '1', [0, 1], null),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.QUIZ_OPTION_INVALID },
+      });
+    });
+
+    it('已有 correct 历史 → 不再发奖（历史查重在落流水前）', async () => {
+      questionRepo.findOne.mockResolvedValue(
+        knowledge({ rewardJson: { currencyType: CurrencyType.GOLD, amount: 5 } }),
+      );
+      quizAnswerRepo.findOne.mockResolvedValue(makeAnswer({ questionId: '1' }));
+
+      const res = await service.submit('p1', '1', [0], null);
+
+      expect(res.correct).toBe(true);
+      expect(quizAnswerRepo.findOne).toHaveBeenCalledWith({
+        where: { playerId: 'p1', questionId: '1', isCorrect: true },
+      });
+      expect(economyService.addCurrency).not.toHaveBeenCalled();
+      expect(economyService.getTxByOpTrace).not.toHaveBeenCalled();
+      expect(res.reward).toBeUndefined();
     });
   });
 });

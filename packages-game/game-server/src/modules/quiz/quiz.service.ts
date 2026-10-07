@@ -2,24 +2,40 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import {
+  QuizAnswer,
   QuizAssessment,
   QuizAssessmentItem,
   QuizQuestion,
   QuizResult,
   QuizSession,
 } from './entities';
+import { DrawQuizDto } from './dto/quiz-draw.dto';
 import { EconomyService } from '@modules/economy/economy.service';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
 import {
   CurrencyType,
   QuizAssessmentStatus,
+  QuizQuestionKind,
   QuizSessionStatus,
 } from '@constants/enums';
 import { DEFAULT_APP_CODE, visibleTo } from '@shared/content-scope';
 
 /** 测评会话有效期 */
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** 单次抽题上限 */
+const QUIZ_DRAW_MAX = 20;
+
+/** Fisher-Yates 洗牌（Math.random，不引库） */
+function shuffle<T>(arr: T[]): T[] {
+  const out = [...arr];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
 
 /**
  * quiz 玩家侧测评流（start / answer / 结果结算）。
@@ -40,6 +56,8 @@ export class QuizService {
     private readonly itemRepo: Repository<QuizAssessmentItem>,
     @InjectRepository(QuizSession)
     private readonly sessionRepo: Repository<QuizSession>,
+    @InjectRepository(QuizAnswer)
+    private readonly quizAnswerRepo: Repository<QuizAnswer>,
     private readonly economyService: EconomyService,
   ) {}
 
@@ -209,6 +227,125 @@ export class QuizService {
     };
   }
 
+  // ===== 知识问答 =====
+
+  /** 抽题：knowledge 池按 scope 过滤（+category 可选），优先未答过的题，不足回退全池 */
+  async draw(
+    playerId: string,
+    appCode: string | null = null,
+    dto: DrawQuizDto = {} as DrawQuizDto,
+  ) {
+    const raw = Number(dto?.count);
+    const count =
+      Number.isInteger(raw) && raw >= 1 ? Math.min(raw, QUIZ_DRAW_MAX) : 1;
+    const questions = await this.questionRepo.find({
+      where: {
+        kind: QuizQuestionKind.KNOWLEDGE,
+        ...(dto?.category ? { category: dto.category } : {}),
+        ...visibleTo(appCode),
+      },
+    });
+    if (questions.length === 0) {
+      return { questions: [] };
+    }
+    const answers = await this.quizAnswerRepo.find({
+      where: { playerId },
+    });
+    const answeredIds = new Set(answers.map((a) => a.questionId));
+    const fresh = questions.filter((q) => !answeredIds.has(q.id));
+    const pool = fresh.length >= count ? fresh : questions;
+    return {
+      questions: shuffle(pool)
+        .slice(0, count)
+        .map((q) => this.sanitizeQuestion(q)),
+    };
+  }
+
+  /** 知识答题：服务端判定对错、落答题流水、答对首发发奖 */
+  async submit(
+    playerId: string,
+    questionId: string,
+    selected: number[],
+    appCode: string | null = null,
+  ) {
+    const question = await this.questionRepo.findOne({
+      where: {
+        id: questionId,
+        kind: QuizQuestionKind.KNOWLEDGE,
+        ...visibleTo(appCode),
+      },
+    });
+    if (!question) {
+      throw new GameException(ErrorCodes.QUIZ_QUESTION_NOT_FOUND, '题目不存在');
+    }
+    if (!Array.isArray(selected) || selected.length === 0) {
+      throw new GameException(ErrorCodes.QUIZ_OPTION_INVALID, '选项序号非法');
+    }
+    for (const idx of selected) {
+      if (!Number.isInteger(idx) || idx < 0 || idx >= question.options.length) {
+        throw new GameException(ErrorCodes.QUIZ_OPTION_INVALID, '选项序号非法');
+      }
+    }
+    if (!question.multiSelect && selected.length !== 1) {
+      throw new GameException(ErrorCodes.QUIZ_OPTION_INVALID, '选项序号非法');
+    }
+
+    const answerIndexes = (question.options ?? []).reduce<number[]>(
+      (acc, opt, idx) => {
+        if (opt?.answer === true) {
+          acc.push(idx);
+        }
+        return acc;
+      },
+      [],
+    );
+
+    let isCorrect: boolean;
+    if (question.multiSelect) {
+      // multiSelect：集合相等（排序后比较，顺序无关）
+      const picked = [...selected].sort((a, b) => a - b);
+      const answer = [...answerIndexes].sort((a, b) => a - b);
+      isCorrect =
+        picked.length === answer.length &&
+        picked.every((v, i) => v === answer[i]);
+    } else {
+      isCorrect = selected[0] === answerIndexes[0];
+    }
+
+    // 历史查重须在落流水前：本次答对的流水行不能算进历史
+    const hasCorrectHistory = isCorrect
+      ? (await this.quizAnswerRepo.findOne({
+          where: { playerId, questionId, isCorrect: true },
+        })) !== null
+      : false;
+    const reward =
+      isCorrect && !hasCorrectHistory
+        ? await this.grantQuestionReward(
+            playerId,
+            questionId,
+            question.rewardJson,
+          )
+        : undefined;
+
+    await this.quizAnswerRepo.save(
+      this.quizAnswerRepo.create({
+        playerId,
+        questionId,
+        isCorrect,
+        appCode: appCode ?? DEFAULT_APP_CODE,
+      } as Partial<QuizAnswer>),
+    );
+
+    const explain = (question.options ?? []).find((o) => o?.answer === true)
+      ?.explain;
+    return {
+      correct: isCorrect,
+      answerIndexes,
+      ...(explain ? { explain } : {}),
+      ...(reward ? { reward } : {}),
+    };
+  }
+
   // ===== 内部 =====
 
   /** 跳转优先级：第一选中选项 goto（题目 code 卷内反查）> item.nextQuestionId > sortOrder 下一题 */
@@ -303,6 +440,43 @@ export class QuizService {
       return undefined;
     }
     const opTrace = `quiz_result:${sessionId}`;
+    const existing = await this.economyService.getTxByOpTrace(opTrace);
+    if (existing) {
+      return undefined;
+    }
+    await this.economyService.addCurrency(
+      playerId,
+      currencyType as CurrencyType,
+      amount,
+      'quiz',
+      opTrace,
+    );
+    return { currencyType, amount };
+  }
+
+  /** 知识题奖励：形状校验逻辑同 grantResultReward，opTrace=quiz_q:{questionId}:{playerId} */
+  private async grantQuestionReward(
+    playerId: string,
+    questionId: string,
+    rewardJson: Record<string, any>,
+  ): Promise<{ currencyType: string; amount: number } | undefined> {
+    if (!rewardJson || Object.keys(rewardJson).length === 0) {
+      return undefined;
+    }
+    const currencyType = rewardJson.currencyType;
+    const amount = rewardJson.amount;
+    if (
+      typeof currencyType !== 'string' ||
+      !Object.values(CurrencyType).includes(currencyType as CurrencyType) ||
+      typeof amount !== 'number' ||
+      amount <= 0
+    ) {
+      this.logger.warn(
+        `Quiz question reward skipped (invalid shape): question=${questionId} rewardJson=${JSON.stringify(rewardJson)}`,
+      );
+      return undefined;
+    }
+    const opTrace = `quiz_q:${questionId}:${playerId}`;
     const existing = await this.economyService.getTxByOpTrace(opTrace);
     if (existing) {
       return undefined;
