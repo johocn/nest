@@ -239,6 +239,7 @@ export enum DialogueActionType {
   SET_FLAG = 'set_flag',
   QUIZ = 'quiz', // 知识问答：下发抽题结果，客户端进入答题 UI
   ASSESS = 'assess', // 启动测评：startOrResume，下发 sessionId + 首题
+  SCORE = 'score', // 评分：把选项 Effect 交给评分引擎（actionArgs.score）
 }
 
 export enum ObjectType {

@@ -1,0 +1,118 @@
+{
+  "code": "history_teach_demo",
+  "title": "历史案例教学（评分驱动分支示例）",
+  "version": 1,
+  "isActive": true,
+  "nodes": [
+    {
+      "key": "root",
+      "speaker": "历史导师",
+      "text": "向古代智者学，再把所学用于当下，最后畅想未来。你想先向谁求学？",
+      "options": [
+        {
+          "text": "拜孔子为师，修习仁礼",
+          "action": "score",
+          "actionArgs": {
+            "score": {
+              "gameId": "history-teach",
+              "effect": { "affinity": { "孔子": 60 }, "flags": ["学完论语"] }
+            }
+          },
+          "next": "apply"
+        },
+        {
+          "text": "向巴菲特学投资理财",
+          "action": "score",
+          "actionArgs": {
+            "score": {
+              "gameId": "history-teach",
+              "effect": { "affinity": { "巴菲特": 60 }, "axes": { "wealth": 300 } }
+            }
+          },
+          "next": "apply"
+        },
+        {
+          "text": "随便逛逛",
+          "next": "apply"
+        }
+      ]
+    },
+    {
+      "key": "apply",
+      "speaker": "历史导师",
+      "text": "现在把所学用到当下吧。",
+      "options": [
+        {
+          "text": "兴办教育，传播智慧",
+          "action": "score",
+          "actionArgs": {
+            "score": { "gameId": "history-teach", "effect": { "axes": { "wisdom": 120 } } }
+          },
+          "next": "imagine"
+        },
+        {
+          "text": "投资实业，积累财富",
+          "action": "score",
+          "actionArgs": {
+            "score": { "gameId": "history-teach", "effect": { "axes": { "wealth": 500 } } }
+          },
+          "next": "imagine"
+        },
+        {
+          "text": "继续",
+          "next": "imagine"
+        }
+      ]
+    },
+    {
+      "key": "imagine",
+      "speaker": "历史导师",
+      "text": "畅想未来——你的人生将走向何方？（不同选择会解锁不同结局）",
+      "options": [
+        {
+          "text": "与孔子共论大道",
+          "condition": { "score": { "gameId": "history-teach", "affinityMin": { "孔子": 50 } } },
+          "next": "confucius_route"
+        },
+        {
+          "text": "成为商业巨擘",
+          "condition": { "score": { "gameId": "history-teach", "axesMin": { "wealth": 500 } } },
+          "next": "rich_end"
+        },
+        {
+          "text": "成为一代大儒",
+          "condition": { "score": { "gameId": "history-teach", "axesMin": { "wisdom": 100 } } },
+          "next": "wise_end"
+        },
+        {
+          "text": "结束对话",
+          "next": null
+        }
+      ]
+    },
+    {
+      "key": "confucius_route",
+      "speaker": "孔子",
+      "text": "吾与点也！你的求学之心，吾甚赞许。",
+      "options": [
+        { "text": "感谢先生", "next": null }
+      ]
+    },
+    {
+      "key": "rich_end",
+      "speaker": "旁白",
+      "text": "你富甲一方，却也在思：财者，天下之公器也。",
+      "options": [
+        { "text": "收手归隐", "next": null }
+      ]
+    },
+    {
+      "key": "wise_end",
+      "speaker": "旁白",
+      "text": "你著书立说，开一代学风，名垂青史。",
+      "options": [
+        { "text": "著书立说", "next": null }
+      ]
+    }
+  ]
+}

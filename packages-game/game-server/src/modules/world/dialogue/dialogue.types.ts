@@ -24,6 +24,25 @@ export interface DialogueOption {
   actionArgs?: Record<string, any>;
 }
 
+/** 评分快照（由 scoring 模块产出，结构对齐 ScoreSnapshot） */
+export interface DialogueScoreSnapshot {
+  axes: Record<string, number>;
+  flags: string[];
+  affinity: Record<string, number>;
+  reputation: Record<string, number>;
+  ideology: Record<string, number>;
+}
+
+/** 评分条件（引用某游戏的评分快照，详见 scoring 模块） */
+export interface DialogueScoreCondition {
+  gameId: string;
+  axesMin?: Record<string, number>;
+  flags?: string[];
+  affinityMin?: Record<string, number>;
+  reputationMin?: Record<string, number>;
+  ideologyMin?: Record<string, number>;
+}
+
 /** 玩家级条件（节点与选项共用，全部可选，AND 语义） */
 export interface DialogueCondition {
   minLevel?: number;
@@ -32,6 +51,8 @@ export interface DialogueCondition {
   notQuestId?: string;
   hasItemId?: string;
   flag?: string;
+  /** 评分条件：引用某游戏的评分快照做分支门控 */
+  score?: DialogueScoreCondition;
 }
 
 /** 对话节点 */
@@ -54,6 +75,8 @@ export interface DialogueActionArgs {
   assessmentCode?: string; // assess 用：测评卷 code
   category?: string; // quiz 用：抽题分类（可选）
   count?: number; // quiz 用：抽题数量（可选，服务端钳制 1-20）
+  /** 评分动作参数：把 Effect 交给评分引擎（gameId 必填，effect 为增量，use 可裁剪策略） */
+  score?: { gameId: string; effect?: Record<string, any>; use?: string[] };
 }
 
 /** 对话动作附带数据（choose 响应的可选 quiz 字段；payload 均已脱敏） */

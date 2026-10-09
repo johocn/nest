@@ -14,12 +14,15 @@ import { InventoryService } from '@modules/inventory/inventory.service';
 import { EconomyService } from '@modules/economy/economy.service';
 import { QuizService } from '@modules/quiz/quiz.service';
 import { DrawQuizDto } from '@modules/quiz/dto/quiz-draw.dto';
+import { ScoringService } from '@modules/scoring/scoring.service';
+import { ScoreEffect } from '@modules/scoring/scoring.types';
 import { Dialogue } from '../entities/dialogue.entity';
 import { COMMON_SCOPE, visibleTo } from '@shared/content-scope';
 import {
   DialogueContext,
   ResolvedNode,
   collectFlagKeys,
+  collectScoreGameIds,
   matchCondition,
   resolveNode,
 } from './dialogue.resolver';
@@ -27,6 +30,7 @@ import {
   DialogueActionArgs,
   DialogueNode,
   DialogueQuizHandout,
+  DialogueScoreSnapshot,
   assertDialogueNodes,
 } from './dialogue.types';
 
@@ -92,6 +96,7 @@ export class DialogueService {
     private readonly inventoryService: InventoryService,
     private readonly economyService: EconomyService,
     private readonly quizService: QuizService,
+    private readonly scoringService: ScoringService,
   ) {}
 
   /**
@@ -103,12 +108,16 @@ export class DialogueService {
   async buildContext(
     playerId: string,
     neededFlags: string[] = [],
+    scoreGameIds: string[] = [],
   ): Promise<DialogueContext> {
-    const [level, quests, items, flags] = await Promise.all([
+    const [level, quests, items, flags, score] = await Promise.all([
       this.getPlayerLevel(playerId),
       this.playerQuestRepo.find({ where: { playerId } }),
       this.inventoryItemRepo.find({ where: { playerId } }),
       this.loadFlags(playerId, neededFlags),
+      scoreGameIds.length
+        ? this.scoringService.snapshotFor(playerId, scoreGameIds)
+        : Promise.resolve({} as Record<string, DialogueScoreSnapshot>),
     ]);
 
     const questStatus = new Map<string, QuestStatus>();
@@ -126,7 +135,7 @@ export class DialogueService {
       );
     }
 
-    return { level, questStatus, itemCount, flags };
+    return { level, questStatus, itemCount, flags, score };
   }
 
   /** 读取玩家等级；玩家不存在或读失败时按「无等级」处理（与 S4 一致） */
@@ -210,7 +219,11 @@ export class DialogueService {
   ): Promise<DialogueView> {
     const nodes = this.assertNodes(dialogue);
 
-    const ctx = await this.buildContext(playerId, collectFlagKeys(nodes));
+    const ctx = await this.buildContext(
+      playerId,
+      collectFlagKeys(nodes),
+      collectScoreGameIds(nodes),
+    );
     const first = nodes[0];
     const node = resolveNode(nodes, first.key, ctx);
     if (!node) {
@@ -270,7 +283,11 @@ export class DialogueService {
     const dialogue = await this.findActiveDialogue(input.code);
     const nodes = this.assertNodes(dialogue);
 
-    const ctx = await this.buildContext(playerId, collectFlagKeys(nodes));
+    const ctx = await this.buildContext(
+      playerId,
+      collectFlagKeys(nodes),
+      collectScoreGameIds(nodes),
+    );
 
     const node = nodes.find((n) => n.key === input.nodeKey);
     if (!node) {
@@ -329,7 +346,11 @@ export class DialogueService {
     }
 
     // 动作已改变玩家状态（如刚接任务），必须重新求值 next 节点的可见性
-    const newCtx = await this.buildContext(playerId, collectFlagKeys(nodes));
+    const newCtx = await this.buildContext(
+      playerId,
+      collectFlagKeys(nodes),
+      collectScoreGameIds(nodes),
+    );
     const nextNode = resolveNode(nodes, option.next, newCtx);
     if (!nextNode) {
       // 不返回 finished，避免把「配置错误/条件未满足」伪装成正常结束
@@ -470,6 +491,22 @@ export class DialogueService {
               questions: r.questions,
             }),
           );
+      }
+      case DialogueActionType.SCORE: {
+        const scoreArgs = args.score;
+        if (!scoreArgs || typeof scoreArgs.gameId !== 'string') {
+          throw new GameException(
+            ErrorCodes.PARAM_INVALID,
+            'score 动作缺少 gameId',
+          );
+        }
+        await this.scoringService.dispatch(
+          playerId,
+          scoreArgs.gameId,
+          (scoreArgs.effect ?? {}) as ScoreEffect,
+          scoreArgs.use,
+        );
+        return null;
       }
       default:
         throw new GameException(

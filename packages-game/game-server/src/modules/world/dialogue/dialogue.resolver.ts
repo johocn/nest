@@ -1,5 +1,9 @@
 import { DialogueActionType, QuestStatus } from '@constants/enums';
-import { DialogueCondition, DialogueNode } from './dialogue.types';
+import {
+  DialogueCondition,
+  DialogueNode,
+  DialogueScoreSnapshot,
+} from './dialogue.types';
 
 /**
  * 对话条件求值与节点解析（S5，**纯函数，零 IO**）
@@ -22,6 +26,8 @@ export interface DialogueContext {
   itemCount: Map<string, number>;
   /** 已存在的旗标集合（键为旗标名，不含前缀） */
   flags: Set<string>;
+  /** 评分快照：gameId -> 快照（分支门控用，由 scoring 模块产出） */
+  score?: Record<string, DialogueScoreSnapshot>;
 }
 
 /** 过滤后的选项视图（index = 原始 options 下标） */
@@ -87,6 +93,34 @@ export function matchCondition(
       if (!((ctx.itemCount.get(String(value)) ?? 0) > 0)) return false;
     } else if (key === 'flag') {
       if (!ctx.flags.has(String(value))) return false;
+    } else if (key === 'score') {
+      const sc = cond.score;
+      if (!sc) continue;
+      const snap = ctx.score?.[sc.gameId];
+      if (!snap) return false;
+      if (sc.axesMin) {
+        for (const [k, v] of Object.entries(sc.axesMin)) {
+          if ((snap.axes[k] ?? 0) < v) return false;
+        }
+      }
+      if (sc.flags) {
+        for (const f of sc.flags) if (!snap.flags.includes(f)) return false;
+      }
+      if (sc.affinityMin) {
+        for (const [k, v] of Object.entries(sc.affinityMin)) {
+          if ((snap.affinity[k] ?? 0) < v) return false;
+        }
+      }
+      if (sc.reputationMin) {
+        for (const [k, v] of Object.entries(sc.reputationMin)) {
+          if ((snap.reputation[k] ?? 0) < v) return false;
+        }
+      }
+      if (sc.ideologyMin) {
+        for (const [k, v] of Object.entries(sc.ideologyMin)) {
+          if ((snap.ideology[k] ?? 0) < v) return false;
+        }
+      }
     }
     // 其余键：忽略
   }
@@ -137,4 +171,21 @@ export function collectFlagKeys(nodes: DialogueNode[]): string[] {
     }
   }
   return Array.from(flags);
+}
+
+/**
+ * 收集整棵对话树内所有 `condition.score.gameId`（节点级 + 选项级，去重）。
+ * 用途：buildContext 需要知道要拉取哪些游戏的评分快照（无索引，无法枚举）。
+ */
+export function collectScoreGameIds(nodes: DialogueNode[]): string[] {
+  const ids = new Set<string>();
+  for (const node of nodes) {
+    const ng = node.condition?.score?.gameId;
+    if (typeof ng === 'string' && ng !== '') ids.add(ng);
+    for (const opt of node.options ?? []) {
+      const og = opt.condition?.score?.gameId;
+      if (typeof og === 'string' && og !== '') ids.add(og);
+    }
+  }
+  return Array.from(ids);
 }
