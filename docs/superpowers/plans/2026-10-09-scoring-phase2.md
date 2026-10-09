@@ -250,7 +250,7 @@ if (!nextKey) { /* 原 finished 返回 */ }
 
 ## 6. 执行记录（回填区）
 
-- [ ] Task 0 基线提交：commit ____
+- [x] Task 0 基线提交：commit e4e446957（19 文件 +820−6，app.module.ts 仅纳入 ScoringModule 2 行，并行改动零扫入，已 push）
 - [ ] Task 1 持久化：commit ____，全量基线 ____
 - [ ] Task 2 分支接线：commit ____
 - [ ] Task 3 admin 配置：commit ____
