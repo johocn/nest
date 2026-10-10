@@ -251,7 +251,7 @@ if (!nextKey) { /* 原 finished 返回 */ }
 ## 6. 执行记录（回填区）
 
 - [x] Task 0 基线提交：commit e4e446957（19 文件 +820−6，app.module.ts 仅纳入 ScoringModule 2 行，并行改动零扫入，已 push）
-- [ ] Task 1 持久化：commit ____，全量基线 ____
+- [x] Task 1 持久化：commit 0d2d8ad14，全量基线 1585 例 / 129 套件（1577 过；8 例失败全集中于并行会话未提交的 guandan-table.service.spec，scoring 7 例 + dialogue 58 例全绿；tsc 仅剩并行会话 app.module.ts 1 条历史错误，本任务文件零新增）
 - [ ] Task 2 分支接线：commit ____
 - [ ] Task 3 admin 配置：commit ____
 - [ ] Task 4 客户端展示：commit ____
