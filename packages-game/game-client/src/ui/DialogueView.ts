@@ -10,6 +10,7 @@ import { MatchPanel } from './MatchPanel';
 import { InventoryPanel } from './InventoryPanel';
 import { MailPanel } from './MailPanel';
 import { QuizPanel } from './QuizPanel';
+import { ScorePanel } from './ScorePanel';
 
 const D = AppConfig.dialogue;
 const T = AppConfig.touch;
@@ -45,6 +46,8 @@ export interface DialogueNodeView {
   questMarks?: DialogueQuestMarks;
   /** 对话 quiz/assess action 附带的答题数据（仅 choose 返回；服务端已脱敏） */
   quiz?: DialogueQuizHandout;
+  /** 评分轴快照（key=gameId；仅 visible 轴、按服务端配置声明顺序；树内无 score 引用时缺省） */
+  score?: Record<string, Array<{ id: string; label: string; value: number }>>;
 }
 
 /**
@@ -110,6 +113,7 @@ export function normalizeTalk(res: NpcTalkResult): DialogueNodeView {
     finished: false,
     error: null,
     questMarks: res.questMarks,
+    score: res.score,
   };
 }
 
@@ -123,8 +127,9 @@ export function normalizeChoose(res: DialogueStepResult): DialogueNodeView {
       options: [],
       finished: true,
       error: null,
-      // finished 分支也透传：服务端在对话结束（finished）时同样可能挂 quiz handout
+      // finished 分支也透传：服务端在对话结束（finished）时同样可能挂 quiz handout / score 快照
       quiz: res.quiz,
+      score: res.score,
     };
   }
   return {
@@ -136,6 +141,7 @@ export function normalizeChoose(res: DialogueStepResult): DialogueNodeView {
     finished: false,
     error: null,
     quiz: res.quiz,
+    score: res.score,
   };
 }
 
@@ -343,7 +349,7 @@ export class DialogueView {
   }
 
   private static onKeyDown(e: Laya.Event): void {
-    if (!DialogueView.opened || ChatPanel.isOpen || MatchPanel.isOpen || InventoryPanel.isOpen || MailPanel.isOpen || QuizPanel.isOpen) return; // 聊天输入/匹配/背包/邮件/答题面板打开时忽略 Esc/数字（防误选对话选项）
+    if (!DialogueView.opened || ChatPanel.isOpen || MatchPanel.isOpen || InventoryPanel.isOpen || MailPanel.isOpen || QuizPanel.isOpen || ScorePanel.isOpen) return; // 聊天输入/匹配/背包/邮件/答题/评分面板打开时忽略 Esc/数字（防误选对话选项）
     const key = String((e as unknown as { key?: string }).key ?? '').toLowerCase();
     if (key === 'escape') {
       DialogueView.close();

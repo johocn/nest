@@ -35,6 +35,13 @@ export interface DialogueScoreSnapshot {
   ideology: Record<string, number>;
 }
 
+/** 下发给客户端的单条评分轴视图（仅 visible:true 轴，按 config 声明顺序） */
+export interface DialogueScoreAxisView {
+  id: string;
+  label: string;
+  value: number;
+}
+
 /** 评分条件（引用某游戏的评分快照，详见 scoring 模块） */
 export interface DialogueScoreCondition {
   gameId: string;

@@ -203,6 +203,24 @@ export class ScoringService implements OnModuleInit {
     return toSnapshot(await this.ensure(playerId, gameId));
   }
 
+  /**
+   * 取该游戏 visible:true 轴的客户端展示视图（按 config 声明顺序；gameId 未注册 → 空数组）。
+   * 纯函数：只读 config + 快照值，不做 IO；供 DialogueView.score 组装。
+   */
+  toVisibleView(
+    snapshot: ScoreSnapshot,
+    gameId: string,
+  ): Array<{ id: string; label: string; value: number }> {
+    const cfg = this.configs.get(gameId);
+    if (!cfg) return [];
+    const out: Array<{ id: string; label: string; value: number }> = [];
+    for (const [id, def] of Object.entries(cfg.axes ?? {})) {
+      if (!def.visible) continue;
+      out.push({ id, label: def.label, value: snapshot.axes[id] ?? 0 });
+    }
+    return out;
+  }
+
   /** 批量取多个游戏的快照（供 buildContext 一次组装上下文） */
   async snapshotFor(
     playerId: string,

@@ -934,6 +934,134 @@ describe('DialogueService.branch（阶段 2：评分分支接线）', () => {
   });
 });
 
+describe('DialogueService.score 视图（阶段 2：客户端展示）', () => {
+  let mocks: ServiceMocks;
+  let service: DialogueService;
+
+  /** 三轴一隐配置：声明顺序 alpha → gamma(隐藏) → beta，可同时断言「仅 visible 轴」与「顺序同 config」 */
+  const VIEW_GAME_CONFIG = {
+    gameId: 'view-game',
+    enabled: ['axis'],
+    axes: {
+      alpha: { label: '甲', min: 0, max: 100, visible: true, initial: 0 },
+      gamma: { label: '隐', min: 0, max: 100, visible: false, initial: 0 },
+      beta: { label: '乙', min: 0, max: 100, visible: true, initial: 0 },
+    },
+  };
+
+  /** 带 score 引用（选项级 condition.score）+ score 动作的演示树 */
+  const SCORE_NODES = [
+    {
+      key: 'root',
+      text: '看看你的修为。',
+      options: [
+        {
+          text: '记一笔',
+          next: 'after',
+          action: DialogueActionType.SCORE,
+          actionArgs: { score: { gameId: 'view-game', effect: { axes: { alpha: 7 } } } },
+          condition: { score: { gameId: 'view-game', axesMin: { alpha: 0 } } },
+        },
+        { text: '离开' },
+      ],
+    },
+    { key: 'after', text: '记好了。', options: [{ text: '好' }] },
+  ];
+
+  function mockScoreDialogue(nodes: any[] = SCORE_NODES) {
+    mocks.dialogueRepo.findOne.mockResolvedValue({
+      id: '4',
+      code: 'score_view_demo',
+      nodes,
+      isActive: true,
+    });
+  }
+
+  beforeEach(() => {
+    mocks = createService();
+    service = mocks.service;
+    mocks.scoringService.registerGame(VIEW_GAME_CONFIG);
+  });
+
+  it('start：树内含 score 引用 → 响应带 score，仅 visible 轴且顺序同 config', async () => {
+    mockScoreDialogue();
+
+    const view = await service.start(PLAYER_ID, 'score_view_demo');
+
+    expect(view.score).toEqual({
+      'view-game': [
+        { id: 'alpha', label: '甲', value: 0 },
+        { id: 'beta', label: '乙', value: 0 },
+      ],
+    });
+  });
+
+  it('choose：score 动作加成后值最新（alpha=7），推进分支同样携带', async () => {
+    mockScoreDialogue();
+
+    const view = await service.choose(PLAYER_ID, {
+      code: 'score_view_demo',
+      nodeKey: 'root',
+      optionIndex: 0,
+    });
+
+    expect(view.finished).toBe(false);
+    expect(view.nodeKey).toBe('after');
+    expect(view.score).toEqual({
+      'view-game': [
+        { id: 'alpha', label: '甲', value: 7 },
+        { id: 'beta', label: '乙', value: 0 },
+      ],
+    });
+  });
+
+  it('树内无 score 引用 → start/choose 响应均不带 score 字段', async () => {
+    mockScoreDialogue([
+      {
+        key: 'root',
+        text: 'plain',
+        options: [{ text: '推进', next: 'end' }, { text: '离开' }],
+      },
+      { key: 'end', text: 'end', options: [{ text: '好' }] },
+    ]);
+
+    const startView = await service.start(PLAYER_ID, 'score_view_demo');
+    expect(startView.score).toBeUndefined();
+
+    const chooseView = await service.choose(PLAYER_ID, {
+      code: 'score_view_demo',
+      nodeKey: 'root',
+      optionIndex: 0,
+    });
+    expect(chooseView.score).toBeUndefined();
+  });
+
+  it('branch.gameId 也触发 score 下发（history-teach：仅 wisdom/wealth，初始 wealth=100）', async () => {
+    mocks.scoringService.registerGame(historyTeachConfig);
+    mockScoreDialogue([
+      {
+        key: 'root',
+        text: '求学吧。',
+        options: [{ text: '听天由命', branch: { gameId: 'history-teach', fallback: null } }],
+      },
+    ]);
+
+    const view = await service.choose(PLAYER_ID, {
+      code: 'score_view_demo',
+      nodeKey: 'root',
+      optionIndex: 0,
+    });
+
+    expect(view.finished).toBe(true);
+    expect(view.score).toEqual({
+      'history-teach': [
+        { id: 'wisdom', label: '智慧', value: 0 },
+        { id: 'wealth', label: '财富', value: 100 },
+      ],
+    });
+  });
+});
+
 describe('history-teach 演示树（samples JSON 结构回归）', () => {
   it('sample JSON 可被 assertDialogueNodes 接受（branch.fallback:null 视为缺省）', () => {
     const raw = fs.readFileSync(

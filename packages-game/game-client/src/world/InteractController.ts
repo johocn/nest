@@ -13,6 +13,7 @@ import { MatchPanel } from '../ui/MatchPanel';
 import { InventoryPanel } from '../ui/InventoryPanel';
 import { MailPanel } from '../ui/MailPanel';
 import { QuizPanel } from '../ui/QuizPanel';
+import { ScorePanel } from '../ui/ScorePanel';
 import { DialogueView, normalizeChoose } from '../ui/DialogueView';
 import type { DialogueNodeView } from '../ui/DialogueView';
 import { Hud } from '../ui/Hud';
@@ -162,6 +163,8 @@ export class InteractController {
       // quiz/assess action：服务端在推进与结束（finished）分支都可能附带脱敏 handout →
       // 打开答题面板（模态，zOrder 高于对话框；未 finished 时答题后回到对话继续）
       if (res.quiz) QuizPanel.openFromHandout(res.quiz, Session.token ?? '');
+      // 评分轴快照：服务端在推进与结束（finished）分支都可能附带（仅 visible 轴）→ 打开评分面板
+      if (res.score) ScorePanel.open(res.score);
       const next = normalizeChoose(res);
       if (next.finished) {
         this.dialogue = null;

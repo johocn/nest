@@ -30,6 +30,7 @@ import {
   DialogueActionArgs,
   DialogueNode,
   DialogueQuizHandout,
+  DialogueScoreAxisView,
   DialogueScoreSnapshot,
   assertDialogueNodes,
 } from './dialogue.types';
@@ -67,6 +68,8 @@ export interface DialogueView {
   finished: boolean;
   /** quiz/assess 动作随 choose 下发的脱敏题目 */
   quiz?: DialogueQuizHandout;
+  /** 评分轴快照（key=gameId；仅 visible:true 轴、按 config 声明顺序；树内无 score 引用时缺省不带） */
+  score?: Record<string, DialogueScoreAxisView[]>;
 }
 
 /** D8：NPC 头顶任务标记（服务端权威计算，客户端不得自行推断） */
@@ -212,6 +215,29 @@ export class DialogueService {
     return this.buildStartView(dialogue, playerId);
   }
 
+  /**
+   * 组装客户端展示用的评分轴快照（key=gameId，仅 visible:true 轴、按 config 声明顺序）。
+   * 树内无 score 引用（condition.score / branch.gameId 均无）→ 返回 undefined（视图不带该字段）。
+   * 每次现取 snapshot（L1 缓存命中）：choose 在动作（如 score 加成）之后组装，保证值最新。
+   */
+  private async buildScoreView(
+    playerId: string,
+    nodes: DialogueNode[],
+  ): Promise<Record<string, DialogueScoreAxisView[]> | undefined> {
+    const gameIds = collectScoreGameIds(nodes);
+    if (gameIds.length === 0) return undefined;
+    const out: Record<string, DialogueScoreAxisView[]> = {};
+    await Promise.all(
+      gameIds.map(async (g) => {
+        out[g] = this.scoringService.toVisibleView(
+          await this.scoringService.snapshot(playerId, g),
+          g,
+        );
+      }),
+    );
+    return out;
+  }
+
   /** 解析首节点并组装视图（start / startById 共用；结构非法或首节点条件不满足即拒绝） */
   private async buildStartView(
     dialogue: Dialogue,
@@ -232,7 +258,14 @@ export class DialogueService {
         `首节点当前不可进入：${first.key}`,
       );
     }
-    return { code: dialogue.code, nodeKey: node.key, node, finished: false };
+    const score = await this.buildScoreView(playerId, nodes);
+    return {
+      code: dialogue.code,
+      nodeKey: node.key,
+      node,
+      finished: false,
+      ...(score ? { score } : {}),
+    };
   }
 
   /**
@@ -356,12 +389,14 @@ export class DialogueService {
 
     // nextKey 为空 → 对话结束
     if (!nextKey) {
+      const endScore = await this.buildScoreView(playerId, nodes);
       return {
         code: dialogue.code,
         nodeKey: null,
         node: null,
         finished: true,
         ...(handout ? { quiz: handout } : {}),
+        ...(endScore ? { score: endScore } : {}),
       };
     }
 
@@ -379,12 +414,14 @@ export class DialogueService {
         `下一节点当前不可进入：${nextKey}`,
       );
     }
+    const score = await this.buildScoreView(playerId, nodes);
     return {
       code: dialogue.code,
       nodeKey: nextNode.key,
       node: nextNode,
       finished: false,
       ...(handout ? { quiz: handout } : {}),
+      ...(score ? { score } : {}),
     };
   }
 

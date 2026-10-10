@@ -29,6 +29,8 @@ export interface NpcTalkResult {
   /** 当前节点**可见**选项的原始下标（与 options 一一对应，choose 必须回传它） */
   optionIndexes?: number[];
   questMarks?: DialogueQuestMarks;
+  /** 评分轴快照（key=gameId；仅 visible 轴、按配置声明顺序；对话树内无 score 引用时缺省） */
+  score?: Record<string, Array<{ id: string; label: string; value: number }>>;
 }
 
 /** 服务端解析后的对话节点（choose / story 返回） */
@@ -47,6 +49,8 @@ export interface DialogueStepResult {
   finished: boolean;
   /** 对话 quiz/assess action 附带的数据（payload 均已脱敏；推进与结束分支都可能出现） */
   quiz?: DialogueQuizHandout;
+  /** 评分轴快照（key=gameId；仅 visible:true 轴、按服务端配置声明顺序；树内无 score 引用时缺省） */
+  score?: Record<string, Array<{ id: string; label: string; value: number }>>;
 }
 
 // ===== Quiz 知识问答 / 测评（字段与后端 quiz.service 返回逐字一致，勿改）=====
