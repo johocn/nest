@@ -248,6 +248,8 @@ if (!nextKey) { /* 原 finished 返回 */ }
 | 并行会话同文件再改（dialogue/enums/app.module） | 每 Task 开始前重跑 `git status` + `git diff` 复核，发现新增并行改动即停下核对范围 |
 | HTTP 冒烟被并行改动阻断 | 脚本随计划留档，延后补跑（quiz 阶段 3 惯例） |
 
+> **Task 5 实测偏离记录（2026-10-10）**：① `npm run typeorm:run` 全量入口被并行会话未提交迁移 `1791360000000_SichuanMahjongTables0005.ts` 阻断（`name='SichuanMahjongTables0005'` 缺时间戳后缀，typeorm 1.1.0 getMigrations 对 name 末 13 位解析失败）——0009 改经仅加载自身的临时 data-source 由 TypeORM 正常执行成功并登记 migrations 表，未改任何并行文件，临时文件用后即删；② HTTP 冒烟延后：`nest build` 失败于并行会话 app.module.ts(41) 引用不存在的 `@modules/mahjong/mahjong.module`，服务无法启动，`scripts/smoke-dialogue-s5.mjs`（含评分断言 ⑩：choose 响应 score 快照仅 wisdom/wealth 且顺序同 config）与 admin CRUD curl（`api/admin/v1/scoring`，admin/admin123）步骤留档待并行收敛后补跑。
+
 ## 6. 执行记录（回填区）
 
 - [x] Task 0 基线提交：commit e4e446957（19 文件 +820−6，app.module.ts 仅纳入 ScoringModule 2 行，并行改动零扫入，已 push）
@@ -255,4 +257,4 @@ if (!nextKey) { /* 原 finished 返回 */ }
 - [x] Task 2 分支接线：commit efdd5a9fc（dialogue 63 例 + scoring 7 例全绿，新增 branch 4 例 + sample JSON 结构回归 1 例；全量 1590 例 / 129 套件，8 例失败仍为并行会话 guandan-table.service.spec，零新增；tsc 仅剩并行会话 app.module.ts 1 条历史错误，本任务文件零新增；fallback 校验按 undefined/null 均视为缺省，与 sample 的 `fallback:null` 对齐）
 - [x] Task 3 admin 配置：commit d38ed89a4（47001-47003 入 error-codes；validator 8 例 + admin service 9 例，scoring 24 例 + dialogue 63 例全绿；全量 1607 例 / 131 套件，8 例失败仍为并行会话 guandan-table.service.spec，零新增；tsc 仅剩并行会话 app.module.ts 1 条历史错误，本任务文件零新增——entity 的 ScoringConfig 需 import type（isolatedModules + emitDecoratorMetadata）；onModuleInit 改 DB 加载 is_active=true 行，全量绿视为与 config/*.ts seeds 等价）
 - [x] Task 4 客户端展示：commit 6486660b5（dialogue 67 例 + scoring 24 例全绿，新增 score 视图 4 例；全量 1611 例 / 131 套件，8 例失败仍为并行会话 guandan-table.service.spec，零新增；server tsc 仅剩并行会话 app.module.ts 1 条历史错误、client tsc 零错；smoke 扩展 smoke-dialogue-s5.mjs 断言 ⑩——临时评分对话 condition.score 引用 history-teach，choose 响应断言 score 快照仅 wisdom/wealth 且顺序同 config，未运行留档 Task 5；计划外最小补充：client api.ts 的 NpcTalkResult 同步补可选 score 字段以支持 normalizeTalk 透传，server talkNpc 现仍显式映射不下发该字段）
-- [ ] Task 5 验收：全量 ____ 例 / ____ 套件；tsc 口径 ____；冒烟 ____
+- [x] Task 5 验收：全量 1611 例 / 131 套件（1603 过；8 例失败仍为并行会话 guandan-table.service.spec，零回归）；tsc 口径 server 仅剩并行会话 app.module.ts(41) 1 条历史错误、client tsc 零错（复验），本功能文件零新增；迁移 0009 up 实测通过——migrations 表已登记 ScoringTables00091791470000000，player_scoring_states（UNIQUE uq_player_scoring(player_id,game_id)）与 scoring_configs（UNIQUE uq_scoring_game(game_id)）结构/约束正确，scoring_configs 恰好 history-teach/demo-rpg 两行 is_active=true 且 config JSONB 可解析；冒烟延后（偏离见 §5 追加记录）
