@@ -253,6 +253,6 @@ if (!nextKey) { /* 原 finished 返回 */ }
 - [x] Task 0 基线提交：commit e4e446957（19 文件 +820−6，app.module.ts 仅纳入 ScoringModule 2 行，并行改动零扫入，已 push）
 - [x] Task 1 持久化：commit 0d2d8ad14，全量基线 1585 例 / 129 套件（1577 过；8 例失败全集中于并行会话未提交的 guandan-table.service.spec，scoring 7 例 + dialogue 58 例全绿；tsc 仅剩并行会话 app.module.ts 1 条历史错误，本任务文件零新增）
 - [x] Task 2 分支接线：commit efdd5a9fc（dialogue 63 例 + scoring 7 例全绿，新增 branch 4 例 + sample JSON 结构回归 1 例；全量 1590 例 / 129 套件，8 例失败仍为并行会话 guandan-table.service.spec，零新增；tsc 仅剩并行会话 app.module.ts 1 条历史错误，本任务文件零新增；fallback 校验按 undefined/null 均视为缺省，与 sample 的 `fallback:null` 对齐）
-- [ ] Task 3 admin 配置：commit ____
+- [x] Task 3 admin 配置：commit d38ed89a4（47001-47003 入 error-codes；validator 8 例 + admin service 9 例，scoring 24 例 + dialogue 63 例全绿；全量 1607 例 / 131 套件，8 例失败仍为并行会话 guandan-table.service.spec，零新增；tsc 仅剩并行会话 app.module.ts 1 条历史错误，本任务文件零新增——entity 的 ScoringConfig 需 import type（isolatedModules + emitDecoratorMetadata）；onModuleInit 改 DB 加载 is_active=true 行，全量绿视为与 config/*.ts seeds 等价）
 - [ ] Task 4 客户端展示：commit ____
 - [ ] Task 5 验收：全量 ____ 例 / ____ 套件；tsc 口径 ____；冒烟 ____
