@@ -20,7 +20,7 @@ export class ScoringTables0009 implements MigrationInterface {
       CREATE TABLE IF NOT EXISTS scoring_configs (
         id BIGSERIAL PRIMARY KEY,
         game_id VARCHAR(64) NOT NULL,
-        config JSONB NOT NULL,
+        config JSON NOT NULL,
         is_active BOOLEAN NOT NULL DEFAULT true,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),

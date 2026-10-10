@@ -16,11 +16,12 @@ CREATE TABLE IF NOT EXISTS player_scoring_states (
   CONSTRAINT uq_player_scoring UNIQUE (player_id, game_id)
 );
 
--- 评分配置（每游戏一份 ScoringConfig）
+-- 评分配置（每游戏一份 ScoringConfig；config 用 json 保键序——jsonb 会按长度/字节重排键，
+-- round-trip 后 axes 声明顺序丢失，违反 score 视图「按 config 声明顺序下发」契约）
 CREATE TABLE IF NOT EXISTS scoring_configs (
   id BIGSERIAL PRIMARY KEY,
   game_id VARCHAR(64) NOT NULL,
-  config JSONB NOT NULL,
+  config JSON NOT NULL,
   is_active BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),

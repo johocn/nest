@@ -19,7 +19,7 @@ export class ScoringConfigEntity {
   @Column({ name: 'game_id', type: 'varchar', length: 64 })
   gameId: string;
 
-  @Column({ type: 'jsonb' })
+  @Column({ type: 'json' })
   config: ScoringConfig;
 
   @Column({ name: 'is_active', type: 'boolean', default: true })
