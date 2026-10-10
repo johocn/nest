@@ -1,5 +1,7 @@
 import { Global, Module, OnModuleInit } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScoringService } from './scoring.service';
+import { PlayerScoringState } from './entities/player-scoring-state.entity';
 import { historyTeachConfig } from './config/history-teach.config';
 import { demoRpgConfig } from './config/demo-rpg.config';
 
@@ -9,6 +11,7 @@ import { demoRpgConfig } from './config/demo-rpg.config';
  */
 @Global()
 @Module({
+  imports: [TypeOrmModule.forFeature([PlayerScoringState])],
   providers: [ScoringService],
   exports: [ScoringService],
 })
