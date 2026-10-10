@@ -274,7 +274,8 @@ export class DialogueService {
    *  6. 取**原始** options[optionIndex]，越界 → DIALOGUE_NODE_INVALID；
    *  7. 对该选项 condition 重新求值（防重放：客户端看不到隐藏选项，服务端二次把关）；
    *  8. 执行动作（失败即中止，**不推进**）；
-   *  9. 动作可能改变任务/道具状态 → 重新组装上下文再解析 next 节点。
+   *  9. 评分分支：选项配置 branch 时按评分规则决定 next（与 next 互斥；goto 越树 → NODE_INVALID）；
+   *  10. 动作可能改变任务/道具状态 → 重新组装上下文再解析 next 节点。
    */
   async choose(
     playerId: string,
@@ -334,8 +335,27 @@ export class DialogueService {
       );
     }
 
-    // option.next 为空 → 对话结束
-    if (!option.next) {
+    // 评分分支（阶段 2）：branch 与 next 互斥（结构校验已保证）。
+    // 动作先执行，再按评分规则决定跳转：命中 → goto 节点 key；
+    // 未命中（'default'）→ fallback（缺省 = 结束对话）；
+    // goto 不在树内 → DIALOGUE_NODE_INVALID（配置错误不伪装成结束）。
+    let nextKey: string | null = option.next ?? null;
+    if (option.branch) {
+      const goto = await this.scoringService.resolveBranch(
+        playerId,
+        option.branch.gameId,
+      );
+      nextKey = goto === 'default' ? option.branch.fallback ?? null : goto;
+      if (nextKey && !nodes.some((n) => n.key === nextKey)) {
+        throw new GameException(
+          ErrorCodes.DIALOGUE_NODE_INVALID,
+          `分支 goto 不在该对话树：${nextKey}`,
+        );
+      }
+    }
+
+    // nextKey 为空 → 对话结束
+    if (!nextKey) {
       return {
         code: dialogue.code,
         nodeKey: null,
@@ -351,12 +371,12 @@ export class DialogueService {
       collectFlagKeys(nodes),
       collectScoreGameIds(nodes),
     );
-    const nextNode = resolveNode(nodes, option.next, newCtx);
+    const nextNode = resolveNode(nodes, nextKey, newCtx);
     if (!nextNode) {
       // 不返回 finished，避免把「配置错误/条件未满足」伪装成正常结束
       throw new GameException(
         ErrorCodes.DIALOGUE_CONDITION_NOT_MET,
-        `下一节点当前不可进入：${option.next}`,
+        `下一节点当前不可进入：${nextKey}`,
       );
     }
     return {

@@ -85,6 +85,10 @@
           "next": "wise_end"
         },
         {
+          "text": "听天由命（按评分定结局）",
+          "branch": { "gameId": "history-teach", "fallback": null }
+        },
+        {
           "text": "结束对话",
           "next": null
         }

@@ -1,10 +1,17 @@
+import * as fs from 'fs';
+import * as path from 'path';
+import { Repository } from 'typeorm';
 import { DialogueActionType, QuestStatus } from '@constants/enums';
 import { ErrorCodes } from '@constants/error-codes';
 import {
   GameException,
   GameExceptionResponse,
 } from '@common/exceptions/game.exception';
+import { ScoringService } from '@modules/scoring/scoring.service';
+import { PlayerScoringState } from '@modules/scoring/entities/player-scoring-state.entity';
+import { historyTeachConfig } from '@modules/scoring/config/history-teach.config';
 import { DialogueService } from './dialogue.service';
+import { assertDialogueNodes } from './dialogue.types';
 import { visibleTo } from '@shared/content-scope';
 import { expectScopedFind } from '../../../testing/content-scope-contract.shared';
 
@@ -27,6 +34,21 @@ interface ServiceMocks {
   inventoryService: { addItem: jest.Mock; removeItem: jest.Mock };
   economyService: { addCurrency: jest.Mock };
   quizService: { startOrResume: jest.Mock; draw: jest.Mock };
+  scoringService: ScoringService;
+}
+
+/** 评分状态 fake repo（Map 底座，仅 scoring 语义所需的 findOne/upsert；参照 scoring.service.spec.ts） */
+function makeFakeScoringRepo(): Repository<PlayerScoringState> {
+  const rows = new Map<string, Partial<PlayerScoringState>>(); // key: `${playerId}:${gameId}`
+  return {
+    async findOne({ where }: any): Promise<PlayerScoringState | null> {
+      const row = rows.get(`${where.playerId}:${where.gameId}`);
+      return row ? ({ ...row } as PlayerScoringState) : null;
+    },
+    async upsert(entity: any): Promise<any> {
+      rows.set(`${entity.playerId}:${entity.gameId}`, { ...entity });
+    },
+  } as unknown as Repository<PlayerScoringState>;
 }
 
 function createService(): ServiceMocks {
@@ -56,6 +78,8 @@ function createService(): ServiceMocks {
       .mockResolvedValue({ sessionId: 'sess-1', question: { id: 'q1' } }),
     draw: jest.fn().mockResolvedValue({ questions: [{ id: 'q1' }] }),
   };
+  // 真实 ScoringService + fake repo（分支用例走真实 resolveBranch 规则）
+  const scoringService = new ScoringService(makeFakeScoringRepo());
 
   const service = new DialogueService(
     playerQuestRepo as any,
@@ -68,6 +92,7 @@ function createService(): ServiceMocks {
     inventoryService as any,
     economyService as any,
     quizService as any,
+    scoringService,
   );
 
   return {
@@ -82,6 +107,7 @@ function createService(): ServiceMocks {
     inventoryService,
     economyService,
     quizService,
+    scoringService,
   };
 }
 
@@ -761,6 +787,162 @@ describe('DialogueService.executeAction / choose / start', () => {
       'gameB',
       { count: 2 },
     );
+  });
+});
+
+describe('DialogueService.branch（阶段 2：评分分支接线）', () => {
+  let mocks: ServiceMocks;
+  let service: DialogueService;
+
+  /** branch 演示树：选项 0 = score 动作 + branch；选项 1 = 纯 branch；goto 节点在树内 */
+  const BRANCH_NODES = [
+    {
+      key: 'root',
+      text: '求学吧。',
+      options: [
+        {
+          text: '拜孔子为师',
+          action: DialogueActionType.SCORE,
+          actionArgs: {
+            score: { gameId: 'history-teach', effect: { affinity: { 孔子: 60 } } },
+          },
+          branch: { gameId: 'history-teach', fallback: null },
+        },
+        { text: '听天由命', branch: { gameId: 'history-teach', fallback: null } },
+      ],
+    },
+    { key: 'confucius_route', text: '吾与点也！', options: [{ text: '感谢先生' }] },
+  ];
+
+  function mockBranchDialogue(nodes: any[] = BRANCH_NODES) {
+    mocks.dialogueRepo.findOne.mockResolvedValue({
+      id: '3',
+      code: 'history_teach_demo',
+      nodes,
+      isActive: true,
+    });
+  }
+
+  beforeEach(() => {
+    mocks = createService();
+    service = mocks.service;
+    mocks.scoringService.registerGame(historyTeachConfig);
+  });
+
+  it('dispatch 后选 branch 选项：评分命中 → 跳 goto 节点（confucius_route）', async () => {
+    mockBranchDialogue();
+
+    const view = await service.choose(PLAYER_ID, {
+      code: 'history_teach_demo',
+      nodeKey: 'root',
+      optionIndex: 0,
+    });
+
+    expect(view.finished).toBe(false);
+    expect(view.nodeKey).toBe('confucius_route');
+    expect(view.node?.text).toBe('吾与点也！');
+  });
+
+  it('评分未命中 → 走 fallback（null → finished:true，不伪装成节点）', async () => {
+    mockBranchDialogue();
+    // 先制造一条不命中任何分支规则的评分（好感 0、低轴值）
+    await mocks.scoringService.dispatch(PLAYER_ID, 'history-teach', {
+      axes: { wisdom: 5 },
+    });
+
+    const view = await service.choose(PLAYER_ID, {
+      code: 'history_teach_demo',
+      nodeKey: 'root',
+      optionIndex: 1,
+    });
+
+    expect(view.finished).toBe(true);
+    expect(view.nodeKey).toBeNull();
+    expect(view.node).toBeNull();
+  });
+
+  it('goto 不在该对话树 → DIALOGUE_NODE_INVALID（配置错误不伪装成结束）', async () => {
+    const spy = jest.spyOn(mocks.scoringService, 'resolveBranch');
+    // 注册一份 goto 指向树外节点的评分配置
+    mocks.scoringService.registerGame({
+      gameId: 'branch-test',
+      enabled: ['axis'],
+      axes: { score: { label: '分', min: 0, max: 100, visible: false } },
+      branches: [
+        {
+          id: 'ghost',
+          when: [{ kind: 'axis', id: 'score', op: '>=', value: 10 }],
+          goto: 'ghost_end',
+        },
+      ],
+    });
+    mockBranchDialogue([
+      {
+        key: 'root',
+        text: '...',
+        options: [
+          { text: '分支', branch: { gameId: 'branch-test', fallback: null } },
+        ],
+      },
+      { key: 'real_end', text: '...', options: [{ text: '嗯' }] },
+    ]);
+    await mocks.scoringService.dispatch(PLAYER_ID, 'branch-test', {
+      axes: { score: 99 },
+    });
+
+    const res = await catchGameException(() =>
+      service.choose(PLAYER_ID, {
+        code: 'history_teach_demo',
+        nodeKey: 'root',
+        optionIndex: 0,
+      }),
+    );
+
+    expect(spy).toHaveBeenCalledWith(PLAYER_ID, 'branch-test');
+    expect(res.code).toBe(ErrorCodes.DIALOGUE_NODE_INVALID);
+    expect(String(res.msg)).toContain('ghost_end');
+  });
+
+  it('branch 与 next 同用 → 结构校验失败（DIALOGUE_NODE_INVALID），不触达评分服务', async () => {
+    const spy = jest.spyOn(mocks.scoringService, 'resolveBranch');
+    mockBranchDialogue([
+      {
+        key: 'root',
+        text: '...',
+        options: [
+          {
+            text: '坏配置',
+            next: 'after',
+            branch: { gameId: 'history-teach', fallback: null },
+          },
+        ],
+      },
+      { key: 'after', text: '...', options: [{ text: '嗯' }] },
+    ]);
+
+    const res = await catchGameException(() =>
+      service.choose(PLAYER_ID, {
+        code: 'history_teach_demo',
+        nodeKey: 'root',
+        optionIndex: 0,
+      }),
+    );
+
+    expect(res.code).toBe(ErrorCodes.DIALOGUE_NODE_INVALID);
+    expect(String(res.msg)).toContain('互斥');
+    expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe('history-teach 演示树（samples JSON 结构回归）', () => {
+  it('sample JSON 可被 assertDialogueNodes 接受（branch.fallback:null 视为缺省）', () => {
+    const raw = fs.readFileSync(
+      path.join(__dirname, 'samples', 'history-teach.dialogue.json'),
+      'utf-8',
+    );
+    const parsed = JSON.parse(raw);
+    expect(parsed.code).toBe('history_teach_demo');
+    expect(assertDialogueNodes(parsed.nodes).ok).toBe(true);
   });
 });
 

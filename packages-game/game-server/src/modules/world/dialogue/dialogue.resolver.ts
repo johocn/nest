@@ -174,7 +174,8 @@ export function collectFlagKeys(nodes: DialogueNode[]): string[] {
 }
 
 /**
- * 收集整棵对话树内所有 `condition.score.gameId`（节点级 + 选项级，去重）。
+ * 收集整棵对话树内所有评分 gameId（节点级/选项级 `condition.score.gameId`
+ * 与选项级 `branch.gameId`，去重）。
  * 用途：buildContext 需要知道要拉取哪些游戏的评分快照（无索引，无法枚举）。
  */
 export function collectScoreGameIds(nodes: DialogueNode[]): string[] {
@@ -185,6 +186,8 @@ export function collectScoreGameIds(nodes: DialogueNode[]): string[] {
     for (const opt of node.options ?? []) {
       const og = opt.condition?.score?.gameId;
       if (typeof og === 'string' && og !== '') ids.add(og);
+      const bg = opt.branch?.gameId;
+      if (typeof bg === 'string' && bg !== '') ids.add(bg);
     }
   }
   return Array.from(ids);

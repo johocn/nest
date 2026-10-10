@@ -18,6 +18,8 @@ export interface DialogueOption {
   condition?: DialogueCondition;
   /** 下一节点 key；为空/undefined 表示对话结束 */
   next?: string;
+  /** 评分分支：选中后按评分规则跳转——命中 → goto 节点 key，未命中 → fallback（缺省 = 结束对话）；与 next 互斥 */
+  branch?: { gameId: string; fallback?: string };
   /** 选中后由服务端执行的动作 */
   action?: DialogueActionType;
   /** 动作参数 */
@@ -112,7 +114,8 @@ function isUnconditional(condition: unknown): boolean {
  *  2. 每个节点必须是对象，key 为非空字符串且不重复，text 为字符串，options 为数组；
  *  3. 每个选项必须是对象且 text 为字符串；next 若存在必须指向树内已存在的 key；
  *  4. action 若存在必须在 DialogueActionType 白名单内；
- *  5. 每个节点必须至少有一个**不带 condition** 的选项（风险 #3：防止条件全挡导致对话卡死）。
+ *  5. 每个节点必须至少有一个**不带 condition** 的选项（风险 #3：防止条件全挡导致对话卡死）；
+ *  6. branch 若存在必须是对象：gameId 为非空字符串、fallback 为缺省（undefined/null）或非空字符串、与 next 互斥。
  */
 export function assertDialogueNodes(nodes: unknown): DialogueNodesAssertResult {
   if (!Array.isArray(nodes)) {
@@ -191,6 +194,29 @@ export function assertDialogueNodes(nodes: unknown): DialogueNodesAssertResult {
           errors.push(
             `${optLabel}: action「${String(action)}」不在 DialogueActionType 白名单内`,
           );
+        }
+      }
+
+      // 评分分支：gameId 必填；fallback 缺省（undefined/null）或非空字符串；与 next 互斥
+      const branch = rawOpt.branch;
+      if (branch !== undefined && branch !== null) {
+        if (!isPlainObject(branch)) {
+          errors.push(`${optLabel}: branch 必须是对象`);
+        } else {
+          if (typeof branch.gameId !== 'string' || branch.gameId.trim() === '') {
+            errors.push(`${optLabel}: branch.gameId 必须是非空字符串`);
+          }
+          const fallback = branch.fallback;
+          if (
+            fallback !== undefined &&
+            fallback !== null &&
+            (typeof fallback !== 'string' || fallback.trim() === '')
+          ) {
+            errors.push(`${optLabel}: branch.fallback 必须是非空字符串或缺省`);
+          }
+        }
+        if (next !== undefined && next !== null && next !== '') {
+          errors.push(`${optLabel}: branch 与 next 互斥，不能同时配置`);
         }
       }
     });
