@@ -276,6 +276,11 @@ export const ErrorCodes = {
   APP_CODE_EXISTS: 46102, // app code 已存在
   APP_NOT_FOUND: 46103, // app 不存在
 
+  // 评分系统 47001-47099
+  SCORING_GAME_NOT_FOUND: 47001, // gameId 未注册
+  SCORING_CONFIG_INVALID: 47002, // 配置校验失败
+  SCORING_GAME_EXISTS: 47003, // game_id 已存在（含软删）
+
   // 掼蛋模块 95001-95099
   GUANDAN_TABLE_NOT_FOUND: 95001, // 牌桌不存在或已解散
   GUANDAN_TABLE_FULL: 95002, // 牌桌已满（4 人）

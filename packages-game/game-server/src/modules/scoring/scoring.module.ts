@@ -1,25 +1,35 @@
 import { Global, Module, OnModuleInit } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { InjectRepository, TypeOrmModule } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { ScoringService } from './scoring.service';
 import { PlayerScoringState } from './entities/player-scoring-state.entity';
-import { historyTeachConfig } from './config/history-teach.config';
-import { demoRpgConfig } from './config/demo-rpg.config';
+import { ScoringConfigEntity } from './entities/scoring-config.entity';
+import { ScoringAdminService } from './scoring-admin.service';
+import { ScoringAdminController } from './scoring-admin.controller';
 
 /**
  * 全局评分模块：一次注册，全项目任意模块（对话/quiz/其他游戏）均可注入 ScoringService。
- * 内置两份示例配置，证明「一套引擎，多游戏复用」。各游戏也可自行 registerGame。
+ * 配置入库 scoring_configs：模块初始化加载 is_active=true 行逐个注册（内置示例由
+ * migration seeds 灌入）；admin CRUD 后即时热更新。config/*.ts 保留作单测 fixture 与类型来源。
  */
 @Global()
 @Module({
-  imports: [TypeOrmModule.forFeature([PlayerScoringState])],
-  providers: [ScoringService],
+  imports: [TypeOrmModule.forFeature([PlayerScoringState, ScoringConfigEntity])],
+  providers: [ScoringService, ScoringAdminService],
+  controllers: [ScoringAdminController],
   exports: [ScoringService],
 })
 export class ScoringModule implements OnModuleInit {
-  constructor(private readonly scoringService: ScoringService) {}
+  constructor(
+    private readonly scoringService: ScoringService,
+    @InjectRepository(ScoringConfigEntity)
+    private readonly configRepo: Repository<ScoringConfigEntity>,
+  ) {}
 
-  onModuleInit(): void {
-    this.scoringService.registerGame(historyTeachConfig);
-    this.scoringService.registerGame(demoRpgConfig);
+  async onModuleInit(): Promise<void> {
+    const rows = await this.configRepo.find({ where: { isActive: true } });
+    for (const row of rows) {
+      if (row.config) this.scoringService.registerGame(row.config);
+    }
   }
 }

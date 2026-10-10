@@ -118,11 +118,16 @@ export class ScoringService implements OnModuleInit {
 
   /** 模块初始化时注册内置示例（也可由各游戏模块自行 registerGame） */
   onModuleInit(): void {
-    // 示例配置见 ./config/*（由 ScoringModule 注册）；配置入库与 DB 加载见阶段 2 计划 Task 3
+    // 配置由 ScoringModule 从 scoring_configs 加载注册（admin CRUD 热更新）
   }
 
   registerGame(cfg: ScoringConfig): void {
     this.configs.set(cfg.gameId, cfg);
+  }
+
+  /** 移除游戏注册（admin 软删后调用）：仅删内存 configs，玩家状态行保留 */
+  unregister(gameId: string): void {
+    this.configs.delete(gameId);
   }
 
   private key(playerId: string, gameId: string): string {
