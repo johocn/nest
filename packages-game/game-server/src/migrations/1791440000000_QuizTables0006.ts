@@ -2,7 +2,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 
 /** quiz 题库模块（阶段 2）数据表：题目池 + 结果库 + 测评卷 + 卷条目 + 会话 + 答题流水 */
 export class QuizTables0006 implements MigrationInterface {
-  name = 'QuizTables0006';
+  name = 'QuizTables00061791440000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
