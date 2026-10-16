@@ -9,6 +9,7 @@ import {
   Rules,
   DEFAULT_RULES,
   RoundSettlement,
+  KowtowInfo,
 } from './types';
 import {
   createDeck,
@@ -60,9 +61,14 @@ export function createGame(
     passCount: 0,
     kitty,
     kittyClaimed: false,
+    played: [],
     roundOver: false,
     matchWinner: null,
     lastSettlement: null,
+    kowtow: null,
+    bombCount: 0,
+    log: [],
+    initialHands: players.map((p) => p.hand),
     rules: fullRules,
   };
 }
@@ -75,8 +81,13 @@ function cloneState(s: GameState): GameState {
       ? { seat: s.lastPlay.seat, combo: { ...s.lastPlay.combo, cards: [...s.lastPlay.combo.cards] } }
       : null,
     kitty: [...s.kitty],
+    played: [...s.played],
     rules: { ...s.rules },
     lastSettlement: s.lastSettlement ? { ...s.lastSettlement, finishOrders: { ...s.lastSettlement.finishOrders } } : null,
+    kowtow: s.kowtow ? { ...s.kowtow } : null,
+    bombCount: s.bombCount,
+    log: [...s.log],
+    initialHands: s.initialHands,
   };
 }
 
@@ -155,6 +166,80 @@ function settleRound(s: GameState) {
   s.turn = headSeat;
 }
 
+/** 贡还：依据上一回合结算，败方末游向胜方头游进贡最大牌、头游还最小牌；双下或末游最大牌为王则抗贡 */
+function kowtow(s: GameState) {
+  const settle = s.lastSettlement;
+  s.kowtow = null;
+  if (!settle) return; // 首局无进贡
+
+  const orders = settle.finishOrders;
+  let headSeat = -1;
+  let lastSeat = -1;
+  for (const key of Object.keys(orders)) {
+    const seat = Number(key);
+    if (orders[seat] === 1) headSeat = seat;
+    if (orders[seat] === 4) lastSeat = seat;
+  }
+  if (headSeat < 0 || lastSeat < 0) return;
+
+  const losingTeam = 1 - settle.winningTeam;
+  const losingSeats = [0, 1, 2, 3].filter((seat) => seat % 2 === losingTeam);
+  const losingOrders = losingSeats.map((seat) => orders[seat]).sort((a, b) => a - b);
+  // 双下抗贡：败方包揽 3、4 名
+  const doubleDownAnti = losingOrders[0] === 3 && losingOrders[1] === 4;
+
+  const lastHand = s.players[lastSeat].hand;
+  const biggest = lastHand.reduce<Card | null>(
+    (best, c) => (!best || c.rank > best.rank ? c : best),
+    null,
+  );
+  // 末游最大牌为王 → 抗贡
+  const jokerAnti = !!biggest && isJoker(biggest);
+
+  if (doubleDownAnti || jokerAnti) {
+    const info: KowtowInfo = {
+      anti: true,
+      reason: doubleDownAnti ? 'double-down' : 'joker',
+      giverSeat: lastSeat,
+      receiverSeat: headSeat,
+    };
+    s.kowtow = info;
+    return;
+  }
+
+  // 进贡：末游最大牌 → 头游
+  const given = biggest!;
+  removeCard(s.players[lastSeat].hand, given.id);
+  s.players[headSeat].hand.push(given);
+
+  // 还贡：头游最小牌 → 末游
+  const headHand = s.players[headSeat].hand;
+  const smallest = headHand.reduce<Card | null>(
+    (min, c) => (!min || c.rank < min.rank ? c : min),
+    null,
+  );
+  let returned: Card | undefined;
+  if (smallest) {
+    removeCard(headHand, smallest.id);
+    s.players[lastSeat].hand.push(smallest);
+    returned = smallest;
+  }
+  s.players.forEach((p) => (p.hand = sortHand(p.hand)));
+
+  s.kowtow = {
+    anti: false,
+    giverSeat: lastSeat,
+    receiverSeat: headSeat,
+    given,
+    returned,
+  };
+}
+
+function removeCard(hand: Card[], id: string) {
+  const idx = hand.findIndex((c) => c.id === id);
+  if (idx >= 0) hand.splice(idx, 1);
+}
+
 /** 开启下一回合（保留 level / 头游领衔） */
 export function startNextRound(s: GameState) {
   const { hands, kitty } = deal(createDeck());
@@ -166,11 +251,17 @@ export function startNextRound(s: GameState) {
   });
   s.kitty = kitty;
   s.kittyClaimed = false;
+  s.played = [];
   s.lastPlay = null;
   s.lastPlayerSeat = s.turn;
   s.passCount = 0;
   s.roundOver = false;
   s.phase = 'play';
+  s.bombCount = 0;
+  kowtow(s); // 发牌后执行贡还/抗贡
+  // 贡还结束后作为回放起点：清空动作日志并快照开局手牌
+  s.log = [];
+  s.initialHands = s.players.map((p) => p.hand);
 }
 
 function resolveTrick(s: GameState) {
@@ -183,6 +274,12 @@ function resolveTrick(s: GameState) {
       recipient = !partner.isOut ? partner : s.players[nextActiveSeat(s, winner.seat)];
     }
     recipient.hand = sortHand([...recipient.hand, ...s.kitty]);
+    s.log.push({
+      step: s.log.length + 1,
+      seat: recipient.seat,
+      type: 'kitty',
+      cards: [...s.kitty],
+    });
     s.kittyClaimed = true;
   }
   s.lastPlay = null;
@@ -209,6 +306,7 @@ export function applyAction(state: GameState, seat: number, action: Action): Gam
   if (action.type === 'pass') {
     if (!s.lastPlay) throw new Error('cannot-pass-free-lead');
     me.passedThisTrick = true;
+    s.log.push({ step: s.log.length + 1, seat, type: 'pass' });
     if (allOthersPassed(s)) {
       resolveTrick(s);
     } else {
@@ -228,8 +326,20 @@ export function applyAction(state: GameState, seat: number, action: Action): Gam
   me.passedThisTrick = false;
   for (const p of s.players) p.passedThisTrick = false;
   s.lastPlay = { seat, combo };
+  s.played.push(...chosen);
   s.lastPlayerSeat = seat;
   s.passCount = 0;
+  if (combo.isBomb) s.bombCount++;
+  s.log.push({
+    step: s.log.length + 1,
+    seat,
+    type: 'play',
+    cards: chosen,
+    comboType: combo.type,
+    comboRank: combo.rank,
+    comboLength: combo.length,
+    isBomb: combo.isBomb,
+  });
 
   if (me.hand.length === 0) {
     markOut(s, seat);

@@ -8,13 +8,15 @@ import { ErrorCodes } from '@constants/error-codes';
 import { GameException } from '@common/exceptions/game.exception';
 import { GuandanMode, GuandanTableStatus } from '@constants/enums';
 import {
+  AiLevel,
   GameState,
   Rules,
 } from './engine';
 import { ActionDto } from './guandan.types';
 import { chooseAction } from './engine/bot';
 import * as engine from './engine';
-import { GuandanRoom, GuandanRecord } from './entities';
+import { RANK_LABEL } from './engine/cards';
+import { GuandanRoom, GuandanRecord, GuandanReplay } from './entities';
 import { PlayerService } from '@modules/player/player.service';
 
 interface GuandanTable {
@@ -23,8 +25,12 @@ interface GuandanTable {
   status: GuandanTableStatus;
   members: (string | null)[]; // 长度 4：playerId / 'bot-N' / null
   sockets: (string | null)[]; // 长度 4：各座位当前 socketId
+  hosted: boolean[]; // 长度 4：真人是否开启托管
+  turnDeadline?: number; // 当前手动出牌截止时间戳(ms)，仅手动真人回合存在
   hostSeat: number;
   state: GameState;
+  /** AI 强度档位（对 bot 座位与托管生效） */
+  aiLevel: AiLevel;
   createdAt: string;
 }
 
@@ -34,11 +40,15 @@ const TABLE_TTL = 3600; // 1 小时
 export class GuandanTableService {
   private readonly logger = new Logger(GuandanTableService.name);
   private readonly KEY = (id: string) => `guandan:table:${id}`;
+  private readonly TURN_MS = 30_000; // 手动出牌倒计时 30s
+  private socketIndex = new Map<string, string>(); // socketId -> tableId
+  private timers = new Map<string, NodeJS.Timeout>(); // tableId -> 倒计时定时器
 
   constructor(
     private readonly cache: CacheService,
     @InjectRepository(GuandanRoom) private readonly roomRepo: Repository<GuandanRoom>,
     @InjectRepository(GuandanRecord) private readonly recordRepo: Repository<GuandanRecord>,
+    @InjectRepository(GuandanReplay) private readonly replayRepo: Repository<GuandanReplay>,
     private readonly eventBus: EventBusService,
     private readonly playerService: PlayerService,
   ) {}
@@ -66,6 +76,7 @@ export class GuandanTableService {
     mode: GuandanMode,
     socketId?: string,
     rules?: Partial<Rules>,
+    aiLevel: AiLevel = 'normal',
   ): Promise<{ tableId: string; seat: number; view: any }> {
     const id = this.buildTableId();
     const ai = mode === GuandanMode.AI;
@@ -81,11 +92,16 @@ export class GuandanTableService {
       mode,
       status: ai ? GuandanTableStatus.PLAYING : GuandanTableStatus.WAITING,
       members,
-      sockets: [socketId ?? null, null, null, null],
+      sockets: [null, null, null, null],
+      hosted: [false, false, false, false],
+      turnDeadline: undefined,
       hostSeat,
       state,
+      aiLevel,
       createdAt: new Date().toISOString(),
     };
+    if (socketId) this.setSocket(table, 0, socketId);
+    this.scheduleTurn(table);
     await this.saveTable(table);
 
     await this.safePersist(async () => {
@@ -117,7 +133,8 @@ export class GuandanTableService {
     const existing = table.members.indexOf(playerId);
     if (existing !== -1) {
       if (socketId && table.sockets[existing] !== socketId) {
-        table.sockets[existing] = socketId;
+        this.setSocket(table, existing, socketId);
+        table.hosted[existing] = false; // 重连后恢复手动控制
         await this.saveTable(table);
       }
       return { seat: existing, view: await this.toView(table, existing) };
@@ -126,7 +143,7 @@ export class GuandanTableService {
     const seat = table.members.indexOf(null);
     if (seat === -1) throw new GameException(ErrorCodes.GUANDAN_TABLE_FULL, '牌桌已满（4 人）');
     table.members[seat] = playerId;
-    table.sockets[seat] = socketId ?? null;
+    this.setSocket(table, seat, socketId ?? null);
 
     if (table.mode === GuandanMode.NET && table.members.every((m) => m)) {
       this.fillBots(table);
@@ -135,6 +152,7 @@ export class GuandanTableService {
         table.state.rules,
         table.state.levelIndex,
       );
+      table.hosted = [false, false, false, false];
       table.status = GuandanTableStatus.PLAYING;
       await this.safePersist(async () => {
         const room = await this.roomRepo.findOne({ where: { tableId } });
@@ -147,28 +165,38 @@ export class GuandanTableService {
       }, `mark playing ${tableId}`);
     }
 
+    this.scheduleTurn(table);
     await this.saveTable(table);
     this.eventBus.emit(GameEvents.GUANDAN_TABLE_UPDATED, { tableId });
     return { seat, view: await this.toView(table, seat) };
   }
 
-  /** 断线：仅清空 socket，保留座位便于重连 */
+  /** 断线：清空 socket 并保留座位便于重连；若正轮到该座位则立即 AI 接管（断线兜底） */
   async disconnectBySocket(socketId: string): Promise<void> {
-    const tables = await this.allTables();
-    for (const table of tables) {
-      const seat = table.sockets.indexOf(socketId);
-      if (seat !== -1) {
-        table.sockets[seat] = null;
-        await this.saveTable(table);
-        return;
-      }
+    const tableId = this.socketIndex.get(socketId);
+    if (!tableId) return;
+    const table = await this.loadTable(tableId);
+    if (!table) {
+      this.socketIndex.delete(socketId);
+      return;
     }
-  }
-
-  private async allTables(): Promise<GuandanTable[]> {
-    // 断线场景少，遍历缓存成本高；改为按已知房间号扫描不现实，这里用 event-bus 反查成本高，
-    // 退化为：从最近活跃房间无法定位，直接忽略（重连时 join 会恢复 socket）。
-    return [];
+    const seat = table.sockets.indexOf(socketId);
+    if (seat === -1) {
+      this.socketIndex.delete(socketId);
+      return;
+    }
+    this.setSocket(table, seat, null);
+    if (
+      table.status === GuandanTableStatus.PLAYING &&
+      table.state.matchWinner == null &&
+      !table.state.roundOver &&
+      table.state.turn === seat
+    ) {
+      await this.progress(table);
+      this.scheduleTurn(table);
+    }
+    await this.saveTable(table);
+    this.eventBus.emit(GameEvents.GUANDAN_TABLE_TIMEOUT, { tableId });
   }
 
   /** 空位补 AI（联网模式开局时） */
@@ -193,6 +221,7 @@ export class GuandanTableService {
       table.state.rules,
       table.state.levelIndex,
     );
+    table.hosted = [false, false, false, false];
     table.status = GuandanTableStatus.PLAYING;
 
     await this.safePersist(async () => {
@@ -205,6 +234,7 @@ export class GuandanTableService {
       }
     }, `mark playing ${tableId}`);
 
+    this.scheduleTurn(table);
     await this.saveTable(table);
     this.eventBus.emit(GameEvents.GUANDAN_TABLE_UPDATED, { tableId });
     this.logger.log(`[Guandan] start ${tableId} by ${playerId} (AI 补位)`);
@@ -232,6 +262,7 @@ export class GuandanTableService {
     }
 
     await this.progress(table);
+    this.scheduleTurn(table);
     await this.saveTable(table);
     this.eventBus.emit(GameEvents.GUANDAN_TABLE_UPDATED, { tableId });
     return this.toView(table, seat);
@@ -251,12 +282,15 @@ export class GuandanTableService {
         engine.startNextRound(s);
         continue;
       }
-      if (!this.isBot(table, s.turn)) return;
-      const action = chooseAction(s, s.turn);
+      const seat = s.turn;
+      const auto =
+        this.isBot(table, seat) || !!table.hosted[seat] || table.sockets[seat] == null;
+      if (!auto) return;
+      const action = chooseAction(s, seat, table.aiLevel);
       try {
-        table.state = engine.applyAction(s, s.turn, action as any);
+        table.state = engine.applyAction(s, seat, action as any);
       } catch {
-        table.state = engine.applyAction(s, s.turn, { type: 'pass' } as any);
+        table.state = engine.applyAction(s, seat, { type: 'pass' as any });
       }
     }
   }
@@ -319,14 +353,131 @@ export class GuandanTableService {
     }));
   }
 
+  /** 复盘：取该牌桌全部回合回放（仅房主或参与者可见） */
+  async replay(tableId: string, playerId: string) {
+    try {
+      return await this.queryReplay(tableId, playerId);
+    } catch (err: any) {
+      this.logger.error(`[replay failed] ${tableId}: ${err?.message}`);
+      return [];
+    }
+  }
+
+  private async queryReplay(tableId: string, playerId: string) {
+    const room = await this.roomRepo.findOne({ where: { tableId } });
+    const isHost = room?.hostPlayerId === playerId;
+    const mine = await this.recordRepo.findOne({ where: { tableId, playerId } });
+    if (!isHost && !mine) return [];
+
+    const rows = await this.replayRepo.find({
+      where: { tableId },
+      order: { createdAt: 'ASC' },
+    });
+    return rows.map((r) => ({
+      id: String(r.id),
+      tableId: r.tableId,
+      level: r.level,
+      players: r.playersJson,
+      initialHands: r.initialHandsJson,
+      actions: r.actionsJson,
+      settlement: r.settlementJson,
+      kowtow: r.kowtowJson,
+      createdAt: r.createdAt,
+    }));
+  }
+
   async leaveTable(tableId: string, playerId: string): Promise<void> {
     const table = await this.loadTable(tableId);
     if (!table) return;
     const seat = table.members.indexOf(playerId);
     if (seat === -1) return;
-    table.sockets[seat] = null;
+    this.setSocket(table, seat, null);
     if (table.mode === GuandanMode.NET) table.members[seat] = null;
     await this.saveTable(table);
+  }
+
+  // ===== 托管 / 倒计时 / 断线兜底 =====
+  /** 真人切换托管；开启且轮到本人时立即由 AI 接管 */
+  async setHost(tableId: string, playerId: string, on: boolean): Promise<{ view: any }> {
+    const table = await this.loadTable(tableId);
+    if (!table) throw new GameException(ErrorCodes.GUANDAN_TABLE_NOT_FOUND, '牌桌不存在或已解散');
+    const seat = table.members.indexOf(playerId);
+    if (seat === -1) throw new GameException(ErrorCodes.GUANDAN_PLAYER_NOT_IN_TABLE, '你不在该牌桌');
+    table.hosted[seat] = on;
+    if (
+      on &&
+      table.status === GuandanTableStatus.PLAYING &&
+      table.state.matchWinner == null &&
+      !table.state.roundOver &&
+      table.state.turn === seat
+    ) {
+      const action = chooseAction(table.state, seat, table.aiLevel);
+      try {
+        table.state = engine.applyAction(table.state, seat, action as any);
+      } catch {
+        table.state = engine.applyAction(table.state, seat, { type: 'pass' as any });
+      }
+      await this.progress(table);
+    }
+    this.scheduleTurn(table);
+    await this.saveTable(table);
+    this.eventBus.emit(GameEvents.GUANDAN_TABLE_UPDATED, { tableId });
+    return { view: await this.toView(table, seat) };
+  }
+
+  /** 安排当前回合倒计时：仅当轮到「手动真人」时设置截止时间并启动定时器 */
+  private scheduleTurn(table: GuandanTable) {
+    this.clearTimer(table.id);
+    const s = table.state;
+    table.turnDeadline = undefined;
+    if (table.status !== GuandanTableStatus.PLAYING) return;
+    if (s.matchWinner != null || s.roundOver) return;
+    const seat = s.turn;
+    const manual = !this.isBot(table, seat) && !table.hosted[seat] && table.sockets[seat] != null;
+    if (!manual) return;
+    table.turnDeadline = Date.now() + this.TURN_MS;
+    this.timers.set(
+      table.id,
+      setTimeout(() => void this.onTurnTimeout(table.id), this.TURN_MS + 250),
+    );
+  }
+
+  private clearTimer(tableId: string) {
+    const t = this.timers.get(tableId);
+    if (t) {
+      clearTimeout(t);
+      this.timers.delete(tableId);
+    }
+  }
+
+  /** 倒计时到点：超时玩家由 AI 代打一次（领出则出最小牌，跟牌则过牌/最小压牌） */
+  private async onTurnTimeout(tableId: string) {
+    this.clearTimer(tableId);
+    const table = await this.loadTable(tableId);
+    if (!table) return;
+    const s = table.state;
+    if (s.matchWinner != null || s.roundOver) return;
+    const seat = s.turn;
+    if (this.isBot(table, seat) || table.hosted[seat] || table.sockets[seat] == null) return;
+    table.turnDeadline = undefined;
+    const action = chooseAction(s, seat, table.aiLevel);
+    try {
+      table.state = engine.applyAction(s, seat, action as any);
+    } catch {
+      table.state = engine.applyAction(s, seat, { type: 'pass' as any });
+    }
+    await this.progress(table);
+    this.scheduleTurn(table);
+    await this.saveTable(table);
+    this.eventBus.emit(GameEvents.GUANDAN_TABLE_TIMEOUT, { tableId });
+  }
+
+  /** 更新某座位 socket 并同步索引（旧 socket 自动失效） */
+  private setSocket(table: GuandanTable, seat: number, socketId: string | null) {
+    const old = table.sockets[seat];
+    if (old && old !== socketId) this.socketIndex.delete(old);
+    table.sockets[seat] = socketId;
+    if (socketId) this.socketIndex.set(socketId, table.id);
   }
 
   // ===== 内部：视图构建 =====
@@ -368,6 +519,8 @@ export class GuandanTableService {
         handCount: ps.hand.length,
         isCurrentTurn: s.turn === i && !s.roundOver && s.matchWinner == null,
         passed: ps.passedThisTrick,
+        connected: table.sockets[i] != null,
+        hosted: !!table.hosted[i],
         hand: reveal || isMe ? ps.hand : [],
       };
     });
@@ -386,6 +539,7 @@ export class GuandanTableService {
     return {
       roomId: table.id,
       mode: table.mode,
+      aiLevel: table.aiLevel,
       state: {
         level: s.level,
         levelLabel: this.levelLabel(s.level),
@@ -398,6 +552,10 @@ export class GuandanTableService {
         roundOver: s.roundOver,
         matchWinner: s.matchWinner,
         settlement: s.lastSettlement,
+        turnDeadline: table.turnDeadline ?? null,
+        counter: this.buildCounter(s, seat),
+        kowtow: s.kowtow ?? null,
+        bombCount: s.bombCount,
         rules: s.rules,
       },
       players,
@@ -416,6 +574,29 @@ export class GuandanTableService {
     return map[level] ?? String(level);
   }
 
+  /** 记牌器：以查看座位视角统计各点数/王还剩多少张未现（= 总张数 - 自己手牌 - 已打出） */
+  private buildCounter(s: GameState, seat: number): {
+    rank: number;
+    label: string;
+    left: number;
+    total: number;
+  }[] {
+    const total: Record<number, number> = {};
+    for (const r of [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]) total[r] = 8;
+    total[16] = 2; // 小王
+    total[17] = 2; // 大王
+    const me = s.players[seat];
+    for (const c of me.hand) total[c.rank] = (total[c.rank] ?? 0) - 1;
+    for (const c of s.played ?? []) total[c.rank] = (total[c.rank] ?? 0) - 1;
+    const order = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17];
+    return order.map((r) => ({
+      rank: r,
+      label: r <= 15 ? RANK_LABEL[r] : r === 16 ? '小' : '大',
+      left: Math.max(0, total[r] ?? 0),
+      total: r <= 15 ? 8 : 2,
+    }));
+  }
+
   private async saveTable(table: GuandanTable) {
     await this.cache.set(this.KEY(table.id), JSON.stringify(table), TABLE_TTL);
   }
@@ -423,7 +604,15 @@ export class GuandanTableService {
   private async loadTable(id: string): Promise<GuandanTable | null> {
     const raw = await this.cache.get(this.KEY(id));
     if (!raw) return null;
-    return JSON.parse(raw as string) as GuandanTable;
+    const t = JSON.parse(raw as string) as GuandanTable;
+    if (!Array.isArray(t.hosted) || t.hosted.length !== 4) {
+      t.hosted = [false, false, false, false];
+    }
+    // 旧存档无 aiLevel，兜底为标准档
+    if (t.aiLevel !== 'easy' && t.aiLevel !== 'normal' && t.aiLevel !== 'hard') {
+      t.aiLevel = 'normal';
+    }
+    return t;
   }
 
   private async persistRound(table: GuandanTable) {
@@ -453,6 +642,7 @@ export class GuandanTableService {
         await this.recordRepo.save(rec);
       }
     }, `round ${table.id}`);
+    await this.saveReplay(table);
     this.eventBus.emit(GameEvents.GUANDAN_TABLE_FINISHED, { tableId: table.id, round: true });
   }
 
@@ -467,7 +657,31 @@ export class GuandanTableService {
         await this.roomRepo.save(room);
       }
     }, `finish ${table.id}`);
+    await this.saveReplay(table);
     this.eventBus.emit(GameEvents.GUANDAN_TABLE_FINISHED, { tableId: table.id });
+  }
+
+  /** 归档本回合回放：开局手牌快照 + 动作日志（供复盘逐步重放） */
+  private async saveReplay(table: GuandanTable) {
+    const s = table.state;
+    if (!s.log?.length) return;
+    await this.safePersist(async () => {
+      const names = await this.namesOf(table);
+      const row = this.replayRepo.create({
+        tableId: table.id,
+        level: s.level,
+        playersJson: table.members.map((m, i) => ({
+          seat: i,
+          nickname: names[i],
+          isBot: !!m && m.startsWith('bot'),
+        })),
+        initialHandsJson: s.initialHands,
+        actionsJson: s.log,
+        settlementJson: s.lastSettlement,
+        kowtowJson: s.kowtow,
+      });
+      await this.replayRepo.save(row);
+    }, `replay ${table.id}`);
   }
 
   /** 落库失败只记日志，不影响牌局进行 */

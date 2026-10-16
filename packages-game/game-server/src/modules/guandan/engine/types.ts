@@ -101,6 +101,22 @@ export interface RoundSettlement {
   desc: string;
 }
 
+/** 进贡/还贡（贡还）信息，用于开局展示 */
+export interface KowtowInfo {
+  /** 是否抗贡（免贡） */
+  anti: boolean;
+  /** 抗贡原因：'double-down'=双下, 'joker'=末游最大牌为王 */
+  reason?: 'double-down' | 'joker';
+  /** 进贡者座位（末游） */
+  giverSeat?: number;
+  /** 收贡者座位（头游） */
+  receiverSeat?: number;
+  /** 进贡打出的牌（末游最大牌） */
+  given?: Card;
+  /** 还贡的牌（头游最小牌） */
+  returned?: Card;
+}
+
 export interface GameState {
   /** 当前级数的 rank 值：15=2 ... 14=A */
   level: number;
@@ -119,11 +135,38 @@ export interface GameState {
   kitty: Card[];
   /** 底牌是否已发放 */
   kittyClaimed: boolean;
+  /** 本回合已打出的所有牌（用于记牌器统计剩余） */
+  played: Card[];
   /** 是否已完成一回合（等待开下一回合） */
   roundOver: boolean;
   /** 整局胜负：冠军队（0/1），未分胜负为 null */
   matchWinner: number | null;
   /** 最近一次回合结算 */
   lastSettlement: RoundSettlement | null;
+  /** 本回合开局贡还信息（进贡/还贡/抗贡），无则为 null */
+  kowtow: KowtowInfo | null;
+  /** 本回合已出现的炸弹数（含王炸/同花顺炸），用于前端音效触发 */
+  bombCount: number;
+  /** 本回合动作日志（回放用，开局/贡还后清空） */
+  log: GameLogEntry[];
+  /** 本回合开局手牌快照（贡还之后），回放起点：index=座位 */
+  initialHands: Card[][];
   rules: Rules;
+}
+
+/** AI 强度档位：easy=新手, normal=标准, hard=高手 */
+export type AiLevel = 'easy' | 'normal' | 'hard';
+
+/** 回放动作日志条目 */
+export interface GameLogEntry {
+  step: number;
+  seat: number;
+  /** play=出牌, pass=过牌, kitty=领取底牌 */
+  type: 'play' | 'pass' | 'kitty';
+  /** 出牌/底牌的具体牌；pass 为空 */
+  cards?: Card[];
+  comboType?: Combo['type'];
+  comboRank?: number;
+  comboLength?: number;
+  isBomb?: boolean;
 }

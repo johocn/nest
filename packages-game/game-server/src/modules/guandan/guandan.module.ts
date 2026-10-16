@@ -6,7 +6,9 @@ import { GuandanTableService } from './guandan-table.service';
 import { GuandanService } from './guandan.service';
 import { GuandanGateway } from './guandan.gateway';
 import { GuandanController } from './guandan.controller';
-import { GuandanRoom, GuandanRecord } from './entities';
+import { GuandanRoom, GuandanRecord, GuandanReplay } from './entities';
+import { GuandanSocialService } from './guandan-social.service';
+import { Friend } from '@modules/social/entities/friend.entity';
 import { CacheModule } from '@cache/cache.module';
 import { EventBusModule } from '@event-bus/event-bus.module';
 import { AuthModule } from '@modules/auth/auth.module';
@@ -14,7 +16,7 @@ import { PlayerModule } from '@modules/player/player.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([GuandanRoom, GuandanRecord]),
+    TypeOrmModule.forFeature([GuandanRoom, GuandanRecord, GuandanReplay, Friend]),
     CacheModule,
     EventBusModule,
     AuthModule,
@@ -29,7 +31,7 @@ import { PlayerModule } from '@modules/player/player.module';
     }),
   ],
   controllers: [GuandanController],
-  providers: [GuandanTableService, GuandanService, GuandanGateway],
+  providers: [GuandanTableService, GuandanSocialService, GuandanService, GuandanGateway],
   exports: [GuandanService],
 })
 export class GuandanModule {}

@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  html,
+  body,
+  #app {
+    height: 100%;
+    margin: 0;
+  }
+  body {
+    font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+    color: #f5f1e6;
+    background:
+      radial-gradient(120% 120% at 50% 0%, #0f4a38 0%, #0b3d2e 38%, #072a20 100%);
+    background-attachment: fixed;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply rounded-2xl border border-gold-400/25 bg-white/5 backdrop-blur-xl shadow-card;
+  }
+  .gold-text {
+    @apply bg-gradient-to-r from-gold-300 via-gold-400 to-gold-300 bg-clip-text text-transparent;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .btn-gold {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 bg-gradient-to-r from-gold-300 to-gold-400 text-felt-900 shadow-glow hover:brightness-105;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 border border-gold-400/30 text-gold-300 hover:bg-gold-400/10;
+  }
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 border border-gold-500/40 text-red-300 hover:bg-red-500/10;
+  }
+  .input {
+    @apply w-full rounded-xl border border-gold-400/25 bg-black/20 px-3 py-2 text-felt-50 placeholder:text-felt-50/30 outline-none focus:border-gold-400/60 focus:ring-2 focus:ring-gold-400/20;
+  }
+  .safe-top {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 0.25rem);
+  }
+  .safe-bottom {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
+  }
+}
