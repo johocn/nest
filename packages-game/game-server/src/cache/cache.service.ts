@@ -29,11 +29,66 @@ export class CacheService implements OnModuleInit, OnModuleDestroy {
     this.client.on('connect', () => {
       this.logger.log('Redis connected');
     });
-    await this.client.connect();
+    try {
+      await this.client.connect();
+    } catch (err) {
+      this.logger.warn(
+        `Redis 连接失败，CacheService 降级为内存 no-op（应用继续启动）： ${(err as Error).message}`,
+      );
+      this.client = this.createDegradedClient();
+    }
   }
 
   async onModuleDestroy() {
-    await this.client.disconnect();
+    try {
+      await this.client.disconnect();
+    } catch {
+      // 降级模式下 client 为内存 no-op，disconnect 无需处理
+    }
+  }
+
+  /**
+   * Redis 不可用时的内存降级实现：所有操作静默返回安全默认值，
+   * 不影响应用启动与无缓存依赖的业务（如狼人杀内存状态机）。
+   */
+  private createDegradedClient(): RedisClientType {
+    const fallback = (name: string): any => {
+      switch (name) {
+        case 'get':
+        case 'hGet':
+          return null;
+        case 'hGetAll':
+          return {};
+        case 'sMembers':
+        case 'zRange':
+        case 'zRangeWithScores':
+          return [];
+        case 'exists':
+        case 'expire':
+        case 'releaseLock':
+          return false;
+        case 'acquireLock':
+          return true;
+        case 'set':
+          return 'OK';
+        default:
+          return 0;
+      }
+    };
+    return new Proxy({} as RedisClientType, {
+      get(_target, prop: string | symbol) {
+        const name = String(prop);
+        if (
+          name === 'on' ||
+          name === 'connect' ||
+          name === 'disconnect' ||
+          name === 'quit'
+        ) {
+          return () => undefined;
+        }
+        return async () => fallback(name);
+      },
+    }) as unknown as RedisClientType;
   }
 
   // ===== String 操作 =====
