@@ -1,5 +1,9 @@
 import { AppConfig } from '../config/AppConfig';
 import type { Entity } from '../entity/Entity';
+import { ChatPanel } from '../ui/ChatPanel';
+import { MatchPanel } from '../ui/MatchPanel';
+import { InventoryPanel } from '../ui/InventoryPanel';
+import { MailPanel } from '../ui/MailPanel';
 import type { WsClient } from '../net/ws';
 import { clampToMapBounds, moveDelta } from './move-step';
 import { isWorldPaused } from './worldControl';
@@ -38,10 +42,29 @@ export class PlayerControl {
     );
   }
 
+  /**
+   * 释放所有 timer / 事件监听 + 清空按键集合。
+   * 支持「退出登录 → 重新登录」「切换场景」等路径的生命周期回收。
+   */
+  detach(): void {
+    Laya.stage.off(Laya.Event.KEY_DOWN, this, this.onKeyDown);
+    Laya.stage.off(Laya.Event.KEY_UP, this, this.onKeyUp);
+    Laya.timer.clearAll(this);
+    this.pressed.clear();
+  }
+
   private onKeyDown(e: Laya.Event): void {
     // 主世界挂起（狼人杀对局中）时不再接受移动按键；
     // keyUp 故意不早退，否则暂停期间松手会残留「一直按住」的幽灵状态
     if (isWorldPaused()) return;
+    // 聊天输入/匹配/背包/邮件面板打开时忽略按键（防误触移动）
+    if (
+      ChatPanel.isOpen ||
+      MatchPanel.isOpen ||
+      InventoryPanel.isOpen ||
+      MailPanel.isOpen
+    )
+      return;
     this.pressed.add(PlayerControl.normKey(e));
   }
 
@@ -54,6 +77,19 @@ export class PlayerControl {
   }
 
   /**
+   * S9 触控：虚拟摇杆把**与键盘同名**的键注入/移出按下集合（`'w'/'a'/'s'/'d'`），
+   * 之后完全复用 `onFrame` 的位移与 10Hz 上报链路 —— 键盘路径、上报口径、WS 契约零变更。
+   * 由摇杆差量调用（只动自己注入的键，不碰键盘按住的键）。
+   */
+  press(key: string): void {
+    this.pressed.add(String(key).toLowerCase());
+  }
+
+  release(key: string): void {
+    this.pressed.delete(String(key).toLowerCase());
+  }
+
+  /**
    * S8 Task 5（D7）：改**时间基** —— 位移 = `speedPxPerMs × Laya.timer.delta`（毫秒），
    * 60fps 与 30fps 手感一致（等价性由纯函数 `world/move-step` 的断言证明）。
    * 上报口径（`moveReportIntervalMs` / `moveReportThreshold`）与上报时机**逐字未改**。
@@ -63,6 +99,16 @@ export class PlayerControl {
     // 否则会出现「人在对局界面里偷偷移动」并持续占用上报带宽
     if (isWorldPaused()) return;
     const p = this.pressed;
+    // 聊天输入/匹配/背包面板打开：清空残留按键并停走（防止开面板前按住的键持续移动）
+    if (
+      ChatPanel.isOpen ||
+      MatchPanel.isOpen ||
+      InventoryPanel.isOpen ||
+      MailPanel.isOpen
+    ) {
+      if (p.size > 0) p.clear();
+      return;
+    }
     let dx = 0;
     let dy = 0;
     if (p.has(KEY_LEFT) || p.has(KEY_ARROW_LEFT)) dx -= 1;

@@ -5,6 +5,7 @@ import { LoggerModule } from '@logger/logger.module';
 import { CacheModule } from '@cache/cache.module';
 import { EventBusModule } from '@event-bus/event-bus.module';
 import { EventListenersModule } from '@event-bus/event-listeners.module';
+import { AppsModule } from '@modules/apps/apps.module';
 import { AuthModule } from '@modules/auth/auth.module';
 import { AdminSessionModule } from '@modules/auth/admin-session.module';
 import { PlayerModule } from '@modules/player/player.module';
@@ -18,6 +19,8 @@ import { SkillModule } from '@modules/skill/skill.module';
 import { BuffModule } from '@modules/buff/buff.module';
 import { CombatModule } from '@modules/combat/combat.module';
 import { QuestModule } from '@modules/quest/quest.module';
+import { QuizModule } from '@modules/quiz/quiz.module';
+import { ScoringModule } from '@modules/scoring/scoring.module';
 import { MailModule } from '@modules/mail/mail.module';
 import { SocialModule } from '@modules/social/social.module';
 import { AdminModule } from '@modules/admin/admin.module';
@@ -35,6 +38,7 @@ import { PaymentModule } from '@modules/payment/payment.module';
 import { VipModule } from '@modules/vip/vip.module';
 import { SandboxModule } from '@modules/sandbox/sandbox.module';
 import { MatchmakingModule } from '@modules/matchmaking/matchmaking.module';
+import { SichuanMahjongModule } from '@modules/sichuanmajiang/sichuanmajiang.module';
 import { OfflineModule } from '@modules/offline/offline.module';
 import { EcoModule } from '@modules/eco/eco.module';
 import { LadderModule } from '@modules/ladder/ladder.module';
@@ -43,6 +47,9 @@ import { ReconcileModule } from '@modules/reconcile/reconcile.module';
 import { RealmModule } from '@modules/realm/realm.module';
 import { ExploreModule } from '@modules/explore/explore.module';
 import { WerewolfModule } from '@modules/werewolf/werewolf.module';
+import { GiftCodeModule } from '@modules/giftcode/giftcode.module';
+import { GuandanModule } from '@modules/guandan/guandan.module';
+import { TraceModule } from '@common/trace/trace.module';
 import { SchedulerModule } from '@scheduler/scheduler.module';
 import { HealthModule } from '@health/health.module';
 import { RequestIdMiddleware } from '@common/middleware/request-id.middleware';
@@ -62,6 +69,7 @@ import { RateLimitGuard } from '@common/guards/rate-limit.guard';
     AdminSessionModule,
 
     // 第三层：功能模块（后续阶段逐步添加）
+    AppsModule,
     AuthModule,
     PlayerModule,
     EconomyModule,
@@ -74,6 +82,8 @@ import { RateLimitGuard } from '@common/guards/rate-limit.guard';
     BuffModule,
     CombatModule,
     QuestModule,
+    QuizModule,
+    ScoringModule,
     MailModule,
     SocialModule,
     AdminModule,
@@ -91,6 +101,7 @@ import { RateLimitGuard } from '@common/guards/rate-limit.guard';
     VipModule,
     SandboxModule,
     MatchmakingModule,
+    SichuanMahjongModule,
     OfflineModule,
     EcoModule,
     LadderModule,
@@ -99,6 +110,11 @@ import { RateLimitGuard } from '@common/guards/rate-limit.guard';
     RealmModule,
     ExploreModule,
     WerewolfModule,
+    GiftCodeModule,
+    GuandanModule,
+
+    // 可观测性
+    TraceModule,
 
     // 定时任务
     SchedulerModule,

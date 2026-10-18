@@ -1,0 +1,31 @@
+<div id="gm-panel" hidden>
+  <div class="gm-header">
+    <span class="gm-title">GM 控制台</span>
+    <button class="gm-close" title="关闭 (Ctrl+G / ~)" onclick="window.__toggleGMPanel()">&#x2715;</button>
+  </div>
+  <div class="gm-body">
+    <div class="gm-sidebar"></div>
+    <div class="gm-content">
+      <!-- 未登录时显示登录表单 -->
+      <div class="gm-login-form" id="gm-login-form" hidden>
+        <div style="margin-bottom: 6px; color: #888; font-size: 12px;">请先登录管理员账号</div>
+        <input type="text" id="gm-admin-user" placeholder="Admin 用户名" />
+        <input type="password" id="gm-admin-pass" placeholder="Admin 密码" />
+        <button id="gm-login-btn">登录</button>
+        <div style="color: #666; font-size: 11px; margin-top: 4px;">
+          登录后 token 存于 localStorage.admin_token
+        </div>
+      </div>
+
+      <!-- 已登录显示的主内容区 -->
+      <template id="gm-main-tpl">
+        <div class="gm-player-row">
+          <input type="text" class="gm-player-id" placeholder="目标玩家 ID (可选)" />
+          <button class="gm-exec-btn">执行</button>
+        </div>
+        <div class="gm-args-area"></div>
+        <div class="gm-log"></div>
+      </template>
+    </div>
+  </div>
+</div>

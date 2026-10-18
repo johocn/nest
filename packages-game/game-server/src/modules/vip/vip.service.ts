@@ -32,9 +32,7 @@ export class VipService {
     return this.playerService.addVipExp(playerId, exp);
   }
 
-  async getVipInfo(
-    playerId: string,
-  ): Promise<{
+  async getVipInfo(playerId: string): Promise<{
     vipLevel: number;
     vipExp: number;
     requiredExp: number;
@@ -179,5 +177,13 @@ export class VipService {
   async deleteConfig(level: number): Promise<{ deleted: boolean }> {
     const result = await this.configRepo.delete({ level });
     return { deleted: (result.affected ?? 0) > 0 };
+  }
+
+  async getConfigDetail(level: number): Promise<VipConfig | null> {
+    return this.configRepo.findOne({ where: { level } });
+  }
+
+  async getPlayersByVipLevel(level: number, page: number, limit: number) {
+    return this.playerService.findByVipLevel(level, page, limit);
   }
 }

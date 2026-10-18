@@ -84,15 +84,11 @@ export class ActivityService {
     }
     return templates.filter(
       (t) =>
-        t.status === ActivityStatus.ACTIVE ||
-        this.isWhitelisted(t, playerId),
+        t.status === ActivityStatus.ACTIVE || this.isWhitelisted(t, playerId),
     );
   }
 
-  private isWhitelisted(
-    template: ActivityTemplate,
-    playerId: string,
-  ): boolean {
+  private isWhitelisted(template: ActivityTemplate, playerId: string): boolean {
     const whitelist = template.grayWhitelistJson ?? {};
     if (Array.isArray(whitelist)) {
       return whitelist.includes(playerId);
@@ -119,10 +115,7 @@ export class ActivityService {
     return hash % 100 < Math.min(percent, 100);
   }
 
-  private assertPlayable(
-    template: ActivityTemplate,
-    playerId: string,
-  ): void {
+  private assertPlayable(template: ActivityTemplate, playerId: string): void {
     if (template.status !== ActivityStatus.ACTIVE) {
       if (
         template.status === ActivityStatus.GRAY &&
@@ -188,7 +181,7 @@ export class ActivityService {
       const required = FAVOR_RANKS[cond.favorLevel] ?? 0;
       const maxRank = relationships.reduce((max, rel) => {
         const rank = rel.level
-          ? FAVOR_RANKS[rel.level] ?? 0
+          ? (FAVOR_RANKS[rel.level] ?? 0)
           : favorRankOf(rel.favorability);
         return Math.max(max, rank);
       }, 0);
@@ -203,7 +196,7 @@ export class ActivityService {
     if (cond.guildRole !== undefined) {
       const myRole = await this.socialService.getMyGuildRole(playerId);
       const required = GUILD_ROLE_RANKS[cond.guildRole] ?? 0;
-      const rank = myRole ? GUILD_ROLE_RANKS[myRole.role] ?? 0 : 0;
+      const rank = myRole ? (GUILD_ROLE_RANKS[myRole.role] ?? 0) : 0;
       if (rank < required) {
         throw new GameException(
           ErrorCodes.ACTIVITY_CONDITION_NOT_MET,
@@ -450,7 +443,9 @@ export class ActivityService {
     await this.adminService.logOperation({
       adminId,
       targetPlayerId: activityId,
-      operation: passed ? 'activity.gray_verify_pass' : 'activity.gray_verify_fail',
+      operation: passed
+        ? 'activity.gray_verify_pass'
+        : 'activity.gray_verify_fail',
       changeBefore: before,
       changeAfter: {
         id: saved.id,
@@ -630,5 +625,40 @@ export class ActivityService {
     if (!template) return null;
     Object.assign(template, data);
     return this.templateRepo.save(template);
+  }
+
+  async getTemplate(id: string): Promise<ActivityTemplate | null> {
+    return this.templateRepo.findOne({ where: { id } });
+  }
+
+  async listTemplatesWithFilter(
+    filter: { status?: ActivityStatus; activityType?: ActivityType },
+    page: number,
+    limit: number,
+  ): Promise<{ items: ActivityTemplate[]; total: number }> {
+    const where: any = {};
+    if (filter.status) where.status = filter.status;
+    if (filter.activityType) where.activityType = filter.activityType;
+    const [items, total] = await this.templateRepo.findAndCount({
+      where,
+      skip: (page - 1) * limit,
+      take: limit,
+      order: { createdAt: 'DESC' },
+    });
+    return { items, total };
+  }
+
+  async getParticipants(
+    activityId: string,
+    page: number,
+    limit: number,
+  ): Promise<{ items: PlayerActivity[]; total: number }> {
+    const [items, total] = await this.playerActivityRepo.findAndCount({
+      where: { activityId },
+      skip: (page - 1) * limit,
+      take: limit,
+      order: { joinedAt: 'DESC' },
+    });
+    return { items, total };
   }
 }

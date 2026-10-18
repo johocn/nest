@@ -55,7 +55,9 @@ export const INTERACT_STRATEGY = {
 } satisfies Record<InteractType, InteractStrategy>;
 
 /** 运行时 kind 列表（TS 联合类型在运行时被擦除，断言脚本需要真实数组）＝映射表的键全集 */
-export const INTERACT_KINDS = Object.keys(INTERACT_STRATEGY) as readonly InteractType[];
+export const INTERACT_KINDS = Object.keys(
+  INTERACT_STRATEGY,
+) as readonly InteractType[];
 
 /** 未登记的 kind（schema 之外的取值）解析为 null，由 registry 统一收口到占位组件 */
 export function resolveStrategy(kind: string): InteractStrategy | null {

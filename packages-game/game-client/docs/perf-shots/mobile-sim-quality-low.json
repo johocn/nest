@@ -1,0 +1,256 @@
+{
+  "label": "mobile-sim-quality-low",
+  "at": "2026-09-24T13:48:04.112Z",
+  "commit": "9cc58bf84",
+  "dirty": true,
+  "mode": "移动端模拟（非真机）",
+  "browser": "151.0.7922.34",
+  "headless": false,
+  "mobile": {
+    "vw": 915,
+    "vh": 412,
+    "dpr": 1.75,
+    "isMobile": true,
+    "hasTouch": true,
+    "userAgent": "Mozilla/5.0 (Linux; Android 10; SM-A105F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+  },
+  "url": "http://localhost:5173/?quality=low",
+  "cpuThrottle": 0,
+  "quality": "low",
+  "timing": {
+    "T1_s": 0.41,
+    "T2_s": 0.33,
+    "T3_s": 0.74
+  },
+  "padGeometry": {
+    "scale": 0.644,
+    "ox": 149,
+    "oy": 0,
+    "canvas": {
+      "w": 618,
+      "h": 412
+    },
+    "stage": {
+      "w": 960,
+      "h": 640
+    },
+    "buttons": [
+      {
+        "text": "↖",
+        "sx": 44,
+        "sy": 452,
+        "w": 64,
+        "h": 64
+      },
+      {
+        "text": "↑",
+        "sx": 116,
+        "sy": 452,
+        "w": 64,
+        "h": 64
+      },
+      {
+        "text": "↗",
+        "sx": 188,
+        "sy": 452,
+        "w": 64,
+        "h": 64
+      },
+      {
+        "text": "←",
+        "sx": 44,
+        "sy": 524,
+        "w": 64,
+        "h": 64
+      },
+      {
+        "text": "→",
+        "sx": 188,
+        "sy": 524,
+        "w": 64,
+        "h": 64
+      },
+      {
+        "text": "↙",
+        "sx": 44,
+        "sy": 596,
+        "w": 64,
+        "h": 64
+      },
+      {
+        "text": "↓",
+        "sx": 116,
+        "sy": 596,
+        "w": 64,
+        "h": 64
+      },
+      {
+        "text": "↘",
+        "sx": 188,
+        "sy": 596,
+        "w": 64,
+        "h": 64
+      },
+      {
+        "text": "交互",
+        "sx": 892,
+        "sy": 556,
+        "w": 88,
+        "h": 88
+      }
+    ]
+  },
+  "interact": {
+    "spot": {
+      "x": 720,
+      "y": 400,
+      "expect": "stone_01 (720,400)，半径 70；最近 NPC smith(700,520) 距离 122 > 90"
+    },
+    "posAtSpot": {
+      "x": 724,
+      "y": 392
+    },
+    "hudAtSpot": "登录成功：playerId=1 | 按 F 交互：object:2",
+    "hudAfter": "采集成功，获得 8 gold | 按 F 交互：npcs:4:0",
+    "touchDelivered": 1,
+    "hits": [
+      "201 POST /api/client/v1/world/objects/2/interact"
+    ],
+    "toastLine": "[S3] 采集返回 {\"ok\":true,\"reward\":{\"currencyType\":\"gold\",\"amount\":8}}"
+  },
+  "route": "→ 0.95s → ↓ 0.95s → ← 0.95s → ↑ 0.95s → → 1.2s",
+  "moveSamples": [
+    {
+      "t": 1.01,
+      "fps": 60,
+      "statFps": 60,
+      "drawcall": 28,
+      "entityTotal": 17,
+      "entityVisible": 17,
+      "upPerSec": 10,
+      "quality": "low",
+      "heapMB": 12.7
+    },
+    {
+      "t": 2.02,
+      "fps": 60,
+      "statFps": 60,
+      "drawcall": 26,
+      "entityTotal": 17,
+      "entityVisible": 17,
+      "upPerSec": 8,
+      "quality": "low",
+      "heapMB": 13.6
+    },
+    {
+      "t": 3.04,
+      "fps": 60,
+      "statFps": 60,
+      "drawcall": 28,
+      "entityTotal": 17,
+      "entityVisible": 17,
+      "upPerSec": 8,
+      "quality": "low",
+      "heapMB": 14.2
+    },
+    {
+      "t": 4.05,
+      "fps": 60,
+      "statFps": 60,
+      "drawcall": 26,
+      "entityTotal": 17,
+      "entityVisible": 17,
+      "upPerSec": 9,
+      "quality": "low",
+      "heapMB": 14.8
+    },
+    {
+      "t": 5.01,
+      "fps": 60,
+      "statFps": 60,
+      "drawcall": 27,
+      "entityTotal": 17,
+      "entityVisible": 17,
+      "upPerSec": 9,
+      "quality": "low",
+      "heapMB": 13.4
+    }
+  ],
+  "idleSamples": [
+    {
+      "t": 1,
+      "fps": 60,
+      "statFps": 60,
+      "drawcall": 27,
+      "entityTotal": 17,
+      "entityVisible": 17,
+      "upPerSec": 0,
+      "quality": "low",
+      "heapMB": 14.4
+    },
+    {
+      "t": 2.02,
+      "fps": 60,
+      "statFps": 60,
+      "drawcall": 29,
+      "entityTotal": 17,
+      "entityVisible": 17,
+      "upPerSec": 0,
+      "quality": "low",
+      "heapMB": 14.8
+    },
+    {
+      "t": 3.02,
+      "fps": 60,
+      "statFps": 60,
+      "drawcall": 29,
+      "entityTotal": 17,
+      "entityVisible": 17,
+      "upPerSec": 0,
+      "quality": "low",
+      "heapMB": 15.2
+    },
+    {
+      "t": 4.04,
+      "fps": 60,
+      "statFps": 60,
+      "drawcall": 29,
+      "entityTotal": 17,
+      "entityVisible": 17,
+      "upPerSec": 0,
+      "quality": "low",
+      "heapMB": 15.6
+    },
+    {
+      "t": 5.01,
+      "fps": 59.9,
+      "statFps": 60,
+      "drawcall": 29,
+      "entityTotal": 17,
+      "entityVisible": 17,
+      "upPerSec": 0,
+      "quality": "low",
+      "heapMB": 16
+    }
+  ],
+  "degradeLine": "(未触发自动降级)",
+  "qualityLine": "[S8] quality=low switches=nameLabels=0 gridLines=0 triggerOutline=0 interp=reduced remoteHz=5 (platform=h5 url=low env=- config=auto)",
+  "finalQuality": "low",
+  "heapAtIdleEndMB": 16,
+  "pageErrors": [],
+  "failedRequests": [],
+  "consoleTouch": "[S9] 贴图预加载 9/9 命中",
+  "screenshot": "E:\\code\\nest\\packages-game\\game-client\\docs\\perf-shots\\mobile-sim-quality-low.png",
+  "summary": {
+    "moveFpsMean": 60,
+    "moveFpsMin": 60,
+    "idleFpsMean": 59.98,
+    "drawcallPeak": 29,
+    "heapPeakMB": 16,
+    "heapAtIdleEndMB": 16,
+    "heapFellBack": false,
+    "moveUpPerSecMean": 8.8,
+    "idleUpPerSecSum": 0,
+    "finalQuality": "low"
+  }
+}

@@ -5,6 +5,7 @@ import {
   QuestStatus,
 } from '@constants/enums';
 import { NpcPresenceService } from './npc-presence.service';
+import { expectScopedFind } from '../../../testing/content-scope-contract.shared';
 
 /**
  * 单测直接 new 出服务（mocked repository），不连真实数据库。
@@ -76,7 +77,10 @@ describe('NpcPresenceService', () => {
   });
 
   beforeEach(() => {
-    spawnRuleRepo = { find: jest.fn().mockResolvedValue([]), findOne: jest.fn() };
+    spawnRuleRepo = {
+      find: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn(),
+    };
     patrolRouteRepo = {
       find: jest.fn().mockResolvedValue([]),
       findOne: jest.fn().mockResolvedValue(null),
@@ -120,6 +124,8 @@ describe('NpcPresenceService', () => {
     // 不携带内部字段
     expect((list[0] as any).condition).toBeUndefined();
     expect((list[0] as any).isFixed).toBeUndefined();
+    expectScopedFind(spawnRepo.find);
+    expectScopedFind(npcRepo.findOne);
   });
 
   it('random 分支：按 spawn_count 生成实例，寻址 npcs:<ruleId>:<slot>', async () => {
@@ -131,11 +137,9 @@ describe('NpcPresenceService', () => {
     const list = await service.listNpcsForPlayer(SCENE_ID, PLAYER_ID);
 
     expect(list).toHaveLength(2);
-    expect(list.map((n) => n.npcId).sort()).toEqual([
-      'npcs:9:0',
-      'npcs:9:1',
-    ]);
+    expect(list.map((n) => n.npcId).sort()).toEqual(['npcs:9:0', 'npcs:9:1']);
     expect(list.every((n) => n.route === undefined)).toBe(true);
+    expectScopedFind(spawnRuleRepo.find);
   });
 
   it('patrol 分支：初始位置 = 第一个路点，带 route.points/cursor=0', async () => {
@@ -167,10 +171,14 @@ describe('NpcPresenceService', () => {
     npcRepo.findOne.mockResolvedValue(makeTemplate());
 
     playerService.getById.mockResolvedValue({ id: PLAYER_ID, level: 5 });
-    expect(await service.listNpcsForPlayer(SCENE_ID, PLAYER_ID)).toHaveLength(0);
+    expect(await service.listNpcsForPlayer(SCENE_ID, PLAYER_ID)).toHaveLength(
+      0,
+    );
 
     playerService.getById.mockResolvedValue({ id: PLAYER_ID, level: 15 });
-    expect(await service.listNpcsForPlayer(SCENE_ID, PLAYER_ID)).toHaveLength(1);
+    expect(await service.listNpcsForPlayer(SCENE_ID, PLAYER_ID)).toHaveLength(
+      1,
+    );
   });
 
   it('condition.questId：任务已开始才可见（未开始/无记录不可见）', async () => {
@@ -184,10 +192,14 @@ describe('NpcPresenceService', () => {
       questTemplateId: '77',
       status: QuestStatus.IN_PROGRESS,
     });
-    expect(await service.listNpcsForPlayer(SCENE_ID, PLAYER_ID)).toHaveLength(1);
+    expect(await service.listNpcsForPlayer(SCENE_ID, PLAYER_ID)).toHaveLength(
+      1,
+    );
 
     playerQuestRepo.findOne.mockResolvedValueOnce(null);
-    expect(await service.listNpcsForPlayer(SCENE_ID, PLAYER_ID)).toHaveLength(0);
+    expect(await service.listNpcsForPlayer(SCENE_ID, PLAYER_ID)).toHaveLength(
+      0,
+    );
   });
 
   it('random 实例坐标落在 spawn_radius 范围内', async () => {

@@ -1,24 +1,28 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CombatService } from './combat.service';
-import { AdminGuard } from '@common/guards/admin.guard';
+import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
+import { CurrentPlayer } from '@common/decorators/current-player.decorator';
+import type { CurrentPlayerData } from '@common/decorators/current-player.decorator';
 
-@ApiTags('Admin-Combat')
+@ApiTags('Combat')
 @ApiBearerAuth()
-@UseGuards(AdminGuard)
-@Controller('api/admin/v1/combat')
+@Controller()
 export class CombatController {
   constructor(private readonly combatService: CombatService) {}
 
-  @Get('log/:characterId')
-  @ApiOperation({ summary: '玩家战斗日志' })
+  // ===== Client =====
+
+  @UseGuards(JwtAuthGuard)
+  @Get('api/client/v1/combat/log')
+  @ApiOperation({ summary: '我的战斗日志' })
   async getCombatLogs(
-    @Param('characterId') characterId: string,
+    @CurrentPlayer() player: CurrentPlayerData,
     @Query('page') page = 1,
     @Query('limit') limit = 20,
   ) {
     return this.combatService.getCombatLogs(
-      characterId,
+      player.playerId,
       Number(page),
       Number(limit),
     );

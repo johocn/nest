@@ -9,6 +9,10 @@ import type {
 } from '../net/api';
 import { ApiError } from '../net/http';
 import { Session } from '../net/Session';
+import { ChatPanel } from '../ui/ChatPanel';
+import { MatchPanel } from '../ui/MatchPanel';
+import { InventoryPanel } from '../ui/InventoryPanel';
+import { MailPanel } from '../ui/MailPanel';
 import { Hud } from '../ui/Hud';
 import {
   DEFAULT_GRID_SIZE,
@@ -20,6 +24,7 @@ import {
 } from './build-logic';
 
 const B = AppConfig.build;
+const T = AppConfig.touch;
 
 /** 面板运行上下文：场景尺寸 + 建造规则 + 蓝图（由 Main 在进场景后注入） */
 export interface BuildPanelContext {
@@ -40,6 +45,19 @@ interface PanelRow {
   button?: boolean;
 }
 
+/** `addRowHit` 入参：一行命中区的几何（行带 + 允许向外扩的上下边界） */
+interface RowHit {
+  x: number;
+  width: number;
+  /** 行带（该行视觉所在的位置） */
+  top: number;
+  height: number;
+  /** 命中区允许向上/向下扩到的边界（由相邻行是否可点决定；面板矩形是硬边界） */
+  minTop: number;
+  maxBottom: number;
+  onClick?: () => void;
+}
+
 /**
  * S6 建造面板（**引擎内自绘，禁用 DOM / HTML**，小游戏端与 H5 行为一致）。
  *
@@ -51,6 +69,29 @@ interface PanelRow {
  *
  * 权威性：合法性只是**本地预判**（`build-logic.predictPlot`），服务端 `assertCanBuild` 才是权威；
  * 落成/拆除一律由服务端广播驱动，面板不做本地状态推进。
+ *
+ * **指针不设遮罩（S9 修复）**：根节点既不 `size()` 也不改 `mouseEnabled` —— 引擎的命中检测是**纯几何**的
+ * （`hitTest` 只看自身 `width>0 && height>0` 且包含该点），根节点一旦有边界就会成为最上层命中目标、
+ * 吃掉整个舞台的指针（表现为「面板打开后手机摇杆按不动」）。去掉后根节点自身永不命中，行命中区/进度条
+ * 作为子节点照常接收点击，空白处点击穿透到下层并**继续冒泡到舞台**，故 `onStageDown`（移动建造光标）不受影响。
+ *
+ * **行为什么在手机上点不动（S9 第二轮修复）**：两个原因叠加，都与「遮罩」无关 ——
+ *
+ *  1. **命中区太矮**：`SCALE_SHOWALL` 把 960×640 等比缩到手机宽度，常见机型（390 CSS px 宽）缩放比
+ *     仅 ~0.41 —— 文本行带 `B.lineHeight=20` 落到屏幕上只有 **8 CSS px 高**，手指落点误差普遍 >4 CSS px，
+ *     于是「想点按钮」的那一下多半压在相邻的**信息行**上（信息行没有 `onClick`）→ 看起来就是没反应。
+ *     对照：交互按钮 `interactHeight=88`（≈36 CSS px）在手机上一直好使，正是因为它够高。
+ *     → 处置：所有可点行的命中区撑到 `touch.minHitHeight`（见 `addRowHit`），**视觉尺寸不变**。
+ *  2. **绑的是 CLICK**：引擎 `TouchInfo` 的 `clickTestThreshold = 10`（舞台像素），按下到抬起位移超过它
+ *     （或中途有 `touchmove`、浏览器把手势判定成缩放而发 `touchcancel`）CLICK 就**不派发** ——
+ *     10 舞台像素换算到手机上只有 ~4 CSS px，真实手指抖动轻易超过。而摇杆（`MOUSE_DOWN`/`DRAG`/`UP`）
+ *     与交互按钮（`MOUSE_DOWN`）都不走这层判定，所以在手机上一直正常。
+ *     → 处置：可点行一律改 `MOUSE_DOWN`（与交互按钮同一口径，按下即响应）。
+ *
+ * **两步确认（S9 第四轮，触控）**：第三轮把可点行加高到 44 后，手机上「点得准」已解决，但**误触代价**仍在 ——
+ * 建造/投料/拆除原来都是「一击即发」，手指滑一下就可能拆掉建筑。故操作行改为：
+ * 点一下只把它标成待确认（行首 `▶` + 底色，**不执行**），底部出现「确认执行：xxx」行，点它才真正执行；
+ * 蓝图行本身只是切换选择（无副作用），仍保持一步。键盘 `Enter/G/Del` 保持直接执行（不受影响）。
  */
 export class BuildPanel {
   private static root: Laya.Sprite | null = null;
@@ -65,6 +106,21 @@ export class BuildPanel {
   private static busy = false;
   private static templateIndex = 0;
   private static cursor = { gx: 0, gy: 0 };
+  /**
+   * **两步确认（S9 第四轮，触控）**：待确认的操作项 key（`PENDING` 的键），null = 无。
+   * 点操作行只把它标为待确认（行首 `▶` + 底部出现「确认执行」行），**不执行**；执行只发生在
+   * 底部「确认执行」行 —— 手机上误触不再直接拆建筑/投料。键盘 `Enter/G/Del` 仍是直接执行。
+   */
+  private static pendingKey: string | null = null;
+  /** 待确认项：key → 行内文案 + 执行体（新增一个操作只需在这里加一行） */
+  private static readonly PENDING: Record<
+    string,
+    { label: string; run: () => void }
+  > = {
+    build: { label: '建造', run: () => void BuildPanel.doBuild() },
+    contribute: { label: '投料', run: () => void BuildPanel.doContribute() },
+    demolish: { label: '拆除', run: () => void BuildPanel.doDemolish() },
+  };
   private static buildings: BuildingView[] = [];
   private static panelRect = { x: 0, y: 0, w: 0, h: 0 };
 
@@ -74,13 +130,41 @@ export class BuildPanel {
     const root = new Laya.Sprite();
     root.name = 's6-build-panel';
     root.zOrder = B.zOrder;
-    root.mouseEnabled = false;
+    // 不设 mouseEnabled / 不设 size：根节点自身不参与命中（否则会吃掉整个舞台的指针 → 触控层收不到按下）。
+    // 面板行按钮作为子节点照常接收点击。详见类注释「指针不设遮罩」。
     Laya.stage.addChild(root);
     BuildPanel.root = root;
 
     Laya.stage.on(Laya.Event.KEY_DOWN, BuildPanel, BuildPanel.onKeyDown);
-    Laya.stage.on(Laya.Event.CLICK, BuildPanel, BuildPanel.onStageClick);
-    console.log(`[S6] BuildPanel 就绪：zOrder=${B.zOrder}（引擎内自绘，无 DOM）`);
+    Laya.stage.on(Laya.Event.MOUSE_DOWN, BuildPanel, BuildPanel.onStageDown);
+    console.log(
+      `[S6] BuildPanel 就绪：zOrder=${B.zOrder}（引擎内自绘，无 DOM）`,
+    );
+  }
+
+  /**
+   * 彻底销毁 BuildPanel（注销 stage 监听 + 清 timer + 移除 root）。
+   * 给「退出登录 / 热更 / 完全退出」留口子；init 后的首次启动不需调用（target=null 时不会有监听残留）。
+   */
+  static destroy(): void {
+    Laya.timer.clearAll(BuildPanel);
+    Laya.stage.off(Laya.Event.KEY_DOWN, BuildPanel, BuildPanel.onKeyDown);
+    Laya.stage.off(Laya.Event.MOUSE_DOWN, BuildPanel, BuildPanel.onStageDown);
+    if (BuildPanel.root && BuildPanel.root.parent) {
+      BuildPanel.root.parent.removeChild(BuildPanel.root);
+    }
+    BuildPanel.root = null;
+    BuildPanel.preview = null;
+    BuildPanel.progressBar = null;
+    BuildPanel.layer = null;
+    BuildPanel.ctx = null;
+    BuildPanel.me = null;
+    BuildPanel.onView = null;
+    BuildPanel.buildings = [];
+    BuildPanel.opened = false;
+    BuildPanel.busy = false;
+    BuildPanel.pendingKey = null;
+    console.log('[S6] BuildPanel.destroy() 完成（stage 监听已注销）');
   }
 
   /** 进场景后注入上下文（场景尺寸 / 规则 / 蓝图 / 世界层）并启动刷新循环 */
@@ -105,7 +189,13 @@ export class BuildPanel {
       BuildPanel.preview = preview;
       layer?.addChild(preview);
     }
-    Laya.timer.frameLoop(B.refreshFrameInterval, BuildPanel, BuildPanel.refresh);
+    // 先清再注册：防止多次 attach（场景重进）时重复叠加同一个 refresh loop
+    Laya.timer.clear(BuildPanel, BuildPanel.refresh);
+    Laya.timer.frameLoop(
+      B.refreshFrameInterval,
+      BuildPanel,
+      BuildPanel.refresh,
+    );
     console.log(
       `[S6] 建造面板接入：场景 ${ctx.sceneId} 模式=${ctx.rule.mode} 格 ${gridSize}px 蓝图 ${ctx.templates.length} 个`,
     );
@@ -118,8 +208,9 @@ export class BuildPanel {
   /** 蓝图查询（广播补建实体时按 templateId 取占地/耐久/耗时） */
   static templateOf(templateId: string): BuildingTemplate | null {
     return (
-      BuildPanel.ctx?.templates.find((t) => String(t.id) === String(templateId)) ??
-      null
+      BuildPanel.ctx?.templates.find(
+        t => String(t.id) === String(templateId),
+      ) ?? null
     );
   }
 
@@ -130,8 +221,6 @@ export class BuildPanel {
     if (!root || !ctx || BuildPanel.opened) return;
 
     BuildPanel.opened = true;
-    root.mouseEnabled = true;
-    root.size(AppConfig.stageWidth, AppConfig.stageHeight);
     BuildPanel.rebuild();
 
     await BuildPanel.reload();
@@ -139,8 +228,10 @@ export class BuildPanel {
 
   static close(): void {
     BuildPanel.opened = false;
+    BuildPanel.pendingKey = null;
+    // 面板关闭时暂停 refresh loop —— 省电 + 干净（open/attach 时会重新 frameLoop）
+    Laya.timer.clear(BuildPanel, BuildPanel.refresh);
     if (BuildPanel.root) {
-      BuildPanel.root.mouseEnabled = false;
       BuildPanel.root.removeChildren();
     }
     if (BuildPanel.preview) {
@@ -162,7 +253,9 @@ export class BuildPanel {
   }
 
   static upsertBuilding(view: BuildingView): void {
-    const idx = BuildPanel.buildings.findIndex((b) => String(b.id) === String(view.id));
+    const idx = BuildPanel.buildings.findIndex(
+      b => String(b.id) === String(view.id),
+    );
     if (idx >= 0) BuildPanel.buildings[idx] = view;
     else BuildPanel.buildings.push(view);
     BuildPanel.onView?.(view);
@@ -172,7 +265,7 @@ export class BuildPanel {
   /** 拆除终态：从列表移除（实体侧淡出由 BuildingViewComponent 负责） */
   static removeBuilding(buildingId: string): void {
     BuildPanel.buildings = BuildPanel.buildings.filter(
-      (b) => String(b.id) !== String(buildingId),
+      b => String(b.id) !== String(buildingId),
     );
     if (BuildPanel.opened) BuildPanel.rebuild();
   }
@@ -183,7 +276,7 @@ export class BuildPanel {
     for (const b of BuildPanel.buildings) {
       const anchor = worldToGrid(b.x, b.y, gridSize);
       const hit = footprintCells(anchor.gx, anchor.gy, b.w, b.h).some(
-        (c) => c.gx === gx && c.gy === gy,
+        c => c.gx === gx && c.gy === gy,
       );
       if (hit) return b;
     }
@@ -217,7 +310,8 @@ export class BuildPanel {
     } catch (err) {
       console.warn(`[S6] 蓝图列表拉取失败，沿用本地缓存：${String(err)}`);
     }
-    if (BuildPanel.templateIndex >= ctx.templates.length) BuildPanel.templateIndex = 0;
+    if (BuildPanel.templateIndex >= ctx.templates.length)
+      BuildPanel.templateIndex = 0;
     if (BuildPanel.opened) BuildPanel.rebuild();
   }
 
@@ -248,16 +342,28 @@ export class BuildPanel {
   private static ownBuildings(): BuildingView[] {
     const myId = String(Session.playerId ?? '');
     return BuildPanel.buildings.filter(
-      (b) => String(b.ownerId) === myId && b.state !== 'demolishing',
+      b => String(b.ownerId) === myId && b.state !== 'demolishing',
     );
   }
 
   // ── 交互 ────────────────────────────────────────────────────────────────
 
   private static onKeyDown(e: Laya.Event): void {
-    const key = String((e as unknown as { key?: string }).key ?? '').toLowerCase();
+    if (
+      ChatPanel.isOpen ||
+      MatchPanel.isOpen ||
+      InventoryPanel.isOpen ||
+      MailPanel.isOpen
+    )
+      return; // 聊天输入/匹配/背包/邮件面板打开时忽略 B/Q/E 等（防误触建造面板）
+    const key = String(
+      (e as unknown as { key?: string }).key ?? '',
+    ).toLowerCase();
     if (!BuildPanel.opened) {
-      if (key === 'b') BuildPanel.toggle();
+      if (key === 'b') {
+        if (!Session.token) return; // 登录页门禁：未登录不打开
+        BuildPanel.toggle();
+      }
       return;
     }
     switch (key) {
@@ -272,13 +378,16 @@ export class BuildPanel {
         BuildPanel.cycleTemplate(1);
         return;
       case 'enter':
+        BuildPanel.clearPending(); // 键盘是「直接执行」，不留在触控的待确认态里
         void BuildPanel.doBuild();
         return;
       case 'g':
+        BuildPanel.clearPending();
         void BuildPanel.doContribute();
         return;
       case 'delete':
       case 'backspace':
+        BuildPanel.clearPending();
         void BuildPanel.doDemolish();
         return;
       default:
@@ -286,9 +395,11 @@ export class BuildPanel {
     }
   }
 
-  /** 点击世界选格（面板区域内的点击交给按钮行，不移动光标） */
-  private static onStageClick(e: Laya.Event): void {
+  /** 按下世界选格（面板区域内、或触控层上的按下交给它们自己处理，不移动光标） */
+  private static onStageDown(e: Laya.Event): void {
     if (!BuildPanel.opened) return;
+    // 触控层（摇杆激活区/交互按钮）上的按下不算选格 —— 否则「想走路」的那一下会把建造光标甩过去
+    if (BuildPanel.fromTouchLayer(e)) return;
     const x = Number(e.stageX ?? 0);
     const y = Number(e.stageY ?? 0);
     const r = BuildPanel.panelRect;
@@ -298,11 +409,49 @@ export class BuildPanel {
     BuildPanel.rebuild();
   }
 
+  /** 事件是否来自触控层：沿 `e.target` 的父链找 `s9-touch`（引擎 bubble 会把 `target` 保持为最初命中的节点） */
+  private static fromTouchLayer(e: Laya.Event): boolean {
+    let node = e.target as unknown as {
+      name?: string;
+      parent?: unknown;
+    } | null;
+    while (node) {
+      if (node.name === 's9-touch') return true;
+      node = node.parent as never;
+    }
+    return false;
+  }
+
   private static cycleTemplate(step: number): void {
     const count = BuildPanel.ctx?.templates.length ?? 0;
     if (count === 0) return;
-    BuildPanel.templateIndex = (BuildPanel.templateIndex + step + count) % count;
+    BuildPanel.templateIndex =
+      (BuildPanel.templateIndex + step + count) % count;
     BuildPanel.rebuild();
+  }
+
+  /** 标记待确认项（点操作行时调用）；再点同一行则取消 */
+  private static setPending(key: string): void {
+    BuildPanel.pendingKey = BuildPanel.pendingKey === key ? null : key;
+    BuildPanel.rebuild();
+  }
+
+  /** 清除待确认（切换蓝图 / 关面板 / 键盘直接执行时调用），避免上一次的待确认被后来的确认行误执行 */
+  private static clearPending(): void {
+    if (BuildPanel.pendingKey === null) return;
+    BuildPanel.pendingKey = null;
+    if (BuildPanel.opened) BuildPanel.rebuild();
+  }
+
+  /** 执行待确认项并清空（底部「确认执行」行的唯一出口） */
+  private static runPending(): void {
+    const key = BuildPanel.pendingKey;
+    if (!key) return;
+    BuildPanel.pendingKey = null;
+    // 先抹掉待确认态（行首 ▶ / 确认行）再执行：动作有守卫分支（光标格无建筑、非法格等）只弹 toast 不重建，
+    // 不先 rebuild 就会留一条「点了没反应」的确认行在面板上
+    BuildPanel.rebuild();
+    BuildPanel.PENDING[key]?.run();
   }
 
   private static async doBuild(): Promise<void> {
@@ -342,7 +491,10 @@ export class BuildPanel {
 
   private static async doContribute(): Promise<void> {
     const ctx = BuildPanel.ctx;
-    const target = BuildPanel.buildingAt(BuildPanel.cursor.gx, BuildPanel.cursor.gy);
+    const target = BuildPanel.buildingAt(
+      BuildPanel.cursor.gx,
+      BuildPanel.cursor.gy,
+    );
     if (!ctx || BuildPanel.busy) return;
     if (!target) {
       Hud.toast('光标格上没有可投料的建筑');
@@ -361,7 +513,11 @@ export class BuildPanel {
 
     BuildPanel.busy = true;
     try {
-      const res = await Api.contributeBuilding(target.id, items, Session.token ?? '');
+      const res = await Api.contributeBuilding(
+        target.id,
+        items,
+        Session.token ?? '',
+      );
       BuildPanel.upsertBuilding(res.building);
       Hud.toast(
         res.reached
@@ -377,7 +533,10 @@ export class BuildPanel {
 
   private static async doDemolish(): Promise<void> {
     const ctx = BuildPanel.ctx;
-    const target = BuildPanel.buildingAt(BuildPanel.cursor.gx, BuildPanel.cursor.gy);
+    const target = BuildPanel.buildingAt(
+      BuildPanel.cursor.gx,
+      BuildPanel.cursor.gy,
+    );
     if (!ctx || BuildPanel.busy) return;
     if (!target) {
       Hud.toast('光标格上没有建筑');
@@ -441,15 +600,30 @@ export class BuildPanel {
 
     const bar = BuildPanel.progressBar;
     if (bar) {
-      const target = BuildPanel.buildingAt(BuildPanel.cursor.gx, BuildPanel.cursor.gy);
-      const template2 = target ? BuildPanel.templateOf(target.templateId) : null;
+      const target = BuildPanel.buildingAt(
+        BuildPanel.cursor.gx,
+        BuildPanel.cursor.gy,
+      );
+      const template2 = target
+        ? BuildPanel.templateOf(target.templateId)
+        : null;
       const progress =
         target && target.state === 'building'
-          ? calcProgress(target.finishAt, Date.now(), template2?.buildSeconds ?? 0)
+          ? calcProgress(
+              target.finishAt,
+              Date.now(),
+              template2?.buildSeconds ?? 0,
+            )
           : null;
       const width = B.panelWidth - B.padX * 2;
       bar.graphics.clear();
-      bar.graphics.drawRect(0, 0, width, B.progressBarHeight, B.progressBgColor);
+      bar.graphics.drawRect(
+        0,
+        0,
+        width,
+        B.progressBarHeight,
+        B.progressBgColor,
+      );
       if (target && target.state === 'building') {
         const filled = progress === null ? width / 2 : width * progress;
         bar.graphics.drawRect(
@@ -477,23 +651,54 @@ export class BuildPanel {
     const contentWidth = B.panelWidth - B.padX * 2;
 
     let height = B.padY * 2;
-    for (const row of rows) height += row.button ? B.buttonHeight + 4 : B.lineHeight;
+    for (const row of rows)
+      height += row.button ? B.buttonHeight + 4 : B.lineHeight;
     BuildPanel.panelRect = { x: panelX, y: panelY, w: B.panelWidth, h: height };
 
     const bg = new Laya.Sprite();
     bg.mouseEnabled = false;
     bg.graphics.drawRect(panelX, panelY, B.panelWidth, height, B.panelBgColor);
-    bg.graphics.drawRect(panelX, panelY, B.panelWidth, B.panelBorderWidth, B.panelBorderColor);
+    bg.graphics.drawRect(
+      panelX,
+      panelY,
+      B.panelWidth,
+      B.panelBorderWidth,
+      B.panelBorderColor,
+    );
     root.addChild(bg);
 
+    // 行带预排：命中区的加高要按「相邻行是否可点」夹边界，避免加高后误触到相邻的建造/投料/拆除
+    const bands: { top: number; height: number; onClick?: () => void }[] = [];
     let y = panelY + B.padY;
+    const bandHeight = (row: PanelRow) =>
+      row.button
+        ? B.buttonHeight
+        : row.onClick
+          ? B.touchRowHeight
+          : B.lineHeight;
     for (const row of rows) {
+      const h = bandHeight(row);
+      bands.push({ top: y, height: h, onClick: row.onClick });
+      y += h + (row.button ? 4 : 0);
+    }
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const band = bands[i];
+      const prev = bands[i - 1];
+      const next = bands[i + 1];
       if (row.button) {
         const button = new Laya.Sprite();
-        button.pos(contentX, y);
+        button.pos(contentX, band.top);
         button.size(contentWidth, B.buttonHeight);
-        button.mouseEnabled = true;
-        button.graphics.drawRect(0, 0, contentWidth, B.buttonHeight, row.bg ?? B.buttonBgColor);
+        button.mouseEnabled = false;
+        button.graphics.drawRect(
+          0,
+          0,
+          contentWidth,
+          B.buttonHeight,
+          row.bg ?? B.buttonBgColor,
+        );
         button.addChild(
           BuildPanel.makeText(
             row.text,
@@ -502,33 +707,49 @@ export class BuildPanel {
             row.color,
           ),
         );
-        if (row.onClick) button.on(Laya.Event.CLICK, null, row.onClick);
         root.addChild(button);
-        y += B.buttonHeight + 4;
       } else {
         if (row.bg) {
           const hl = new Laya.Sprite();
           hl.mouseEnabled = false;
-          hl.graphics.drawRect(contentX, y, contentWidth, B.lineHeight, row.bg);
+          hl.graphics.drawRect(
+            contentX,
+            band.top,
+            contentWidth,
+            band.height,
+            row.bg,
+          );
           root.addChild(hl);
         }
-        const text = BuildPanel.makeText(row.text, contentX, y + 3, row.color);
-        root.addChild(text);
-        if (row.onClick) {
-          const hit = new Laya.Sprite();
-          hit.pos(contentX, y);
-          hit.size(contentWidth, B.lineHeight);
-          hit.mouseEnabled = true;
-          hit.graphics.drawRect(0, 0, contentWidth, B.lineHeight, null);
-          hit.on(Laya.Event.CLICK, null, row.onClick);
-          root.addChild(hit);
-        }
-        y += B.lineHeight;
+        // 可点行（蓝图）行带已加高到 44 → 文本垂直居中；信息行仍是 20，保持原有 +3 的观感
+        const textTop = row.onClick
+          ? band.top + Math.round((band.height - B.lineFontSize) / 2)
+          : band.top + 3;
+        root.addChild(
+          BuildPanel.makeText(row.text, contentX, textTop, row.color),
+        );
       }
+      BuildPanel.addRowHit(root, {
+        x: contentX,
+        width: contentWidth,
+        top: band.top,
+        height: band.height,
+        // 可扩到相邻的**信息行**上（那行本来就没反应），但不越进相邻的**可点行**（否则会误触）
+        minTop: prev ? (prev.onClick ? band.top : prev.top) : panelY,
+        maxBottom: next
+          ? next.onClick
+            ? band.top + band.height
+            : next.top + next.height
+          : panelY + height,
+        onClick: row.onClick,
+      });
     }
 
     // 光标处建筑的进度条（每帧 refresh 重绘填充）
-    const target = BuildPanel.buildingAt(BuildPanel.cursor.gx, BuildPanel.cursor.gy);
+    const target = BuildPanel.buildingAt(
+      BuildPanel.cursor.gx,
+      BuildPanel.cursor.gy,
+    );
     if (target && target.state === 'building') {
       const bar = new Laya.Sprite();
       bar.mouseEnabled = false;
@@ -554,6 +775,12 @@ export class BuildPanel {
     if (forbidden) {
       rows.push({ text: '此场景不允许建造', color: B.illegalColor });
       rows.push({ text: '建造入口已禁用', color: B.dimColor });
+      rows.push({
+        text: '关闭面板（B）',
+        color: B.dimColor,
+        button: true,
+        onClick: () => BuildPanel.close(),
+      });
       return rows;
     }
 
@@ -569,6 +796,8 @@ export class BuildPanel {
         bg: selected ? B.selectedBgColor : undefined,
         onClick: () => {
           BuildPanel.templateIndex = i;
+          // 换蓝图时清掉待确认：否则「先点拆除、再换蓝图、再点确认执行」会拆掉不该拆的
+          BuildPanel.clearPending();
           BuildPanel.rebuild();
         },
       });
@@ -581,7 +810,10 @@ export class BuildPanel {
       color: prediction.legal ? B.legalColor : B.illegalColor,
     });
 
-    const target = BuildPanel.buildingAt(BuildPanel.cursor.gx, BuildPanel.cursor.gy);
+    const target = BuildPanel.buildingAt(
+      BuildPanel.cursor.gx,
+      BuildPanel.cursor.gy,
+    );
     if (target) {
       const template = BuildPanel.templateOf(target.templateId);
       const stateText =
@@ -599,30 +831,92 @@ export class BuildPanel {
       rows.push({ text: '建筑：无', color: B.dimColor });
     }
 
-    rows.push({ text: '—— 操作 ——', color: B.dimColor });
     rows.push({
-      text: `建造（Enter）　${costText(BuildPanel.selectedTemplate()?.buildCost ?? [])}`,
-      color: prediction.legal ? B.legalColor : B.dimColor,
-      button: true,
-      onClick: () => void BuildPanel.doBuild(),
+      text: '—— 操作（点行选中，再点下方「确认执行」）——',
+      color: B.dimColor,
     });
+    /** 操作行（**两步确认**）：点一下只标为待确认，不执行 —— 行首 `▶` 即待确认标记 */
+    const opRow = (key: string, text: string, color: string): void => {
+      rows.push({
+        text: `${BuildPanel.pendingKey === key ? '▶' : '　'}${text}`,
+        color: BuildPanel.pendingKey === key ? B.titleColor : color,
+        bg: BuildPanel.pendingKey === key ? B.selectedBgColor : undefined,
+        button: true,
+        onClick: () => BuildPanel.setPending(key),
+      });
+    };
+    opRow(
+      'build',
+      `建造（Enter）　${costText(BuildPanel.selectedTemplate()?.buildCost ?? [])}`,
+      prediction.legal ? B.legalColor : B.dimColor,
+    );
+    opRow(
+      'contribute',
+      '投料（G）　共建场景向光标处建筑投料',
+      target && target.state === 'building' ? B.lineColor : B.dimColor,
+    );
+    opRow('demolish', '拆除（Del）　不返还材料', B.lineColor);
+
+    // 确认行（**只有它真正执行**）：有待确认项时才出现，手机上的第二个、也是唯一的大确认目标
+    const pending = BuildPanel.pendingKey
+      ? BuildPanel.PENDING[BuildPanel.pendingKey]
+      : null;
+    if (pending) {
+      rows.push({
+        text: `确认执行：${pending.label}`,
+        color: B.titleColor,
+        bg: B.selectedBgColor,
+        button: true,
+        onClick: () => BuildPanel.runPending(),
+      });
+    }
+
+    // 手机上的退出口：触控「建造」按钮在面板下方，可能被面板盖住，且面板不吃指针 —— 必须有行内关闭
     rows.push({
-      text: '投料（G）　共建场景向光标处建筑投料',
-      color: target && target.state === 'building' ? B.lineColor : B.dimColor,
+      text: '关闭面板（B）',
+      color: B.dimColor,
       button: true,
-      onClick: () => void BuildPanel.doContribute(),
-    });
-    rows.push({
-      text: '拆除（Del）　不返还材料',
-      color: B.lineColor,
-      button: true,
-      onClick: () => void BuildPanel.doDemolish(),
+      onClick: () => BuildPanel.close(),
     });
 
     return rows;
   }
 
-  private static makeText(content: string, x: number, y: number, color: string): Laya.Text {
+  /**
+   * 追加一行的命中区（**不可见**，视觉尺寸不变）：高度取 `max(行带, touch.minHitHeight)` 并以行带为中心
+   * 上下扩，扩的范围夹在 `minTop..maxBottom`（相邻可点行之间）与面板矩形内。
+   * `onClick` 为空（信息行）则不建节点 —— 信息行本来就没有反应。
+   *
+   * **必须在行视觉之后 addChild**：引擎 `getSpriteUnderPoint` 逆序遍历子节点、取最先命中的那个，
+   * 后加入的命中区因此盖过同行视觉（视觉 sprite 一律 `mouseEnabled=false`，避免两个目标争同一片区域）。
+   * 用 `MOUSE_DOWN` 而非 `CLICK`：CLICK 要求按下到抬起位移小于 `clickTestThreshold`（10 舞台像素 ≈
+   * 手机 4 CSS px），真实手指抖动会把它判掉（详见类注释）。
+   */
+  private static addRowHit(root: Laya.Sprite, spec: RowHit): void {
+    if (!spec.onClick) return;
+    const extra = Math.max(0, T.minHitHeight - spec.height) / 2;
+    const panel = BuildPanel.panelRect;
+    const top = Math.max(panel.y, spec.minTop, spec.top - extra);
+    const bottom = Math.min(
+      panel.y + panel.h,
+      spec.maxBottom,
+      spec.top + spec.height + extra,
+    );
+    const hit = new Laya.Sprite();
+    hit.name = 's6-build-hit';
+    hit.pos(spec.x, top);
+    hit.size(spec.width, Math.max(spec.height, bottom - top));
+    hit.mouseEnabled = true;
+    hit.on(Laya.Event.MOUSE_DOWN, null, spec.onClick);
+    root.addChild(hit);
+  }
+
+  private static makeText(
+    content: string,
+    x: number,
+    y: number,
+    color: string,
+  ): Laya.Text {
     const text = new Laya.Text();
     text.text = content;
     text.fontSize = B.lineFontSize;
@@ -648,7 +942,7 @@ function fill(color: string, alpha: number): string {
 function costText(entries: readonly BuildCostEntry[]): string {
   if (!entries || entries.length === 0) return '无消耗';
   return entries
-    .map((e) =>
+    .map(e =>
       e.itemTemplateId !== undefined
         ? `道具#${e.itemTemplateId}×${e.amount}`
         : `货币${e.currencyType}×${e.amount}`,

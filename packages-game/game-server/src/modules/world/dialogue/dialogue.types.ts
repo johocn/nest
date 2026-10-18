@@ -18,10 +18,38 @@ export interface DialogueOption {
   condition?: DialogueCondition;
   /** 下一节点 key；为空/undefined 表示对话结束 */
   next?: string;
+  /** 评分分支：选中后按评分规则跳转——命中 → goto 节点 key，未命中 → fallback（缺省 = 结束对话）；与 next 互斥 */
+  branch?: { gameId: string; fallback?: string };
   /** 选中后由服务端执行的动作 */
   action?: DialogueActionType;
   /** 动作参数 */
   actionArgs?: Record<string, any>;
+}
+
+/** 评分快照（由 scoring 模块产出，结构对齐 ScoreSnapshot） */
+export interface DialogueScoreSnapshot {
+  axes: Record<string, number>;
+  flags: string[];
+  affinity: Record<string, number>;
+  reputation: Record<string, number>;
+  ideology: Record<string, number>;
+}
+
+/** 下发给客户端的单条评分轴视图（仅 visible:true 轴，按 config 声明顺序） */
+export interface DialogueScoreAxisView {
+  id: string;
+  label: string;
+  value: number;
+}
+
+/** 评分条件（引用某游戏的评分快照，详见 scoring 模块） */
+export interface DialogueScoreCondition {
+  gameId: string;
+  axesMin?: Record<string, number>;
+  flags?: string[];
+  affinityMin?: Record<string, number>;
+  reputationMin?: Record<string, number>;
+  ideologyMin?: Record<string, number>;
 }
 
 /** 玩家级条件（节点与选项共用，全部可选，AND 语义） */
@@ -32,6 +60,8 @@ export interface DialogueCondition {
   notQuestId?: string;
   hasItemId?: string;
   flag?: string;
+  /** 评分条件：引用某游戏的评分快照做分支门控 */
+  score?: DialogueScoreCondition;
 }
 
 /** 对话节点 */
@@ -51,7 +81,17 @@ export interface DialogueActionArgs {
   currencyType?: string;
   amount?: number;
   flag?: string;
+  assessmentCode?: string; // assess 用：测评卷 code
+  category?: string; // quiz 用：抽题分类（可选）
+  count?: number; // quiz 用：抽题数量（可选，服务端钳制 1-20）
+  /** 评分动作参数：把 Effect 交给评分引擎（gameId 必填，effect 为增量，use 可裁剪策略） */
+  score?: { gameId: string; effect?: Record<string, any>; use?: string[] };
 }
+
+/** 对话动作附带数据（choose 响应的可选 quiz 字段；payload 均已脱敏） */
+export type DialogueQuizHandout =
+  | { kind: 'knowledge'; questions: Array<Record<string, any>> }
+  | { kind: 'assessment'; sessionId: string; question: Record<string, any> };
 
 /** 结构校验结果 */
 export type DialogueNodesAssertResult =
@@ -81,7 +121,8 @@ function isUnconditional(condition: unknown): boolean {
  *  2. 每个节点必须是对象，key 为非空字符串且不重复，text 为字符串，options 为数组；
  *  3. 每个选项必须是对象且 text 为字符串；next 若存在必须指向树内已存在的 key；
  *  4. action 若存在必须在 DialogueActionType 白名单内；
- *  5. 每个节点必须至少有一个**不带 condition** 的选项（风险 #3：防止条件全挡导致对话卡死）。
+ *  5. 每个节点必须至少有一个**不带 condition** 的选项（风险 #3：防止条件全挡导致对话卡死）；
+ *  6. branch 若存在必须是对象：gameId 为非空字符串、fallback 为缺省（undefined/null）或非空字符串、与 next 互斥。
  */
 export function assertDialogueNodes(nodes: unknown): DialogueNodesAssertResult {
   if (!Array.isArray(nodes)) {
@@ -102,7 +143,9 @@ export function assertDialogueNodes(nodes: unknown): DialogueNodesAssertResult {
     }
     const key = raw.key;
     const label =
-      typeof key === 'string' && key.trim() !== '' ? `节点[${key}]` : `节点#${i}`;
+      typeof key === 'string' && key.trim() !== ''
+        ? `节点[${key}]`
+        : `节点#${i}`;
 
     if (typeof key !== 'string' || key.trim() === '') {
       errors.push(`${label}: key 必须是非空字符串`);
@@ -160,6 +203,32 @@ export function assertDialogueNodes(nodes: unknown): DialogueNodesAssertResult {
           errors.push(
             `${optLabel}: action「${String(action)}」不在 DialogueActionType 白名单内`,
           );
+        }
+      }
+
+      // 评分分支：gameId 必填；fallback 缺省（undefined/null）或非空字符串；与 next 互斥
+      const branch = rawOpt.branch;
+      if (branch !== undefined && branch !== null) {
+        if (!isPlainObject(branch)) {
+          errors.push(`${optLabel}: branch 必须是对象`);
+        } else {
+          if (
+            typeof branch.gameId !== 'string' ||
+            branch.gameId.trim() === ''
+          ) {
+            errors.push(`${optLabel}: branch.gameId 必须是非空字符串`);
+          }
+          const fallback = branch.fallback;
+          if (
+            fallback !== undefined &&
+            fallback !== null &&
+            (typeof fallback !== 'string' || fallback.trim() === '')
+          ) {
+            errors.push(`${optLabel}: branch.fallback 必须是非空字符串或缺省`);
+          }
+        }
+        if (next !== undefined && next !== null && next !== '') {
+          errors.push(`${optLabel}: branch 与 next 互斥，不能同时配置`);
         }
       }
     });

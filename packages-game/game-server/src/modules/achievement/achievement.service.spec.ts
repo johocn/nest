@@ -35,6 +35,11 @@ describe('AchievementService', () => {
             save: jest
               .fn()
               .mockImplementation((data: any) => Promise.resolve(data)),
+            // advanceByCondition 的 conditionJson fallback 查询需要
+            createQueryBuilder: jest.fn(() => ({
+              where: jest.fn().mockReturnThis(),
+              getMany: jest.fn().mockResolvedValue([]),
+            })),
           },
         },
         {
@@ -234,8 +239,18 @@ describe('AchievementService', () => {
 
     it('should continue with other templates when one fails', async () => {
       templateRepo.find.mockResolvedValue([
-        { id: 'a1', name: 'x', condition: AchievementCondition.KILL_COUNT, targetValue: 9 },
-        { id: 'a2', name: 'y', condition: AchievementCondition.KILL_COUNT, targetValue: 9 },
+        {
+          id: 'a1',
+          name: 'x',
+          condition: AchievementCondition.KILL_COUNT,
+          targetValue: 9,
+        },
+        {
+          id: 'a2',
+          name: 'y',
+          condition: AchievementCondition.KILL_COUNT,
+          targetValue: 9,
+        },
       ] as any);
       playerAchievementRepo.findOne.mockResolvedValue(null);
       playerAchievementRepo.save

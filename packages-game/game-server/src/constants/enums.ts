@@ -237,6 +237,9 @@ export enum DialogueActionType {
   TAKE_ITEM = 'take_item',
   ADD_CURRENCY = 'add_currency',
   SET_FLAG = 'set_flag',
+  QUIZ = 'quiz', // 知识问答：下发抽题结果，客户端进入答题 UI
+  ASSESS = 'assess', // 启动测评：startOrResume，下发 sessionId + 首题
+  SCORE = 'score', // 评分：把选项 Effect 交给评分引擎（actionArgs.score）
 }
 
 export enum ObjectType {
@@ -776,6 +779,34 @@ export enum ReportHandleAction {
   BAN = 'BAN',
 }
 
+// ===== 礼包兑换码枚举 =====
+
+/** 兑换码生成方式 */
+export enum GiftCodeGenerateType {
+  /** 手动批量生成随机码 */
+  BATCH = 'batch',
+  /** 规则生成（前缀+日期+随机段，可预测） */
+  PATTERN = 'pattern',
+  /** 单次固定码（运营指定） */
+  CUSTOM = 'custom',
+}
+
+/** 兑换码状态 */
+export enum GiftCodeStatus {
+  ACTIVE = 'active',
+  USED = 'used',
+  DISABLED = 'disabled',
+  EXPIRED = 'expired',
+}
+
+/** 玩家领过同模板码时是否允许继续领（限领口径） */
+export enum GiftCodeClaimLimit {
+  /** 玩家无限制重复领（每次消耗兑换码本身） */
+  UNLIMITED = 'unlimited',
+  /** 玩家对该模板只允许领一次（防刷） */
+  ONE_PER_PLAYER = 'one_per_player',
+}
+
 // ===== 社交经济枚举（阶段5批2） =====
 
 export enum SocialPointType {
@@ -891,4 +922,107 @@ export enum PlotState {
   EMPTY = 'empty',
   OCCUPIED = 'occupied',
   LOCKED = 'locked',
+}
+
+// ===== quiz 题库模块枚举 =====
+
+export enum QuizQuestionKind {
+  KNOWLEDGE = 'knowledge', // 有对错，服务端判定
+  ASSESSMENT = 'assessment', // 无对错，计分 + 分支
+}
+
+export enum QuizAssessmentStatus {
+  DRAFT = 'draft',
+  PUBLISHED = 'published',
+}
+
+export enum QuizSessionStatus {
+  IN_PROGRESS = 'in_progress',
+  FINISHED = 'finished',
+}
+
+// ===== 掼蛋模块枚举 =====
+
+/** 掼蛋对局模式：ai=房主建房+AI 补位（1-4 真人同台）；net=联网房（空位由 AI 补位） */
+export enum GuandanMode {
+  AI = 'ai',
+  NET = 'net',
+}
+
+/** 掼蛋牌桌状态 */
+export enum GuandanTableStatus {
+  WAITING = 'waiting',
+  PLAYING = 'playing',
+  FINISHED = 'finished',
+}
+
+// ===== 三国杀（标准身份局）模块枚举 =====
+
+/** 对局模式：ai=房主建房+AI 补位；net=联网房（空位由 AI 补位） */
+export enum SanguoshaMode {
+  AI = 'ai',
+  NET = 'net',
+}
+
+/** 牌桌状态 */
+export enum SanguoshaTableStatus {
+  WAITING = 'waiting',
+  PLAYING = 'playing',
+  FINISHED = 'finished',
+}
+
+/** 身份（标准身份局） */
+export enum Identity {
+  LORD = 'lord', // 主公
+  LOYALIST = 'loyalist', // 忠臣
+  REBEL = 'rebel', // 反贼
+  SPY = 'spy', // 内奸
+}
+
+/** 回合阶段 */
+export enum SgsPhase {
+  PREPARE = 'prepare', // 回合开始
+  JUDGE = 'judge', // 判定
+  DRAW = 'draw', // 摸牌
+  PLAY = 'play', // 出牌
+  DISCARD = 'discard', // 弃牌
+  END = 'end', // 结束
+}
+
+/** 卡牌大类 */
+export enum SgsCardType {
+  BASIC = 'basic', // 基本牌（杀/闪/桃）
+  TRICK = 'trick', // 锦囊
+  EQUIPMENT = 'equipment', // 装备
+}
+
+/** 卡牌花色 */
+export enum SgsSuit {
+  SPADE = 'spade', // 黑桃 ♠
+  HEART = 'heart', // 红桃 ♥
+  CLUB = 'club', // 梅花 ♣
+  DIAMOND = 'diamond', // 方块 ♦
+}
+
+/** 装备子类 */
+export enum SgsEquipType {
+  WEAPON = 'weapon', // 武器（决定攻击距离/次数）
+  ARMOR = 'armor', // 防具（如八卦阵）
+  HORSE_PLUS = 'horse_plus', // +1 马（防御距离）
+  HORSE_MINUS = 'horse_minus', // -1 马（进攻距离）
+}
+
+// ===== 四川麻将（血战到底）模块枚举 =====
+
+/** 麻将对局模式：ai=房主建房+AI 补位；net=联网房（坐满开局） */
+export enum SichuanMahjongMode {
+  AI = 'ai',
+  NET = 'net',
+}
+
+/** 麻将牌桌状态 */
+export enum SichuanMahjongTableStatus {
+  WAITING = 'waiting',
+  PLAYING = 'playing',
+  FINISHED = 'finished',
 }

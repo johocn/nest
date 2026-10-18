@@ -5,6 +5,9 @@ import { WorldController } from './world.controller';
 import { WorldClientController } from './world.client.controller';
 import { NpcAdminController } from './npc-admin.controller';
 import { DialogueAdminController } from './dialogue-admin.controller';
+import { WorldSceneAdminController } from './world-scene-admin.controller';
+import { WorldMonsterAdminController } from './world-monster-admin.controller';
+import { WorldBuildingAdminController } from './world-building-admin.controller';
 import { EconomyModule } from '@modules/economy/economy.module';
 import { CharacterModule } from '@modules/character/character.module';
 import { AdminModule } from '@modules/admin/admin.module';
@@ -36,6 +39,7 @@ import { QuestTemplate } from '@modules/quest/entities/quest-template.entity';
 import { InventoryItem } from '@modules/inventory/entities/inventory-item.entity';
 import { PlayerModule } from '@modules/player/player.module';
 import { QuestModule } from '@modules/quest/quest.module';
+import { QuizModule } from '@modules/quiz/quiz.module';
 import { InventoryModule } from '@modules/inventory/inventory.module';
 import { NpcPresenceService } from './npc/npc-presence.service';
 import { NpcTickService } from './npc/npc-tick.service';
@@ -77,6 +81,7 @@ import { BuildingScheduler } from './building/building.scheduler';
     AdminModule,
     PlayerModule,
     QuestModule,
+    QuizModule,
     InventoryModule,
   ],
   controllers: [
@@ -84,6 +89,9 @@ import { BuildingScheduler } from './building/building.scheduler';
     WorldClientController,
     NpcAdminController,
     DialogueAdminController,
+    WorldSceneAdminController,
+    WorldMonsterAdminController,
+    WorldBuildingAdminController,
   ],
   providers: [
     WorldService,

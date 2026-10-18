@@ -52,7 +52,9 @@ export class PlaceholderInteractComponent extends InteractComponent {
  * kind 取值只在 `registry-map.ts`（零引擎依赖的纯映射表）里登记：新增一种交互只改那张表，**不改选择器**。
  * 未登记的 kind（schema 之外的取值）同样解析为占位组件，保证「不崩、有出口」。
  */
-export function createInteractComponent(o: InteractCreateOptions): InteractComponent {
+export function createInteractComponent(
+  o: InteractCreateOptions,
+): InteractComponent {
   const kind = String(o.kind ?? '');
 
   switch (resolveStrategy(kind)) {
@@ -80,7 +82,9 @@ export function createInteractComponent(o: InteractCreateOptions): InteractCompo
     case 'placeholder':
       return new PlaceholderInteractComponent(kind as InteractType);
     default:
-      console.warn(`[S3] 未登记的交互类型 ${kind}（解析为占位组件，仅提示不请求）`);
+      console.warn(
+        `[S3] 未登记的交互类型 ${kind}（解析为占位组件，仅提示不请求）`,
+      );
       return new PlaceholderInteractComponent(kind as InteractType);
   }
 }

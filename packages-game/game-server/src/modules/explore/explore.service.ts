@@ -14,6 +14,7 @@ import { EventBusService } from '@event-bus/event-bus.service';
 import { GameEvents } from '@event-bus/game-events';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
+import { visibleTo } from '@shared/content-scope';
 import { CurrencyType } from '@constants/enums';
 
 export interface WorldState {
@@ -94,8 +95,7 @@ export class ExploreService {
     const row = rows?.[0];
     const hour = String(row?.hour ?? '0');
     const h = parseInt(hour, 10) || 0;
-    const timeOfDay: 'day' | 'night' =
-      h >= 6 && h < 18 ? 'day' : 'night';
+    const timeOfDay: 'day' | 'night' = h >= 6 && h < 18 ? 'day' : 'night';
     const weather = this.weatherOf(String(row?.day ?? ''));
     return { timeOfDay, weather, hour };
   }
@@ -110,7 +110,9 @@ export class ExploreService {
 
   /** 探索足迹：幂等 upsert + times 递增，首探经既有效益通道发里程碑奖 */
   async discover(playerId: string, sceneId: string): Promise<DiscoverResult> {
-    const scene = await this.sceneRepo.findOne({ where: { id: sceneId } });
+    const scene = await this.sceneRepo.findOne({
+      where: { id: sceneId, ...visibleTo(null) },
+    });
     if (!scene) {
       throw new GameException(ErrorCodes.PARAM_INVALID, '场景不存在');
     }
@@ -126,9 +128,8 @@ export class ExploreService {
     // 首探：读取足迹里程碑配置并结算（走既有 economy/inventory 发奖通道）
     let reward: RewardItem = {};
     try {
-      const cfg = await this.configService.getTypedValue<any>(
-        'explore.milestone',
-      );
+      const cfg =
+        await this.configService.getTypedValue<any>('explore.milestone');
       reward = cfg?.reward ?? {};
     } catch {
       reward = {};
@@ -194,9 +195,7 @@ export class ExploreService {
     // 天气加成（读 remote_configs explore.weather，缺失默认晴天无加成）
     let weatherBonus = 0;
     try {
-      const wc = await this.configService.getTypedValue<any>(
-        'explore.weather',
-      );
+      const wc = await this.configService.getTypedValue<any>('explore.weather');
       weatherBonus = wc?.rainyTriggerBonus ?? 0;
     } catch {
       weatherBonus = 0;
@@ -279,7 +278,10 @@ export class ExploreService {
     const enc = JSON.parse(raw);
     const choice = (enc.choices ?? []).find((c: any) => c.id === choiceId);
     if (!choice) {
-      throw new GameException(ErrorCodes.ENCOUNTER_CHOICE_INVALID, '选项不存在');
+      throw new GameException(
+        ErrorCodes.ENCOUNTER_CHOICE_INVALID,
+        '选项不存在',
+      );
     }
     const delivered = await this.deliverEffects(
       playerId,
@@ -297,7 +299,9 @@ export class ExploreService {
   }
 
   // ---------- admin 奇遇模板 CRUD ----------
-  async createTemplate(data: Partial<EncounterTemplate>): Promise<EncounterTemplate> {
+  async createTemplate(
+    data: Partial<EncounterTemplate>,
+  ): Promise<EncounterTemplate> {
     const t = this.encRepo.create(data);
     return this.encRepo.save(t);
   }

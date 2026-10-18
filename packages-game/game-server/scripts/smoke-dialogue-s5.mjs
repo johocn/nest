@@ -32,6 +32,7 @@ const SUBMIT_OPTION_TEXT = '提交任务';
 const GIVE_ITEM_OPTION_TEXT = '给我点矿石';
 const TMP_DIALOGUE_CODE = 'smoke_tmp_take_item';
 const TMP_TAKE_QUANTITY = 999; // 远大于脚本内该玩家的持有量，制造「数量不足」
+const TMP_SCORE_DIALOGUE_CODE = 'smoke_tmp_scoring';
 
 const run = Date.now().toString(36).slice(-6);
 const USER = {
@@ -151,27 +152,47 @@ const TMP_NODES = [
   { key: 'ok', text: '收到。', options: [{ text: '好' }] },
 ];
 
+/** 临时对话（断言 ⑩：评分轴快照随 choose 下发）。选项级 condition.score 引用
+ *  history-teach（migration 0009 seed 配置，wisdom/wealth 均 visible）→ 服务端收集
+ *  gameId 后在 choose 响应附带 visible 轴快照（前置：0009 迁移已跑、配置已从库加载）。 */
+const TMP_SCORE_NODES = [
+  {
+    key: 'root',
+    speaker: '临时校验',
+    text: '评分轴下发校验。',
+    options: [
+      {
+        text: '看看评分',
+        next: 'done',
+        condition: { score: { gameId: 'history-teach', axesMin: { wisdom: 0 } } },
+      },
+      { text: '算了' },
+    ],
+  },
+  { key: 'done', text: '完毕。', options: [{ text: '好' }] },
+];
+
 /** 幂等准备临时对话：已存在则（重新）启用，返回 id */
-async function ensureTmpDialogue(adminToken) {
+async function ensureTmpDialogue(adminToken, code, nodes) {
   const created = await call('POST', '/api/admin/v1/world/dialogue', {
     token: adminToken,
-    body: { code: TMP_DIALOGUE_CODE, title: 'S5 冒烟临时：take_item 数量不足', nodes: TMP_NODES },
+    body: { code, title: `S5 冒烟临时：${code}`, nodes },
   });
   if (created.payload?.code === 0) {
     return { id: String(created.payload.data.id), created: true };
   }
   const listed = await call(
     'GET',
-    `/api/admin/v1/world/dialogue/list?keyword=${TMP_DIALOGUE_CODE}&limit=20`,
+    `/api/admin/v1/world/dialogue/list?keyword=${code}&limit=20`,
     { token: adminToken },
   );
-  const found = (listed.payload?.data?.items ?? []).find((d) => d.code === TMP_DIALOGUE_CODE);
+  const found = (listed.payload?.data?.items ?? []).find((d) => d.code === code);
   if (!found) {
     throw new Error(`临时对话创建失败且列表中找不到：${JSON.stringify(created.payload)}`);
   }
   await call('PUT', `/api/admin/v1/world/dialogue/${found.id}`, {
     token: adminToken,
-    body: { nodes: TMP_NODES, isActive: true },
+    body: { nodes, isActive: true },
   });
   return { id: String(found.id), created: false };
 }
@@ -187,7 +208,7 @@ async function cleanupTmpDialogue(adminToken, id) {
 
 // ===== 主流程 =====
 
-const ctx = { adminToken: null, tmpDialogueId: null };
+const ctx = { adminToken: null, tmpDialogueId: null, tmpScoreDialogueId: null };
 const STORY_LOCK_KEY = `world:story:once:${STORY_TRIGGER_ID}`;
 
 async function main() {
@@ -291,7 +312,7 @@ async function main() {
   }
   console.log(`  admin 登录成功（token=${ctx.adminToken.slice(0, 12)}…）`);
 
-  const tmp = await ensureTmpDialogue(ctx.adminToken);
+  const tmp = await ensureTmpDialogue(ctx.adminToken, TMP_DIALOGUE_CODE, TMP_NODES);
   ctx.tmpDialogueId = tmp.id;
   console.log(
     `  临时 take_item 对话 id=${tmp.id}（${tmp.created ? '本次新建' : '已存在，已重新启用'}）quantity=${TMP_TAKE_QUANTITY}`,
@@ -336,6 +357,30 @@ async function main() {
     `第二次 body.code=${s2.payload?.code} msg="${s2.payload?.msg}"（期望 43002）`,
   );
 
+  // ── ⑩ 评分轴快照随 choose 下发（评分系统阶段 2：仅 visible 轴、顺序同 config）──
+  const scoreTmp = await ensureTmpDialogue(ctx.adminToken, TMP_SCORE_DIALOGUE_CODE, TMP_SCORE_NODES);
+  ctx.tmpScoreDialogueId = scoreTmp.id;
+  console.log(
+    `  临时评分对话 id=${scoreTmp.id}（${scoreTmp.created ? '本次新建' : '已存在，已重新启用'}）gameId=history-teach`,
+  );
+  const c4 = await choose(me.token, {
+    code: TMP_SCORE_DIALOGUE_CODE,
+    nodeKey: 'root',
+    optionIndex: 0,
+  });
+  const scoreView = c4.payload?.data?.score ?? null;
+  const htAxes = scoreView?.['history-teach'] ?? null;
+  check(
+    '⑩ choose 响应带 score 快照（history-teach 仅 visible 轴 wisdom/wealth，顺序同 config）',
+    c4.payload?.code === 0 &&
+      scoreView !== null &&
+      Array.isArray(htAxes) &&
+      htAxes.length === 2 &&
+      htAxes.map((a) => a.id).join(',') === 'wisdom,wealth' &&
+      htAxes.every((a) => typeof a.label === 'string' && typeof a.value === 'number'),
+    `code=${c4.payload?.code} nodeKey=${c4.payload?.data?.nodeKey} score=${JSON.stringify(scoreView)}（空数组多为 0009 迁移未跑/配置未加载）`,
+  );
+
   console.log(failed === 0 ? '\nS5 对话冒烟全部通过' : `\nS5 对话冒烟失败 ${failed} 项`);
   return failed === 0 ? 0 : 1;
 }
@@ -354,6 +399,11 @@ main()
       await cleanupTmpDialogue(ctx.adminToken, ctx.tmpDialogueId);
     } catch (err) {
       console.error(`[清理] 停用临时对话失败：${err.message}`);
+    }
+    try {
+      await cleanupTmpDialogue(ctx.adminToken, ctx.tmpScoreDialogueId);
+    } catch (err) {
+      console.error(`[清理] 停用临时评分对话失败：${err.message}`);
     }
     try {
       const deleted = await redisCmd('DEL', STORY_LOCK_KEY);

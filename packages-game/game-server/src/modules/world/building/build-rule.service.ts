@@ -9,6 +9,7 @@ import {
 } from '@constants/enums';
 import { ErrorCodes } from '@constants/error-codes';
 import { GameException } from '@common/exceptions/game.exception';
+import { visibleTo } from '@shared/content-scope';
 import { Scene } from '../entities/scene.entity';
 import { SceneBuildRule } from '../entities/scene-build-rule.entity';
 import { SceneLandPlot } from '../entities/scene-land-plot.entity';
@@ -112,20 +113,12 @@ export class BuildRuleService {
    * 像素坐标 → 格点坐标（纯数学换算，不做场景边界判定）。
    * gridSize = 每格边长（像素）。
    */
-  toGrid(
-    x: number,
-    y: number,
-    gridSize: number,
-  ): { gx: number; gy: number } {
+  toGrid(x: number, y: number, gridSize: number): { gx: number; gy: number } {
     return { gx: Math.floor(x / gridSize), gy: Math.floor(y / gridSize) };
   }
 
   /** 格点坐标 → 格中心像素坐标（纯数学换算） */
-  toCenter(
-    gx: number,
-    gy: number,
-    gridSize: number,
-  ): { x: number; y: number } {
+  toCenter(gx: number, gy: number, gridSize: number): { x: number; y: number } {
     return { x: (gx + 0.5) * gridSize, y: (gy + 0.5) * gridSize };
   }
 
@@ -176,7 +169,9 @@ export class BuildRuleService {
     }
 
     // 2. 场景边界（格数 = floor(mapWidth / 每格边长)）
-    const scene = await this.sceneRepo.findOne({ where: { id: sceneId } });
+    const scene = await this.sceneRepo.findOne({
+      where: { id: sceneId, ...visibleTo(null) },
+    });
     if (!scene) {
       throw new GameException(ErrorCodes.PARAM_INVALID, '场景不存在');
     }
@@ -188,13 +183,19 @@ export class BuildRuleService {
 
     // 3. 保留区
     if (this.inReservedZone(rule, gx, gy)) {
-      throw new GameException(ErrorCodes.BUILD_FORBIDDEN, '该区域为保留区，不允许建造');
+      throw new GameException(
+        ErrorCodes.BUILD_FORBIDDEN,
+        '该区域为保留区，不允许建造',
+      );
     }
 
     // 4. 玩家上限
     const count = await this.countPlayerBuildings(sceneId, playerId);
     if (count >= rule.maxBuildingsPerPlayer) {
-      throw new GameException(ErrorCodes.BUILD_LIMIT_REACHED, '建造数量已达上限');
+      throw new GameException(
+        ErrorCodes.BUILD_LIMIT_REACHED,
+        '建造数量已达上限',
+      );
     }
 
     return rule;

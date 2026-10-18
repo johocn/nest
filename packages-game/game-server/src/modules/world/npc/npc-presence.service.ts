@@ -13,6 +13,7 @@ import { NpcPatrolRoute } from '../entities/npc-patrol-route.entity';
 import { NpcSpawnRule } from '../entities/npc-spawn-rule.entity';
 import { NpcTemplate } from '../entities/npc-template.entity';
 import { SceneEntitySpawn } from '../entities/scene-entity-spawn.entity';
+import { visibleTo } from '@shared/content-scope';
 
 /** 巡逻路点（与 npc_patrol_routes.points 元素一一对应） */
 export interface NpcPatrolPoint {
@@ -146,7 +147,7 @@ export class NpcPresenceService {
     if (cached) return cached;
 
     const rules = await this.spawnRuleRepo.find({
-      where: { sceneId, isActive: true },
+      where: { sceneId, isActive: true, ...visibleTo(null) },
     });
 
     const instances: SceneNpcInstance[] = [];
@@ -160,7 +161,12 @@ export class NpcPresenceService {
       }
     }
     const spawns = await this.spawnRepo.find({
-      where: { sceneId, entityType: EntityType.NPC, isActive: true },
+      where: {
+        sceneId,
+        entityType: EntityType.NPC,
+        isActive: true,
+        ...visibleTo(null),
+      },
     });
     for (const spawn of spawns) {
       const template = await this.loadTemplate(
@@ -179,8 +185,7 @@ export class NpcPresenceService {
           anim: template?.defaultAnim ?? '',
           x: spawn.spawnX,
           y: spawn.spawnY,
-          condition:
-            fixedConditions.get(String(spawn.templateId)) ?? null,
+          condition: fixedConditions.get(String(spawn.templateId)) ?? null,
           ruleId: `spawn:${spawn.id}`,
           isFixed: true,
         });
@@ -191,19 +196,11 @@ export class NpcPresenceService {
     for (const rule of rules) {
       if (rule.ruleType === NpcSpawnRuleType.RANDOM) {
         instances.push(
-          ...(await this.buildRandomInstances(
-            sceneId,
-            rule,
-            templateCache,
-          )),
+          ...(await this.buildRandomInstances(sceneId, rule, templateCache)),
         );
       } else if (rule.ruleType === NpcSpawnRuleType.PATROL) {
         instances.push(
-          ...(await this.buildPatrolInstances(
-            sceneId,
-            rule,
-            templateCache,
-          )),
+          ...(await this.buildPatrolInstances(sceneId, rule, templateCache)),
         );
       }
     }
@@ -329,7 +326,7 @@ export class NpcPresenceService {
   ): Promise<NpcTemplate | null> {
     if (cache.has(templateId)) return cache.get(templateId) ?? null;
     const template = await this.npcRepo.findOne({
-      where: { id: templateId },
+      where: { id: templateId, ...visibleTo(null) },
     });
     cache.set(templateId, template);
     return template;
@@ -359,7 +356,9 @@ export class NpcPresenceService {
       if (key === 'minLevel') {
         const minLevel = Number(value);
         if (!Number.isFinite(minLevel)) {
-          this.logger.debug(`condition.minLevel 非法（${String(value)}），已忽略`);
+          this.logger.debug(
+            `condition.minLevel 非法（${String(value)}），已忽略`,
+          );
           continue;
         }
         if (playerLevel < minLevel) return false;

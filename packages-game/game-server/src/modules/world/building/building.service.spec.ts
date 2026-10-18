@@ -12,6 +12,7 @@ import { InventoryService } from '@modules/inventory/inventory.service';
 import { EconomyService } from '@modules/economy/economy.service';
 import { EventBusService } from '@event-bus/event-bus.service';
 import { GameEvents } from '@event-bus/game-events';
+import { expectScopedFind } from '../../../testing/content-scope-contract.shared';
 import {
   BuildMode,
   BuildingOwnerType,
@@ -156,14 +157,13 @@ describe('BuildingService', () => {
         }
         return entity;
       }),
-      find: jest.fn(
-        async ({ where }: any = {}) =>
-          contributions.filter(
-            (row) =>
-              (where?.buildingInstanceId === undefined ||
-                row.buildingInstanceId === where.buildingInstanceId) &&
-              (where?.refunded === undefined || row.refunded === where.refunded),
-          ),
+      find: jest.fn(async ({ where }: any = {}) =>
+        contributions.filter(
+          (row) =>
+            (where?.buildingInstanceId === undefined ||
+              row.buildingInstanceId === where.buildingInstanceId) &&
+            (where?.refunded === undefined || row.refunded === where.refunded),
+        ),
       ),
       remove: jest.fn(async (rows: any[]) => {
         for (const row of rows) {
@@ -292,9 +292,9 @@ describe('BuildingService', () => {
 
       expect(buildingRepo.save).not.toHaveBeenCalled();
       expect(plotRepo.save).not.toHaveBeenCalled();
-      expect([...plots.values()].every((p) => p.state === PlotState.EMPTY)).toBe(
-        true,
-      );
+      expect(
+        [...plots.values()].every((p) => p.state === PlotState.EMPTY),
+      ).toBe(true);
       expect(eventBus.emit).not.toHaveBeenCalled();
       // 失败项未进入 done，故无需补偿
       expect(inventoryService.addItem).not.toHaveBeenCalled();
@@ -369,9 +369,7 @@ describe('BuildingService', () => {
       expect(saved.state).toBe(BuildingState.BUILDING);
       expect(saved.plotId).toBe('1'); // 锚点格 id
       expect(saved.ownerId).toBe(PLAYER_ID);
-      expect(saved.finishAt.getTime()).toBe(
-        Date.now() + 60 * 1000,
-      );
+      expect(saved.finishAt.getTime()).toBe(Date.now() + 60 * 1000);
       expect(saved.payload).toEqual({
         gx: 3,
         gy: 4,
@@ -414,6 +412,7 @@ describe('BuildingService', () => {
         w: 1,
         h: 1,
       });
+      expectScopedFind(sceneRepo.findOne);
     });
 
     it('2×2 footprint 占用 4 格，锚点格记录 2×2', async () => {
@@ -445,9 +444,7 @@ describe('BuildingService', () => {
       // 锚点格
       expect(savedPlots[0]).toMatchObject({ gx: 5, gy: 6, w: 2, h: 2 });
       expect(savedPlots.slice(1)).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ w: 1, h: 1 }),
-        ]),
+        expect.arrayContaining([expect.objectContaining({ w: 1, h: 1 })]),
       );
 
       const saved = buildingRepo.save.mock.calls[0][0];
@@ -944,7 +941,9 @@ describe('BuildingService', () => {
       });
       inventoryService.addItem.mockRejectedValueOnce(new Error('背包已满'));
 
-      await expect(service.refundExpiredCoop('900')).rejects.toThrow('背包已满');
+      await expect(service.refundExpiredCoop('900')).rejects.toThrow(
+        '背包已满',
+      );
 
       expect(loggerErrorSpy).toHaveBeenCalled();
       expect(contributions[0].refunded).toBe(false);
@@ -987,7 +986,9 @@ describe('BuildingService', () => {
         .mockRejectedValueOnce(new Error('背包已满'))
         .mockResolvedValueOnce({});
 
-      await expect(service.refundExpiredCoop('900')).rejects.toThrow('背包已满');
+      await expect(service.refundExpiredCoop('900')).rejects.toThrow(
+        '背包已满',
+      );
       expect(contributions[0].refunded).toBe(true);
       expect(contributions[1].refunded).toBe(false);
       expect(building.state).toBe(BuildingState.BUILDING);

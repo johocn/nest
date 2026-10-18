@@ -17,6 +17,7 @@ import {
   FriendStatus,
   SupportTicketStatus,
   VoiceRoomType,
+  PenaltyLevel,
 } from '@constants/enums';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
@@ -358,13 +359,13 @@ export class ChatService {
     return { signedIn: Boolean(existing), today };
   }
 
-  async makeupSignIn(
-    playerId: string,
-    date: string,
-  ): Promise<ChatSignIn> {
+  async makeupSignIn(playerId: string, date: string): Promise<ChatSignIn> {
     const today = new Date().toISOString().slice(0, 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date >= today) {
-      throw new GameException(ErrorCodes.MAKEUP_INVALID_DATE, '仅可补签过去的日期');
+      throw new GameException(
+        ErrorCodes.MAKEUP_INVALID_DATE,
+        '仅可补签过去的日期',
+      );
     }
     const existing = await this.signInRepo.findOne({
       where: { playerId, signInDate: date },
@@ -377,7 +378,10 @@ export class ChatService {
     const countKey = `chat:makeup:${playerId}:${monthKey}`;
     const used = Number((await this.cacheService.get(countKey)) ?? '0');
     if (used >= limit) {
-      throw new GameException(ErrorCodes.MAKEUP_LIMIT_EXCEEDED, '本月补签次数已达上限');
+      throw new GameException(
+        ErrorCodes.MAKEUP_LIMIT_EXCEEDED,
+        '本月补签次数已达上限',
+      );
     }
     const cost = await this.readConfigNumber('chat.makeup_cost', 50);
     await this.socialEconomyService.spendPoints(
@@ -388,7 +392,9 @@ export class ChatService {
     );
     await this.cacheService.set(countKey, String(used + 1), 31 * 86400);
 
-    const reward = await this.readConfigJson('chat.sign_in_reward', { favor: 1 });
+    const reward = await this.readConfigJson('chat.sign_in_reward', {
+      favor: 1,
+    });
     const record = await this.signInRepo.save(
       this.signInRepo.create({
         playerId,
@@ -417,7 +423,10 @@ export class ChatService {
   async getHotTopics(
     days = 1,
     limit = 10,
-  ): Promise<{ topics: { name: string; count: number }[]; mentions: { name: string; count: number }[] }> {
+  ): Promise<{
+    topics: { name: string; count: number }[];
+    mentions: { name: string; count: number }[];
+  }> {
     const cacheKey = HOT_TOPIC_CACHE_PREFIX + days;
     const cached = await this.cacheService.get(cacheKey);
     if (cached) return JSON.parse(cached);
@@ -456,7 +465,11 @@ export class ChatService {
       throw new GameException(ErrorCodes.CHAT_TOPIC_EMPTY, '暂无热搜话题');
     }
     const result = { topics, mentions };
-    await this.cacheService.set(cacheKey, JSON.stringify(result), HOT_TOPIC_CACHE_TTL);
+    await this.cacheService.set(
+      cacheKey,
+      JSON.stringify(result),
+      HOT_TOPIC_CACHE_TTL,
+    );
     return result;
   }
 
@@ -482,9 +495,7 @@ export class ChatService {
         '近几天无有效发言玩家',
       );
     }
-    const players = playerIds
-      .sort(() => Math.random() - 0.5)
-      .slice(0, count);
+    const players = playerIds.sort(() => Math.random() - 0.5).slice(0, count);
     const reward = await this.readConfigJson('chat.lucky_star_reward', {
       favor: 5,
     });
@@ -715,15 +726,106 @@ export class ChatService {
     }
   }
 
-  private async readConfigJson(
-    key: string,
-    fallback: any,
-  ): Promise<any> {
+  private async readConfigJson(key: string, fallback: any): Promise<any> {
     try {
       const config = await this.configService.getConfig(key);
       return JSON.parse(config.value);
     } catch {
       return fallback;
     }
+  }
+
+  // ===== Admin =====
+
+  async searchMessages(
+    filter: {
+      channel?: ChatChannel;
+      senderId?: string;
+      keyword?: string;
+    },
+    page: number,
+    limit: number,
+  ): Promise<{ items: ChatMessage[]; total: number }> {
+    const qb = this.chatRepo.createQueryBuilder('m');
+    if (filter.channel) {
+      qb.where('m.channel = :channel', { channel: filter.channel });
+    }
+    if (filter.senderId) {
+      qb.andWhere('m.sender_id = :senderId', { senderId: filter.senderId });
+    }
+    if (filter.keyword) {
+      qb.andWhere('m.content ILIKE :kw', { kw: `%${filter.keyword}%` });
+    }
+    qb.orderBy('m.created_at', 'DESC');
+
+    const total = await qb.getCount();
+    const items = await qb
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+    return { items, total };
+  }
+
+  async getMessage(id: string): Promise<ChatMessage | null> {
+    return this.chatRepo.findOne({ where: { id } });
+  }
+
+  async deleteMessage(id: string): Promise<boolean> {
+    const result = await this.chatRepo.delete(id);
+    return (result.affected ?? 0) > 0;
+  }
+
+  async getChannelStats(): Promise<
+    Record<string, { total: number; today: number; uniqueSenders: number }>
+  > {
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+    const channels = Object.values(ChatChannel);
+    const result: Record<
+      string,
+      { total: number; today: number; uniqueSenders: number }
+    > = {};
+    for (const ch of channels) {
+      const [total, todayCount, senders] = await Promise.all([
+        this.chatRepo.count({ where: { channel: ch } }),
+        this.chatRepo
+          .createQueryBuilder('m')
+          .where('m.channel = :ch', { ch })
+          .andWhere("to_char(m.created_at, 'YYYY-MM-DD') = :today", { today })
+          .getCount(),
+        this.chatRepo
+          .createQueryBuilder('m')
+          .where('m.channel = :ch', { ch })
+          .select('COUNT(DISTINCT m.sender_id)', 'cnt')
+          .getRawOne(),
+      ]);
+      result[ch] = {
+        total,
+        today: todayCount,
+        uniqueSenders: Number((senders as any)?.cnt ?? 0),
+      };
+    }
+    return result;
+  }
+
+  async blockPlayer(
+    adminUsername: string,
+    playerId: string,
+    durationMinutes: number,
+    reason: string,
+  ) {
+    const player = await this.playerRepo.findOne({ where: { id: playerId } });
+    if (!player) {
+      throw new GameException(ErrorCodes.PLAYER_NOT_FOUND, '玩家不存在');
+    }
+    const durationSeconds = durationMinutes * 60;
+    return this.authService.applyPenalty(
+      adminUsername,
+      playerId,
+      player.accountId,
+      PenaltyLevel.MUTE,
+      reason,
+      durationSeconds,
+    );
   }
 }

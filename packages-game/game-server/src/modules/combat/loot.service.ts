@@ -32,10 +32,7 @@ export class LootService {
     mode: LootDistributionMode,
     itemsJson: Record<string, any> = {},
   ): Promise<CombatLootLog> {
-    if (
-      !/^\d+$/.test(distributorId) ||
-      !/^\d+$/.test(combatLogId)
-    ) {
+    if (!/^\d+$/.test(distributorId) || !/^\d+$/.test(combatLogId)) {
       throw new GameException(ErrorCodes.PARAM_INVALID, '参数不合法');
     }
     const log = await this.combatLogRepo.findOne({
@@ -51,7 +48,9 @@ export class LootService {
       const list = Array.isArray(players)
         ? players.filter((p) => typeof p === 'string' && /^\d+$/.test(p))
         : [];
-      return list.length ? (list as string[]) : [log.attackerId, log.defenderId];
+      return list.length
+        ? (list as string[])
+        : [log.attackerId, log.defenderId];
     };
 
     let playersJson: LootPlayersItem[];
@@ -88,14 +87,13 @@ export class LootService {
         if (!winnerId || !/^\d+$/.test(String(winnerId))) {
           throw new GameException(ErrorCodes.PARAM_INVALID, '缺少指定得主');
         }
-        playersJson = [{ playerId: String(winnerId), ratio: 1, amount: items.length }];
+        playersJson = [
+          { playerId: String(winnerId), ratio: 1, amount: items.length },
+        ];
         break;
       }
       case LootDistributionMode.EQUAL: {
-        playersJson = this.splitEqual(
-          parties(itemsJson.players),
-          items.length,
-        );
+        playersJson = this.splitEqual(parties(itemsJson.players), items.length);
         break;
       }
     }
@@ -125,10 +123,17 @@ export class LootService {
     }));
   }
 
-  async getLootLog(combatLogId: string): Promise<CombatLootLog | null> {
+  async getLootLog(combatLogId: string): Promise<CombatLootLog> {
     if (!/^\d+$/.test(combatLogId)) {
       throw new GameException(ErrorCodes.PARAM_INVALID, '参数不合法');
     }
-    return this.lootLogRepo.findOne({ where: { combatLogId } });
+    const log = await this.lootLogRepo.findOne({ where: { combatLogId } });
+    if (!log) {
+      throw new GameException(
+        ErrorCodes.LOOT_NOT_FOUND,
+        '战利品分配记录不存在',
+      );
+    }
+    return log;
   }
 }

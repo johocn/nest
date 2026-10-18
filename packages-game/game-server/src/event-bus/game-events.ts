@@ -9,6 +9,10 @@ export const GameEvents = {
   BATTLE_REPORTED: 'combat.battle.reported',
   ARBITRATION_SETTLED: 'combat.arbitration.settled',
   GRUDGE_DECLARED: 'combat.grudge.declared',
+  // Buff / Skill 事件（修复前 buff.service 错发 ENTITY_SPAWNED）
+  SKILL_CAST: 'skill.cast',
+  BUFF_APPLIED: 'buff.applied',
+  BUFF_REMOVED: 'buff.removed',
 
   // 经济事件
   CURRENCY_CHANGED: 'economy.currency.changed',
@@ -20,6 +24,13 @@ export const GameEvents = {
   VIP_LEVEL_UP: 'player.vip.level_up',
   RECHARGE_SUCCESS: 'payment.recharge.success',
   MATCH_SUCCESS: 'matchmaking.match.success',
+  // Room 生命周期事件
+  ROOM_CREATED: 'room.created',
+  ROOM_DESTROYED: 'room.destroyed',
+  ROOM_STARTED: 'room.started',
+  ROOM_FINISHED: 'room.finished',
+  ROOM_PLAYER_READY: 'room.player.ready',
+  ROOM_PLAYER_LEFT: 'room.player.left',
   PLAYER_OFFLINE_SYNC: 'player.offline.sync',
   PLAYER_OFFLINE_SAVED: 'player.offline.saved',
   POWER_CHANGED: 'character.power.changed',
@@ -134,6 +145,24 @@ export const GameEvents = {
 
   // 狼人杀事件
   WEREWOLF_BROADCAST: 'werewolf.broadcast',
+
+  // 四川麻将（血战到底）模块事件
+  SICHUANMAJIANG_TABLE_CREATED: 'sichuanmajiang.table.created',
+  SICHUANMAJIANG_TABLE_UPDATED: 'sichuanmajiang.table.updated',
+  SICHUANMAJIANG_TABLE_FINISHED: 'sichuanmajiang.table.finished',
+  SICHUANMAJIANG_TABLE_TIMEOUT: 'sichuanmajiang.table.timeout',
+
+  // 掼蛋模块事件
+  GUANDAN_TABLE_CREATED: 'guandan.table.created',
+  GUANDAN_TABLE_UPDATED: 'guandan.table.updated',
+  GUANDAN_TABLE_FINISHED: 'guandan.table.finished',
+  GUANDAN_TABLE_TIMEOUT: 'guandan.table.timeout',
+
+  // 三国杀（标准身份局）模块事件
+  SANGUOSHA_TABLE_CREATED: 'sanguosha.table.created',
+  SANGUOSHA_TABLE_UPDATED: 'sanguosha.table.updated',
+  SANGUOSHA_TABLE_FINISHED: 'sanguosha.table.finished',
+  SANGUOSHA_TABLE_TIMEOUT: 'sanguosha.table.timeout',
 } as const;
 
 export type GameEvent = (typeof GameEvents)[keyof typeof GameEvents];

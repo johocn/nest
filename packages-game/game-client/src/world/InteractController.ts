@@ -8,7 +8,12 @@ import { Api } from '../net/api';
 import type { DialogueQuestMarks } from '../net/api';
 import { ApiError } from '../net/http';
 import { Session } from '../net/Session';
-import { BuildPanel } from './BuildPanel';
+import { ChatPanel } from '../ui/ChatPanel';
+import { MatchPanel } from '../ui/MatchPanel';
+import { InventoryPanel } from '../ui/InventoryPanel';
+import { MailPanel } from '../ui/MailPanel';
+import { QuizPanel } from '../ui/QuizPanel';
+import { ScorePanel } from '../ui/ScorePanel';
 import { DialogueView, normalizeChoose } from '../ui/DialogueView';
 import type { DialogueNodeView } from '../ui/DialogueView';
 import { Hud } from '../ui/Hud';
@@ -16,8 +21,6 @@ import { isWorldPaused } from './worldControl';
 
 /** 交互键：Laya 的 KEY_DOWN 事件只代理 nativeEvent.key（不带 keyCode），故用归一化小写 'f' 判定 */
 const KEY_INTERACT = 'f';
-/** S6 建造键：打开/关闭建造面板（面板内部另用 Q/E 切换蓝图、Enter 建造、G 投料、Del 拆除） */
-const KEY_BUILD = 'b';
 /** 目标重选节流：每 6 帧（≈100ms）一次，跟手且无谓开销可忽略 */
 const PICK_FRAME_INTERVAL = 6;
 
@@ -49,6 +52,17 @@ export class InteractController {
     console.log(
       `[S3] 交互选择器就绪：半径 NPC ${AppConfig.interactRadiusNpc}px / 物件 ${AppConfig.interactRadiusObject}px，按 F 由选中组件自行派发`,
     );
+  }
+
+  /** 释放 timer / 键盘监听 + 清空交互状态（对话/标记） */
+  detach(): void {
+    Laya.stage.off(Laya.Event.KEY_DOWN, this, this.onKeyDown);
+    Laya.timer.clearAll(this);
+    this.lastHintId = null;
+    this.dialogue = null;
+    this.markedEntity = null;
+    this.busy = false;
+    this.choosing = false;
   }
 
   /**
@@ -98,22 +112,34 @@ export class InteractController {
     // 主世界挂起（狼人杀对局中）：屏蔽 B/F 等世界快捷键，
     // 否则对局里打字或误触会弹出建造面板 / 触发远处交互
     if (isWorldPaused()) return;
+    // 聊天输入/匹配/背包/邮件面板打开时忽略 F（防误触交互）
+    if (
+      ChatPanel.isOpen ||
+      MatchPanel.isOpen ||
+      InventoryPanel.isOpen ||
+      MailPanel.isOpen
+    )
+      return;
     const key = String(
       (e as unknown as { key?: string }).key ?? '',
     ).toLowerCase();
 
-    // S6 建造键 B：打开/关闭建造面板。面板自身在 forbidden 场景展示「此场景不允许建造」并禁用操作行
-    if (key === KEY_BUILD) {
-      if (DialogueView.isOpen) return;
-      BuildPanel.toggle();
-      return;
-    }
+    // 注：建造键 B 的监听**只在 BuildPanel.onKeyDown 一处**（两个处理器都监听 stage 的 KEY_DOWN，
+    // 若此处再 toggle 一次，同一次按键会「开+关」互相抵消 → 面板永远打不开）。触发交互键 F 是本类的职责。
+    if (key !== KEY_INTERACT) return;
+    await this.triggerInteract();
+  }
 
-    if (key !== KEY_INTERACT || this.busy) return;
-    // 对话打开时屏蔽交互键 F（避免连点重复请求）；移动是 W/A/S/D，不受影响
+  /**
+   * S9 触控：交互按钮与键盘 F **共用同一入口**（行为逐字不变）——
+   * 触控只补输入通道，不做任何逻辑分支。
+   */
+  async triggerInteract(): Promise<void> {
+    if (this.busy) return;
+    // 对话打开时屏蔽交互（避免连点重复请求）；移动是 W/A/S/D，不受影响
     if (DialogueView.isOpen) return;
 
-    // 按键时按同一规则重选一次，避免用上一次节流的结果
+    // 触发时按同一规则重选一次，避免用上一次节流的结果
     const picked = this.pick();
     if (!picked) {
       Hud.toast('附近没有可交互目标');
@@ -168,6 +194,11 @@ export class InteractController {
         optionIndex,
         Session.token ?? '',
       );
+      // quiz/assess action：服务端在推进与结束（finished）分支都可能附带脱敏 handout →
+      // 打开答题面板（模态，zOrder 高于对话框；未 finished 时答题后回到对话继续）
+      if (res.quiz) QuizPanel.openFromHandout(res.quiz, Session.token ?? '');
+      // 评分轴快照：服务端在推进与结束（finished）分支都可能附带（仅 visible 轴）→ 打开评分面板
+      if (res.score) ScorePanel.open(res.score);
       const next = normalizeChoose(res);
       if (next.finished) {
         this.dialogue = null;

@@ -4,6 +4,7 @@ import { SkillService } from './skill.service';
 import { SkillTemplate } from './entities';
 import { CacheService } from '@cache/cache.service';
 import { BuffService } from '@modules/buff/buff.service';
+import { EventBusService } from '@event-bus/event-bus.service';
 import { GameException } from '@common/exceptions/game.exception';
 import { SkillType, MartialArtType } from '@constants/enums';
 import type { Repository } from 'typeorm';
@@ -51,6 +52,7 @@ describe('SkillService', () => {
             }),
           },
         },
+        { provide: EventBusService, useValue: { emit: jest.fn() } },
       ],
     }).compile();
 

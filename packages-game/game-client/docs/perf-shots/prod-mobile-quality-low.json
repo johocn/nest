@@ -1,0 +1,493 @@
+{
+  "label": "prod-mobile-quality-low",
+  "at": "2026-09-24T23:54:03.216Z",
+  "commit": "1d1847fc1",
+  "dirty": true,
+  "mode": "移动端模拟（非真机）",
+  "browser": "151.0.7922.34",
+  "headless": false,
+  "mobile": {
+    "vw": 915,
+    "vh": 412,
+    "dpr": 1.75,
+    "isMobile": true,
+    "hasTouch": true,
+    "userAgent": "Mozilla/5.0 (Linux; Android 10; SM-A105F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+  },
+  "url": "https://game.joho.cn/client/?quality=low",
+  "cpuThrottle": 0,
+  "quality": "low",
+  "timing": {
+    "T1_s": 2.99,
+    "T2_s": 3.77,
+    "T3_s": 6.76
+  },
+  "padGeometry": {
+    "scale": 0.644,
+    "ox": 149,
+    "oy": 0,
+    "canvas": {
+      "w": 618,
+      "h": 412
+    },
+    "stage": {
+      "w": 960,
+      "h": 640
+    },
+    "zone": {
+      "sx": 0,
+      "sy": 240,
+      "w": 256,
+      "h": 400
+    },
+    "buttons": [
+      {
+        "name": "",
+        "text": "交互",
+        "sx": 892,
+        "sy": 556
+      },
+      {
+        "name": "s9-build-btn",
+        "text": "建造",
+        "sx": 892,
+        "sy": 444
+      }
+    ],
+    "interact": {
+      "name": "",
+      "text": "交互",
+      "sx": 892,
+      "sy": 556
+    }
+  },
+  "stick": {
+    "origin": {
+      "x": 128,
+      "y": 440
+    },
+    "radius": 88,
+    "probes": [
+      {
+        "dir": "→",
+        "visible": true,
+        "base": {
+          "x": 128,
+          "y": 440
+        },
+        "knob": {
+          "x": 88,
+          "y": 0
+        }
+      },
+      {
+        "dir": "↓",
+        "visible": true,
+        "base": {
+          "x": 128,
+          "y": 440
+        },
+        "knob": {
+          "x": 0,
+          "y": 88
+        }
+      },
+      {
+        "dir": "←",
+        "visible": true,
+        "base": {
+          "x": 128,
+          "y": 440
+        },
+        "knob": {
+          "x": -88,
+          "y": 0
+        }
+      },
+      {
+        "dir": "↑",
+        "visible": true,
+        "base": {
+          "x": 128,
+          "y": 440
+        },
+        "knob": {
+          "x": 0,
+          "y": -88
+        }
+      },
+      {
+        "dir": "→",
+        "visible": true,
+        "base": {
+          "x": 128,
+          "y": 440
+        },
+        "knob": {
+          "x": 88,
+          "y": 0
+        }
+      },
+      {
+        "dir": "←",
+        "visible": true,
+        "base": {
+          "x": 128,
+          "y": 440
+        },
+        "knob": {
+          "x": -88,
+          "y": 0
+        }
+      },
+      {
+        "dir": "↑",
+        "visible": true,
+        "base": {
+          "x": 128,
+          "y": 440
+        },
+        "knob": {
+          "x": 0,
+          "y": -88
+        }
+      },
+      {
+        "dir": "←",
+        "visible": true,
+        "base": {
+          "x": 128,
+          "y": 440
+        },
+        "knob": {
+          "x": -88,
+          "y": 0
+        }
+      },
+      {
+        "dir": "↓",
+        "visible": true,
+        "base": {
+          "x": 128,
+          "y": 440
+        },
+        "knob": {
+          "x": 0,
+          "y": 88
+        }
+      },
+      {
+        "dir": "→",
+        "visible": true,
+        "base": {
+          "x": 128,
+          "y": 440
+        },
+        "knob": {
+          "x": 88,
+          "y": 0
+        }
+      },
+      {
+        "dir": "↑",
+        "visible": true,
+        "base": {
+          "x": 128,
+          "y": 440
+        },
+        "knob": {
+          "x": 0,
+          "y": -88
+        }
+      }
+    ]
+  },
+  "interact": {
+    "spot": {
+      "x": 720,
+      "y": 400,
+      "expect": "stone_01 (720,400)，半径 70；最近 NPC smith(700,520) 距离 122 > 90"
+    },
+    "posAtSpot": {
+      "x": 736,
+      "y": 408
+    },
+    "hudAtSpot": "登录成功：playerId=125 | 按 F 交互：object:2",
+    "hudAfter": "采集成功，获得 8 gold | 按 F 交互：npcs:1:0",
+    "touchDelivered": 1,
+    "hits": [
+      "201 POST /api/client/v1/world/objects/2/interact"
+    ],
+    "toastLine": "[S3] 采集返回 {\"ok\":true,\"reward\":{\"currencyType\":\"gold\",\"amount\":8}}"
+  },
+  "route": "→ 1.9s → ↓ 1.9s → ← 1.9s → ↑ 1.9s → → 2.4s",
+  "buildPanel": {
+    "buttonFound": true,
+    "buttonCss": {
+      "x": 723,
+      "y": 286
+    },
+    "beforeChildren": 0,
+    "openedChildren": 23,
+    "openedByButton": true,
+    "hitHeights": [
+      44,
+      44,
+      44,
+      44,
+      44,
+      44,
+      44
+    ],
+    "selectedBefore": "▸木屋　货币gold×50　15s",
+    "selectedAfter": "▸石墙　货币gold×20　10s",
+    "rowClickWorked": true,
+    "closeRowTouched": true,
+    "closedChildren": 0,
+    "closedByRow": true
+  },
+  "moveSamples": [
+    {
+      "t": 1.01,
+      "fps": 59.9,
+      "statFps": 60,
+      "drawcall": 23,
+      "entityTotal": 15,
+      "entityVisible": 15,
+      "upPerSec": 9,
+      "quality": "low",
+      "heapMB": 13
+    },
+    {
+      "t": 2.02,
+      "fps": 59.8,
+      "statFps": 60,
+      "drawcall": 22,
+      "entityTotal": 15,
+      "entityVisible": 13,
+      "upPerSec": 10,
+      "quality": "low",
+      "heapMB": 13.4
+    },
+    {
+      "t": 3.03,
+      "fps": 60.3,
+      "statFps": 60,
+      "drawcall": 21,
+      "entityTotal": 15,
+      "entityVisible": 12,
+      "upPerSec": 8,
+      "quality": "low",
+      "heapMB": 13.9
+    },
+    {
+      "t": 4.03,
+      "fps": 60,
+      "statFps": 60,
+      "drawcall": 18,
+      "entityTotal": 15,
+      "entityVisible": 10,
+      "upPerSec": 10,
+      "quality": "low",
+      "heapMB": 14.4
+    },
+    {
+      "t": 5.03,
+      "fps": 59.9,
+      "statFps": 60,
+      "drawcall": 17,
+      "entityTotal": 15,
+      "entityVisible": 9,
+      "upPerSec": 8,
+      "quality": "low",
+      "heapMB": 11.9
+    },
+    {
+      "t": 6.04,
+      "fps": 60,
+      "statFps": 60,
+      "drawcall": 13,
+      "entityTotal": 15,
+      "entityVisible": 9,
+      "upPerSec": 10,
+      "quality": "low",
+      "heapMB": 11.8
+    },
+    {
+      "t": 7.06,
+      "fps": 60,
+      "statFps": 60,
+      "drawcall": 13,
+      "entityTotal": 15,
+      "entityVisible": 14,
+      "upPerSec": 8,
+      "quality": "low",
+      "heapMB": 12.3
+    },
+    {
+      "t": 8.08,
+      "fps": 59.9,
+      "statFps": 60,
+      "drawcall": 16,
+      "entityTotal": 15,
+      "entityVisible": 15,
+      "upPerSec": 9,
+      "quality": "low",
+      "heapMB": 12.1
+    },
+    {
+      "t": 9.08,
+      "fps": 60,
+      "statFps": 60,
+      "drawcall": 21,
+      "entityTotal": 15,
+      "entityVisible": 15,
+      "upPerSec": 9,
+      "quality": "low",
+      "heapMB": 12.7
+    },
+    {
+      "t": 10,
+      "fps": 60,
+      "statFps": 60,
+      "drawcall": 24,
+      "entityTotal": 15,
+      "entityVisible": 15,
+      "upPerSec": 10,
+      "quality": "low",
+      "heapMB": 12.5
+    }
+  ],
+  "idleSamples": [
+    {
+      "t": 1.01,
+      "fps": 60,
+      "statFps": 60,
+      "drawcall": 16,
+      "entityTotal": 15,
+      "entityVisible": 10,
+      "upPerSec": 0,
+      "quality": "low",
+      "heapMB": 12.8
+    },
+    {
+      "t": 2.02,
+      "fps": 60,
+      "statFps": 60,
+      "drawcall": 16,
+      "entityTotal": 15,
+      "entityVisible": 10,
+      "upPerSec": 0,
+      "quality": "low",
+      "heapMB": 13.1
+    },
+    {
+      "t": 3.03,
+      "fps": 60,
+      "statFps": 60,
+      "drawcall": 16,
+      "entityTotal": 15,
+      "entityVisible": 10,
+      "upPerSec": 0,
+      "quality": "low",
+      "heapMB": 12.8
+    },
+    {
+      "t": 4.03,
+      "fps": 59.9,
+      "statFps": 60,
+      "drawcall": 16,
+      "entityTotal": 15,
+      "entityVisible": 10,
+      "upPerSec": 0,
+      "quality": "low",
+      "heapMB": 13.1
+    },
+    {
+      "t": 5.03,
+      "fps": 60,
+      "statFps": 60,
+      "drawcall": 16,
+      "entityTotal": 15,
+      "entityVisible": 10,
+      "upPerSec": 0,
+      "quality": "low",
+      "heapMB": 13.5
+    },
+    {
+      "t": 6.04,
+      "fps": 60,
+      "statFps": 60,
+      "drawcall": 16,
+      "entityTotal": 15,
+      "entityVisible": 10,
+      "upPerSec": 0,
+      "quality": "low",
+      "heapMB": 13
+    },
+    {
+      "t": 7.05,
+      "fps": 60,
+      "statFps": 60,
+      "drawcall": 16,
+      "entityTotal": 15,
+      "entityVisible": 10,
+      "upPerSec": 0,
+      "quality": "low",
+      "heapMB": 13.3
+    },
+    {
+      "t": 8.06,
+      "fps": 60,
+      "statFps": 60,
+      "drawcall": 16,
+      "entityTotal": 15,
+      "entityVisible": 10,
+      "upPerSec": 0,
+      "quality": "low",
+      "heapMB": 13.6
+    },
+    {
+      "t": 9.06,
+      "fps": 60,
+      "statFps": 60,
+      "drawcall": 16,
+      "entityTotal": 15,
+      "entityVisible": 10,
+      "upPerSec": 0,
+      "quality": "low",
+      "heapMB": 13.2
+    },
+    {
+      "t": 10.01,
+      "fps": 60,
+      "statFps": 60,
+      "drawcall": 16,
+      "entityTotal": 15,
+      "entityVisible": 10,
+      "upPerSec": 0,
+      "quality": "low",
+      "heapMB": 13.5
+    }
+  ],
+  "degradeLine": "(未触发自动降级)",
+  "qualityLine": "[S8] quality=low switches=nameLabels=0 gridLines=0 triggerOutline=0 interp=reduced remoteHz=5 (platform=h5 url=low env=- config=auto)",
+  "finalQuality": "low",
+  "heapAtIdleEndMB": 13.5,
+  "pageErrors": [],
+  "failedRequests": [],
+  "consoleTouch": "[S9] 贴图预加载 9/9 命中",
+  "screenshot": "E:\\code\\nest\\packages-game\\game-client\\docs\\perf-shots\\prod-mobile-quality-low.png",
+  "summary": {
+    "moveFpsMean": 59.98,
+    "moveFpsMin": 59.8,
+    "idleFpsMean": 59.99,
+    "drawcallPeak": 24,
+    "heapPeakMB": 14.4,
+    "heapAtIdleEndMB": 13.5,
+    "heapFellBack": true,
+    "moveUpPerSecMean": 9.1,
+    "idleUpPerSecSum": 0,
+    "finalQuality": "low"
+  }
+}

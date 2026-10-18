@@ -11,6 +11,7 @@ import { ErrorCodes } from '@constants/error-codes';
 import { GameException } from '@common/exceptions/game.exception';
 import { EventBusService } from '@event-bus/event-bus.service';
 import { GameEvents } from '@event-bus/game-events';
+import { visibleTo } from '@shared/content-scope';
 import { InventoryService } from '@modules/inventory/inventory.service';
 import { EconomyService } from '@modules/economy/economy.service';
 import { Scene } from '../entities/scene.entity';
@@ -128,7 +129,10 @@ export class BuildingService {
     // 1. 前置校验（模式/边界/保留区/上限）—— forbidden 已由 assertCanBuild 拦截
     const rule = await this.buildRule.assertCanBuild(sceneId, playerId, gx, gy);
     if (rule.mode !== BuildMode.SOLO) {
-      throw new GameException(ErrorCodes.BUILD_FORBIDDEN, '该场景不适用单独建造');
+      throw new GameException(
+        ErrorCodes.BUILD_FORBIDDEN,
+        '该场景不适用单独建造',
+      );
     }
 
     // 2. 蓝图校验（不校验 unlock_condition，本批不做）
@@ -146,7 +150,9 @@ export class BuildingService {
     const h = template.footprintH ?? 1;
 
     // 3. 矩形越界校验（assertCanBuild 只校验锚点）
-    const scene = await this.sceneRepo.findOne({ where: { id: sceneId } });
+    const scene = await this.sceneRepo.findOne({
+      where: { id: sceneId, ...visibleTo(null) },
+    });
     if (!scene) {
       throw new GameException(ErrorCodes.PARAM_INVALID, '场景不存在');
     }
@@ -242,7 +248,10 @@ export class BuildingService {
     // 1. 前置校验（模式/边界/保留区/上限）
     const rule = await this.buildRule.assertCanBuild(sceneId, playerId, gx, gy);
     if (rule.mode !== BuildMode.COOP) {
-      throw new GameException(ErrorCodes.BUILD_FORBIDDEN, '该场景不适用共同建造');
+      throw new GameException(
+        ErrorCodes.BUILD_FORBIDDEN,
+        '该场景不适用共同建造',
+      );
     }
 
     // 2. 蓝图校验
@@ -260,7 +269,9 @@ export class BuildingService {
     const h = template.footprintH ?? 1;
 
     // 3. 矩形越界校验（assertCanBuild 只校验锚点）
-    const scene = await this.sceneRepo.findOne({ where: { id: sceneId } });
+    const scene = await this.sceneRepo.findOne({
+      where: { id: sceneId, ...visibleTo(null) },
+    });
     if (!scene) {
       throw new GameException(ErrorCodes.PARAM_INVALID, '场景不存在');
     }
@@ -289,9 +300,7 @@ export class BuildingService {
         ownerType: BuildingOwnerType.PLAYER,
         ownerId: playerId,
         state: BuildingState.BUILDING,
-        finishAt: new Date(
-          Date.now() + rule.coopExpireHours * 3600_000,
-        ),
+        finishAt: new Date(Date.now() + rule.coopExpireHours * 3600_000),
         durability: template.durability,
         payload: {
           gx,
@@ -347,13 +356,19 @@ export class BuildingService {
       where: { id: buildingId },
     });
     if (!building || building.state !== BuildingState.BUILDING) {
-      throw new GameException(ErrorCodes.BUILD_NOT_FOUND, '建筑不存在或不可投料');
+      throw new GameException(
+        ErrorCodes.BUILD_NOT_FOUND,
+        '建筑不存在或不可投料',
+      );
     }
 
     // 2. 规则校验（仅 coop 场景可投料）
     const rule = await this.buildRule.getRule(building.sceneId);
     if (rule.mode !== BuildMode.COOP) {
-      throw new GameException(ErrorCodes.BUILD_FORBIDDEN, '该场景不适用共同建造');
+      throw new GameException(
+        ErrorCodes.BUILD_FORBIDDEN,
+        '该场景不适用共同建造',
+      );
     }
 
     // 3. 已超时
@@ -367,7 +382,10 @@ export class BuildingService {
     // 4. 已达标的行不再受理投料
     const currentPayload = building.payload ?? {};
     if (currentPayload.reached === true) {
-      throw new GameException(ErrorCodes.COOP_NOT_READY, '共建已达标，不再受理投料');
+      throw new GameException(
+        ErrorCodes.COOP_NOT_READY,
+        '共建已达标，不再受理投料',
+      );
     }
 
     // 5. 解析并校验投料内容（空数组视为非法）
@@ -392,12 +410,7 @@ export class BuildingService {
     const done: DeductionPlanItem[] = [];
     for (const item of plan) {
       try {
-        await this.applyDeduction(
-          playerId,
-          item,
-          opTrace,
-          building.templateId,
-        );
+        await this.applyDeduction(playerId, item, opTrace, building.templateId);
         done.push(item);
         const row = await this.contributionRepo.save(
           this.contributionRepo.create({
@@ -412,12 +425,7 @@ export class BuildingService {
         inserted.push(row);
       } catch (err) {
         await this.removeContributions(inserted);
-        await this.compensate(
-          playerId,
-          done,
-          refundTrace,
-          building.templateId,
-        );
+        await this.compensate(playerId, done, refundTrace, building.templateId);
         throw err;
       }
     }
@@ -437,7 +445,9 @@ export class BuildingService {
       payload.reached = true;
       payload.coopReachedAt = new Date().toISOString();
       building.payload = payload;
-      building.finishAt = new Date(Date.now() + (template.buildSeconds ?? 0) * 1000);
+      building.finishAt = new Date(
+        Date.now() + (template.buildSeconds ?? 0) * 1000,
+      );
       await this.buildingRepo.save(building);
 
       const { x, y } = this.buildRule.toCenter(
@@ -577,13 +587,19 @@ export class BuildingService {
    * 终态：置 `demolishing` + `finish_at=null` → emit（让在线客户端淡出）→ 释放矩形内地块 → 软删实例。
    * **不退款**（计划 D7）：不调用任何扣料/发料途径，避免「建 → 拆 → 再建」无损刷料。
    */
-  async demolish(playerId: string, buildingId: string): Promise<DemolishResult> {
+  async demolish(
+    playerId: string,
+    buildingId: string,
+  ): Promise<DemolishResult> {
     // 1. 查实例（软删行由 TypeORM 默认过滤 → 视同不存在）
     const building = await this.buildingRepo.findOne({
       where: { id: buildingId },
     });
     if (!building || building.state !== BuildingState.BUILT) {
-      throw new GameException(ErrorCodes.BUILD_NOT_FOUND, '建筑不存在或不可拆除');
+      throw new GameException(
+        ErrorCodes.BUILD_NOT_FOUND,
+        '建筑不存在或不可拆除',
+      );
     }
 
     // 2. 规则：该场景是否允许拆除
@@ -597,7 +613,10 @@ export class BuildingService {
       building.ownerType !== BuildingOwnerType.PLAYER ||
       building.ownerId !== playerId
     ) {
-      throw new GameException(ErrorCodes.BUILD_FORBIDDEN, '只有建筑所有者可拆除');
+      throw new GameException(
+        ErrorCodes.BUILD_FORBIDDEN,
+        '只有建筑所有者可拆除',
+      );
     }
 
     // 4. 置拆除中（清 finish_at）
@@ -659,9 +678,7 @@ export class BuildingService {
     opts?: { ownerId?: string },
   ): Promise<BuildingView[]> {
     const rows = await this.buildingRepo.find({
-      where: opts?.ownerId
-        ? { sceneId, ownerId: opts.ownerId }
-        : { sceneId },
+      where: opts?.ownerId ? { sceneId, ownerId: opts.ownerId } : { sceneId },
       order: { id: 'ASC' },
     });
     const rule = await this.buildRule.getRule(sceneId);

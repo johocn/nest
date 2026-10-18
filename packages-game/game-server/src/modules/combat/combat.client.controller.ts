@@ -27,12 +27,11 @@ import { GrudgeDto } from './dto/grudge.dto';
 import { LootDto } from './dto/loot.dto';
 import { ArbitrationDto } from './dto/arbitration.dto';
 import { ArbitrationResolveDto } from './dto/arbitration-resolve.dto';
-import { FaceAdjustDto } from './dto/face-adjust.dto';
 
 @ApiTags('Combat')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
-@Controller()
+@Controller('api/client/v1/combat')
 export class CombatClientController {
   constructor(
     private readonly formationService: FormationService,
@@ -51,7 +50,7 @@ export class CombatClientController {
 
   // ===== 阵法 =====
 
-  @Post('api/client/v1/combat/formations')
+  @Post('formations')
   @ApiOperation({ summary: '创建阵法' })
   async createFormation(
     @CurrentPlayer() player: CurrentPlayerData,
@@ -63,12 +62,9 @@ export class CombatClientController {
     );
   }
 
-  @Post('api/client/v1/combat/formations/:id/join')
+  @Post('formations/:id/join')
   @ApiOperation({ summary: '加入阵法' })
-  async joinFormation(
-    @Param('id') id: string,
-    @Body() dto: JoinFormationDto,
-  ) {
+  async joinFormation(@Param('id') id: string, @Body() dto: JoinFormationDto) {
     return this.formationService.joinFormation(
       this.assertId(dto.playerId),
       this.assertId(id),
@@ -76,16 +72,19 @@ export class CombatClientController {
     );
   }
 
-  @Delete('api/client/v1/combat/formations/:id/leave')
+  @Delete('formations/:id/leave')
   @ApiOperation({ summary: '离开阵法' })
   async leaveFormation(
     @CurrentPlayer() player: CurrentPlayerData,
     @Param('id') id: string,
   ) {
-    return this.formationService.leaveFormation(player.playerId, this.assertId(id));
+    return this.formationService.leaveFormation(
+      player.playerId,
+      this.assertId(id),
+    );
   }
 
-  @Post('api/client/v1/combat/formations/:id/activate')
+  @Post('formations/:id/activate')
   @ApiOperation({ summary: '激活阵法' })
   async activateFormation(
     @CurrentPlayer() player: CurrentPlayerData,
@@ -97,7 +96,7 @@ export class CombatClientController {
     );
   }
 
-  @Get('api/client/v1/combat/formations/:id')
+  @Get('formations/:id')
   @ApiOperation({ summary: '阵法详情' })
   async getFormation(@Param('id') id: string) {
     return this.formationService.getFormation(this.assertId(id));
@@ -105,7 +104,7 @@ export class CombatClientController {
 
   // ===== 合击 + 援护 =====
 
-  @Post('api/client/v1/combat/combo')
+  @Post('combo')
   @ApiOperation({ summary: '合击' })
   async performCombo(
     @CurrentPlayer() player: CurrentPlayerData,
@@ -118,7 +117,7 @@ export class CombatClientController {
     );
   }
 
-  @Post('api/client/v1/combat/rescue')
+  @Post('rescue')
   @ApiOperation({ summary: '援护' })
   async attemptRescue(
     @CurrentPlayer() player: CurrentPlayerData,
@@ -130,7 +129,7 @@ export class CombatClientController {
     );
   }
 
-  @Get('api/client/v1/combat/rescue/logs')
+  @Get('rescue/logs')
   @ApiOperation({ summary: '援护记录与今日次数' })
   async getRescueLogs(@CurrentPlayer() player: CurrentPlayerData) {
     const [logs, count] = await Promise.all([
@@ -142,17 +141,7 @@ export class CombatClientController {
 
   // ===== 颜面 =====
 
-  @Post('api/client/v1/combat/face/adjust')
-  @ApiOperation({ summary: '颜面调整（GM 占位）' })
-  async adjustFace(@Body() dto: FaceAdjustDto) {
-    return this.faceService.adjustFace(
-      this.assertId(dto.playerId),
-      dto.delta,
-      dto.reason,
-    );
-  }
-
-  @Post('api/client/v1/combat/shame')
+  @Post('shame')
   @ApiOperation({ summary: '公开羞辱' })
   async publicShame(
     @CurrentPlayer() player: CurrentPlayerData,
@@ -164,7 +153,7 @@ export class CombatClientController {
     );
   }
 
-  @Post('api/client/v1/combat/grudge/declare')
+  @Post('grudge/declare')
   @ApiOperation({ summary: '雪耻宣言' })
   async declareGrudge(
     @CurrentPlayer() player: CurrentPlayerData,
@@ -178,7 +167,7 @@ export class CombatClientController {
 
   // ===== 战利品 =====
 
-  @Post('api/client/v1/combat/loot/distribute')
+  @Post('loot/distribute')
   @ApiOperation({ summary: '战利品分配' })
   async distributeLoot(
     @CurrentPlayer() player: CurrentPlayerData,
@@ -192,7 +181,7 @@ export class CombatClientController {
     );
   }
 
-  @Get('api/client/v1/combat/loot/:combatLogId')
+  @Get('loot/:combatLogId')
   @ApiOperation({ summary: '战利品分配记录' })
   async getLootLog(@Param('combatLogId') combatLogId: string) {
     return this.lootService.getLootLog(this.assertId(combatLogId));
@@ -200,7 +189,7 @@ export class CombatClientController {
 
   // ===== 调解仲裁 =====
 
-  @Post('api/client/v1/combat/arbitration')
+  @Post('arbitration')
   @ApiOperation({ summary: '发起仲裁' })
   async startArbitration(
     @CurrentPlayer() player: CurrentPlayerData,
@@ -214,16 +203,19 @@ export class CombatClientController {
     );
   }
 
-  @Post('api/client/v1/combat/arbitration/:id/resolve')
+  @Post('arbitration/:id/resolve')
   @ApiOperation({ summary: '仲裁结算' })
   async resolveArbitration(
     @Param('id') id: string,
     @Body() dto: ArbitrationResolveDto,
   ) {
-    return this.arbitrationService.resolveArbitration(this.assertId(id), dto.result);
+    return this.arbitrationService.resolveArbitration(
+      this.assertId(id),
+      dto.result,
+    );
   }
 
-  @Get('api/client/v1/combat/arbitration/:id')
+  @Get('arbitration/:id')
   @ApiOperation({ summary: '仲裁详情' })
   async getArbitration(@Param('id') id: string) {
     return this.arbitrationService.getArbitration(this.assertId(id));
@@ -231,13 +223,13 @@ export class CombatClientController {
 
   // ===== 战报 + Buff =====
 
-  @Get('api/client/v1/combat/battle-report/:combatLogId')
+  @Get('battle-report/:combatLogId')
   @ApiOperation({ summary: '战报' })
   async createBattleReport(@Param('combatLogId') combatLogId: string) {
     return this.faceService.createBattleReport(this.assertId(combatLogId));
   }
 
-  @Get('api/client/v1/combat/buffs')
+  @Get('buffs')
   @ApiOperation({ summary: '当前战斗 Buff 状态' })
   async getActiveBuffs(@CurrentPlayer() player: CurrentPlayerData) {
     return this.faceService.getActiveBuffs(player.playerId);

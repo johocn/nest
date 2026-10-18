@@ -110,6 +110,17 @@ export class BuildingAdminService {
     return this.templateRepo.save(template);
   }
 
+  /** 单条蓝图查询，不存在抛 BUILD_NOT_FOUND（复用 findTemplate） */
+  async getTemplate(id: string): Promise<BuildingTemplate> {
+    return this.findTemplate(id);
+  }
+
+  /** 软删蓝图（softRemove） */
+  async deleteTemplate(id: string): Promise<void> {
+    const template = await this.findTemplate(id);
+    await this.templateRepo.softRemove(template);
+  }
+
   /**
    * 场景建造规则 upsert：存在则更新（仅覆盖传入字段），不存在则插入；
    * 返回统一走 BuildRuleService.getRule 的视图，不自造结构。

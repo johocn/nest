@@ -1,7 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { CurrencyType, DialogueActionType, QuestStatus } from '@constants/enums';
+import {
+  CurrencyType,
+  DialogueActionType,
+  QuestStatus,
+} from '@constants/enums';
 import { ErrorCodes } from '@constants/error-codes';
 import { GameException } from '@common/exceptions/game.exception';
 import { CacheService } from '@cache/cache.service';
@@ -12,17 +16,26 @@ import { QuestService } from '@modules/quest/quest.service';
 import { InventoryItem } from '@modules/inventory/entities/inventory-item.entity';
 import { InventoryService } from '@modules/inventory/inventory.service';
 import { EconomyService } from '@modules/economy/economy.service';
+import { QuizService } from '@modules/quiz/quiz.service';
+import { DrawQuizDto } from '@modules/quiz/dto/quiz-draw.dto';
+import { ScoringService } from '@modules/scoring/scoring.service';
+import { ScoreEffect } from '@modules/scoring/scoring.types';
 import { Dialogue } from '../entities/dialogue.entity';
+import { COMMON_SCOPE, visibleTo } from '@shared/content-scope';
 import {
   DialogueContext,
   ResolvedNode,
   collectFlagKeys,
+  collectScoreGameIds,
   matchCondition,
   resolveNode,
 } from './dialogue.resolver';
 import {
   DialogueActionArgs,
   DialogueNode,
+  DialogueQuizHandout,
+  DialogueScoreAxisView,
+  DialogueScoreSnapshot,
   assertDialogueNodes,
 } from './dialogue.types';
 
@@ -31,7 +44,7 @@ import {
  *
  * 职责：
  *  1. 组装玩家上下文（buildContext）：等级/任务态/背包数量/redis 旗标 → 纯数据结构；
- *  2. 动作执行器（executeAction）：6 个白名单动作**一律走既有服务**，失败即中止不推进节点（D3）；
+ *  2. 动作执行器（executeAction）：白名单动作**一律走既有服务**，失败即中止不推进节点（D3）；
  *  3. 对话推进（start / choose）：服务端权威解析节点、条件过滤、防重放（D2/D4/D7）。
  *
  * 错误语义（计划 §1.2/§3）：
@@ -57,6 +70,10 @@ export interface DialogueView {
   nodeKey: string | null;
   node: ResolvedNode | null;
   finished: boolean;
+  /** quiz/assess 动作随 choose 下发的脱敏题目 */
+  quiz?: DialogueQuizHandout;
+  /** 评分轴快照（key=gameId；仅 visible:true 轴、按 config 声明顺序；树内无 score 引用时缺省不带） */
+  score?: Record<string, DialogueScoreAxisView[]>;
 }
 
 /** D8：NPC 头顶任务标记（服务端权威计算，客户端不得自行推断） */
@@ -85,6 +102,8 @@ export class DialogueService {
     private readonly questService: QuestService,
     private readonly inventoryService: InventoryService,
     private readonly economyService: EconomyService,
+    private readonly quizService: QuizService,
+    private readonly scoringService: ScoringService,
   ) {}
 
   /**
@@ -96,12 +115,16 @@ export class DialogueService {
   async buildContext(
     playerId: string,
     neededFlags: string[] = [],
+    scoreGameIds: string[] = [],
   ): Promise<DialogueContext> {
-    const [level, quests, items, flags] = await Promise.all([
+    const [level, quests, items, flags, score] = await Promise.all([
       this.getPlayerLevel(playerId),
       this.playerQuestRepo.find({ where: { playerId } }),
       this.inventoryItemRepo.find({ where: { playerId } }),
       this.loadFlags(playerId, neededFlags),
+      scoreGameIds.length
+        ? this.scoringService.snapshotFor(playerId, scoreGameIds)
+        : Promise.resolve({} as Record<string, DialogueScoreSnapshot>),
     ]);
 
     const questStatus = new Map<string, QuestStatus>();
@@ -119,7 +142,7 @@ export class DialogueService {
       );
     }
 
-    return { level, questStatus, itemCount, flags };
+    return { level, questStatus, itemCount, flags, score };
   }
 
   /** 读取玩家等级；玩家不存在或读失败时按「无等级」处理（与 S4 一致） */
@@ -185,7 +208,7 @@ export class DialogueService {
     dialogueId: number | string,
   ): Promise<DialogueView> {
     const dialogue = await this.dialogueRepo.findOne({
-      where: { id: String(dialogueId), isActive: true },
+      where: { id: String(dialogueId), isActive: true, ...visibleTo(null) },
     });
     if (!dialogue) {
       throw new GameException(
@@ -196,6 +219,29 @@ export class DialogueService {
     return this.buildStartView(dialogue, playerId);
   }
 
+  /**
+   * 组装客户端展示用的评分轴快照（key=gameId，仅 visible:true 轴、按 config 声明顺序）。
+   * 树内无 score 引用（condition.score / branch.gameId 均无）→ 返回 undefined（视图不带该字段）。
+   * 每次现取 snapshot（L1 缓存命中）：choose 在动作（如 score 加成）之后组装，保证值最新。
+   */
+  private async buildScoreView(
+    playerId: string,
+    nodes: DialogueNode[],
+  ): Promise<Record<string, DialogueScoreAxisView[]> | undefined> {
+    const gameIds = collectScoreGameIds(nodes);
+    if (gameIds.length === 0) return undefined;
+    const out: Record<string, DialogueScoreAxisView[]> = {};
+    await Promise.all(
+      gameIds.map(async (g) => {
+        out[g] = this.scoringService.toVisibleView(
+          await this.scoringService.snapshot(playerId, g),
+          g,
+        );
+      }),
+    );
+    return out;
+  }
+
   /** 解析首节点并组装视图（start / startById 共用；结构非法或首节点条件不满足即拒绝） */
   private async buildStartView(
     dialogue: Dialogue,
@@ -203,7 +249,11 @@ export class DialogueService {
   ): Promise<DialogueView> {
     const nodes = this.assertNodes(dialogue);
 
-    const ctx = await this.buildContext(playerId, collectFlagKeys(nodes));
+    const ctx = await this.buildContext(
+      playerId,
+      collectFlagKeys(nodes),
+      collectScoreGameIds(nodes),
+    );
     const first = nodes[0];
     const node = resolveNode(nodes, first.key, ctx);
     if (!node) {
@@ -212,7 +262,14 @@ export class DialogueService {
         `首节点当前不可进入：${first.key}`,
       );
     }
-    return { code: dialogue.code, nodeKey: node.key, node, finished: false };
+    const score = await this.buildScoreView(playerId, nodes);
+    return {
+      code: dialogue.code,
+      nodeKey: node.key,
+      node,
+      finished: false,
+      ...(score ? { score } : {}),
+    };
   }
 
   /**
@@ -224,7 +281,7 @@ export class DialogueService {
   async buildQuestMarks(playerId: string): Promise<DialogueQuestMarks> {
     const [ctx, templates] = await Promise.all([
       this.buildContext(playerId),
-      this.questTemplateRepo.find(),
+      this.questTemplateRepo.find({ where: { ...visibleTo(null) } }),
     ]);
 
     const available: string[] = [];
@@ -254,7 +311,8 @@ export class DialogueService {
    *  6. 取**原始** options[optionIndex]，越界 → DIALOGUE_NODE_INVALID；
    *  7. 对该选项 condition 重新求值（防重放：客户端看不到隐藏选项，服务端二次把关）；
    *  8. 执行动作（失败即中止，**不推进**）；
-   *  9. 动作可能改变任务/道具状态 → 重新组装上下文再解析 next 节点。
+   *  9. 评分分支：选项配置 branch 时按评分规则决定 next（与 next 互斥；goto 越树 → NODE_INVALID）；
+   *  10. 动作可能改变任务/道具状态 → 重新组装上下文再解析 next 节点。
    */
   async choose(
     playerId: string,
@@ -263,7 +321,11 @@ export class DialogueService {
     const dialogue = await this.findActiveDialogue(input.code);
     const nodes = this.assertNodes(dialogue);
 
-    const ctx = await this.buildContext(playerId, collectFlagKeys(nodes));
+    const ctx = await this.buildContext(
+      playerId,
+      collectFlagKeys(nodes),
+      collectScoreGameIds(nodes),
+    );
 
     const node = nodes.find((n) => n.key === input.nodeKey);
     if (!node) {
@@ -294,40 +356,81 @@ export class DialogueService {
     }
 
     const opTrace = `dialogue:choose:${dialogue.code}:${node.key}`;
+    // quiz/assess 可见域随对话归属：common 卷传 null（只见公共内容），自有卷传自身 code
+    const scopeAppCode =
+      dialogue.appScope && dialogue.appScope !== COMMON_SCOPE
+        ? dialogue.appScope
+        : null;
+    let handout: DialogueQuizHandout | null = null;
     if (option.action) {
-      await this.executeAction(
+      handout = await this.executeAction(
         playerId,
         option.action,
         option.actionArgs ?? {},
         opTrace,
+        scopeAppCode,
       );
     }
 
-    // option.next 为空 → 对话结束
-    if (!option.next) {
-      return { code: dialogue.code, nodeKey: null, node: null, finished: true };
+    // 评分分支（阶段 2）：branch 与 next 互斥（结构校验已保证）。
+    // 动作先执行，再按评分规则决定跳转：命中 → goto 节点 key；
+    // 未命中（'default'）→ fallback（缺省 = 结束对话）；
+    // goto 不在树内 → DIALOGUE_NODE_INVALID（配置错误不伪装成结束）。
+    let nextKey: string | null = option.next ?? null;
+    if (option.branch) {
+      const goto = await this.scoringService.resolveBranch(
+        playerId,
+        option.branch.gameId,
+      );
+      nextKey = goto === 'default' ? (option.branch.fallback ?? null) : goto;
+      if (nextKey && !nodes.some((n) => n.key === nextKey)) {
+        throw new GameException(
+          ErrorCodes.DIALOGUE_NODE_INVALID,
+          `分支 goto 不在该对话树：${nextKey}`,
+        );
+      }
+    }
+
+    // nextKey 为空 → 对话结束
+    if (!nextKey) {
+      const endScore = await this.buildScoreView(playerId, nodes);
+      return {
+        code: dialogue.code,
+        nodeKey: null,
+        node: null,
+        finished: true,
+        ...(handout ? { quiz: handout } : {}),
+        ...(endScore ? { score: endScore } : {}),
+      };
     }
 
     // 动作已改变玩家状态（如刚接任务），必须重新求值 next 节点的可见性
-    const newCtx = await this.buildContext(playerId, collectFlagKeys(nodes));
-    const nextNode = resolveNode(nodes, option.next, newCtx);
+    const newCtx = await this.buildContext(
+      playerId,
+      collectFlagKeys(nodes),
+      collectScoreGameIds(nodes),
+    );
+    const nextNode = resolveNode(nodes, nextKey, newCtx);
     if (!nextNode) {
       // 不返回 finished，避免把「配置错误/条件未满足」伪装成正常结束
       throw new GameException(
         ErrorCodes.DIALOGUE_CONDITION_NOT_MET,
-        `下一节点当前不可进入：${option.next}`,
+        `下一节点当前不可进入：${nextKey}`,
       );
     }
+    const score = await this.buildScoreView(playerId, nodes);
     return {
       code: dialogue.code,
       nodeKey: nextNode.key,
       node: nextNode,
       finished: false,
+      ...(handout ? { quiz: handout } : {}),
+      ...(score ? { score } : {}),
     };
   }
 
   /**
-   * 执行单个对话动作（计划 §1.4 白名单 6 个）。
+   * 执行单个对话动作（白名单见 DialogueActionType）。
    *
    * 硬约束：**一律走既有服务**（QuestService / InventoryService / EconomyService / redis 旗标），
    * 不在对话模块内写第二套经济或背包逻辑。
@@ -340,13 +443,18 @@ export class DialogueService {
     action: DialogueActionType,
     args: DialogueActionArgs = {},
     opTrace?: string,
-  ): Promise<void> {
+    scopeAppCode: string | null = null,
+  ): Promise<DialogueQuizHandout | null> {
     const trace =
-      opTrace && opTrace.trim() !== ''
-        ? opTrace
-        : `dialogue:action:${action}`;
+      opTrace && opTrace.trim() !== '' ? opTrace : `dialogue:action:${action}`;
     try {
-      await this.dispatchAction(playerId, action, args ?? {}, trace);
+      return await this.dispatchAction(
+        playerId,
+        action,
+        args ?? {},
+        trace,
+        scopeAppCode,
+      );
     } catch (err) {
       if (err instanceof GameException) throw err; // 原样上抛，不吞
       this.logger.error(
@@ -365,20 +473,33 @@ export class DialogueService {
     action: DialogueActionType,
     args: DialogueActionArgs,
     opTrace: string,
-  ): Promise<void> {
+    scopeAppCode: string | null,
+  ): Promise<DialogueQuizHandout | null> {
     switch (action) {
       case DialogueActionType.ACCEPT_QUEST: {
-        const questTemplateId = this.requireString(args, 'questTemplateId', action);
+        const questTemplateId = this.requireString(
+          args,
+          'questTemplateId',
+          action,
+        );
         await this.questService.acceptQuest(playerId, questTemplateId);
-        return;
+        return null;
       }
       case DialogueActionType.SUBMIT_QUEST: {
-        const questTemplateId = this.requireString(args, 'questTemplateId', action);
+        const questTemplateId = this.requireString(
+          args,
+          'questTemplateId',
+          action,
+        );
         await this.questService.submitQuest(playerId, questTemplateId);
-        return;
+        return null;
       }
       case DialogueActionType.GIVE_ITEM: {
-        const itemTemplateId = this.requireString(args, 'itemTemplateId', action);
+        const itemTemplateId = this.requireString(
+          args,
+          'itemTemplateId',
+          action,
+        );
         const quantity = this.optionalQuantity(args.quantity, action);
         await this.inventoryService.addItem(
           playerId,
@@ -386,10 +507,14 @@ export class DialogueService {
           quantity,
           opTrace,
         );
-        return;
+        return null;
       }
       case DialogueActionType.TAKE_ITEM: {
-        const itemTemplateId = this.requireString(args, 'itemTemplateId', action);
+        const itemTemplateId = this.requireString(
+          args,
+          'itemTemplateId',
+          action,
+        );
         const quantity = this.optionalQuantity(args.quantity, action);
         await this.inventoryService.removeItem(
           playerId,
@@ -397,7 +522,7 @@ export class DialogueService {
           quantity,
           opTrace,
         );
-        return;
+        return null;
       }
       case DialogueActionType.ADD_CURRENCY: {
         const currencyType = this.requireString(args, 'currencyType', action);
@@ -409,12 +534,56 @@ export class DialogueService {
           'dialogue',
           opTrace,
         );
-        return;
+        return null;
       }
       case DialogueActionType.SET_FLAG: {
         const flag = this.requireString(args, 'flag', action);
         await this.cacheService.set(this.flagKey(playerId, flag), '1');
-        return;
+        return null;
+      }
+      case DialogueActionType.ASSESS: {
+        const assessmentCode = this.requireString(
+          args,
+          'assessmentCode',
+          action,
+        );
+        return this.quizService
+          .startOrResume(playerId, assessmentCode, scopeAppCode)
+          .then(
+            (r): DialogueQuizHandout => ({
+              kind: 'assessment',
+              sessionId: r.sessionId,
+              question: r.question,
+            }),
+          );
+      }
+      case DialogueActionType.QUIZ: {
+        const dto: DrawQuizDto = {
+          ...(args.category ? { category: args.category } : {}),
+          ...(args.count ? { count: args.count } : {}),
+        };
+        return this.quizService.draw(playerId, scopeAppCode, dto).then(
+          (r): DialogueQuizHandout => ({
+            kind: 'knowledge',
+            questions: r.questions,
+          }),
+        );
+      }
+      case DialogueActionType.SCORE: {
+        const scoreArgs = args.score;
+        if (!scoreArgs || typeof scoreArgs.gameId !== 'string') {
+          throw new GameException(
+            ErrorCodes.PARAM_INVALID,
+            'score 动作缺少 gameId',
+          );
+        }
+        await this.scoringService.dispatch(
+          playerId,
+          scoreArgs.gameId,
+          (scoreArgs.effect ?? {}) as ScoreEffect,
+          scoreArgs.use,
+        );
+        return null;
       }
       default:
         throw new GameException(
@@ -473,7 +642,7 @@ export class DialogueService {
   /** 查启用中的对话；不存在/停用 → DIALOGUE_NOT_FOUND（业务码而非 500） */
   private async findActiveDialogue(code: string): Promise<Dialogue> {
     const dialogue = await this.dialogueRepo.findOne({
-      where: { code, isActive: true },
+      where: { code, isActive: true, ...visibleTo(null) },
     });
     if (!dialogue) {
       throw new GameException(

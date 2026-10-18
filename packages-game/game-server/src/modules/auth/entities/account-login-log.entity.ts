@@ -3,24 +3,18 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  ManyToOne,
-  JoinColumn,
   Index,
 } from 'typeorm';
-import { AuthAccount } from './auth-account.entity';
 
 @Entity('account_login_logs')
 export class AccountLoginLog {
   @PrimaryGeneratedColumn({ type: 'bigint' })
   id: string;
 
+  // 无外键：登录失败且账号不存在时记录哨兵值 '0'（写 FK 会违反约束 → 90004）
   @Index()
   @Column({ name: 'account_id', type: 'bigint' })
   accountId: string;
-
-  @ManyToOne(() => AuthAccount)
-  @JoinColumn({ name: 'account_id' })
-  account: AuthAccount;
 
   @Column({ name: 'login_ip', type: 'varchar', length: 45 })
   loginIp: string;

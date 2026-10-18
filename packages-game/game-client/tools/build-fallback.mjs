@@ -1,7 +1,7 @@
 // 兜底构建：tsc（借用 game-server 的 typescript）→ 重写产物导入扩展名 → 生成 bin/index.html
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -23,7 +23,15 @@ for (const file of walk(outRoot).filter((f) => f.endsWith('.js'))) {
   const before = readFileSync(file, 'utf8');
   const after = before.replace(
     /(from\s+|import\s+)(["'])(\.{1,2}\/[^"']+)(["'])/g,
-    (m, head, q1, spec, q2) => (spec.endsWith('.js') ? m : `${head}${q1}${spec}.js${q2}`),
+    (m, head, q1, spec, q2) => {
+      if (spec.endsWith('.js')) return m;
+      // 目录索引导入（如 '../gm-panel'）须解析到 '<spec>/index.js'，否则浏览器按 '<spec>.js' 请求会 404
+      // 说明：spec 相对于**导入方文件**所在目录，不是 outRoot
+      const fromDir = dirname(file);
+      if (existsSync(join(fromDir, `${spec}.js`))) return `${head}${q1}${spec}.js${q2}`;
+      if (existsSync(join(fromDir, spec, 'index.js'))) return `${head}${q1}${spec}/index.js${q2}`;
+      return `${head}${q1}${spec}.js${q2}`;
+    },
   );
   if (after !== before) {
     writeFileSync(file, after, 'utf8');

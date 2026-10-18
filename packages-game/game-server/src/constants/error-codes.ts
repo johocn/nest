@@ -254,22 +254,83 @@ export const ErrorCodes = {
   BUILD_NOT_FOUND: 44004, // 建筑实例不存在或不可操作
   COOP_NOT_READY: 44005, // 共建未达人数/投料门槛
   COOP_EXPIRED: 44006, // 共建已超时
+  // 邮件系统 45001-45099
+  MAIL_NOT_FOUND: 45001, // 邮件不存在（或非本人收件箱）
+  MAIL_ATTACHMENT_CLAIMED: 45002, // 附件已领取过
+  MAIL_NO_ATTACHMENT: 45003, // 邮件无可领取附件
 
-  // 狼人杀 45001-45099
-  WEREWOLF_NOT_IN_ROOM: 45001, // 不在房间内
-  WEREWOLF_ROOM_FULL: 45002, // 房间已满 / 人数不足无法开局
-  WEREWOLF_NOT_HOST: 45003, // 仅房主可操作
-  WEREWOLF_ALREADY_STARTED: 45004, // 对局已开始
-  WEREWOLF_NOT_YOUR_TURN: 45005, // 当前不是你的行动阶段
-  WEREWOLF_DEAD_CANNOT_ACT: 45006, // 已出局，无法行动
-  WEREWOLF_INVALID_TARGET: 45007, // 非法目标
-  WEREWOLF_WITCH_NO_ANTIDOTE: 45008, // 女巫无可用的解药
-  WEREWOLF_WITCH_NO_POISON: 45009, // 女巫无可用的毒药
-  WEREWOLF_WITCH_CANNOT_BOTH: 45010, // 女巫同一晚不能同时用两瓶药
-  WEREWOLF_GUARD_SAME_TARGET: 45011, // 守卫不能连续两晚守护同一人
-  WEREWOLF_GAME_NOT_RUNNING: 45012, // 对局未在进行中
-  WEREWOLF_CANNOT_SPEAK: 45013, // 当前阶段不可发言 / 遗言已用完
-  WEREWOLF_EMPTY_MESSAGE: 45014, // 发言内容为空
+  // quiz 题库 46001-46099
+  QUIZ_ASSESSMENT_NOT_FOUND: 46001, // 测评卷不存在或未发布
+  QUIZ_SESSION_NOT_FOUND: 46002, // 会话不存在或非本人
+  QUIZ_SESSION_EXPIRED: 46003, // 会话已过期（超 24h）
+  QUIZ_QUESTION_MISMATCH: 46004, // 提交的不是当前题目
+  QUIZ_OPTION_INVALID: 46005, // 选项序号非法
+  QUIZ_QUESTION_NOT_FOUND: 46006, // 题目不存在
+  QUIZ_RESULT_NOT_RESOLVED: 46007, // 得分未命中任何结果区间
+  QUIZ_SESSION_FINISHED: 46008, // 会话已完成
+  QUIZ_FLOW_INVALID: 46009, // 测评卷流程校验失败（死链/死循环/不可达终点）
+  QUIZ_CODE_EXISTS: 46010, // code 在同 scope 下已存在
+
+  // apps 接入层 46101-46199
+  APP_API_KEY_INVALID: 46101, // x-api-key 无效或对应 app 已停用
+  APP_CODE_EXISTS: 46102, // app code 已存在
+  APP_NOT_FOUND: 46103, // app 不存在
+
+  // 评分系统 47001-47099
+  SCORING_GAME_NOT_FOUND: 47001, // gameId 未注册
+  SCORING_CONFIG_INVALID: 47002, // 配置校验失败
+  SCORING_GAME_EXISTS: 47003, // game_id 已存在（含软删）
+
+  // 掼蛋模块 95001-95099
+  GUANDAN_TABLE_NOT_FOUND: 95001, // 牌桌不存在或已解散
+  GUANDAN_TABLE_FULL: 95002, // 牌桌已满（4 人）
+  GUANDAN_NOT_YOUR_TURN: 95003, // 不是你的操作时机 / 不在该牌桌
+  GUANDAN_INVALID_ACTION: 95004, // 非法动作
+  GUANDAN_NOT_HOST: 95005, // 仅房主可执行
+  GUANDAN_ALREADY_PLAYED: 95006, // 本回合已出牌
+  GUANDAN_GAME_ENDED: 95007, // 对局已结束
+  GUANDAN_PLAYER_NOT_IN_TABLE: 95008, // 玩家不在该牌桌
+  GUANDAN_ILLEGAL_COMBO: 95009, // 牌型非法或无法压制上家
+  GUANDAN_LEVEL_INVALID: 95010, // 级数非法
+
+  // 三国杀（标准身份局）96001-96099
+  SANGUOSHA_TABLE_NOT_FOUND: 96001, // 牌桌不存在或已解散
+  SANGUOSHA_TABLE_FULL: 96002, // 牌桌已满（8 人）
+  SANGUOSHA_NOT_YOUR_TURN: 96003, // 不是你的操作时机 / 不在该牌桌
+  SANGUOSHA_INVALID_ACTION: 96004, // 非法动作
+  SANGUOSHA_NOT_HOST: 96005, // 仅房主可执行
+  SANGUOSHA_GAME_ENDED: 96006, // 对局已结束
+  SANGUOSHA_PLAYER_NOT_IN_TABLE: 96007, // 玩家不在该牌桌
+  SANGUOSHA_NOT_ENOUGH_CARDS: 96008, // 牌堆不足
+  SANGUOSHA_TARGET_INVALID: 96009, // 目标非法
+  SANGUOSHA_CANNOT_RESPOND: 96010, // 当前无法响应
+  SANGUOSHA_TENANT_MISMATCH: 96011, // 租户不匹配（运营商隔离）
+
+  // 四川麻将（血战到底）80001-80099
+  SICHUANMAJIANG_TABLE_NOT_FOUND: 80001, // 牌桌不存在或已解散
+  SICHUANMAJIANG_TABLE_FULL: 80002, // 牌桌已满（4 人）
+  SICHUANMAJIANG_NOT_YOUR_TURN: 80003, // 不是你的操作时机 / 不在该牌桌
+  SICHUANMAJIANG_INVALID_ACTION: 80004, // 非法动作
+  SICHUANMAJIANG_ALREADY_QUEUED: 80005, // 已定缺或不在定缺阶段
+
+  // 狼人杀 49001-49099
+  // 注：狼人杀原占用 45001 区间，与 origin/master 的「邮件系统」同号冲突，
+  // 故整体迁到空闲的 49001 区间；调用方以常量名引用，无需改动。
+  WEREWOLF_ACTION_FAILED: 49000, // 操作失败（catch 兜底，具体原因见 message）
+  WEREWOLF_NOT_IN_ROOM: 49001, // 不在房间内
+  WEREWOLF_ROOM_FULL: 49002, // 房间已满 / 人数不足无法开局
+  WEREWOLF_NOT_HOST: 49003, // 仅房主可操作
+  WEREWOLF_ALREADY_STARTED: 49004, // 对局已开始
+  WEREWOLF_NOT_YOUR_TURN: 49005, // 当前不是你的行动阶段
+  WEREWOLF_DEAD_CANNOT_ACT: 49006, // 已出局，无法行动
+  WEREWOLF_INVALID_TARGET: 49007, // 非法目标
+  WEREWOLF_WITCH_NO_ANTIDOTE: 49008, // 女巫无可用的解药
+  WEREWOLF_WITCH_NO_POISON: 49009, // 女巫无可用的毒药
+  WEREWOLF_WITCH_CANNOT_BOTH: 49010, // 女巫同一晚不能同时用两瓶药
+  WEREWOLF_GUARD_SAME_TARGET: 49011, // 守卫不能连续两晚守护同一人
+  WEREWOLF_GAME_NOT_RUNNING: 49012, // 对局未在进行中
+  WEREWOLF_CANNOT_SPEAK: 49013, // 当前阶段不可发言 / 遗言已用完
+  WEREWOLF_EMPTY_MESSAGE: 49014, // 发言内容为空
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

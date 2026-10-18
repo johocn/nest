@@ -61,6 +61,15 @@ export class ActivityTemplate {
   @Column({ name: 'published_version', type: 'int', default: 0 })
   publishedVersion: number;
 
+  @Column({ name: 'priority', type: 'int', default: 0 })
+  priority: number;
+
+  @Column({ name: 'is_active', type: 'boolean', default: true })
+  isActive: boolean;
+
+  @Column({ name: 'rules_json', type: 'jsonb', default: '{}' })
+  rulesJson: Record<string, any>;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

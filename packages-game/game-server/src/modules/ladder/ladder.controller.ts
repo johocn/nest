@@ -1,8 +1,7 @@
-import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { LadderService } from './ladder.service';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
-import { AdminGuard } from '@common/guards/admin.guard';
 import { CurrentPlayer } from '@common/decorators/current-player.decorator';
 import type { CurrentPlayerData } from '@common/decorators/current-player.decorator';
 
@@ -20,16 +19,8 @@ export class LadderController {
   }
 
   @Get('rank')
-  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: '天梯榜单' })
   async getTopN(@Query('limit') limit: number = 50) {
     return this.ladderService.getTopN(Number(limit));
-  }
-
-  @Post('admin/settle')
-  @UseGuards(AdminGuard)
-  @ApiOperation({ summary: '[管理] 赛季结算' })
-  async settleSeason(@Body() body: { adminId: string }) {
-    return this.ladderService.settleSeason(body.adminId);
   }
 }

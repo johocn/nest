@@ -19,14 +19,26 @@ export class LoginView {
             result = await Api.register(username, password, username);
             Toast.info('账号不存在，已自动注册');
           } catch (regErr) {
-            const msg = regErr instanceof ApiError ? regErr.message : String(regErr);
-            throw new ApiError(-1, `登录失败：${msg}（若账号已存在，请检查密码）`);
+            const msg =
+              regErr instanceof ApiError ? regErr.message : String(regErr);
+            throw new ApiError(
+              -1,
+              `登录失败：${msg}（若账号已存在，请检查密码）`,
+            );
           }
         }
 
         Session.save(result);
         Platform.ui.hideLogin();
         Toast.info(`登录成功：playerId=${result.playerId}`);
+        onLoggedIn();
+      },
+      onSsoLogin: async (username, password) => {
+        // SSO 账密直登：不自动注册（sso-user 在 h.joho.cn 侧注册），失败直接提示
+        const result = await Api.ssoLogin(username, password);
+        Session.save(result);
+        Platform.ui.hideLogin();
+        Toast.info(`SSO 登录成功：playerId=${result.playerId}`);
         onLoggedIn();
       },
     });

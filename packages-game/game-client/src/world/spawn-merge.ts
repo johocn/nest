@@ -12,8 +12,11 @@ import type { SceneConfig, ServerSpawn } from '../config/schema';
  * - entity_type='npc' 且 spawnId 已在配置包 fixedNpcs 中 → 忽略（位置以服务端为准的规则留给 S4 的巡逻/随机 NPC）
  * 返回被保留的动态 spawn，供调用方生成实体。
  */
-export function mergeServerSpawns(cfg: SceneConfig, spawns: ServerSpawn[]): ServerSpawn[] {
-  const staticNpcSpawnIds = new Set(cfg.fixedNpcs.map((n) => n.spawnId));
+export function mergeServerSpawns(
+  cfg: SceneConfig,
+  spawns: ServerSpawn[],
+): ServerSpawn[] {
+  const staticNpcSpawnIds = new Set(cfg.fixedNpcs.map(n => n.spawnId));
   const accepted: ServerSpawn[] = [];
   let ignored = 0;
 

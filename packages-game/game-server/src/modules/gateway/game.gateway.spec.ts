@@ -135,6 +135,10 @@ describe('GameGateway', () => {
       const client = mockClient('socket1');
       client.data.playerId = 'p1';
       client.data.sceneId = '1';
+      const toEmit = jest.fn();
+      gateway.setServer({
+        to: jest.fn().mockReturnValue({ emit: toEmit }),
+      } as any);
       await gateway.handleDisconnect(client as any);
       expect(worldService.leaveScene).toHaveBeenCalledWith('p1', '1');
       expect(connectionService.playerDisconnect).toHaveBeenCalledWith(
@@ -311,7 +315,13 @@ describe('GameGateway', () => {
       ]);
       expect(buildingFrame.data.playerId).toBeNull();
       expect(Object.keys(npcFrame.data)).toEqual(
-        expect.arrayContaining(['entityId', 'entityType', 'pos', 'rotation', 'state']),
+        expect.arrayContaining([
+          'entityId',
+          'entityType',
+          'pos',
+          'rotation',
+          'state',
+        ]),
       );
     });
 

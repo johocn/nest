@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { ILike, Repository } from 'typeorm';
 import {
   Scene,
   NpcTemplate,
@@ -29,12 +29,10 @@ import {
   EntityType,
   NpcInteractType,
 } from '@constants/enums';
+import { visibleTo } from '@shared/content-scope';
 import { EconomyService } from '../economy/economy.service';
 import { ResourceBalancePolicy } from './resource-balance.policy';
-import {
-  NpcPresenceService,
-  NpcInstance,
-} from './npc/npc-presence.service';
+import { NpcPresenceService, NpcInstance } from './npc/npc-presence.service';
 import {
   DialogueQuestMarks,
   DialogueService,
@@ -105,23 +103,120 @@ export class WorldService {
   ) {}
 
   async getScene(id: string): Promise<Scene> {
-    const scene = await this.sceneRepo.findOne({ where: { id } });
+    const scene = await this.sceneRepo.findOne({
+      where: { id, ...visibleTo(null) },
+    });
     if (!scene) {
       throw new GameException(ErrorCodes.PARAM_INVALID, '场景不存在');
     }
     return scene;
   }
 
-  async getScenes(
-    page: number,
-    limit: number,
-  ): Promise<{ items: Scene[]; total: number }> {
+  async getScenes(filter: {
+    name?: string;
+    sceneType?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{ items: Scene[]; total: number; page: number; limit: number }> {
+    const page = filter.page ?? 1;
+    const limit = filter.limit ?? 20;
+    const where: any = {};
+    if (filter.name) where.name = ILike(`%${filter.name}%`);
+    if (filter.sceneType) where.sceneType = filter.sceneType;
+    if (filter.status) where.status = filter.status;
     const [items, total] = await this.sceneRepo.findAndCount({
+      where: { ...where, ...visibleTo(null) },
       skip: (page - 1) * limit,
       take: limit,
       order: { createdAt: 'DESC' },
     });
-    return { items, total };
+    return { items, total, page, limit };
+  }
+
+  async deleteScene(sceneId: string): Promise<void> {
+    const scene = await this.sceneRepo.findOne({
+      where: { id: sceneId, ...visibleTo(null) },
+    });
+    if (!scene) {
+      throw new GameException(
+        ErrorCodes.PARAM_INVALID,
+        `场景 ${sceneId} 不存在`,
+      );
+    }
+    await this.sceneRepo.softRemove(scene);
+  }
+
+  async getMonsterTemplates(filter: {
+    name?: string;
+    aiType?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{
+    items: MonsterTemplate[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const page = filter.page ?? 1;
+    const limit = filter.limit ?? 20;
+    const where: any = {};
+    if (filter.name) where.name = ILike(`%${filter.name}%`);
+    if (filter.aiType) where.aiType = filter.aiType;
+    const [items, total] = await this.monsterRepo.findAndCount({
+      where,
+      skip: (page - 1) * limit,
+      take: limit,
+      order: { createdAt: 'DESC' },
+    });
+    return { items, total, page, limit };
+  }
+
+  async createMonsterTemplate(
+    dto: Partial<MonsterTemplate>,
+  ): Promise<MonsterTemplate> {
+    if (
+      dto.attr !== undefined &&
+      dto.attr !== null &&
+      typeof dto.attr !== 'object'
+    ) {
+      dto.attr = JSON.parse(String(dto.attr));
+    }
+    const entity = this.monsterRepo.create(dto);
+    return this.monsterRepo.save(entity);
+  }
+
+  async updateMonsterTemplate(
+    id: string,
+    dto: Partial<MonsterTemplate>,
+  ): Promise<MonsterTemplate> {
+    const existing = await this.monsterRepo.findOne({ where: { id } });
+    if (!existing) {
+      throw new GameException(
+        ErrorCodes.PARAM_INVALID,
+        `MonsterTemplate ${id} 不存在`,
+      );
+    }
+    if (
+      dto.attr !== undefined &&
+      dto.attr !== null &&
+      typeof dto.attr !== 'object'
+    ) {
+      dto.attr = JSON.parse(String(dto.attr));
+    }
+    Object.assign(existing, dto);
+    return this.monsterRepo.save(existing);
+  }
+
+  async deleteMonsterTemplate(id: string): Promise<void> {
+    const m = await this.monsterRepo.findOne({ where: { id } });
+    if (!m) {
+      throw new GameException(
+        ErrorCodes.PARAM_INVALID,
+        `MonsterTemplate ${id} 不存在`,
+      );
+    }
+    await this.monsterRepo.softRemove(m);
   }
 
   async createScene(data: Partial<Scene>): Promise<Scene> {
@@ -130,7 +225,9 @@ export class WorldService {
   }
 
   async updateScene(id: string, data: Partial<Scene>): Promise<Scene> {
-    const scene = await this.sceneRepo.findOne({ where: { id } });
+    const scene = await this.sceneRepo.findOne({
+      where: { id, ...visibleTo(null) },
+    });
     if (!scene) {
       throw new GameException(ErrorCodes.PARAM_INVALID, '场景不存在');
     }
@@ -139,11 +236,15 @@ export class WorldService {
   }
 
   async getSceneSpawns(sceneId: string): Promise<SceneEntitySpawn[]> {
-    return this.spawnRepo.find({ where: { sceneId, isActive: true } });
+    return this.spawnRepo.find({
+      where: { sceneId, isActive: true, ...visibleTo(null) },
+    });
   }
 
   async getSceneTriggers(sceneId: string): Promise<SceneTrigger[]> {
-    return this.triggerRepo.find({ where: { sceneId } });
+    return this.triggerRepo.find({
+      where: { sceneId, ...visibleTo(null) },
+    });
   }
 
   async checkEnterRequirement(
@@ -202,7 +303,9 @@ export class WorldService {
   }
 
   async getNpcTemplate(id: string): Promise<NpcTemplate | null> {
-    return this.npcRepo.findOne({ where: { id } });
+    return this.npcRepo.findOne({
+      where: { id, ...visibleTo(null) },
+    });
   }
 
   async getMonsterTemplate(id: string): Promise<MonsterTemplate | null> {
@@ -222,13 +325,15 @@ export class WorldService {
    *   保证老 NPC 与 S1 冒烟不回归（风险 #1/#4）。
    */
   async talkNpc(playerId: string, spawnId: string): Promise<NpcTalkResult> {
-    const spawn = await this.spawnRepo.findOne({ where: { id: spawnId } });
+    const spawn = await this.spawnRepo.findOne({
+      where: { id: spawnId, ...visibleTo(null) },
+    });
     if (!spawn || spawn.entityType !== EntityType.NPC) {
       throw new GameException(ErrorCodes.PARAM_INVALID, 'NPC 不存在');
     }
 
     const template = await this.npcRepo.findOne({
-      where: { id: spawn.templateId },
+      where: { id: spawn.templateId, ...visibleTo(null) },
     });
     if (!template) {
       throw new GameException(ErrorCodes.PARAM_INVALID, 'NPC 模板不存在');
@@ -313,7 +418,7 @@ export class WorldService {
     triggerId: string,
   ): Promise<DialogueView> {
     const trigger = await this.triggerRepo.findOne({
-      where: { id: triggerId },
+      where: { id: triggerId, ...visibleTo(null) },
     });
     if (!trigger) {
       throw new GameException(ErrorCodes.PARAM_INVALID, '触发器不存在');
@@ -365,7 +470,10 @@ export class WorldService {
       const onceKey = `world:obj:once:${objectId}`;
       const first = await this.cacheService.acquireLock(onceKey, 31536000);
       if (!first) {
-        throw new GameException(ErrorCodes.OBJECT_ALREADY_OPENED, '该物件已被开启');
+        throw new GameException(
+          ErrorCodes.OBJECT_ALREADY_OPENED,
+          '该物件已被开启',
+        );
       }
     }
 
@@ -406,7 +514,10 @@ export class WorldService {
         `object:${objectId}:${interactType}`,
         objectId,
       );
-      return { ok: true, reward: { currencyType: reward.currencyType, amount } };
+      return {
+        ok: true,
+        reward: { currencyType: reward.currencyType, amount },
+      };
     }
 
     return { ok: true };
@@ -418,7 +529,7 @@ export class WorldService {
     memberIds: string[] = [],
   ): Promise<{ unlocked: boolean; members: string[] }> {
     const trigger = await this.triggerRepo.findOne({
-      where: { id: triggerId },
+      where: { id: triggerId, ...visibleTo(null) },
     });
     if (!trigger) {
       throw new GameException(ErrorCodes.PARAM_INVALID, '机关不存在');
@@ -481,10 +592,7 @@ export class WorldService {
     if (!existing) {
       throw new GameException(ErrorCodes.PARAM_INVALID, '坐骑未获得');
     }
-    await this.mountRepo.update(
-      { id: existing.id },
-      { isActive: ride },
-    );
+    await this.mountRepo.update({ id: existing.id }, { isActive: ride });
     return { ok: true };
   }
 
@@ -547,9 +655,7 @@ export class WorldService {
       `session:${sessionId}:bet`,
       sessionId,
     );
-    session.betPool = (
-      BigInt(session.betPool) + BigInt(betAmount)
-    ).toString();
+    session.betPool = (BigInt(session.betPool) + BigInt(betAmount)).toString();
     await this.sessionRepo.save(session);
     return { betPool: session.betPool };
   }

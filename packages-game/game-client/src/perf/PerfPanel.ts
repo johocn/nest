@@ -43,7 +43,8 @@ function statDrawCall(): number | null {
     const gl = L?.LayaGL;
     const el = L?.StatElement ?? gl?.StatElement;
     const agent = gl?.statAgent;
-    if (!el || !agent || typeof agent.getElementData !== 'function') return null;
+    if (!el || !agent || typeof agent.getElementData !== 'function')
+      return null;
     const v = agent.getElementData(el.CT_DrawCall);
     // 引擎返回的是按采样窗口平滑过的浮点值，取整后才是「次数」语义
     return typeof v === 'number' && isFinite(v) ? Math.round(v) : null;
@@ -119,7 +120,15 @@ export class PerfPanel {
     Laya.stage.on(Laya.Event.KEY_DOWN, PerfPanel, PerfPanel.onKeyDown);
     // 始终每帧计数（面板隐藏时也计，否则 __PERF__ 快照会失真）；只累加、不重绘
     Laya.timer.frameLoop(1, PerfPanel, PerfPanel.onFrame);
-    console.log(`[S8] PerfPanel 就绪：F3 开关 zOrder=${P.zOrder}（引擎内自绘，无 DOM）`);
+    console.log(
+      `[S8] PerfPanel 就绪：F3 开关 zOrder=${P.zOrder}（引擎内自绘，无 DOM）`,
+    );
+    if (PerfPanel.urlWantsPanel()) {
+      PerfPanel.show(true);
+      console.log(
+        '[S8] ?perf=1 → 面板开机显形（真机点检用；手机无键盘 / iOS 无 console）',
+      );
+    }
   }
 
   static get isVisible(): boolean {
@@ -137,11 +146,26 @@ export class PerfPanel {
     if (on) PerfPanel.render();
   }
 
+  /**
+   * `?perf=1` 覆盖来源（**真机点检专用**）：手机上既没有键盘（F3 用不了），iOS 也没有
+   * `chrome://inspect` 与 console（`__PERF__.panel(true)` 也敲不了）→ 只能靠 URL 开机显形。
+   * 取值 `1` / `true` / `on`（大小写不敏感）；其余一律忽略。
+   */
+  private static urlWantsPanel(): boolean {
+    const loc = (globalThis as any).location;
+    if (!loc || typeof loc.search !== 'string') return false;
+    const m = /[?&]perf=([^&]+)/.exec(loc.search);
+    if (!m) return false;
+    return ['1', 'true', 'on'].includes(decodeURIComponent(m[1]).toLowerCase());
+  }
+
   // ── 交互 / 采样 ──────────────────────────────────────────────────────────
 
   private static onKeyDown(e: Laya.Event): void {
     // 与 PlayerControl.normKey 同口径：Laya 事件不携带 keyCode，只代理 nativeEvent.key
-    const key = String((e as unknown as { key?: string }).key ?? '').toLowerCase();
+    const key = String(
+      (e as unknown as { key?: string }).key ?? '',
+    ).toLowerCase();
     if (key === 'f3') PerfPanel.toggle();
   }
 
@@ -152,7 +176,8 @@ export class PerfPanel {
     const elapsed = now - PerfPanel.windowStart;
     if (elapsed < P.refreshMs) return;
 
-    PerfPanel.fps = elapsed > 0 ? round1((PerfPanel.frames * 1000) / elapsed) : 0;
+    PerfPanel.fps =
+      elapsed > 0 ? round1((PerfPanel.frames * 1000) / elapsed) : 0;
     PerfPanel.frames = 0;
     PerfPanel.windowStart = now;
 
@@ -162,7 +187,8 @@ export class PerfPanel {
 
   /** 目标帧率随档位取值：低帧连续 sustainMs 才降一档；有强制覆盖时不介入 */
   private static refreshWatcher(): void {
-    const targetFps = Quality.tier() === 'low' ? P.targetFpsLow : P.targetFpsHigh;
+    const targetFps =
+      Quality.tier() === 'low' ? P.targetFpsLow : P.targetFpsHigh;
     PerfPanel.watcher = createFpsWatcher({
       targetFps,
       ratio: P.degradeRatio,

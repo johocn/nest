@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { InventoryService } from './inventory.service';
 import { UseItemDto } from './dto/use-item.dto';
 import { EquipItemDto } from './dto/equip-item.dto';
+import { DropItemDto } from './dto/drop-item.dto';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { CurrentPlayer } from '@common/decorators/current-player.decorator';
 import type { CurrentPlayerData } from '@common/decorators/current-player.decorator';
@@ -28,6 +29,19 @@ export class InventoryController {
     @Body() dto: UseItemDto,
   ) {
     return this.inventoryService.useItem(player.playerId, dto.itemTemplateId);
+  }
+
+  @Post('drop')
+  @ApiOperation({ summary: '丢弃物品（绑定/canDrop=false 不可丢）' })
+  async dropItem(
+    @CurrentPlayer() player: CurrentPlayerData,
+    @Body() dto: DropItemDto,
+  ) {
+    return this.inventoryService.dropItem(
+      player.playerId,
+      dto.inventoryItemId,
+      dto.quantity,
+    );
   }
 
   @Post('equip')

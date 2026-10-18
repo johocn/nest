@@ -12,11 +12,19 @@ import { AiComponent } from '../entity/components/AiComponent';
 import { BuildingViewComponent } from '../entity/components/BuildComponent';
 import { Entity } from '../entity/Entity';
 import { EntityFactory } from '../entity/EntityFactory';
-import { acquire } from '../entity/EntityPool';
+import { acquire, release } from '../entity/EntityPool';
 import { RemoteInterp } from '../entity/components/RemoteInterp';
 import { EntityRegistry } from '../entity/EntityRegistry';
 import { Api } from '../net/api';
 import type { BuildRuleView, BuildingTemplate, BuildingView } from '../net/api';
+import { attachChat, getRecentChatMessages, sendChat } from '../net/chat';
+import {
+  attachMatchmaking,
+  cancelQueue,
+  joinQueue,
+  leaveRoom,
+  setRoomReady,
+} from '../net/matchmaking';
 import { Session } from '../net/Session';
 import { WsClient } from '../net/ws';
 import { Platform } from '../platform/Platform';
@@ -36,13 +44,29 @@ import { isWorldPaused } from '../world/worldControl';
 import { Toast } from '../ui/Toast';
 import { startWerewolf, showWerewolfEntry } from '../werewolf/startWerewolf';
 import { Hud } from '../ui/Hud';
+import { ChatPanel } from '../ui/ChatPanel';
+import { MatchPanel } from '../ui/MatchPanel';
+import { InventoryPanel } from '../ui/InventoryPanel';
+import { MailPanel } from '../ui/MailPanel';
+import { QuizPanel } from '../ui/QuizPanel';
+import { ScorePanel } from '../ui/ScorePanel';
 import { DialogueView } from '../ui/DialogueView';
+import { TouchControls } from '../ui/TouchControls';
+import { injectGMPanel } from '../gm-panel';
 
-const state = {
-  cfg: null as SceneConfig | null,
-  ws: null as WsClient | null,
-  me: null as Entity | null,
-  buildRule: null as BuildRuleView | null,
+const state: {
+  cfg: SceneConfig | null;
+  ws: WsClient | null;
+  me: Entity | null;
+  buildRule: BuildRuleView | null;
+  // 三个全局逐帧驱动 loop 的 method 引用 —— 由 afterLogin 注册、shutdown 清理
+  loops: { updateAll: () => void; cull: () => void; resort: () => void } | null;
+} = {
+  cfg: null,
+  ws: null,
+  me: null,
+  buildRule: null,
+  loops: null,
 };
 
 interface EnterSceneSync {
@@ -51,6 +75,23 @@ interface EnterSceneSync {
   triggers: Array<{ id: string; triggerType: string }>;
   /** S4 新增：NPC 实例（含巡逻路点）；旧客户端可缺失，按空数组处理（风险 #4） */
   npcs?: NpcInstanceConfig[];
+}
+
+/** ChatPanel 的发送回调：读当前 state.ws，world 频道（private/guild 网络层已支持，UI 本期不做） */
+async function chatSender(content: string): Promise<void> {
+  const ws = state.ws;
+  if (!ws) throw new Error('WS 未连接');
+  await sendChat(ws, { channel: 'world', content });
+}
+
+/** 心跳间隔：对齐服务端 GAME_WS_HEARTBEAT_INTERVAL（30s） */
+const HEARTBEAT_INTERVAL_MS = 30000;
+
+/** 应答式心跳：失败只记日志，由下一次循环重试 */
+function heartbeatTick(): void {
+  state.ws
+    ?.send('player.heartbeat', {})
+    .catch(err => console.warn(`[WS] 心跳失败：${String(err)}`));
 }
 
 /** S9：进场景前批量预加载（静态物件 + 固定 NPC + 场景背景）；缺图归一为回退占位贴图，不阻塞 */
@@ -112,6 +153,41 @@ async function afterLogin(): Promise<void> {
   await ws.connect(Session.token!);
   state.ws = ws;
 
+  // ②a 聊天：注册 chat.message / chat.support_reply 广播（重登后 init 幂等重建面板），
+  //    并把缓冲里最近的消息回喂给消息条（首登为空数组）
+  ChatPanel.init(chatSender);
+  attachChat(ws, { onMessage: m => ChatPanel.push(m) });
+  for (const m of getRecentChatMessages()) ChatPanel.push(m);
+
+  // ②a-3 答题面板（对话 choose 响应的 quiz handout 打开；init 幂等，重登无副作用）
+  QuizPanel.init();
+
+  // ②a-4 评分面板（对话 choose 响应的 score 快照打开；init 幂等，重登无副作用）
+  ScorePanel.init();
+
+  // ②a-2 匹配：注册三个裸广播（matchmaking:matched / room:update / room:destroyed）+ 注入上行动作
+  attachMatchmaking(ws, {
+    onMatched: p => MatchPanel.onMatched(p),
+    onRoomUpdate: room => MatchPanel.onRoomUpdate(room),
+    onRoomDestroyed: p => MatchPanel.onRoomDestroyed(p),
+  });
+  MatchPanel.setActions({
+    join: mode => joinQueue(ws, mode),
+    cancel: mode => cancelQueue(ws, mode),
+    ready: (roomId, ready) => setRoomReady(ws, roomId, ready),
+    leave: (roomId, reason) => leaveRoom(ws, roomId, reason),
+  });
+
+  // ②b 心跳（30s，对齐服务端 GAME_WS_HEARTBEAT_INTERVAL）+ 离线数据推送监听
+  ws.on('offline:data', m => {
+    const d = m?.data ?? {};
+    console.log('[WS] 离线数据推送', d);
+    if (d.lastOnline) Toast.info(`欢迎回来，上次在线：${d.lastOnline}`);
+  });
+  // 先 clear 再 loop：防「重进场景」叠加多个心跳 timer（与 shutdownLoops 同幂等模式）
+  Laya.timer.clear(null, heartbeatTick);
+  Laya.timer.loop(HEARTBEAT_INTERVAL_MS, null, heartbeatTick);
+
   // ③ 进场景（应答 cmd 为 world.enter_scene_sync）
   const sync = await ws.send<EnterSceneSync>('world.enter-scene', {
     sceneId: cfg.sceneId,
@@ -160,6 +236,17 @@ async function afterLogin(): Promise<void> {
 
     if (d.entityType === 'player') {
       if (String(d.playerId) === String(Session.playerId)) return;
+
+      // 玩家离开（服务端 handleDisconnect 广播）：从 EntityRegistry 移除 + 归还对象池
+      if (d.state === 'leave') {
+        const e = EntityRegistry.get(d.entityId);
+        if (e) {
+          EntityRegistry.remove(d.entityId);
+          release(e);
+          console.log(`[S1] 远端玩家 ${d.entityId} 离开，已回收`);
+        }
+        return;
+      }
 
       const pos = d.pos ?? { x: 0, y: 0 };
       // S8 Task 5：远端玩家**不再直接 setPos**（那是位置跳变的来源），只覆盖插值目标，
@@ -225,13 +312,19 @@ async function afterLogin(): Promise<void> {
   });
 
   // ⑦ 本地移动 → 10Hz 上报
-  new PlayerControl(me, ws, {
+  // 保留引用：手机触控链路与 shutdownClient 都要用到
+  const playerControl = new PlayerControl(me, ws, {
     width: cfg.scene.mapWidth,
     height: cfg.scene.mapHeight,
-  }).attach();
+  });
+  playerControl.attach();
 
   // ⑧ 就近交互（F 键）
-  new InteractController(me).attach();
+  const interactControl = new InteractController(me);
+  interactControl.attach();
+
+  // ⑧a S9 手机触控（仅触摸设备）：浮动虚拟摇杆 + 交互按钮，复用上面两条链路（键盘行为零变更）
+  TouchControls.attach(playerControl, interactControl);
 
   // ⑧b S6 建造（规则/蓝图/建筑列表走服务端权威接口；面板为引擎内自绘）
   await attachBuild(me, cfg);
@@ -240,27 +333,82 @@ async function afterLogin(): Promise<void> {
   //    S8 Task 4：谓词「可见才更新」—— 离屏实体不再做逐帧插值/进度计算（缺省无谓词时行为与基线一致）。
   //    例外：建筑实体始终更新 —— `BuildingViewComponent.update` 不只是视觉插值，还承担**生命周期清理**
   //    （demolishing 淡出到点后从 EntityRegistry 移除）。若把它也冻结，离屏的拆除中建筑会永不回收。
-  // 狼人杀对局期间世界层已隐藏：三处循环统一早退，避免隐藏状态下仍做插值/裁剪/重排的无效开销
-  Laya.timer.frameLoop(1, null, () => {
-    if (isWorldPaused()) return;
-    EntityRegistry.updateAll(
-      Laya.timer.delta,
-      e =>
-        e.sprite.visible !== false ||
-        e.getComponent(BuildingViewComponent) !== null,
-    );
-  });
-  // S8 Task 4：裁剪 tick 先于 resort 注册，保证两者同帧触发时 resort 看到最新可见性
-  Laya.timer.frameLoop(AppConfig.viewport.tickFrames, null, () => {
-    if (isWorldPaused()) return;
-    SceneBuilder.cull(state.me);
-  });
-  Laya.timer.frameLoop(10, null, () => {
-    if (isWorldPaused()) return;
-    SceneBuilder.resort();
-  });
+  //    存 method 引用到 state.loops，shutdown() 时可统一 clear —— 支持「退出登录 → 重新登录」
+  //    不产生重复 loop。
+  //    狼人杀对局期间世界层已隐藏：三个 loop 统一早退，避免隐藏状态下仍做插值/裁剪/重排的无效开销。
+  const loops = {
+    updateAll: (): void => {
+      if (isWorldPaused()) return;
+      EntityRegistry.updateAll(
+        Laya.timer.delta,
+        e =>
+          e.sprite.visible !== false ||
+          e.getComponent(BuildingViewComponent) !== null,
+      );
+    },
+    cull: (): void => {
+      if (isWorldPaused()) return;
+      SceneBuilder.cull(state.me);
+    },
+    resort: (): void => {
+      if (isWorldPaused()) return;
+      SceneBuilder.resort();
+    },
+  };
+  // 先清再注册：防止 afterLogin 被二次调用（重进场景）时重复叠加 loop
+  shutdownLoops();
+  state.loops = loops;
+  Laya.timer.frameLoop(1, null, loops.updateAll);
+  Laya.timer.frameLoop(AppConfig.viewport.tickFrames, null, loops.cull);
+  Laya.timer.frameLoop(10, null, loops.resort);
   console.log(
     `[S1] 客户端版本 ${AppConfig.clientVersion}，配置包 v${cfg.version}`,
+  );
+
+  // GM DOM overlay —— 非微信小游戏环境自动生效（内部已 guard）
+  injectGMPanel();
+}
+
+/** 清理 Main.afterLogin 注册的三个全局逐帧 loop —— 支持重进场景/退出登录 */
+function shutdownLoops(): void {
+  const l = state.loops;
+  if (l) {
+    Laya.timer.clear(null, l.updateAll);
+    Laya.timer.clear(null, l.cull);
+    Laya.timer.clear(null, l.resort);
+    state.loops = null;
+  }
+  Laya.timer.clear(null, heartbeatTick);
+}
+
+/**
+ * 客户端全量清理（退出登录 / 重进场景时调用）。
+ * 先停 loop → 再断 WS → 再清各子系统 attach 出来的监听/timer。
+ * 不做「销毁场景节点」—— 场景层重建由新的 afterLogin 负责。
+ */
+export function shutdownClient(
+  playerControl?: PlayerControl | null,
+  interactControl?: InteractController | null,
+): void {
+  shutdownLoops();
+  playerControl?.detach();
+  interactControl?.detach();
+  BuildPanel.destroy();
+  ChatPanel.destroy();
+  MatchPanel.destroy();
+  InventoryPanel.destroy();
+  MailPanel.destroy();
+  QuizPanel.destroy();
+  ScorePanel.destroy();
+  state.ws?.disconnect();
+  state.ws = null;
+  state.me = null;
+  state.cfg = null;
+  state.buildRule = null;
+  EntityRegistry.clear();
+  TextureRegistry.clear();
+  console.log(
+    '[S1] 客户端 shutdown 完成（loop / 监听 / 实体注册表 / 贴图已清空）',
   );
 }
 
@@ -348,6 +496,13 @@ async function main(): Promise<void> {
   Hud.init();
   // S5 对话框（同为引擎内自绘，屏幕空间，zOrder 高于 HUD）
   DialogueView.init();
+  // 聊天面板在 afterLogin 里 init —— 登录页不显示聊天条（登录页门禁）
+  // 匹配面板（三态：idle/matching/matched，M 开关，zOrder 高于 HUD/聊天/建造）
+  MatchPanel.init();
+  // 背包面板（打开时懒加载 GET /inventory/list，I 开关，zOrder 最高）
+  InventoryPanel.init();
+  // 邮件面板（打开时懒加载 GET /mail/list，L 开关，zOrder 高于背包）
+  MailPanel.init();
   // S6 建造面板（引擎内自绘，zOrder 高于 HUD/对话框）
   BuildPanel.init();
   // S8 质量分级 + 性能面板（面板 zOrder 须高于 login；F3 开关）

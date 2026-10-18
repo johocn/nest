@@ -13,11 +13,7 @@ import { PlayerService } from '@modules/player/player.service';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
 import { AccountType, AccountStatus, PenaltyLevel } from '@constants/enums';
-import {
-  aesDecrypt,
-  aesEncrypt,
-  sha256Hex,
-} from '@common/crypto/crypto.util';
+import { aesDecrypt, aesEncrypt, sha256Hex } from '@common/crypto/crypto.util';
 
 export interface JwtPayload {
   accountId: string;
@@ -64,7 +60,8 @@ export class AuthService {
     this.jwtExpiresIn = jwtConfig?.expiresIn ?? '7d';
     this.realNameSecret =
       this.configService.get<string>('auth.realNameSecret') ??
-      (jwtConfig?.secret ?? 'default-secret');
+      jwtConfig?.secret ??
+      'default-secret';
     this.ssoBaseUrl =
       this.configService.get<string>('SSO_BASE_URL') ?? 'https://h.joho.cn';
     this.ssoCallbackUrl =
@@ -194,12 +191,22 @@ export class AuthService {
     return `${this.ssoBaseUrl}/api/zhao-sso/v1/auth/authorize?app_code=game&redirect_uri=${redirectUri}&response_type=code`;
   }
 
+  /** SSO 账密直登：password-authorize 换一次性 code → 走统一回调换发 game JWT */
+  async ssoPasswordLogin(
+    username: string,
+    password: string,
+  ): Promise<AuthResult> {
+    const code = await this.passwordAuthorize(username, password);
+    return this.handleSsoCallback(code);
+  }
+
   async handleSsoCallback(code: string): Promise<AuthResult> {
     const ssoUser = await this.exchangeSsoCode(code);
     let account = await this.accountRepo.findOne({
       where: { ssoId: ssoUser.ssoId },
     });
-    let player: Awaited<ReturnType<PlayerService['createPlayer']>> | null = null;
+    let player: Awaited<ReturnType<PlayerService['createPlayer']>> | null =
+      null;
     if (!account) {
       const created = await this.createSsoAccount(ssoUser);
       account = created.account;
@@ -220,7 +227,9 @@ export class AuthService {
       { tokenVersion: newTokenVersion, lastLoginAt: new Date() },
     );
     const token = this.generateToken(account.id, player.id, newTokenVersion);
-    this.logger.log(`SSO 登录成功 accountId=${account.id} ssoId=${ssoUser.ssoId}`);
+    this.logger.log(
+      `SSO 登录成功 accountId=${account.id} ssoId=${ssoUser.ssoId}`,
+    );
     return { token, accountId: account.id, playerId: player.id };
   }
 
@@ -228,7 +237,8 @@ export class AuthService {
     account: AuthAccount;
     player: Awaited<ReturnType<PlayerService['createPlayer']>>;
   }> {
-    const baseUsername = ssoUser.username || `sso_${ssoUser.ssoId.slice(0, 12)}`;
+    const baseUsername =
+      ssoUser.username || `sso_${ssoUser.ssoId.slice(0, 12)}`;
     let username = baseUsername;
     let suffix = 1;
     while (await this.accountRepo.findOne({ where: { username } })) {
@@ -286,6 +296,43 @@ export class AuthService {
       ssoId: String(data.user.uuid),
       username: String(data.user.username ?? ''),
     };
+  }
+
+  /** 账密换一次性 code（zhao-sso 降级密码登录 code 模式），失败一律抛 SSO_AUTH_FAILED */
+  private async passwordAuthorize(
+    identifier: string,
+    password: string,
+  ): Promise<string> {
+    let response: globalThis.Response;
+    try {
+      response = await fetch(
+        `${this.ssoBaseUrl}/api/zhao-sso/v1/auth/password-authorize`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            app_code: 'game',
+            identifier,
+            password,
+            redirect_uri: this.ssoCallbackUrl,
+            state: '',
+          }),
+          signal: AbortSignal.timeout(2000),
+        },
+      );
+    } catch {
+      throw new GameException(ErrorCodes.SSO_AUTH_FAILED, 'SSO 认证服务不可用');
+    }
+    if (!response.ok) {
+      throw new GameException(ErrorCodes.SSO_AUTH_FAILED, 'SSO 账号或密码错误');
+    }
+    const data = (await response.json().catch(() => null)) as {
+      code?: string;
+    } | null;
+    if (!data?.code) {
+      throw new GameException(ErrorCodes.SSO_AUTH_FAILED, 'SSO 换码失败');
+    }
+    return data.code;
   }
 
   async validateToken(payload: JwtPayload): Promise<boolean> {

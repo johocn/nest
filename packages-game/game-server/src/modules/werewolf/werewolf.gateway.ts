@@ -9,6 +9,7 @@ import type { Server, Socket } from 'socket.io';
 import { WerewolfService } from './werewolf.service';
 import { ConnectionService } from '@modules/gateway/connection.service';
 import { GameEvents } from '@event-bus/game-events';
+import { ErrorCodes } from '@constants/error-codes';
 import { ActionPayload, CreateRoomOptions } from './werewolf.types';
 
 interface WsEnvelope {
@@ -62,7 +63,12 @@ export class WerewolfGateway {
       const snap = this.werewolfService.createRoom(opts);
       return this.ack(envelope, { roomId: opts.roomId, snapshot: snap });
     } catch (err: any) {
-      return this.ack(envelope, null, 45000, err?.message ?? '建房失败');
+      return this.ack(
+        envelope,
+        null,
+        ErrorCodes.WEREWOLF_ACTION_FAILED,
+        err?.message ?? '建房失败',
+      );
     }
   }
 
@@ -79,7 +85,12 @@ export class WerewolfGateway {
       );
       return this.ack(envelope, { snapshot: snap });
     } catch (err: any) {
-      return this.ack(envelope, null, 45001, err?.message ?? '加入失败');
+      return this.ack(
+        envelope,
+        null,
+        ErrorCodes.WEREWOLF_ACTION_FAILED,
+        err?.message ?? '加入失败',
+      );
     }
   }
 
@@ -101,7 +112,12 @@ export class WerewolfGateway {
       const snap = this.werewolfService.startRoom(d.roomId, playerId);
       return this.ack(envelope, { snapshot: snap });
     } catch (err: any) {
-      return this.ack(envelope, null, 45004, err?.message ?? '开局失败');
+      return this.ack(
+        envelope,
+        null,
+        ErrorCodes.WEREWOLF_ACTION_FAILED,
+        err?.message ?? '开局失败',
+      );
     }
   }
 
@@ -118,7 +134,12 @@ export class WerewolfGateway {
       );
       return this.ack(envelope, view);
     } catch (err: any) {
-      return this.ack(envelope, null, 45005, err?.message ?? '行动失败');
+      return this.ack(
+        envelope,
+        null,
+        ErrorCodes.WEREWOLF_ACTION_FAILED,
+        err?.message ?? '行动失败',
+      );
     }
   }
 
@@ -175,7 +196,12 @@ export class WerewolfGateway {
       );
       return this.ack(envelope, { snapshot: snap });
     } catch (err: any) {
-      return this.ack(envelope, null, 45003, err?.message ?? '填充失败');
+      return this.ack(
+        envelope,
+        null,
+        ErrorCodes.WEREWOLF_ACTION_FAILED,
+        err?.message ?? '填充失败',
+      );
     }
   }
 

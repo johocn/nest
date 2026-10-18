@@ -34,6 +34,29 @@ export class AchievementService {
     private readonly economyService: EconomyService,
   ) {}
 
+  /**
+   * AchievementCondition → conditionJson 可能包含的 JSON keys。
+   * 与 admin controller 的 JSON_KEY_TO_ENUM 对称：Service 层用它在
+   * conditionJson 里做包含匹配，确保 admin-web 创建的模板（condition
+   * enum 列 fallback 成 REACH_LEVEL 或推断不到）也能被正确推进。
+   */
+  private static readonly CONDITION_TO_JSON_KEYS: Record<
+    AchievementCondition,
+    string[]
+  > = {
+    [AchievementCondition.KILL_COUNT]: ['kills', 'killCount'],
+    [AchievementCondition.REACH_LEVEL]: ['target', 'level'],
+    [AchievementCondition.COMPLETE_QUEST]: ['questId', 'questCount', 'quests'],
+    [AchievementCondition.EARN_CURRENCY]: [
+      'totalGold',
+      'currencyEarned',
+      'earn',
+    ],
+    [AchievementCondition.JOIN_GUILD]: ['guildId', 'joinGuild'],
+    [AchievementCondition.ADD_FRIEND]: ['friendCount', 'friends'],
+    [AchievementCondition.WIN_COMBAT]: ['wins', 'winCount', 'winCombat'],
+  };
+
   async updateProgress(
     playerId: string,
     achievementId: string,
@@ -82,6 +105,11 @@ export class AchievementService {
   /**
    * 按成就条件推进进度：命中同一 condition 的所有模板逐一推进。
    * 单条模板失败只记日志，不阻断其余模板与调用方主流程。
+   *
+   * 模板匹配走两条路径然后去重合并：
+   *   ① condition enum 列精确匹配 —— 正常流程（手写 migration / service 创建）
+   *   ② conditionJson 包含匹配   —— admin-web 创建的模板 fallback
+   *      （condition enum 列可能被推断或 fallback 成非期望值）
    */
   async advanceByCondition(
     playerId: string,
@@ -91,7 +119,39 @@ export class AchievementService {
   ): Promise<void> {
     if (!Number.isFinite(value) || value <= 0) return;
 
-    const templates = await this.templateRepo.find({ where: { condition } });
+    // ① enum 精确匹配
+    const templatesByEnum = await this.templateRepo.find({
+      where: { condition },
+    });
+
+    // ② conditionJson 包含匹配（Postgres JSONB 的 ? 操作符检查顶层 key 是否存在）
+    const jsonKeys = AchievementService.CONDITION_TO_JSON_KEYS[condition] ?? [];
+    const templatesByJson =
+      jsonKeys.length > 0
+        ? await this.templateRepo
+            .createQueryBuilder('t')
+            .where(
+              jsonKeys
+                .map((k) => `t.condition_json::jsonb @> :json_${k}`)
+                .join(' OR '),
+              Object.fromEntries(
+                jsonKeys.map((k) => [
+                  `json_${k}`,
+                  JSON.stringify({ [k]: null }),
+                ]),
+              ),
+            )
+            .getMany()
+        : [];
+
+    // 去重合并
+    const seen = new Set<string>();
+    const templates = [...templatesByEnum, ...templatesByJson].filter((t) => {
+      if (seen.has(t.id)) return false;
+      seen.add(t.id);
+      return true;
+    });
+
     for (const template of templates) {
       try {
         await this.applyProgress(playerId, template, value, mode);
@@ -262,6 +322,17 @@ export class AchievementService {
     return { items, total };
   }
 
+  /**
+   * Admin 模板列表（与 getTemplates 等价，预留 filter 扩展位）。
+   * admin-web 路由 GET /admin/v1/achievement/template/list 直接复用。
+   */
+  async listTemplates(
+    page = 1,
+    limit = 20,
+  ): Promise<{ items: AchievementTemplate[]; total: number }> {
+    return this.getTemplates(page, limit);
+  }
+
   async createTemplate(
     data: Partial<AchievementTemplate>,
   ): Promise<AchievementTemplate> {
@@ -277,5 +348,94 @@ export class AchievementService {
     if (!template) return null;
     Object.assign(template, data);
     return this.templateRepo.save(template);
+  }
+
+  async getTemplate(id: string): Promise<AchievementTemplate | null> {
+    return this.templateRepo.findOne({ where: { id } });
+  }
+
+  async deleteTemplate(id: string): Promise<void> {
+    const template = await this.templateRepo.findOne({ where: { id } });
+    if (template) await this.templateRepo.softRemove(template);
+  }
+
+  // ===== Admin: PlayerAchievement =====
+
+  async listPlayerAchievements(
+    filter: {
+      playerId?: string;
+      achievementId?: string;
+      isUnlocked?: boolean;
+      isRewardClaimed?: boolean;
+    },
+    page: number,
+    limit: number,
+  ): Promise<{ items: PlayerAchievement[]; total: number }> {
+    const where: any = {};
+    if (filter.playerId) where.playerId = filter.playerId;
+    if (filter.achievementId) where.achievementId = filter.achievementId;
+    if (filter.isUnlocked !== undefined) where.isUnlocked = filter.isUnlocked;
+    if (filter.isRewardClaimed !== undefined)
+      where.isRewardClaimed = filter.isRewardClaimed;
+    const [items, total] = await this.playerAchievementRepo.findAndCount({
+      where,
+      skip: (page - 1) * limit,
+      take: limit,
+      order: { createdAt: 'DESC' },
+    });
+    return { items, total };
+  }
+
+  async getPlayerAchievementById(
+    id: string,
+  ): Promise<PlayerAchievement | null> {
+    return this.playerAchievementRepo.findOne({ where: { id } });
+  }
+
+  async grantPlayerAchievement(
+    playerId: string,
+    achievementId: string,
+  ): Promise<PlayerAchievement> {
+    const template = await this.templateRepo.findOne({
+      where: { id: achievementId },
+    });
+    if (!template) {
+      throw new GameException(
+        ErrorCodes.ACHIEVEMENT_NOT_FOUND,
+        '成就模板不存在',
+      );
+    }
+    let record = await this.playerAchievementRepo.findOne({
+      where: { playerId, achievementId },
+    });
+    if (!record) {
+      record = this.playerAchievementRepo.create({
+        playerId,
+        achievementId,
+        currentValue: template.targetValue,
+        isUnlocked: true,
+        isRewardClaimed: false,
+        unlockedAt: new Date(),
+      });
+    } else {
+      record.currentValue = template.targetValue;
+      record.isUnlocked = true;
+      record.unlockedAt = record.unlockedAt ?? new Date();
+    }
+    return this.playerAchievementRepo.save(record);
+  }
+
+  async revokePlayerAchievement(id: string): Promise<PlayerAchievement | null> {
+    const record = await this.playerAchievementRepo.findOne({ where: { id } });
+    if (!record) return null;
+    record.isUnlocked = false;
+    record.currentValue = 0;
+    record.unlockedAt = null;
+    record.isRewardClaimed = false;
+    return this.playerAchievementRepo.save(record);
+  }
+
+  async deletePlayerAchievement(id: string): Promise<void> {
+    await this.playerAchievementRepo.delete(id);
   }
 }

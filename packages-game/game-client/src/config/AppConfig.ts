@@ -80,7 +80,16 @@ export const AppConfig = {
   dialogue: {
     /** 对话框根节点 zOrder：须盖在 HUD 之上 */
     zOrder: 10000,
-    panelMaxWidth: 640,
+    /**
+     * 面板宽度上限。**上限受触控层几何约束**：面板水平居中（占 x (960−w)/2 .. (960+w)/2），
+     * 而摇杆激活区占左下 x 0..256（见下方 `touch.stickZoneWidth`）、交互按钮占 x 848..936。
+     * 两条约束：
+     *  - **左缘 ≥ 256** → `w ≤ 448`：面板左缘再往左就会压进摇杆激活区，其上的选项按钮（在触控层之上）
+     *    会抢走按下事件，表现为「想走路却误选了对话选项」；
+     *  - 右缘 ≤ 736 → 让开右下角交互按钮（取 448 时右缘 704 < 848，余量充足）。
+     * 故取 **448**：左缘 256 与激活区右界**恰好贴齐、零重叠**，右缘 704 让开交互按钮。
+     */
+    panelMaxWidth: 448,
     panelMarginX: 40,
     panelBottomOffset: 24,
     panelBgColor: 'rgba(0,0,0,0.88)',
@@ -99,7 +108,8 @@ export const AppConfig = {
     bodyLineHeight: 20,
     optionFontSize: 14,
     optionColor: '#8ecdf7',
-    optionHeight: 22,
+    /** 选项行高（S9 第三轮起 22 → 44：手机上 22 只有 8.9 CSS px，手指点不准；面板自底向上生长，不会溢出） */
+    optionHeight: 44,
     optionGap: 4,
     optionBgColor: 'rgba(255,255,255,0.06)',
     optionPadX: 8,
@@ -128,13 +138,20 @@ export const AppConfig = {
     lineColor: '#e6edf3',
     dimColor: '#8b949e',
     lineHeight: 20,
+    /**
+     * **可点行的行带高度（S9 第三轮）**：蓝图行（选蓝图）与操作按钮行（建造/投料/拆除/关闭）都用它。
+     * 理由：手机上 20 舞台像素只有 **8.1 CSS px**、手指点不准 —— 而面板的行带是**连续无缝**的，
+     * 「命中区加高」在相邻行都可点时最多只能吃半个行距（实测中间行仍是 20）→ 只能把**视觉行带本身**加高。
+     * 44 ≈ 18 CSS px，与触控按钮同量级；面板因此变高（约 310 → 480），仍在 640 内。
+     */
+    touchRowHeight: 44,
     /** 蓝图行选中底色 */
     selectedBgColor: 'rgba(47,129,247,0.35)',
     /** 合法性红/绿 */
     legalColor: '#3fb950',
     illegalColor: '#ff7b72',
-    /** 操作按钮行高与底色 */
-    buttonHeight: 26,
+    /** 操作按钮行高与底色（S9 第三轮起 26 → 44，与 `touchRowHeight` 一致，手机上才点得准） */
+    buttonHeight: 44,
     buttonBgColor: 'rgba(255,255,255,0.10)',
     /** 格点预览：半透明填充 + 边框 */
     previewAlpha: 0.35,
@@ -204,6 +221,13 @@ export const AppConfig = {
     buttonDisabledColor: '#8b949e',
     buttonIdleText: '登录 / 自动注册',
     buttonBusyText: '登录中…',
+    /** SSO 登录按钮（主按钮下方的次要按钮） */
+    gapBeforeSsoButton: 8,
+    ssoButtonHeight: 30,
+    ssoButtonFontSize: 13,
+    ssoButtonColor: '#8b949e',
+    ssoButtonBgColor: 'rgba(255,255,255,0.06)',
+    ssoButtonBusyText: 'SSO 登录中…',
     /** 错误行（校验失败 / 提交异常） */
     gapBeforeError: 10,
     errorHeight: 18,
@@ -247,6 +271,62 @@ export const AppConfig = {
   pool: {
     /** 每个 kind 桶的容量上限：超限的 release 直接丢弃并计入 discarded，防止长时间运行内存无界增长 */
     maxPerKind: 32,
+  },
+  /**
+   * S9 手机触控（引擎内自绘，屏幕空间）：**浮动虚拟摇杆** + 交互按钮，**仅触摸设备显示**。
+   * 只补输入通道：摇杆把与键盘同名的 `'w'/'a'/'s'/'d'` 按 8 向离散注入 `PlayerControl.pressed`，
+   * 交互按钮走 `InteractController.triggerInteract()` —— 与键盘是同一条链路，PC 端行为零变更。
+   * 尺寸均为**舞台坐标**（`SCALE_SHOWALL` 下随舞台等比缩放）。
+   */
+  touch: {
+    /** 触控层根节点 zOrder：**低于** hud(9999) —— 提示条/对话/建造/登录/性能面板永远盖在它上面 */
+    zOrder: 9998,
+    /**
+     * 摇杆激活区（左下角锚定）：**不可见但可命中**，手指在这块区域按下才生成底座与摇杆头。
+     * 必须有实体节点接住按下 —— Laya 的拖动事件只向「按下时命中的节点链」派发，空处按下连 MOUSE_DOWN 都收不到。
+     * **宽度取 256**：恰好等于对话面板左缘 x（见上方 `dialogue.panelMaxWidth` 的推导），
+     * 使激活区与面板**零重叠** —— 在激活区内按下必定起摇杆，不会误选到压在上层的对话选项行。
+     */
+    stickZoneWidth: 256,
+    stickZoneHeight: 400,
+    /** 摇杆底座半径 / 摇杆头半径：摇杆头最大偏移 = 底座半径（超出按方向钳制在圆内） */
+    stickRadius: 88,
+    knobRadius: 36,
+    /** 死区比例：偏移 < `stickRadius × 该比例` 时不注入任何方向键（防误触抖动） */
+    deadZoneRatio: 0.28,
+    /** 交互按钮尺寸与到右下角的边距 */
+    interactWidth: 88,
+    interactHeight: 88,
+    interactMarginRight: 24,
+    interactMarginBottom: 40,
+    /**
+     * 「建造」按钮到右下角的边距：与交互按钮**同宽同高**（复用 `interactWidth/Height/interactFontSize`），
+     * 竖直叠放在交互按钮正上方（水平位置一致）。`152 = interactMarginBottom(40) + interactHeight(88) + 24(间距)`
+     * → 按钮落在 `y 400..488`（与交互按钮同为 88×88）。
+     * 面板打开时若被建造面板盖住，面板内已有「关闭面板」按钮行兜底（见 `BuildPanel.rows`）。
+     */
+    buildMarginBottom: 152,
+    /** 半透明不挡视野；`pressedBgColor` 同时用作摇杆头底色 */
+    bgColor: 'rgba(255,255,255,0.16)',
+    pressedBgColor: 'rgba(255,255,255,0.42)',
+    borderColor: 'rgba(255,255,255,0.35)',
+    borderWidth: 1,
+    /** 交互按钮字号 / 文字色 */
+    interactFontSize: 20,
+    textColor: '#ffffff',
+    /**
+     * **可点行的最小命中高度（舞台像素）**：触控下「点一下就有反应」的行把自己的命中区撑到至少这个高度。
+     *
+     * 为什么需要：`SCALE_SHOWALL` 把 960×640 等比缩到手机宽度，常见机型（如 390 CSS px 宽）
+     * 缩放比只有 ~0.41 —— 20 舞台像素的行带落到屏幕上只有 **8.1 CSS px 高**，而手指落点误差普遍
+     * >4 CSS px，表现就是「点了没反应」。交互按钮 `interactHeight=88`（≈36 CSS px）之所以一直好使，就是够高。
+     * 取 **44**：≈18 CSS px，与 88 的交互按钮同一量级。
+     *
+     * **但命中区只解决「相邻有空隙」的行**：面板的行带是连续无缝的，相邻行都可点时只能各吃半个行距
+     * （实测中间行仍是 20）—— 故 **S9 第三轮把可点行的视觉行带本身也加到了 44**
+     * （`build.touchRowHeight` / `build.buttonHeight` / `dialogue.optionHeight`），本常量退化为兜底。
+     */
+    minHitHeight: 44,
   },
   /**
    * S8 Task 3 静态背景层（世界空间）：地块 + 网格 + 触发区描边 + 增量排序阈值集中在此，避免魔法数字散落。

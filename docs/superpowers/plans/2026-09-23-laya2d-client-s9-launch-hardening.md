@@ -2,7 +2,7 @@
 
 > **状态：执行中，范围收敛为 H5-only（2026-09-24）。** 微信小游戏侧**缺 AppID**，Task 6（正式提审）**阻塞**，Task 5 的产物链**代码已交付**，真实 `release/wxgame` 导出的复核随小游戏上线解阻后再补。本文件只做规划与记录，不动代码、不动生产。
 > **H5 侧进度快照（2026-09-24）**：Task 1（证书）/ Task 2（S8 上线）/ Task 5（包体门禁）/ Task 7（广播门禁）**已完成**；Task 3 Step 2–3（素材入库 + 贴图接线）**已完成并上线**（落地方式偏离 D8，见 Task 3 Step 2 记录），Step 4–5（图集）**已决策不做**（2026-09-24 确认，见 Task 3 Step 4/5 记录），Step 6（线上点检）**服务器侧已完成、手机端待人工**（见 §7.4.1）；Task 4（真机验收，唯一需设备的硬缺口）**清单与模板已就绪、实测未做**；Task 8（验收与文档结清）Step 1–4 **已完成**（见 §7，提交 `76c2e8e7f`）。
-> **点检轮快照（2026-09-24 晚，「接上文，真机点检」）**：① **P0 已修** —— 线上证书 13:30 被「整目录还原」类操作回退成自建 CA（A1 回归），18:14 用面板 cert-stage 的 LE 全链重铺 + reload 修好（`0 (ok)`），回退陷阱已写进 `game-client/README.md`；② **服务器侧点检完成**（SSH → odoo）：线上产物 md5 与本机一致、S8 五模块/素材/manifest/health 全 200、assets 13 PNG + 13 `.meta`、`wss` 101；③ **本地基线完成**：`s9-art-after` 60fps / drawcall 峰 39 / heap 峰 23.2MB / up 9.5 / high（Task 3 Step 3 + §7.4.2）；④ **真机清单与记录模板已产出**（Task 4 Step 1–6 + §7.4.3），实测待人工持真机执行 —— 本机 Windows 且**出网被拦**，无真机通道。
+> **点检轮快照（2026-09-24 晚，「接上文，真机点检」）**：① **P0 已修** —— 线上证书 13:30 被「整目录还原」类操作回退成自建 CA（A1 回归），18:14 用面板 cert-stage 的 LE 全链重铺 + reload 修好（`0 (ok)`），回退陷阱已写进 `game-client/README.md`；② **服务器侧点检完成**（SSH → odoo）：线上产物 md5 与本机一致、S8 五模块/素材/manifest/health 全 200、assets 13 PNG + 13 `.meta`、`wss` 101；③ **本地基线完成**：`s9-art-after` 60fps / drawcall 峰 39 / heap 峰 23.2MB / up 9.5 / high（Task 3 Step 3 + §7.4.2）；④ **真机清单与记录模板已产出**（Task 4 Step 1–6 + §7.4.3），实测待人工持真机执行 —— 本机 Windows 且**出网被拦**，无真机通道；⑤ **低端代理预评估完成**（§7.4.4，`perf-sample.mjs` 新增 `--cpu-throttle`）：×6 仍 60fps（**H5 无 CPU 瓶颈**）、×50 **首次实证自动降级链路可用**（降级后 39.7fps ≥30）—— 代理值**不参与 A4 判定**。
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development（沿用 S2–S8 的既定方式：每 Task 派新 subagent，Task 间两阶段评审）。
 
 **Goal:** 把「能在开发者工具与本机跑通」的客户端变成**可正式上线**的游戏端：修掉生产证书链、把 S8 性能成果发布上线、接入已定稿美术并做图集、在**真机低端机型**上验收帧率与内存、建立包体与后端广播的**硬指标门禁**，最终通过**微信小游戏正式提审**并上线 H5。
@@ -229,25 +229,27 @@
 - [ ] **Step 1** 定义机型矩阵（§4 待确认 5）与测量项：冷启动耗时、稳态 fps、内存峰值、场景切换回落。→ **口径已定义（本轮）**：
   - **机型矩阵**（§4 待确认 5 的默认口径，三档）：① **低端安卓** —— 门槛档，A4 判定以它为准（如骁龙 4xx/6xx 系、4GB RAM、Android 10±）；② **中端安卓** —— 参考档（如骁龙 7xx 系、8GB RAM）；③ **iOS Safari** —— 参考档。**三档各一台**即可，机型/系统版本如实填进 Step 6 表。
   - **打开地址与账号**：手机浏览器直接打开 `https://game.joho.cn/client/`（**非** `http://`、**非** PC 地址），用 `spike01` / `spike123456` 登录；需看「互见」时在 PC 另开一窗用 `spike02` 同场景对照（Task 2 Step 4 的线上双窗口径）。
-  - **打点方式（关键约束：手机无键盘，`F3` 不可用）**：
+  - **打点方式（关键约束：手机无键盘，`F3` 不可用；移动/交互见 §7.4.5 触控通道）**：
     - **安卓**：USB 连 PC → PC Chrome 打开 `chrome://inspect` → inspect 手机页面 → Console 执行 `__PERF__.panel(true)`（显形面板，`__PERF__.panel()` 不传参是**切换**，连调两次取第二次返回值才是「读」）或 `__PERF__.snapshot()` 逐秒读数。**面板读数项**：`fps` / `drawcall` / `heapMB` / `upPerSec` / `quality` / `entityTotal`。
     - **iOS**：无 Mac 则走不了 Safari Web Inspector → **仅目视 + 录屏**，`heapMB` 记 **n/a**（iOS 无 `performance.memory`，`snapshot().heapMB` 本就返回 null），fps 以目视是否卡顿 + 录屏帧计数估算，并在结论里标注「非仪器读数」。
   - **测量项与判定阈值**（A4 三项 + 降级）：
 
     | 代号 | 测量项 | 打点方式 | 阈值 |
     |---|---|---|---|
-    | T1 | 打开 URL → 登录表单可输入 | 秒表（或录屏逐帧） | — |
-    | T2 | 点登录 → 场景首帧出现 | 秒表（或录屏逐帧） | — |
-    | T3 | 冷启动总耗时 = T1 + T2 | T1 + T2 | **≤5s** |
+    | T1 | 打开 URL → 登录表单可输入 | 秒表（或录屏逐帧） | **≤2.5s**（诊断预算，见下注） |
+    | T2 | 点登录 → 场景首帧出现 | 秒表（或录屏逐帧） | **≤2.5s**（诊断预算，见下注） |
+    | T3 | 冷启动总耗时 = T1 + T2 | T1 + T2 | **≤5s（合同口径 —— 唯一的判定门槛）** |
     | F | 稳态 fps（移动 + 静止，含降级生效后） | `__PERF__.snapshot().fps` 逐秒 | **低端安卓 ≥30** |
     | M | 内存峰值 / 切场景后 | `snapshot().heapMB` | 峰值 **≤300MB**，切场景后**回落**（安卓）；iOS 记 n/a |
     | D | 自动降级可复现性 | 控制台日志 + `snapshot().quality` | 出现 `[S8] 连续 3000ms fps 低于目标 80% → 自动降级 quality=low` 或 `quality==='low'`，且**降级后 fps ≥30** |
 
-  - **桌面端已知基线（仅供对照，非真机结论）**：H5 线上 PC 非 headless **60fps** / drawcall 峰 34 / heap 峰 17MB（Task 2 Step 5）；本机 dev `s9-art-after` 60fps / drawcall 峰 39 / heap 峰 23.2MB（Task 3 Step 3）。真机数值**一律实测填入，不预填**。
+    > **T1 / T2 的阈值是「诊断预算」，不是判定门槛**：合同只规定 **T3 ≤5s**（§1.2 A4 行），判定一律以 T3 为准。这里把 5s **均分**给两段（各 2.5s）唯一的用途是**定位**——真机不达标时，先看是哪一段超预算：**T1 超 = 前端装载慢**（首访要裸拉 index.html + 60 js + 5 libs + 28 assets，未合并 / 未压缩 / 无 CDN）；**T2 超 = 登录 + 进场景慢**（配置包拉取 / ws 握手 / 场景装配）。两段的处置方向完全不同，故必须分开记。均分只是最简单的分法，**可随基线校准改**。
+
+  - **桌面端已知基线（仅供对照，非真机结论）**：H5 线上 PC 非 headless **60fps** / drawcall 峰 34 / heap 峰 17MB（Task 2 Step 5）；本机 dev `s9-art-after` 60fps / drawcall 峰 39 / heap 峰 23.2MB（Task 3 Step 3）；**CPU 限速代理**（非真机替代）见 §7.4.4：×6 仍 60fps、×50 触发降级后 39.7fps。真机数值**一律实测填入，不预填**。
 - [ ] **Step 2** 真机跑 H5（手机浏览器）：记录面板数据 + 截图/录屏。→ **本期仅 H5 手机浏览器**（小游戏真机随 Task 6 解阻再补）。操作即 Step 1 的「打开地址 + 打点方式」；每档机型产出一份 Step 6 表行 + 至少 1 张面板截图或 1 段录屏。
-- [ ] **Step 3** **自动降级验证**：在低端机上确认连续 3s 低于目标 80% → 降 `quality=low`（并记录降级后 fps）。→ 判据见 Step 1 表 D 行。**若低端安卓本就 ≥30fps 不触发降级**，改由「临时构造」验证：`https://game.joho.cn/client/?quality=low` 强制低档，确认面板 `quality==='low'` 且表现正常（**证明开关链路可用**），并在结论里注明「未触发自动降级，仅验证手动切档」。
-- [ ] **Step 4** 若 <30fps：先查 `Quality` 开关项（名标签/网格线/触发区描边）与图集是否生效，再考虑降级阈值调参（**禁止无数据调参**）。→ 处置顺序（§3 风险 #6）：① 降级开关项（`?quality=low` 或触发自动降级）；② 图集（Task 3 Step 4/5 已决策不做，**真机 <30fps 是它的首选触发条件**）；③ 最后才动 `degradeRatio` 调参。
-- [ ] **Step 5** 达标判定：A4 三项（帧率/内存/启动）。→ 判定表（**逐档机型单独判**，低端安卓为门槛档）：T3 ≤5s、F ≥30（若触发降级，用**降级后**的 F 判定）、M ≤300MB 且切场景后回落（iOS 该项记 n/a 并在结论标注）。三项全过 = 该档 PASS；低端安卓 FAIL 即 A4 FAIL。
+- [ ] **Step 3** **自动降级验证**：在低端机上确认连续 3s 低于目标 80% → 降 `quality=low`（并记录降级后 fps）。→ 判据见 Step 1 表 D 行。**若低端安卓本就 ≥30fps 不触发降级**，改由「临时构造」验证：`https://game.joho.cn/client/?quality=low` 强制低档，确认面板 `quality==='low'` 且表现正常（**证明开关链路可用**），并在结论里注明「未触发自动降级，仅验证手动切档」。**代理侧已先证**：§7.4.4 的 ×50 CPU 限速下该链路**真实触发**（日志 + `finalQuality=low`，降级后 39.7fps ≥30）—— 真机只需复现「是否触发」，不必再验证代码通不通。
+- [ ] **Step 4** 若 <30fps：先查 `Quality` 开关项（名标签/网格线/触发区描边）与图集是否生效，再考虑降级阈值调参（**禁止无数据调参**）。→ 处置顺序（§3 风险 #6）：① 降级开关项（`?quality=low` 或触发自动降级）；② 图集（Task 3 Step 4/5 已决策不做，**真机 <30fps 是它的首选触发条件**）；③ 最后才动 `degradeRatio` 调参。**先验线索**：§7.4.4 表明 H5 无 CPU 瓶颈（×6 仍 60fps），故真机掉帧优先怀疑 **GPU / 内存**——第 ② 步（图集，本质是减少纹理与 drawcall）的优先级因此高于第 ③ 步调参。
+- [ ] **Step 5** 达标判定：A4 三项（帧率/内存/启动）。→ 判定表（**逐档机型单独判**，低端安卓为门槛档）：T3 ≤5s、F ≥30（若触发降级，用**降级后**的 F 判定）、M ≤300MB 且切场景后回落（iOS 该项记 n/a 并在结论标注）。三项全过 = 该档 PASS；低端安卓 FAIL 即 A4 FAIL。**T1 / T2 不参与判定**，只作**定位**用（各 2.5s 诊断预算，Step 1 表下注）：T3 超线时看是哪一段超预算 —— **T1 超 → 查前端装载**（合并/压缩/CDN、js 数量）；**T2 超 → 查登录 + 进场景**（配置包 / ws 握手 / 场景装配）。**§7.4.4 的 CPU 限速值只作参考、不参与判定**（不模拟移动 GPU / 内存 / 触屏，且为桌面浏览器口径）。
 - [ ] **Step 6** 记录矩阵表 + 结论，commit：`test(game-client): 真机机型矩阵与性能验收记录`。→ **模板已就绪（本轮）**，见 §7.4「真机点检记录模板」；实测数据由执行者填入后随本 Step 一起提交（README「真机性能矩阵」节的占位表同步回填）。
 
 ### Task 5: 包体门禁与产物链
@@ -275,7 +277,7 @@
 - [x] **Step 2** 用 S8 的历史数据（`loadtest-s8-result.json`）验证门禁脚本能正确判定（含一次「故意把阈值调到不可能满足」的失败路径验证）。→ 50bot 历史数据 PASS/exit 0；5 条阈值各自单独调到不可能满足均 exit 1（断言彼此独立）；`--run` 布线用 1 bot/8s 实测 PASS（输出隔离到临时文件，S8 数据文件 SHA256 未变）。
 - [x] **Step 3** 监控固化：记录 pm2/systemd 的 RSS/CPU 观测命令与「超标看什么」的排查顺序（不引入监控组件）。→ 报告 §6。
 - [x] **Step 4** 明确触发条件：**目标并发 >50 人** 或门禁连续失败 → 重新评估后端视口裁剪/分线（需单独确认，属广播行为变更）。→ 报告 §7（含 N² 外推表：100 人 ≈100k/s、200 人 ≈400k/s）。
-- [x] **Step 5** `scripts/loadtest-s9-report.md`：上线前/后指标对照 + 门禁结论。→ 上线后一列 **PENDING**（Task 2 未执行，挂账）。
+- [x] **Step 5** `scripts/loadtest-s9-report.md`：上线前/后指标对照 + 门禁结论。→ **已闭环**：报告 §3 上线前（S8 本机 50 bot）+ **§4 上线后对照（2026-09-24 生产冒烟，5 bot/10s：P95 33.08ms、上行 9.2/s/人、掉线 0、进场景 5/5）**；§4.1 记录生产冒烟暴露的两处脚本缺陷。**注**：上线后为 5 bot 冒烟口径（2G 生产机未跑 50 bot），非 50 bot 对照。
 - [x] **Step 6** commit：`test(game-perf): 广播硬指标门禁与上线报告`
 
 ### Task 8: S9 验收与文档结清
@@ -367,7 +369,7 @@ Task 1（证书，硬前置）→ Task 2（H5 发布）→ Task 3（素材/图�
 | A1 | 证书链合法 | `openssl s_client -showcerts -connect game.joho.cn:443` | 链完整、issuer 公共 CA、无 `unable to verify` | **通过**：`Verify return code: 0 (ok)`，issuer `C=US, O=Let's Encrypt, CN=YE2`（链 4 张）；本机 `curl`（系统 CA、不带 `-k`）→ 200 / `ssl_verify_result=0`；Node `https.get` → `authorized=true`（Task 1 Step 4）。**⚠️ 2026-09-24 曾回归过一次**：站点 `ssl/` 被「整目录还原」覆盖回自建 CA（`19 self signed certificate`），当日 18:14 已修复并复验 `0 (ok)`；防再发条款见 `game-client/README.md` 与 §7.4.1 |
 | A2 | S8 成果上线 | 线上 `/client/` 含 S8 模块、`PerfPanel` 可开、线上 `perf-sample` | 线上产物为 S8 版 | **通过**：线上 `/client/index.html` 200 且 md5 `533b098c…` 与本机一致；S8 十模块 URL 全 200；F3 面板真实按键可开；线上非 headless **60fps**/最低 59.9、drawcall 峰 34、heap 峰 17MB、上行 9.4/s、静止 0；`?quality=low` 生效（drawcall 峰 15）（Task 2 Step 3–5）。**2026-09-24 晚服务器侧复验**：S8 五模块 URL 仍全 200，`index.html` md5 更新为 `8d9d559a…`（Task 3 素材上线后的重建产物，本机逐字节一致）（§7.4.1） |
 | A3 | 美术接入 | 素材入库 + `.meta` 完整；drawcall/包体前后数值 | 素材入库 + 数值记录（图集不列入，§4-3 已确认不做） | **达成**：12 张 PNG 入库（程序化生成 + 同格式 `.meta`，**偏离 D8 已获批准**）并贴图接线、已上线（`b5d8c19f0`）；图集本期已决策不做（不计入缺口）；**进图前后基线已补齐**（2026-09-24 晚，Task 3 Step 3）：表现不回退（60/59.9、drawcall 38→39、heap 18.7→23.2MB、high），包体 71→96 文件 / 2.41→2.95 MB（+0.52 MiB，远低于门禁） |
-| A4 | 真机性能 | 低端安卓机型矩阵实测（面板打点） | ≥30fps / ≤300MB / 冷启动 ≤5s | **未做 / PENDING（清单已就绪）**：本机 Windows + 出网被拦，无真机通道；**点检清单 + 记录模板本轮已产出**（Task 4 Step 1–6、§7.4.3，H5 手机浏览器口径），实测待人工持真机执行后回填。**无任何真机 fps/内存/启动数据** |
+| A4 | 真机性能 | 低端安卓机型矩阵实测（面板打点） | ≥30fps / ≤300MB / 冷启动 ≤5s | **未做 / PENDING（清单已就绪 + 代理预评估已做）**：本机 Windows + 出网被拦，无真机通道；**点检清单 + 记录模板本轮已产出**（Task 4 Step 1–6、§7.4.3，H5 手机浏览器口径），**CPU 限速代理预评估见 §7.4.4**（×6 仍 60fps、×50 真实触发自动降级且降级后 39.7fps ≥30 —— 但**不参与 A4 判定**）。**无任何真机 fps/内存/启动数据** |
 | A5 | 包体门禁 | `tools/check-package.mjs`（体积/hash/引擎脚本顺序） | exit 0 | **脚本通过**：H5 布局（`release/client` 71 文件 / 2.23MB）与 wxgame 布局 fixture 均 **6/6 PASS, exit 0**；6 条失败路径各自独立命中（exit 1/2 正确）。**真实 `release/wxgame` 复核 PENDING**（缺 AppID 不导出）（Task 5 Step 1/2） |
 | A6 | 正式提审 | 体验版验收 → 提交审核 → 上线 | 审核通过上线 | **未做 / PENDING**：**阻塞于缺微信小游戏 AppID**（Task 6 全部 Step 未启动） |
 | A7 | 广播硬指标 | `scripts/loadtest-gate.mjs` | exit 0（P95 ≤200ms、投递 ≤25k/s、0 掉线、RSS Δ ≤50MB） | **门禁判定正确**：S8 历史 50bot 数据 PASS/exit 0；5 条阈值各自单独调到不可能满足均 exit 1（独立）；生产冒烟（5 bot/10s）**P95 33.08ms**、上行 9.2/s/人、**掉线 0**、进场景 5/5，门禁 exit 1 **仅因远端 RSS 无法度量**（脚本缺陷已记录）（Task 7 Step 2 + Task 2 Step 5） |
@@ -383,7 +385,7 @@ Task 1（证书，硬前置）→ Task 2（H5 发布）→ Task 3（素材/图�
 | Task 3 基线数值（drawcall/heap/包体） | **已补齐**（2026-09-24 晚） | 同口径采样写入 Task 3 Step 3：表现「60/59.9、drawcall 39、heap 23.2MB、up 9.5、high」不回退；包体 96 文件 / 2,953,242 B（+0.52 MiB，远低于门禁）。单变量未隔离：heap +4.5MB 含样本波动，不作为结论 |
 | Task 3 Step 6 线上点检 | **服务器侧完成 / 手机端待人工** | 服务器侧（SSH 到 odoo）全量核对通过：线上 `index.html` md5 与本机逐字节一致、S8 五模块 + manifest + health + 6 素材 URL 全 200、assets 13 PNG + 13 `.meta`、`wss` 101；**线上手机浏览器端到端点检归入 Task 4，由人工持真机执行**（模板见 §7.4） |
 | **生产证书被回退成自建 CA（P0，2026-09-24 发现）** | **已修复**（2026-09-24 18:14） | 站点 `ssl/` 目录 13:30 被「整目录还原」类操作覆盖回自建 CA（A1 回归，手机/微信端报不受信）。已用面板 cert-stage 的 LE 全链 + 私钥重铺 + `chmod 600` + reload，验证 `Verify return code: 0 (ok)`（链 4 张）；同源事故的**回退陷阱已写进 `game-client/README.md`**（只还原产物目录、绝不还原 `ssl/`）。详见 §7.4 |
-| Task 4（A4 真机性能） | **PENDING（清单已就绪）** | 需真实设备（低端/中端安卓 + iOS）；**点检清单与记录模板本轮已产出**（Task 4 Step 1–6 + §7.4 模板），本机无真机通道（出网被拦），实测待人工执行 |
+| Task 4（A4 真机性能） | **PENDING（清单已就绪 + 代理预评估已做）** | 需真实设备（低端/中端安卓 + iOS）；**点检清单与记录模板本轮已产出**（Task 4 Step 1–6 + §7.4 模板），**CPU 限速代理预评估见 §7.4.4**（含自动降级首次实证触发），本机无真机通道（出网被拦、无 USB/Safari Inspector），真机实测待人工执行 |
 | Task 5 真实 `release/wxgame` 复核 | **PENDING** | 缺 AppID 不导出，产物链仅以 fixture 自检 |
 | Task 6（A6 正式提审） | **BLOCKED** | 缺微信小游戏 AppID，S9 记为 H5-only 交付 |
 | Task 8 Step 4（commit） | **已执行** | `76c2e8e7f`（`docs(game-client): S9 上线硬化验收记录`，README.md + 本文件） |
@@ -437,20 +439,268 @@ Task 1（证书，硬前置）→ Task 2（H5 发布）→ Task 3（素材/图�
 
 **执行顺序（安卓门槛档为例，中端/iOS 同法各跑一遍）**：
 
-1. 手机浏览器打开 `https://game.joho.cn/client/`（确认地址栏无证书告警 —— 有告警说明 §7.4.1 的 P0 复发，先修证书再点检）；秒表起 T1（URL → 登录表单可输入）。
-2. USB 连 PC → PC Chrome `chrome://inspect` → inspect 该页 → Console 备用。
+1. 手机浏览器打开 `https://game.joho.cn/client/?perf=1`（**`?perf=1` = 开机显形性能面板**，见下方注；确认地址栏无证书告警 —— 有告警说明 §7.4.1 的 P0 复发，先修证书再点检）；秒表起 T1（URL → 登录表单可输入）。
+2. （**仅安卓需要，iOS 跳过**）USB 连 PC → PC Chrome `chrome://inspect` → inspect 该页 → Console 备用；用途是逐秒读 `__PERF__.snapshot()` 与抓自动降级日志原文。
 3. 输入 `spike01` / `spike123456` 登录，秒表计 T2（点登录 → 场景首帧）；T3 = T1 + T2。
-4. Console 执行 `__PERF__.panel(true)` 显形面板（或 `__PERF__.snapshot()` 逐秒读数）；按 `ArrowRight/Down/Left/Up` 走一段 + 静止一段，各读数 **F**（fps）与 **M**（heapMB）。
+4. 面板**开机即在左上角 (8,8)**（不压左下摇杆，可边走边看数）：按住**左下角虚拟摇杆**（§7.4.5）走约 10s + 静止约 10s，读 **F**（`fps` 行）与 **M**（`内存` 行）。
 5. 观察控制台是否出现 `[S8] 连续 3000ms fps 低于目标 80% → 自动降级 quality=low` 或 `snapshot().quality === 'low'`（**D**）；若触发，记录降级后 fps。
 6. 切换场景（或走出/回到场景）后再读一次 heap，判定**是否回落**（**M** 后半句）。
 7. 截图/录屏留证，按下方模板填行，回填 README「真机性能矩阵」节。
+
+> **`?perf=1`（2026-09-25 新增，专为真机点检而加）**：面板读的是 `PerfPanel`，原先**只有键盘 `F3`** 能开 —— 手机上没键盘、iOS 又没有 `chrome://inspect` 与 console（`__PERF__.panel(true)` 同样敲不了），于是 **iOS 那档根本出不了数**。现在 URL 带 `?perf=1`（或 `true` / `on`，大小写不敏感）即**开机显形**，**任意手机、不需要 PC 与数据线**；无参数时行为完全不变（默认隐藏，`?perf=0` 等无关值忽略）。可与质量档共存：`?perf=1&quality=low`（实测 `quality=low` 生效、面板同显）。
+> 改动位置 `src/perf/PerfPanel.ts`（`init()` 末尾读 `urlWantsPanel()`），**仅 1 文件、不改生产契约**（`__PERF__` 注释已声明为 dev/验收钩子）。
+> **发布记录（2026-09-25）**：`build-fallback` → `inject-env --env prod` → `publish h5-site` → **97 文件**；tar 1,144,101B、sha256 **`d3e974e5d8167422ff126f4fa8eb8b9742373d80dc3c064f068a6d25ce891f65`**（服务器 `sha256sum` 一致）；换目录 `before: 97 / new: 97 / after: 97`。**备份（回退用）**：`client.bak_perfflag_20260925_095927`（97 文件，= 两步确认版），回退 = `mv client client.failed && mv client.bak_perfflag_20260925_095927 client`。
+> **验证**：本机 ⇄ 服务器 md5 逐字节一致 —— `index.html` **`832309d3a68c7f4412d094af43ee0e74`**、`js/perf/PerfPanel.js` **`697c42187e05dd6bbab5c824c71d1b18`**；**公网实测**（Playwright，390×844）：`?perf=1` → 面板可见 ✓、无参数 → 隐藏 ✓、`?perf=0` → 隐藏 ✓、`?perf=on&quality=low` → 可见且 `quality=low` ✓；面板读数行样例 `fps 60.1 (stat 60.0) / drawcall 1 / 上行 world.move 0/s / quality high … / 内存 9.5MB`。
 
 **真机点检记录模板**（Step 6 用；**数据待填，不预填占位数值**）：
 
 | 机型 | 系统/浏览器 | T1(s) | T2(s) | T3(s) | fps 均值/最低 | drawcall 峰 | heap 峰(MB) | 切场景后 heap(MB) | 触发降级 | 降级后 fps | 结论 | 证据文件 |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| 待填（低端安卓 · 门槛档） | 待填 | 待填 | 待填 | 待填（≤5s） | 待填（≥30） | 待填 | 待填（≤300） | 待填（应回落） | 待填 | 待填 | 待填 PASS/FAIL | 截图/录屏文件名 |
-| 待填（中端安卓 · 参考档） | 待填 | 待填 | 待填 | 待填（≤5s） | 待填（≥30） | 待填 | 待填（≤300） | 待填（应回落） | 待填 | 待填 | 待填 | 截图/录屏文件名 |
-| 待填（iOS Safari · 参考档） | 待填 | 待填 | 待填 | 待填（≤5s） | 待填（≥30，目视估算） | n/a（无 Inspector） | **n/a**（iOS 无 `performance.memory`） | n/a | 待填 | 待填 | 待填 | 录屏文件名 |
+| 待填（低端安卓 · 门槛档） | 待填 | 待填（≤2.5s 预算） | 待填（≤2.5s 预算） | 待填（**≤5s · 判定**） | 待填（≥30） | 待填 | 待填（≤300） | 待填（应回落） | 待填 | 待填 | 待填 PASS/FAIL | 截图/录屏文件名 |
+| 待填（中端安卓 · 参考档） | 待填 | 待填（≤2.5s 预算） | 待填（≤2.5s 预算） | 待填（**≤5s · 判定**） | 待填（≥30） | 待填 | 待填（≤300） | 待填（应回落） | 待填 | 待填 | 待填 | 截图/录屏文件名 |
+| 待填（iOS Safari · 参考档） | 待填 | 待填（≤2.5s 预算） | 待填（≤2.5s 预算） | 待填（**≤5s · 判定**） | 待填（≥30，**面板读数**） | 待填（**面板读数**） | **n/a**（iOS 无 `performance.memory`） | n/a | 待填（**看面板 `quality` 行**） | 待填 | 待填 | 录屏文件名 |
 
-**填写注意**：① `drawcall` 仅安卓可读（`snapshot().drawcall`），iOS 无 Inspector 时记 n/a；② 触发降级时，**F 用降级后的值判**（Step 1 表 F 行）；③ iOS 的 fps/heap 属目视估算，结论须标注「非仪器读数」；④ 三档中**低端安卓为 A4 门槛档**，其 FAIL 即 A4 FAIL。
+**填写注意**：① **fps 与 `drawcall` 任何机型都能读**（`?perf=1` 面板内含 `Laya.Stat`，不需要 USB / Inspector）；**只有 heap 在 iOS 是 n/a**（`performance.memory` 是 Chrome 私有 API）；② 触发降级时，**F 用降级后的值判**（Step 1 表 F 行）；③ 安卓走 `chrome://inspect` 除读数外还要**抄降级日志原文**留证，iOS 用面板 `quality` 行替代；④ 三档中**低端安卓为 A4 门槛档**，其 FAIL 即 A4 FAIL；⑤ **T1 / T2 必须分两格单独记**（别只记 T3）：T1 列与 T2 列各带 2.5s **诊断预算**，超预算的那一段就是排查入口（T1 超 → 前端装载；T2 超 → 登录 + 进场景）；**判定只用 T3 列**（≤5s）。
+
+#### 7.4.4 低端代理预评估（CPU 限速 · **非 A4 替代**）
+
+真机不可得时的降险手段：用 CDP `Emulation.setCPUThrottlingRate` 在桌面浏览器上降 CPU 速度近似低端安卓。为此给 `scripts/perf-sample.mjs` 新增 `--cpu-throttle <n>`（记录字段新增 `cpuThrottle` / `degradeLine`）。**局限（必读）**：只降 CPU，不模拟移动 GPU、显存/内存带宽与触屏输入 —— 结论只能回答「H5 是否 CPU 瓶颈」，**不能替代 A4 真机验收**。
+
+| 限速 | 移动段 fps 均值 / 最低 | 静止段 fps 均值 | drawcall 峰 | heap 峰 | 自动降级 | 结束档位 |
+|---|---|---|---|---|---|---|
+| 不限速（`s9-art-after` 对照） | 60 / 59.9 | 59.8 | 39 | 23.2 MB | 未触发 | high |
+| ×6 | 59.2 / 55.2 | 60 | 39 | 21.8 MB | 未触发 | high |
+| ×20 | 50.3 / 20.8 | 58.2 | 38 | 22.5 MB | 未触发 | high |
+| ×50 | **39.7 / 32.8** | 46.8 | **28** | 22.8 MB | **已触发** | **low** |
+
+**结论**：
+
+1. **H5 不是 CPU 瓶颈**：×6（已属低端安卓量级的 CPU 降速）仍稳 60fps；直到 ×20 才见回落（最低 20.8，但未持续 3s，故未降级），×50 才崩到 39.7。
+2. **自动降级链路首次被实证可用**（此前 H5 从未触发过）：×50 出现 `[S8] 连续 3000ms fps 低于目标 80% → 自动降级 quality=low`，`finalQuality=low`，drawcall 峰 38→28；**降级后 fps 均值 39.7 / 最低 32.8，均 ≥30** —— 与 Task 4 Step 3 的「降级后 fps ≥30」判据一致。
+3. **对真机的指向**：真机若 <30fps，更可能来自**移动 GPU / 内存带宽 / 触屏输入**而非 CPU，处置仍按 §3 风险 #6 顺序（开关项 → 图集 → 阈值调参）；图集是否启动仍待真机数据决定。
+
+样本：`docs/perf-sample.md` 的 `s9-lowend-proxy-6x` / `s9-lowend-proxy-20x` / `s9-lowend-proxy-50x`。
+
+#### 7.4.5 手机触控通道（本轮补入 —— **A4 真机验收的硬前置**）
+
+**发现的硬阻断（本轮）**：手机浏览器上**完全无法操作**。全客户端只有键盘输入 —— `PlayerControl` 只绑 `KEY_DOWN/KEY_UP`，`InteractController` 只在 `'f'` 键上派发交互，触屏一个字都不认。所以 §7.4.3 里「按 `ArrowRight/Down/Left/Up` 走一段」在真机上根本做不到，A4 的 F/M 两项（稳态 fps / 内存峰值）**必然测不出**（人只能站在原地）。
+
+**补法（最小改动：只补输入通道，零逻辑分支）**：
+
+| 文件 | 改动 |
+|---|---|
+| `src/config/AppConfig.ts` | 新增 `touch` 常量块（zOrder 9998、摇杆激活区 256×400 / 半径 88 / 摇杆头 36 / 死区 0.28、交互按钮 88px、半透明配色）—— 初版为 3×3 网格 8 向方向键，2026-09-24 改为浮动摇杆（见 §7.4.7 第 3 条） |
+| `src/world/PlayerControl.ts` | 新增 `press(key)` / `release(key)`：把**与键盘同名**的 `'w'/'a'/'s'/'d'` 注入既有 `pressed` 集合，之后完全复用 `onFrame` 的位移与 10Hz 上报（原 `releaseAll()` 已删，见 §7.4.7 第 3 条「差量注入」） |
+| `src/world/InteractController.ts` | `F` 键分支抽成 `public async triggerInteract()`，键盘路径改为委托它（行为逐字不变） |
+| `src/ui/TouchControls.ts`（新增） | 引擎内自绘（同 `Hud` 范式，不引 DOM/`laya.ui`）：左下**浮动虚拟摇杆**（激活区内按下 → 底座落在按下点）+ 右下「交互」按钮；**仅触摸设备显示**；抬手由 激活区 `MOUSE_DRAG_END` + `MOUSE_DRAG` + **舞台级** `MOUSE_UP` 三路收口、按 `touchId` 过滤（见 §7.4.7 第 3 条） |
+| `src/boot/Main.ts` | 进场景装配 ⑧a 处接线 `TouchControls.attach(playerControl, interactControl)` |
+
+**范围（用户 2026-09-24 决策）**：只做**走动 + 交互**；建造（`B` 键与面板内 `Q/E/Enter/G/Del`）本期不做。**⚠️ 2026-09-25 修订**：真机复验时发现「手机上没有打开建造面板的入口（只有键盘 `b`）」，故**补上触控建造入口 + 面板内关闭行**，原「建造本期不做」作废 —— 见本节末「S9 第三轮补充」。
+
+**e2e 取证（Playwright 移动端模拟 + CDP `Input.dispatchTouchEvent`，本机 5173/3000/6379 + 本机 PostgreSQL 16，**已跑通 15/15 PASS**）**：
+
+- 触摸设备识别 → `[S9] 触控层就绪：浮动摇杆（激活区 256×400，半径 88）+ 交互按钮`；PC（无触摸）→ `非触摸设备：不启用触控层`（触控层不渲染）。
+- **真实位移**（取 WS 上行报文，比截图硬）：摇杆按住「右」1s，`world.move` 帧 `x: 648 → 908`（≈240px/s 与 `moveSpeedPxPerMs=0.24` 一致；2026-09-24 摇杆版为 8.7–9.4 次/秒）；抬手后 `upPerSec` 回到 **0** 且不再有新位置帧。
+- **交互与键盘同源**：走回 `plant_01`（`(560,480)`，物件半径 70）→ 点「交互」→ 命中 `POST /api/client/v1/world/objects/1/interact`（`before=3 → after=4`）。
+- 回归：S3/S4/S5/S6/S7/S8 六个零依赖冒烟全绿（16/18/27/50/102/146 项）。
+
+**仍未做**：真机（含 iOS Safari）上的触控手感验收。**⚠️ 2026-09-24 更正**：本行原写「Laya 默认 `multiTouchEnabled=false`，同屏只能按一个按钮」是**错的** —— 引擎 `laya.core.js:25963` 显式 `InputManager.multiTouchEnabled = true`，多点触控默认开启，故「摇杆按住 + 同屏点交互」本身可行；摇杆另按 `touchId` 过滤（只认按下摇杆的那根手指），避免交互按钮抬手时把摇杆一起停掉。
+
+**发布记录（2026-09-24 已完成）**：摇杆版触控**已发布**到线上 `game.joho.cn/client/`（原「发布前置」已解除）——真机验收直接开 `https://game.joho.cn/client/` 即可，无需 LAN 通道（§7.4.6 保留作离线验收备用）。
+
+- **装配**（cwd `packages-game/game-client`，服务器零构建）：`node tools/build-fallback.mjs`（42 个产物重写导入扩展名）→ `node tools/inject-env.mjs --env prod`（`apiBase=https://game.joho.cn` / `wsUrl=wss://game.joho.cn/game`）→ `node tools/publish.mjs h5-site` → **97 文件**（js 60 / libs 5 / vendor 1 / assets 28 / gamedata 2 / index.html）；index.html 前缀改写与 env-config 顺序自校验通过、gamedata sha256 校验通过。
+- **上传**：本机 `tar.gz` 1,138,086B，sha256 `7709176d…` 经 `scp` 后服务器比对一致 → 解包到 `client.new` 后**换目录**（非覆盖解包，杜绝残留旧文件）→ `chmod -R u=rwX,go=rX`。
+- **备份（回退用）**：`client.bak_touch_20260924_230714`（发布前 **96 文件 / 2,953,242B**，即 Task 3 美术版现状）；回退 = `mv client client.failed && mv client.bak_touch_20260924_230714 client`。
+- **验证**：站点目录 **97 文件 / 2,967,970B**；`index.html` 线上 md5 **`5a20bce8020ec25cf8e0464c018f1a79`** 与本机逐字节一致；服务器侧 `Host: game.joho.cn` 下 `/client/index.html`、`/client/js/ui/TouchControls.js`、`/client/js/boot/Main.js`、`/client/js/env-config.js`、`/client/assets/resources/bg_scene1.png`、`/gamedata/manifest.json`、`/health` **全 200**；线上 `TouchControls.js` 含 `s9-stick-zone` 且 `AppConfig.js` 为 `stickZoneWidth: 256`（收窄版）；本机 `curl --resolve game.joho.cn:443:39.106.99.9 https://game.joho.cn/client/index.html` → **200 且 `ssl_verify_result=0`**（公共 CA 链合法，与 Task 1 结论一致）。
+- **口径提示**：本次发布用的是**工作区当前 `src/`**（含 `Entity.ts` / `spawn-merge.ts` 等**未提交**改动），与已提交 HEAD（`9d2097fd4`）存在差异 —— 若要「线上产物 = 某次 commit 可字节级重现」，需先处置这几个未提交文件再重发。
+
+**S9 第二轮修复（2026-09-24，真机实测「建造面板仍点不动」）**
+
+- **上一轮结论被真机推翻**：§7.4.7 第 3 条的 BuildPanel 修复（删根节点遮罩）只验证了「空白处按下 → 选格」，**从未测「点面板里的行」，也从未真机验证** → 真机上依旧点不动。根因与遮罩无关，是两条叠加：
+  1. **绑的是 `CLICK`**：引擎 `InputManager.clickTestThreshold = 10`（**舞台像素**），而实测手机 390 CSS px 宽时 `SCALE_SHOWALL` 缩放比仅 **0.406** → 10 舞台像素 ≈ **4 CSS px**；真机手指按下时轻滚超过 4 CSS px 即被 `TouchInfo.move()` 置 `clickCancelled=true`，`clickTest()` 返回 null，**CLICK 根本不派发**。反证：同口径早已改成 `MOUSE_DOWN` 的摇杆 / 交互按钮一直正常。
+  2. **命中的行带太矮**：建造面板蓝图行高 **20** 舞台像素（≈8.1 CSS px）、对话选项行 `optionHeight=22`（≈8.9 CSS px），远小于手指落点误差 → 常按到相邻的**信息行**（那些行有意不可点），表现就是「点了没反应」。
+- **改法（视觉零变化：只放大看不见的命中区 + 换事件口径）**：
+
+| 文件 | 改动 |
+|---|---|
+| `src/config/AppConfig.ts` | `touch` 段新增 `minHitHeight: 44`（**舞台像素**，≈18 CSS px，与 88 的交互按钮同量级）：所有「点一下就有反应」的行把**命中区**撑到至少 44，**视觉一律不动** |
+| `src/world/BuildPanel.ts` | ① `Laya.stage` 的 `CLICK` → **`MOUSE_DOWN`**（`onStageClick` → `onStageDown`），并加 `fromTouchLayer(e)` 守卫（沿 `e.target` 的父链找 `s9-touch`：摇杆 / 交互按钮上的按下不移动建造光标）；② `rebuild()` 改为「行带预排（`RowHit`）→ 绘制（视觉节点一律 `mouseEnabled=false`）→ `addRowHit()`」；③ 新增 `addRowHit()`：以行带为中心向上下扩到 44，**边界夹在面板内框与相邻可点行的分界**（相邻两行都可点 → 只能各吃半个行距） |
+| `src/ui/DialogueView.ts` | 同源隐患一并修（用户 2026-09-24 选定范围 = BuildPanel + DialogueView，不含 LoginView）：选项行 `CLICK` → `MOUSE_DOWN`，命中区扩到 `max(行带, 44)`、上下界夹在相邻选项行分界中点；底色与文字仍画在行带上（用 `row.y - top` 补偿）→ **视觉零变化** |
+
+- **取证（CDP `Input.dispatchTouchEvent`，移动模拟 390×844，实测 scale=0.406）**：蓝图行「手指不动」→ `mouseDown=1 / click=1`；蓝图行「按下后位移 10 CSS px」→ **`mouseDown=1 / click=0`**（旧 `CLICK` 会漏掉的那一下，正是真机的手感）；信息行按下**不响应且不移动光标**；地图空白处按下 → 选址光标移动；摇杆区按下 → 光标不动且摇杆底座出现。命中区实测：`s6-build-hit` 高度 **20 → 32/35**（可加高的行）；**相邻两行都可点时保持 20**（投料行 26 与相邻蓝图行 20，物理上无法各自到 44）。对话选项行命中区 **24/26/26/24**（≈9.7–10.6 CSS px），「按下后位移 10 CSS px」→ fire 且 `click=0`。
+- **回归**：`node tools/build-fallback.mjs` 通过（42 个产物）；S3/S4/S5/S6/S7/S8 六个零依赖冒烟全绿（16/18/27/50/102/146）。
+- **提交**：`ee6b1fea8`「fix(game-client): 建造面板与对话选项改 MOUSE_DOWN + 命中区加高，修真机点不动（S9）」，**仅 3 文件**（`src/config/AppConfig.ts`、`src/world/BuildPanel.ts`、`src/ui/DialogueView.ts`），3 files changed / 139 insertions(+) / 28 deletions(-)。
+- **发布记录（第二轮，2026-09-24）**：同链路 `build-fallback` → `inject-env --env prod` → `publish h5-site` → **97 文件 / 2,880,884B**；`tar.gz` 1,141,393B，sha256 **`e9d411e9677ce4425e536204116140867db0f15cd4859201c9e5ef9232a9a1fd`**（服务器 `sha256sum` 比对一致）；解到 `client.new` 后**换目录**（`before: 97 / new: 97 / after: 97`），`chmod -R u=rwX,go=rX`。**备份（回退用）**：`client.bak_touch2_20260924_234148`（发布前的上一版 = 97 文件 / 2,967,970B），回退 = `mv client client.failed && mv client.bak_touch2_20260924_234148 client`。
+- **验证（第二轮）**：本机 ⇄ 服务器 md5 双向一致 —— `index.html` **`acc04c8ed250a6d12d5c5a0d35c84a20`**、`js/world/BuildPanel.js` **`6ec7788aca4171d1ac10f34cbc74233e`**（含 marker `s6-build-hit`）、`js/ui/DialogueView.js` **`a941f5f00241da807d6b1fe37830c433`**（含 3 处 `MOUSE_DOWN`）；`env-config.js` 为 prod；公网 `https://game.joho.cn/client/index.html` 与 `.../js/world/BuildPanel.js` 均 **200** 且含 marker。
+- **本次口径已收敛**：提交与发布同源（发布用的 `src/` 即 `ee6b1fea8` 的内容），上一轮「线上产物 ≠ HEAD」的差异已消除。
+- **仍未做**：**真机复验**（需用户手测）；`LoginView` 的 `CLICK`（提交按钮 @273 / 输入框 @303）为同类隐患但本次按用户决策未修。
+
+**S9 第三轮补充（2026-09-25，手机建造入口 + 面板内退出口）**
+
+- **起因（真机复验的前置阻断）**：核对代码后确认手机**根本打不开建造面板** —— 面板唯一入口是键盘 `b`（`BuildPanel.onKeyDown`），触控层只有摇杆 + 交互按钮，也没有 URL 参数入口。也就是说「手机点不动建造面板」这句话在触控入口补齐前**无法真机复验**。
+- **改法（4 文件，仍不改任何游戏逻辑）**：
+
+| 文件 | 改动 |
+|---|---|
+| `src/config/AppConfig.ts` | `touch.buildMarginBottom: 152` —— 「建造」按钮与交互按钮**同尺寸**（复用 `interactWidth/Height/interactFontSize`），竖直叠放其上，落在 `y 400..488`；`152 = interactMarginBottom(40) + interactHeight(88) + 24(间距)` |
+| `src/ui/TouchControls.ts` | 新增建造按钮（`name='s9-build-btn'`，绑 `MOUSE_DOWN`）→ `BuildPanel.toggle()`，与键盘 `B` **同一入口** |
+| `src/world/BuildPanel.ts` | `rows()` 末尾（及 `forbidden` 分支）新增「**关闭面板（B）**」按钮行 —— 手机上的**唯一退出口**：面板 zOrder 10001 会盖住触控层的建造按钮，若没有行内关闭会「开得进、出不来」 |
+| `scripts/accept-mobile.mjs` | 新增触控建造面板取证段：`readTouch` 改返回 `buttons[]`（`btnCss` 按文本查找，不再只认「交互」）；`readPanel` 读 `s6-build-panel` 的**视觉文本行**与命中区高度；点行一律用**文本坐标**（真机手指落点口径） |
+
+- **取证（移动模拟 390×844 + CDP 真实触摸，`docs/perf-shots/build-btn-touch.json`）**：点「建造」（CSS `723,286`）→ 面板子节点 **0 → 23**；点第 2 张蓝图行 → 选中标记 **`▸木屋` → `▸石墙`**（**即上一轮真机点不动的那一面，现已可点**）；命中区高度 `[32,20,32,35,26,26,35]`（相邻两行都可点时只能各吃半个行距，符合物理约束）；点「关闭面板」行 → **23 → 0**；摇杆 11 次长按全正常、静止段上行 0、`pageErrors=0`、失败请求 0。
+- **回归**：`build-fallback` 42 产物；S3/S4/S5/S6/S7/S8 冒烟全绿（16/18/27/50/102/146）。
+- **取证脚本的一个坑（下次直接用）**：面板**按钮行的文本挂在按钮 sprite 下**（比信息行深一层），只收 root 直接子节点的文本会漏掉「关闭面板」→ 已改为两级收集。
+- **发布记录（第三轮，2026-09-25）**：`build-fallback` → `inject-env --env prod` → `publish h5-site` → **97 文件 / 2,882,681B**；`tar.gz` 1,141,914B，sha256 **`5ec880e972276335a4a340556729d466f49f545edfa30f0fa379b779b17014c5`**（服务器 `sha256sum` 一致）；换目录解法同前（`before: 97 / new: 97 / after: 97`）。**备份（回退用）**：`client.bak_buildbtn_20260924_235713`（= 第二轮版本），回退 = `mv client client.failed && mv client.bak_buildbtn_20260924_235713 client`。
+- **验证（第三轮）**：本机 ⇄ 服务器 md5 逐字节一致 —— `index.html` **`2896d25925abe0b1ce385a4c0b7ccead`**、`js/world/BuildPanel.js` **`086646801a5f970795d32b57bd4272c8`**、`js/ui/TouchControls.js` **`cbb5cca2650fc4a034c017930b041e92`**；线上 `TouchControls.js` 含 `s9-build-btn`、`AppConfig.js` 含 `buildMarginBottom: 152` 与 `minHitHeight: 44`；公网 `index.html` 200。
+- **仍未做**：**真机复验本轮的建造按钮与面板行手感**（需用户手测，机型：中端安卓 + Chrome）。
+
+**S9 第三轮修订（2026-09-25，行带加高到 44 —— 抛出「命中区加高」这条路线）**
+
+- **起因（第二轮方案撞到物理天花板）**：第二轮用的是「视觉不变、只撑大看不见的命中区」。但**面板的行带是连续无缝的**（蓝图行一行紧贴一行，没有间隙），相邻行都可点时，每个可点行最多只能吃「自己的行带 + 半个行距」→ 实测中间那行命中区**仍是 20**（≈8.1 CSS px），真机照样点不准。
+- **被否掉的方案（记录下来，别再走一遍）**：曾考虑「点哪一行就以最近行为准」的兜底命中 —— **对面板无效**：行带连续无缝时，「就近切分」的边界与现在的行带**逐条重合**，结果一模一样。真正有效的只有两条：**把视觉行带本身加高**，或把「点行」拆成「点行高亮 + 另一行确认」两步。用户（AskUserQuestion，2026-09-25）选 **「加高行（视觉变大）」**。
+- **改法（3 文件，不改任何游戏逻辑与交互语义）**：
+
+| 文件 | 改动 |
+|---|---|
+| `src/config/AppConfig.ts` | 新增 `build.touchRowHeight: 44`；`build.buttonHeight` **26 → 44**；`dialogue.optionHeight` **22 → 44**（44 ≈ **18 CSS px**，与触控按钮同量级）；`touch.minHitHeight` 注释更正为「**兜底**」定位（只对「相邻有空隙」的行还有意义） |
+| `src/world/BuildPanel.ts` | 行带高度按**三分**：按钮行 `buttonHeight`、可点行（蓝图）`touchRowHeight`、信息行保持 `lineHeight=20`；可点行文字改**垂直居中**（信息行仍是原来的 `+3`）；选中底色矩形跟随行带高度 |
+| `src/ui/DialogueView.ts` | 注释更新：行带已加高，命中区随之自然等于行带（选项面板自底向上生长，不会溢出屏幕） |
+
+- **面板尺寸影响**：内容高约 **310 → 492**（仍在 640 内，实测底边 492 未溢出）；信息行不变 → 面板变高但不变臃肿。实拍：`docs/perf-shots/panel-taller-rows.png`。
+- **取证（本机 + 生产站点各一次，均为 CDP 真实触摸 390×844）**：7 个可点行的**行带/命中高度全部 44**（此前为 `[32,20,32,35,26,26,35]`）；点第 2 张蓝图行 → **`▸木屋` → `▸石墙`**；点「关闭面板」行 → 子节点 **23 → 0**；点「建造」→ **0 → 23**；摇杆 11 次长按正常、静止段上行 0、`pageErrors=0`、失败请求 0、fps 54.8 / `quality=high`。数据：`docs/perf-shots/taller-rows.json`（本机）、`docs/perf-shots/prod-taller-rows.json`（生产）。
+- **回归**：`build-fallback` 42 产物；S3/S4/S5/S6/S7/S8 冒烟全绿（16/18/27/50/102/146）。
+- **发布记录（第四轮，2026-09-25）**：`build-fallback` → `inject-env --env prod` → `publish h5-site` → **97 文件 / 2,884,142B**；`tar.gz` 1,142,478B，sha256 **`ecd11aaa0e711f7049067aafe377eb0e2900a75fe03df7b0c28b2dabb9c3280a`**（服务器 `sha256sum` 一致）；换目录解法同前（`before: 98 / new: 97 / after: 97`）。**备份（回退用）**：`client.bak_taller_20260925_*`（= 第三轮版本），回退 = `mv client client.failed && mv client.bak_taller_20260925_* client`。
+- **验证（第四轮）**：本机 ⇄ 服务器 md5 逐字节一致 —— `index.html` **`4c7d3ff96a5353c866fd4eaca5d0645c`**、`js/world/BuildPanel.js` **`17d7866e91a2e8a34035d99d44ab288e`**、`js/config/AppConfig.js` **`bca43d2d64df4420309fb1228518aba6`**、`js/ui/DialogueView.js` **`e3ca940083e29092be3e89642cfe7f76`**；公网 200。
+- **仍未做**：真机复验「随手点蓝图行是否跟手」（需用户手测）。若仍要更保险，剩下只有「两步确认」（点行只高亮 + 另一行确认）这条路。
+
+**S9 第四轮修订（2026-09-25，两步确认 —— 用户选定「实施两步确认」）**
+
+- **起因**：第三轮把可点行加高到 44 后「点得准」已解决，但**误触代价**仍在 —— 建造/投料/拆除原为「一击即发」，手指滑一下就可能拆掉建筑。
+- **用户决策**（AskUserQuestion，2026-09-25）：实施「两步确认」。
+- **改法（1 文件，不改任何游戏逻辑）**：
+
+| 文件 | 改动 |
+|---|---|
+| `src/world/BuildPanel.ts` | 新增静态 `pendingKey` + `PENDING` 表（key → 行内文案 + 执行体，新增一个操作只加一行）；操作行 `onClick` 改 `setPending(key)` —— **只标待确认**（行首 `▶` + 底色，再点同一行取消，**不发请求**）；底部新增「**确认执行：xxx**」行 = **唯一执行出口**（`runPending`），只在其出现时占位；`close()` / 蓝图行 `onClick` / 键盘 `Enter`·`G`·`Del` 一律 `clearPending()`（蓝图行保持一步、键盘保持直接执行） |
+
+- **生产取证（`https://game.joho.cn/client/`，390×844 + CDP 真实触摸）**：
+
+| 步骤 | 结果 |
+|---|---|
+| 打开面板 | 无确认行 ✓ |
+| 点「建造」行 | 出确认行 `确认执行：建造` + `▶建造`，**0 请求** ✓ |
+| **再点同一行** | 取消，确认行消失 ✓ |
+| 点「投料」行 | 待确认切到投料 ✓ |
+| **点确认行** | 确认行消失 + 动作真的执行（HUD「光标格上没有可投料的建筑」）✓ |
+| 点「拆除」行 | 只标态（**未点确认，线上建筑没被拆掉**）✓ |
+| 点蓝图行 | 待确认被清 ✓ |
+| 点「关闭面板」 | 面板子节点 23 → 0 ✓ |
+
+- **本轮发现并修复的真 bug**：`runPending()` 清 `pendingKey` 后**不重绘** —— 动作被守卫拦下（如「光标格上没有可投料的建筑」）只弹 toast 不重建时，面板会残留一条 `确认执行：投料` 的**死行**（看着有确认行、再点却没反应）。改为**先 `rebuild()` 再执行**。教训见 §7.4.7 第 7 条。
+- **发布记录（第五轮，2026-09-25）**：`build-fallback` → `inject-env --env prod` → `publish h5-site` → **97 文件**；`tar` 2,976,768B，sha256 **`bd4f6aee50972fa9d97a56cbf8be398e62c92f634efac9e20fac7ebe864a078a`**（服务器 `sha256sum` 一致）；换目录解法同前（`before: 97 / new: 97 / after: 97`）。**备份（回退用）**：`client.bak_twostep2_20260925_072236`（= 第四轮版本，`BuildPanel.js 5dae39c7…`），回退 = `mv client client.failed && mv client.bak_twostep2_20260925_072236 client`。
+- **验证（第五轮）**：本机 ⇄ 服务器 md5 逐字节一致 —— `index.html` **`2df2bd485edb6821d27fbc68679dbd46`**、`js/world/BuildPanel.js` **`44e9e78f86de55df29a0b4b33ddd73c8`**；线上含 marker `确认执行` **7 处**；公网 `index.html` / `BuildPanel.js` 均 **200**。
+- **事故记录（本轮，务必照做）**：换目录那条命令直接经 PowerShell 传参被**拆词**，`mv client → 备份` 执行了、补位那步没执行 → **`/client/` 短暂 404（约 1 分钟）**。已用**同一个 tar** 恢复：97/97 文件、md5 逐字节一致、公网 200；回滚链完整（上一版备份可取回），乱码命令留下的嵌套副本已清理。**后续规则：任何含 `$(...)` / `$VAR` 的服务器命令一律走 base64**（`$b64=[Convert]::ToBase64String(...); ssh odoo "echo $b64 | base64 -d | bash"`），不再直传；换目录必须**先确认新目录已就位再删旧**（本次教训即「移动了但没补位」）。
+- **提交**：`0542a76cc`「fix(game-client): 建造面板操作行改两步确认，防手机误触拆建筑（S9 第四轮）」，**仅 1 文件**，1 file changed / 82 insertions(+) / 19 deletions(-)。
+- **仍未做**：**真机复验两步确认的手感**（需用户手测：点操作行 → 底部确认行 → 误触是否不再误拆）。
+
+#### 7.4.6 真机验收的 LAN 通道（2026-09-24 用户选择「先不发布」；**当晚已发布，本节降为备用通道**）
+
+不发布也能真机验收，前提是让手机直连开发机：
+
+| 环节 | 做法 |
+|---|---|
+| 入口页 | `game-client/bin/lan.html`（**gitignored 构建目录**，非源码；`serve.mjs` 直接可服）——在引擎脚本后注入 `window.__ENV__ = { apiBase: 'http://192.168.1.2:3000', wsUrl: '…/game' }`（机制见 `Platform.ts` `envValue`）。`bin/index.html` 不注入，故本机 localhost 流程与 `perf-sample.mjs` 不受影响 |
+| 后端 | 本机起 `mock-redis`(6379) + `node dist/src/main.js`(3000)，并把 LAN 源加入白名单：`CORS_ORIGINS=…,http://192.168.1.2:5173,http://192.168.1.2:3000`（否则前端登录/接口全被 CORS 拦） |
+| 静态 | `node tools/serve.mjs`(5173，绑 `::` 双栈，LAN 可达) |
+| 手机 URL | `http://192.168.1.2:5173/lan.html`（同一 WiFi；开发机 LAN IP 用 `Get-NetIPAddress` 查） |
+| ⚠️ 防火墙 | 本机三个 Profile 均 `Enabled=True / DefaultInboundAction=NotConfigured`，且**没有 `node.exe` 入站允许规则** → 手机大概率连不上。需**管理员** PowerShell 放行：`New-NetFirewallRule -DisplayName "lan-game" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 3000,5173 -Profile Any` |
+
+**LAN 源预检（本机以 `http://192.168.1.2:5173/lan.html` 为源跑同一套触控 e2e）：10/10 PASS**
+
+- `__ENV__` 注入生效 → 跨源登录 + 进场景成功（CORS 放行 LAN 源）→ 触控层启用；**全程无控制台错误、无失败请求**（CORS / ws / 静态资源都干净）。
+- 触控位移与上报同 localhost：按住「右」`world.move` 帧 `x: 644 → 952`，`upPerSec` 0 → 6 → 9，抬手回 0。
+- 触控几何：根节点 9 个子节点 = 8 向 + 交互，交互按钮 `88×88 @ (848,512)`。**⚠️ 2026-09-24 更正**：这是**方向键版（8 向 pad）**的几何，摇杆重写后已作废 —— 摇杆版根节点只有 **3 个子节点**（`s9-stick-zone` 激活区 + `s9-stick-base` 底座 + 交互按钮），交互按钮 `88×88 @ (848,512)` 不变；现行几何见 §7.4.5。
+- 触控点按「交互」→ 命中 `POST /api/client/v1/world/npcs/13/talk` 并弹出对话。
+
+**两条与验收有关的实测结论（不是 bug，记录以免误判）**
+
+1. **交互目标由「就近 + priority」裁决，NPC 会抢走物件**：站在 `chest_01 (420,600)` 旁边时选中的是同样在附近的 `npc:13`（货郎），于是发的是 `talk` 而非 `collect`。真机验收要测「采集」得挑没有 NPC 抢的物件。**⚠️ 2026-09-24 更正**：这里原先举的 `plant_01 (560,480)` **也不安全**（货郎会巡逻过来抢，§7.4.7 实测）；目前已知的稳妥点是 **`stone_01 (720,400)`**（最近 NPC smith 距 122px）。
+2. **「该 NPC 暂不可对话」是契约内的正常出口**：`InteractComponent` 规定「未实现类型 / 不可手动激活的触发器 / Quest 注册位」`canInteract()=true` 但 `interact()` **只 toast、不发请求**。所以「点交互没看到请求」不等于触控坏了——**同位置键盘 F 也是同样 toast**（本轮已用此差分证明触控与键盘行为一致）。
+
+**手机端读数（A4 的 F/M）怎么办**：手机无键盘，`F3` 调不出面板。安卓可 USB + PC Chrome `chrome://inspect` → Console 执行 `__PERF__.panel(true)`；iOS 无此路。若不便接线，则 F/M 采用 §7.4.4 的 CPU 限速代理样本（已在 `docs/perf-sample.md`），真机只做**功能与手感**验收。
+
+#### 7.4.7 移动端模拟验收（**非真机**，2026-09-24 用户决策「先不发布，跑完可自动化的部分」；**当晚已发布**，见 §7.4.5 发布记录）
+
+**口径声明（必读）**：本节数据来自 Chromium 移动端模拟（移动 UA + DPR 1.75 + `isMobile/hasTouch` + 视口 915×412 横屏 + CDP 真实触摸事件），**不是真机**：不反映移动 GPU / 内存带宽 / 机型差异，也**不参与 A4 判定**（§1.2 / §7.4.3 的真机表仍为「待填」）。它的用途是：① 补上「触控通路」的端到端取证；② 把 §7.4.3 里**可自动化**的部分（T1/T2/T3、F/M、D、切档）先跑出基线，真机只需换设备复测；③ 沉淀可复跑的脚本。
+
+**工具**：`scripts/accept-mobile.mjs`（零依赖，仅可选 playwright；同 `perf-sample.mjs` 一样从 `e:\code\node_modules` 解析）
+
+```bash
+node scripts/accept-mobile.mjs --label mobile-sim --map-localhost-ipv4                       # 标准轮
+node scripts/accept-mobile.mjs --label mobile-sim-throttle50 --cpu-throttle 50 --map-localhost-ipv4  # 自动降级
+node scripts/accept-mobile.mjs --label mobile-sim-quality-low --quality low --map-localhost-ipv4     # 手动切档
+```
+
+产物：`docs/perf-shots/<label>.png`（移动视口截图）+ `docs/perf-shots/<label>.json`（逐秒样本与全部取证字段）。
+
+**实测（场景 1，固定路线 → ↓ ← ↑ →，移动 10s + 静止 10s）**：
+
+| 轮次 | 限速 / 档位 | T1(s) | T2(s) | T3(s) | fps 均值 / 最低 | drawcall 峰 | heap 峰 | 静止后 heap | 触发降级 | 结束档位 | 交互取证 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `mobile-sim` | 不限速 / 平台默认 | 0.40 | 0.33 | **0.73** | **59.8 / 58.0** | 38 | 16.8 MB | **15.2 MB（回落）** | 未触发 | high | `201 POST …/world/objects/2/interact` |
+| `mobile-sim-throttle50` | **×50** / 平台默认 | 2.07 | 2.26 | 4.33 | 56.2 / **39.4** | **29** | 16.1 MB | 15.3 MB（回落） | **已触发** | **low** | `201 POST …/world/npcs/12/talk` |
+| `mobile-sim-quality-low` | 不限速 / **`?quality=low`** | 0.41 | 0.33 | 0.74 | 60.0 / 60.0 | **29** | 16.0 MB | 16.0 MB（5s/5s 短采样，不作回落结论） | 未触发（强制低档） | **low** | `201 POST …/world/objects/2/interact` |
+
+**触控通路取证（每轮均成立）**：
+
+| 项 | 实测 |
+|---|---|
+| 触控层启用 | `[S9] 触控层就绪`；摇杆激活区 `256×400`（舞台 `(0,240)`）+ 底座/摇杆头（按下才显示）+ 交互按钮 `88×88`（舞台 `(848,512)`）—— 2026-09-24 摇杆版 |
+| 触摸送达 | `touchDelivered=1`（CDP 触摸 → 舞台 `MOUSE_DOWN` 计数 +1，**证明点按真的到达**，非「以为点了」） |
+| 按住能走 | 移动段上行 **9.0–9.4 次/秒**（键盘基线 9.5，`world.move` 帧 `x: 644 → 676 → …`） |
+| 松手能停 | 静止段上行合计 **0**（抬手即停，舞台级 `MOUSE_UP` 兜底有效） |
+| 交互命中 | HUD 选中 `object:2`（stone_01）→ 点「交互」→ HUD `采集成功，获得 8 gold` + `201 POST …/objects/2/interact` |
+| 无副作用 | `pageerror=0`、失败请求 `=0`、CORS 干净（全程无控制台报错） |
+
+**自动降级（D 项）实证**：×50 下出现 `[S8] 连续 3000ms fps 低于目标 80% → 自动降级 quality=low`，`finalQuality=low`，drawcall 峰 38 → **29**，**降级后最低 fps 39.4 ≥ 30** —— 与 §7.4.4 桌面口径一致，且本轮是**在移动端模拟 + 真实触摸输入**下复现的。
+
+**生产站点复测（2026-09-25，线上构建 = 第五轮「两步确认」版）**
+
+口径：同一脚本打在**生产**上 —— `node scripts/accept-mobile.mjs --label prod-mobile --url https://game.joho.cn/client/`（三档各一次），`--label` 一律加 `prod-` 前缀，**不覆盖**上表的本机基线。这是**真机前最后一次线上基线**（与线上产物同源：`BuildPanel.js 44e9e78f…`）。
+
+| 轮次 | 限速 / 档位 | T1(s) | T2(s) | T3(s) | fps 均值 / 最低 | drawcall 峰 | heap 峰 → 静止后 | 触发降级 | 结束档位 | 交互取证 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `prod-mobile` | 不限速 / 平台默认 | 2.90 | 3.45 | 6.35 | 59.89 / 59.4 | 35 | 14.7 MB → **10.0 MB（回落）** | 未触发 | high | `201 POST …/world/objects/2/interact` |
+| `prod-mobile-throttle50` | ×50 / 平台默认 | 3.41 | 3.92 | 7.33 | 57.64 / 51.3 | 35 | 14.7 MB → 14.0 MB | **未触发**（见下） | high | 同上 |
+| `prod-mobile-quality-low` | 不限速 / **`?quality=low`** | 2.99 | 3.77 | 6.76 | 59.98 / 59.8 | **24** | 14.4 MB → 13.5 MB | 未触发（强制低档） | **low** | 同上 |
+
+- **T1/T2/T3 比本机基线大一个量级**（本机 0.40 / 0.33 / 0.73 是 **localhost**）：生产走公网（TLS + 真实后端 + 静态资源），**这才是真机验收该对标的数** —— §7.4.3 的 T1/T2/T3 判定请用本表。
+- **⚠️ T3 已踩到门槛线（本轮最值得盯的数）**：§7.4.3 门槛档要求 **T3 ≤ 5s**，而生产实测（冷缓存首访）**T3 = 6.35 / 7.33 / 6.76s，三档全部 > 5s**。按 §7.4.3 的两段**诊断预算**（各 2.5s）拆开看 —— **T1 ≈ 2.90–3.41s（超 2.5s 预算）、T2 ≈ 3.45–3.92s（超 2.5s 预算）**，**两段都超**，即：既有前端装载问题、也有登录 + 进场景问题，**不是单点**。这是移动模拟口径（本机出网的公网往返，非真机 4G/WiFi），**不能直接判 A4 FAIL**，但它说明「≤5s」这条**没有余量**。**排查入口按段分工**：T1 → 首访要拉 index.html + 60 js + 5 libs + 28 assets（**未合并 / 未压缩 / 无 CDN**，最大嫌疑）；T2 → 配置包拉取 / ws 握手 / 场景装配。**真机点检务必分开记 T1 与 T2**（§7.4.3 模板已拆成两格）。
+- **×50 这轮没触发自动降级**（本机基线那轮触发了）：阈值是「连续 3s 低于目标 80%」= 48fps，本轮最低 **51.3 > 48** 故不降级 —— 是**机器更快 / 负载更低**的差异，不是降级坏了；低档仍可用 `?quality=low` 强制（drawcall 35 → **24**，切档有效）。
+- **三档都带建造面板触控段且全绿**：触控「建造」→ 面板 `0 → 23` 子节点；点第 2 张蓝图行 → **`▸木屋` → `▸石墙`**；点「关闭面板」行 → **0**；**7 个可点行命中高度全部 44**；`touchDelivered=1`、`pageErrors=0`、失败请求 0；静止段上行 **0**、移动段 **8.2–9.3 次/秒**；交互 `201` + HUD「采集成功，获得 8 gold」。产物：`docs/perf-shots/prod-mobile.json` / `prod-mobile-throttle50.json` / `prod-mobile-quality-low.json`（+ 同名 `.png`）。
+
+**本轮发现（第 1 条已修复并验证）**：
+
+1. **对话打开后触控失效 → 已修复**：交互成功（如 `talk`）会打开 `DialogueView`（zOrder 10000），其根节点被显式 `mouseEnabled = true` 且 `size(960,640)` 铺满舞台；而 Laya 命中检测（`getSpriteUnderPoint` → `hitTest`）会把「有 bounds + 显式启用鼠标」的最上层节点直接判为命中目标 → 下层 `TouchControls`（zOrder 9998）收不到任何事件（实测：若把交互取证排在移动段之前，移动段 `upPerSec` 恒 0）。而 `InteractController.triggerInteract` 的注释明确写着「对话打开时屏蔽交互……**移动是 W/A/S/D，不受影响**」→ 结果变成「**对话打开时键盘能走、触控走不了**」，与设计意图相悖。
+    - **修复**：删掉根节点的 `size(...)` 与三处 `mouseEnabled` 赋值（`src/ui/DialogueView.ts` 的 `init/open/close`）——根节点自身永不命中、触摸穿透到触控层，选项按钮（子节点，显式 `mouseEnabled=true`）照常吃点击。
+    - **修复后实测**（移动端模拟 + 真实 CDP 触摸；站点 `(660,470)` → 铁匠 smith）：对话打开后按住方向键 → **26 帧上行 / 652px 位移**（修复前 0）；松手静置 1s → **0 帧**；点选项 → `POST …/world/dialogue/choose` **200**；`pageerror = 0`。
+    - **连带修掉的布局冲突**：选项命中区原为 `x176..784`，把方向键右列（`↗/→/↘`，`x156..220`）整列压在下面——不只是「按不动」，**点它会误选对话选项**。故 `dialogue.panelMaxWidth` 640 → **448**（居中面板 x 256..704，让开左下方向键 x≤220 与右下交互按钮 x≥848；居中面板宽度上限 ≤496 属几何约束）。收窄后复测：两组几何不相交、按住 `→` → **23 帧 / 588px**、静置 0 帧、选项点击 200、文本无溢出（最大右边缘 524 < 面板右 704）。
+2. **NPC 抢目标 + 巡逻**（复述 §7.4.6 结论并对脚本取点产生实际影响）：NPC 半径 90 > 物件 70，且 NPC 会巡逻移动 → 站点必须选「NPC 距离 > 90 且不易被巡逻覆盖」的点。本轮由 `plant_01 (560,480)`（被货郎抢走）改为 **`stone_01 (720,400)`**（最近 NPC smith 距 122px）后稳定命中物件。`npcs:3:1` / `npc:12` 这类选中是**契约内占位出口**（只 toast 不发请求），不是触控故障。另：村长 `npc:11` 无对话数据（`talk` 返回空 `options` + `dialogueId=null`，只走 greeting 兜底、不开视图），验对话请用铁匠 `npc:12`。
+
+3. **8 向方向键 → 浮动虚拟摇杆；并修掉两处「面板根节点吃指针」（2026-09-24 用户决策，已修复并验证）**：
+    - **动机**：第 1 条只修了 `DialogueView`，`BuildPanel` 是同一写法的第二处（`init/open/close` 里 `mouseEnabled` + `open()` 里 `size(960,640)`）→ 建造面板一打开，摇杆同样按不动；且 8 向 3×3 方向键在手机上按键面积小、手感差（用户要求改摇杆）。
+    - **摇杆实现**（`src/ui/TouchControls.ts`）：左下角锚定一块**不可见但可命中**的激活区（`256×400`，`mouseEnabled=true`）接住按下 —— 这是必须的，因为引擎 `MOUSE_DRAG`/`MOUSE_DRAG_END` **只向「按下时命中的节点链」**（`TouchInfo.downTargets`）派发，空处按下连 `MOUSE_DOWN` 都收不到；按下后浮动底座落在按下点，拖动按方向钳制在半径 88 内并按 8 向离散注入 `'w'/'a'/'s'/'d'`（纯函数 `stickKeys`，阈值 sin22.5°=0.3827，死区 88×0.28≈24.6）；抬手由 激活区 `MOUSE_DRAG_END` + `MOUSE_DRAG` + 舞台 `MOUSE_UP` 三路收口，并按 `touchId` 过滤（只认按下摇杆的那根手指）。**差量注入**（只 press 新增 / release 失效）→ `PlayerControl.releaseAll()` 成为死代码已删除，且触控与键盘可并存。
+    - **BuildPanel 修复**：删掉 `init()` 的 `mouseEnabled=false`、`open()` 的 `mouseEnabled=true` + `size(960,640)`、`close()` 的 `mouseEnabled=false` → 根节点自身永不命中（`hitTest` 是**纯几何**：只看自身 `width>0 && height>0`），行按钮作为子节点照常可点；点空白处仍**冒泡到 stage**，`onStageClick`（移动建造光标）不受影响（实测光标 `格(10,7) → 格(7,4)`、预览 bounds `(640,448)→(448,256)`）。
+    - **连带修掉一个既有 bug**（与触控无关，本次一并修）：`B` 键打不开建造面板 —— `InteractController.onKeyDown` 与 `BuildPanel.onKeyDown` **都**监听 stage 的 `KEY_DOWN` 并各自 `toggle()`，一次按键「开+关」互相抵消。已删除 `InteractController` 里的 `KEY_BUILD` 分支（含随之无用的 `BuildPanel` import 与常量），建造键监听收敛到 `BuildPanel` 一处。实测：按 `b` → `s6-build-panel` 子节点 **0 → 18**，再按 `b` → **0**。
+    - **激活区宽度 480 → 256（零重叠）**：初版激活区 `x 0..480` 与对话面板（`x 256..704`）重叠 224px，压在选项行上的按下会**误选对话选项**。取 `256` 后激活区右界与面板左缘**恰好贴齐**（`dialogue.panelMaxWidth=448` 的推导也正是这条：左缘 ≥ 256 → `w ≤ 448`；右缘 704 < 848 让开交互按钮）。实测：无面板/对话打开两种状态下，激活区 5 点 `(40,440)/(128,440)/(250,440)/(128,300)/(128,600)` 按下**全部起摇杆**、底座坐标逐点等于按下点、无一误选；底座圆覆盖舞台 `x 40..216`，与面板左缘 256 有 40px 间隙。
+    - **摇杆版实测**（移动端模拟 + CDP `touchStart→touchMove→保持→touchEnd`，`accept-mobile.mjs` 已同步改为摇杆口径并刷新 `docs/perf-shots/mobile-sim.json`）：5 段路线 + 闭环走位共 8 次长按，每次 `base` 均为按下点 `(128,440)`、`knob` 偏移逐次为 `(±88,0)`/`(0,±88)`；移动段 **8.7 次/秒**、静止段 **0**；`59.88–60.01 fps` / drawcall 峰 **39** / heap 峰 16.7MB（静止回落 15.4）；`对 stone_01 交互 → 201`、`pageerror=0`。**建造面板打开时摇杆仍可用**（面板 18 子节点下按住 → `upPerSec=9`）、**对话打开时摇杆仍可用**（`upPerSec=9`）且选项点击 `200`。
+
+4. **可点行「绑 CLICK + 行带太矮」导致真机点不动（2026-09-24 第二轮修复，已提交 `ee6b1fea8` 并发布）**：第 3 条只修了「根节点遮罩」，且当轮验证只覆盖「空白处按下选格」，**既没测面板内的行、也没真机验证** → 真机上手测「建造面板仍点不动」。与遮罩无关的两条根因、改法（`touch.minHitHeight=44` + `s6-build-hit` 命中区 + `CLICK`→`MOUSE_DOWN` + `fromTouchLayer` 守卫，BuildPanel/DialogueView 同批，**视觉零变化**）、CDP 取证与第二轮发布记录见 §7.4.5 末节。**教训**：① 触控验证必须**打在真实可点元素上**（空白处选格通过 ≠ 行按钮可用）；② 手机端可点元素一律 `MOUSE_DOWN`，不用 `CLICK`（`clickTestThreshold=10` 舞台像素 ≈ 手机 4 CSS px）。仍待**真机复验**。
+
+5. **「命中区加高」救不了连续无缝的行带（2026-09-25 第三轮修订，已提交 `60f7ac1a0` 并发布）**：第二轮「视觉不变、只撑大命中区」撞到物理天花板 —— 面板行带连续无缝，相邻行都可点时每个可点行最多吃「自己的行带 + 半个行距」，**中间那行仍是 20**。用户选定「加高行」后把可点行的**视觉行带本身**提到 44（`build.touchRowHeight` / `build.buttonHeight` / `dialogue.optionHeight`），命中区退化为兜底。**教训**：判定「命中区是否够大」不能只看脚本报的数组，要看**最小值**（`[32,20,32,...]` 里的 20 就是失败点）；连续排布的相邻可点元素只能靠**行高**，不能靠命中区重叠。
+
+6. **探针的「文本关键字匹配」会点到分隔行，制造假阴性（2026-09-25 第四轮）**：验证两步确认时，探针用 `text.includes('确认执行')` 找确认行 —— 但分隔信息行「—— 操作（点行选中，再点下方「确认执行」）——」**也含这四个字**，于是「点确认行」那一步实际点在**无 `onClick` 的信息行**上（空点），脚本报「0 请求、状态不变」，看起来像功能没接线，**其实是我没点到**。同轮还犯了第二个错：修好 `tapConfirm()` 后**忘了把步骤改用它**（新增了函数但 `step()` 仍走旧的按关键字匹配），于是同一个假阴性又复现一次。**教训**：① 断言/点击的定位必须用**精确谓词**（`startsWith('确认执行：')`）而不是 `includes`；② 临时探针里「新写了正确的辅助函数」必须回头核对**调用点**，否则等于没改；③ 报告结论前先自问「这个『没反应』是产品没反应，还是我没点到」——用**独立证据**（HUD toast / 网络请求）交叉验证。
+
+7. **状态清除后不重绘 → 留下「点了没反应」的死行（2026-09-25 第四轮，已修复并发布）**：`runPending()` 先把 `pendingKey = null` 再执行动作，但**没有重绘**；而动作有多个守卫分支（光标格无建筑 / 该建筑不在建造中 / 非法格 / 场景不允许），这些分支**只弹 toast、不重建面板** → 面板上那条「确认执行：xxx」继续留着，用户再点它已经没反应（此时 `pendingKey` 已是 null，`runPending` 直接 return）。第三轮就修过一次同类问题（`clearPending()` 里补了 `if (opened) rebuild()`），**这次是新加的 `runPending` 又漏了**。**教训**：凡是「清状态的方法」都要问一句「谁负责重绘」，把 `rebuild()` 写在**状态变更的同一处**，不要指望被调用的动作顺手重绘（动作可能提前 return）。**验证方式**：制造一个必然被守卫拦下的操作（如光标格无建筑的投料）点确认行，看确认行是否消失 —— 只看「请求数」看不出来（守卫分支本来就不发请求）。
+
+**仍未做（需真机 / 人工）**：真机三档（低端安卓门槛档、中端安卓、iOS Safari）与手感验收、iOS 无法用 `chrome://inspect` 的目视口径。**⚠️ 更正（2026-09-24）**：原写「多点触控（Laya `multiTouchEnabled=false`，同屏只能按一个按钮）」不成立 —— 引擎 `laya.core.js:25963` 显式 `InputManager.multiTouchEnabled = true`，多点触控默认开启，「摇杆按住 + 同屏点交互」可行（摇杆另按 `touchId` 过滤，见第 3 条）。

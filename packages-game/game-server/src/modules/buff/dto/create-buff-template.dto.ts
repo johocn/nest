@@ -2,6 +2,7 @@ import {
   IsString,
   IsEnum,
   IsInt,
+  IsObject,
   IsOptional,
   Min,
   MinLength,
@@ -25,6 +26,7 @@ export class CreateBuffTemplateDto {
   @Min(1)
   duration: number;
 
+  @IsObject()
   statModifiers: Record<string, number>;
 
   @IsOptional()

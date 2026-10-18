@@ -1,10 +1,19 @@
+import * as fs from 'fs';
+import * as path from 'path';
+import { Repository } from 'typeorm';
 import { DialogueActionType, QuestStatus } from '@constants/enums';
 import { ErrorCodes } from '@constants/error-codes';
 import {
   GameException,
   GameExceptionResponse,
 } from '@common/exceptions/game.exception';
+import { ScoringService } from '@modules/scoring/scoring.service';
+import { PlayerScoringState } from '@modules/scoring/entities/player-scoring-state.entity';
+import { historyTeachConfig } from '@modules/scoring/config/history-teach.config';
 import { DialogueService } from './dialogue.service';
+import { assertDialogueNodes } from './dialogue.types';
+import { visibleTo } from '@shared/content-scope';
+import { expectScopedFind } from '../../../testing/content-scope-contract.shared';
 
 /**
  * 单测直接 new 出服务（mocked repository / 各依赖服务），不连真实数据库或 redis。
@@ -24,6 +33,22 @@ interface ServiceMocks {
   questService: { acceptQuest: jest.Mock; submitQuest: jest.Mock };
   inventoryService: { addItem: jest.Mock; removeItem: jest.Mock };
   economyService: { addCurrency: jest.Mock };
+  quizService: { startOrResume: jest.Mock; draw: jest.Mock };
+  scoringService: ScoringService;
+}
+
+/** 评分状态 fake repo（Map 底座，仅 scoring 语义所需的 findOne/upsert；参照 scoring.service.spec.ts） */
+function makeFakeScoringRepo(): Repository<PlayerScoringState> {
+  const rows = new Map<string, Partial<PlayerScoringState>>(); // key: `${playerId}:${gameId}`
+  return {
+    async findOne({ where }: any): Promise<PlayerScoringState | null> {
+      const row = rows.get(`${where.playerId}:${where.gameId}`);
+      return row ? ({ ...row } as PlayerScoringState) : null;
+    },
+    async upsert(entity: any): Promise<any> {
+      rows.set(`${entity.playerId}:${entity.gameId}`, { ...entity });
+    },
+  } as unknown as Repository<PlayerScoringState>;
 }
 
 function createService(): ServiceMocks {
@@ -47,6 +72,14 @@ function createService(): ServiceMocks {
     removeItem: jest.fn().mockResolvedValue({}),
   };
   const economyService = { addCurrency: jest.fn().mockResolvedValue({}) };
+  const quizService = {
+    startOrResume: jest
+      .fn()
+      .mockResolvedValue({ sessionId: 'sess-1', question: { id: 'q1' } }),
+    draw: jest.fn().mockResolvedValue({ questions: [{ id: 'q1' }] }),
+  };
+  // 真实 ScoringService + fake repo（分支用例走真实 resolveBranch 规则）
+  const scoringService = new ScoringService(makeFakeScoringRepo());
 
   const service = new DialogueService(
     playerQuestRepo as any,
@@ -58,6 +91,8 @@ function createService(): ServiceMocks {
     questService as any,
     inventoryService as any,
     economyService as any,
+    quizService as any,
+    scoringService,
   );
 
   return {
@@ -71,6 +106,8 @@ function createService(): ServiceMocks {
     questService,
     inventoryService,
     economyService,
+    quizService,
+    scoringService,
   };
 }
 
@@ -105,7 +142,11 @@ describe('DialogueService.buildContext', () => {
         questTemplateId: '77',
         status: QuestStatus.IN_PROGRESS,
       },
-      { playerId: PLAYER_ID, questTemplateId: '78', status: QuestStatus.CLAIMED },
+      {
+        playerId: PLAYER_ID,
+        questTemplateId: '78',
+        status: QuestStatus.CLAIMED,
+      },
     ]);
     mocks.inventoryItemRepo.find.mockResolvedValue([
       { playerId: PLAYER_ID, itemTemplateId: '5', quantity: 3 },
@@ -141,8 +182,7 @@ describe('DialogueService.buildContext', () => {
 
   it('旗标：只放入存在的旗标，键为 dialogue:flag:<playerId>:<flag>，且去重探测', async () => {
     mocks.cacheService.exists.mockImplementation(
-      async (key: string) =>
-        key === `dialogue:flag:${PLAYER_ID}:saw_secret`,
+      async (key: string) => key === `dialogue:flag:${PLAYER_ID}:saw_secret`,
     );
 
     const ctx = await service.buildContext(PLAYER_ID, [
@@ -238,7 +278,10 @@ describe('DialogueService.executeAction / choose / start', () => {
       optionIndex: 0,
     });
 
-    expect(mocks.questService.acceptQuest).toHaveBeenCalledWith(PLAYER_ID, '77');
+    expect(mocks.questService.acceptQuest).toHaveBeenCalledWith(
+      PLAYER_ID,
+      '77',
+    );
     expect(view.finished).toBe(false);
     expect(view.nodeKey).toBe('after_accept');
     expect(view.node?.text).toBe('去把野狼清了。');
@@ -424,10 +467,11 @@ describe('DialogueService.executeAction / choose / start', () => {
       }),
     );
     expect(res.code).toBe(ErrorCodes.DIALOGUE_NOT_FOUND);
-    // 查询条件必须带上 isActive:true（停用即不可选）
+    // 查询条件必须带上 isActive:true（停用即不可选）+ appScope 过滤
     expect(mocks.dialogueRepo.findOne).toHaveBeenCalledWith({
-      where: { code: 'missing_dialogue', isActive: true },
+      where: { code: 'missing_dialogue', isActive: true, ...visibleTo(null) },
     });
+    expectScopedFind(mocks.dialogueRepo.findOne);
   });
 
   it('选项条件不满足（重放被隐藏选项）→ DIALOGUE_CONDITION_NOT_MET', async () => {
@@ -553,7 +597,9 @@ describe('DialogueService.executeAction / choose / start', () => {
     expect(view.nodeKey).toBe('after');
     expect(view.node?.text).toBe('任务已接取。');
     // buildContext 至少调用两次（动作前判定 + 动作后重新求值）
-    expect(mocks.playerQuestRepo.find.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(mocks.playerQuestRepo.find.mock.calls.length).toBeGreaterThanOrEqual(
+      2,
+    );
   });
 
   it('结构非法（next 指向不存在的 key）→ DIALOGUE_NODE_INVALID', async () => {
@@ -598,10 +644,11 @@ describe('DialogueService.executeAction / choose / start', () => {
     const view = await service.startById(PLAYER_ID, 1);
 
     expect(mocks.dialogueRepo.findOne).toHaveBeenCalledWith({
-      where: { id: '1', isActive: true },
+      where: { id: '1', isActive: true, ...visibleTo(null) },
     });
     expect(view.nodeKey).toBe('root');
     expect(view.node?.text).toBe('客官要打点什么？');
+    expectScopedFind(mocks.dialogueRepo.findOne);
   });
 
   it('startById：id 悬空/已停用 → DIALOGUE_NOT_FOUND（业务码，不抛 500）', async () => {
@@ -610,6 +657,443 @@ describe('DialogueService.executeAction / choose / start', () => {
       service.startById(PLAYER_ID, 999),
     );
     expect(res.code).toBe(ErrorCodes.DIALOGUE_NOT_FOUND);
+  });
+
+  // ===== quiz / assess 动作（阶段 3：handout 随 choose 下发）=====
+
+  it('assess：以 (playerId, assessmentCode, scopeAppCode) 调 startOrResume，common 对话 scope=null，finished 分支带 assessment handout', async () => {
+    mockDialogue([
+      {
+        key: 'root',
+        text: '做个测评？',
+        options: [
+          {
+            text: '开始',
+            action: DialogueActionType.ASSESS,
+            actionArgs: { assessmentCode: 'assess-1' },
+          },
+        ],
+      },
+    ]);
+    mocks.quizService.startOrResume.mockResolvedValue({
+      sessionId: 'sess-9',
+      question: { id: 'q1' },
+      resumed: false,
+    });
+
+    const view = await service.choose(PLAYER_ID, {
+      code: 'npc_blacksmith_main',
+      nodeKey: 'root',
+      optionIndex: 0,
+    });
+
+    // mockDialogue 未设 appScope → common 卷 → scopeAppCode=null
+    expect(mocks.quizService.startOrResume).toHaveBeenCalledWith(
+      PLAYER_ID,
+      'assess-1',
+      null,
+    );
+    expect(view.finished).toBe(true);
+    expect(view.quiz).toEqual({
+      kind: 'assessment',
+      sessionId: 'sess-9',
+      question: { id: 'q1' },
+    });
+  });
+
+  it('assess 缺 assessmentCode → PARAM_INVALID 且不调 quizService', async () => {
+    mockDialogue([
+      {
+        key: 'root',
+        text: '做个测评？',
+        options: [
+          { text: '开始', action: DialogueActionType.ASSESS, actionArgs: {} },
+        ],
+      },
+    ]);
+
+    const res = await catchGameException(() =>
+      service.choose(PLAYER_ID, {
+        code: 'npc_blacksmith_main',
+        nodeKey: 'root',
+        optionIndex: 0,
+      }),
+    );
+
+    expect(res.code).toBe(ErrorCodes.PARAM_INVALID);
+    expect(mocks.quizService.startOrResume).not.toHaveBeenCalled();
+  });
+
+  it('quiz：组装 DrawQuizDto 下发 knowledge handout（推进分支也附带 quiz）', async () => {
+    mockDialogue([
+      {
+        key: 'root',
+        text: '来答个题？',
+        options: [
+          {
+            text: '来',
+            next: 'after',
+            action: DialogueActionType.QUIZ,
+            actionArgs: { category: 'history', count: 3 },
+          },
+        ],
+      },
+      { key: 'after', text: '答完再聊。', options: [{ text: '嗯' }] },
+    ]);
+    mocks.quizService.draw.mockResolvedValue({
+      questions: [{ id: 'k1' }, { id: 'k2' }],
+    });
+
+    const view = await service.choose(PLAYER_ID, {
+      code: 'npc_blacksmith_main',
+      nodeKey: 'root',
+      optionIndex: 0,
+    });
+
+    expect(mocks.quizService.draw).toHaveBeenCalledWith(PLAYER_ID, null, {
+      category: 'history',
+      count: 3,
+    });
+    expect(view.finished).toBe(false);
+    expect(view.nodeKey).toBe('after');
+    expect(view.quiz).toEqual({
+      kind: 'knowledge',
+      questions: [{ id: 'k1' }, { id: 'k2' }],
+    });
+  });
+
+  it('自有 appScope 对话（gameB）：quiz 动作以对话自身 appScope 作为 scope 调用', async () => {
+    mocks.dialogueRepo.findOne.mockResolvedValue({
+      id: '2',
+      code: 'npc_gameB',
+      nodes: [
+        {
+          key: 'root',
+          text: '...',
+          options: [
+            {
+              text: '来',
+              action: DialogueActionType.QUIZ,
+              actionArgs: { count: 2 },
+            },
+          ],
+        },
+      ],
+      isActive: true,
+      appScope: 'gameB',
+    });
+    mocks.quizService.draw.mockResolvedValue({ questions: [] });
+
+    await service.choose(PLAYER_ID, {
+      code: 'npc_gameB',
+      nodeKey: 'root',
+      optionIndex: 0,
+    });
+
+    expect(mocks.quizService.draw).toHaveBeenCalledWith(PLAYER_ID, 'gameB', {
+      count: 2,
+    });
+  });
+});
+
+describe('DialogueService.branch（阶段 2：评分分支接线）', () => {
+  let mocks: ServiceMocks;
+  let service: DialogueService;
+
+  /** branch 演示树：选项 0 = score 动作 + branch；选项 1 = 纯 branch；goto 节点在树内 */
+  const BRANCH_NODES = [
+    {
+      key: 'root',
+      text: '求学吧。',
+      options: [
+        {
+          text: '拜孔子为师',
+          action: DialogueActionType.SCORE,
+          actionArgs: {
+            score: {
+              gameId: 'history-teach',
+              effect: { affinity: { 孔子: 60 } },
+            },
+          },
+          branch: { gameId: 'history-teach', fallback: null },
+        },
+        {
+          text: '听天由命',
+          branch: { gameId: 'history-teach', fallback: null },
+        },
+      ],
+    },
+    {
+      key: 'confucius_route',
+      text: '吾与点也！',
+      options: [{ text: '感谢先生' }],
+    },
+  ];
+
+  function mockBranchDialogue(nodes: any[] = BRANCH_NODES) {
+    mocks.dialogueRepo.findOne.mockResolvedValue({
+      id: '3',
+      code: 'history_teach_demo',
+      nodes,
+      isActive: true,
+    });
+  }
+
+  beforeEach(() => {
+    mocks = createService();
+    service = mocks.service;
+    mocks.scoringService.registerGame(historyTeachConfig);
+  });
+
+  it('dispatch 后选 branch 选项：评分命中 → 跳 goto 节点（confucius_route）', async () => {
+    mockBranchDialogue();
+
+    const view = await service.choose(PLAYER_ID, {
+      code: 'history_teach_demo',
+      nodeKey: 'root',
+      optionIndex: 0,
+    });
+
+    expect(view.finished).toBe(false);
+    expect(view.nodeKey).toBe('confucius_route');
+    expect(view.node?.text).toBe('吾与点也！');
+  });
+
+  it('评分未命中 → 走 fallback（null → finished:true，不伪装成节点）', async () => {
+    mockBranchDialogue();
+    // 先制造一条不命中任何分支规则的评分（好感 0、低轴值）
+    await mocks.scoringService.dispatch(PLAYER_ID, 'history-teach', {
+      axes: { wisdom: 5 },
+    });
+
+    const view = await service.choose(PLAYER_ID, {
+      code: 'history_teach_demo',
+      nodeKey: 'root',
+      optionIndex: 1,
+    });
+
+    expect(view.finished).toBe(true);
+    expect(view.nodeKey).toBeNull();
+    expect(view.node).toBeNull();
+  });
+
+  it('goto 不在该对话树 → DIALOGUE_NODE_INVALID（配置错误不伪装成结束）', async () => {
+    const spy = jest.spyOn(mocks.scoringService, 'resolveBranch');
+    // 注册一份 goto 指向树外节点的评分配置
+    mocks.scoringService.registerGame({
+      gameId: 'branch-test',
+      enabled: ['axis'],
+      axes: { score: { label: '分', min: 0, max: 100, visible: false } },
+      branches: [
+        {
+          id: 'ghost',
+          when: [{ kind: 'axis', id: 'score', op: '>=', value: 10 }],
+          goto: 'ghost_end',
+        },
+      ],
+    });
+    mockBranchDialogue([
+      {
+        key: 'root',
+        text: '...',
+        options: [
+          { text: '分支', branch: { gameId: 'branch-test', fallback: null } },
+        ],
+      },
+      { key: 'real_end', text: '...', options: [{ text: '嗯' }] },
+    ]);
+    await mocks.scoringService.dispatch(PLAYER_ID, 'branch-test', {
+      axes: { score: 99 },
+    });
+
+    const res = await catchGameException(() =>
+      service.choose(PLAYER_ID, {
+        code: 'history_teach_demo',
+        nodeKey: 'root',
+        optionIndex: 0,
+      }),
+    );
+
+    expect(spy).toHaveBeenCalledWith(PLAYER_ID, 'branch-test');
+    expect(res.code).toBe(ErrorCodes.DIALOGUE_NODE_INVALID);
+    expect(String(res.msg)).toContain('ghost_end');
+  });
+
+  it('branch 与 next 同用 → 结构校验失败（DIALOGUE_NODE_INVALID），不触达评分服务', async () => {
+    const spy = jest.spyOn(mocks.scoringService, 'resolveBranch');
+    mockBranchDialogue([
+      {
+        key: 'root',
+        text: '...',
+        options: [
+          {
+            text: '坏配置',
+            next: 'after',
+            branch: { gameId: 'history-teach', fallback: null },
+          },
+        ],
+      },
+      { key: 'after', text: '...', options: [{ text: '嗯' }] },
+    ]);
+
+    const res = await catchGameException(() =>
+      service.choose(PLAYER_ID, {
+        code: 'history_teach_demo',
+        nodeKey: 'root',
+        optionIndex: 0,
+      }),
+    );
+
+    expect(res.code).toBe(ErrorCodes.DIALOGUE_NODE_INVALID);
+    expect(String(res.msg)).toContain('互斥');
+    expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe('DialogueService.score 视图（阶段 2：客户端展示）', () => {
+  let mocks: ServiceMocks;
+  let service: DialogueService;
+
+  /** 三轴一隐配置：声明顺序 alpha → gamma(隐藏) → beta，可同时断言「仅 visible 轴」与「顺序同 config」 */
+  const VIEW_GAME_CONFIG = {
+    gameId: 'view-game',
+    enabled: ['axis'],
+    axes: {
+      alpha: { label: '甲', min: 0, max: 100, visible: true, initial: 0 },
+      gamma: { label: '隐', min: 0, max: 100, visible: false, initial: 0 },
+      beta: { label: '乙', min: 0, max: 100, visible: true, initial: 0 },
+    },
+  };
+
+  /** 带 score 引用（选项级 condition.score）+ score 动作的演示树 */
+  const SCORE_NODES = [
+    {
+      key: 'root',
+      text: '看看你的修为。',
+      options: [
+        {
+          text: '记一笔',
+          next: 'after',
+          action: DialogueActionType.SCORE,
+          actionArgs: {
+            score: { gameId: 'view-game', effect: { axes: { alpha: 7 } } },
+          },
+          condition: { score: { gameId: 'view-game', axesMin: { alpha: 0 } } },
+        },
+        { text: '离开' },
+      ],
+    },
+    { key: 'after', text: '记好了。', options: [{ text: '好' }] },
+  ];
+
+  function mockScoreDialogue(nodes: any[] = SCORE_NODES) {
+    mocks.dialogueRepo.findOne.mockResolvedValue({
+      id: '4',
+      code: 'score_view_demo',
+      nodes,
+      isActive: true,
+    });
+  }
+
+  beforeEach(() => {
+    mocks = createService();
+    service = mocks.service;
+    mocks.scoringService.registerGame(VIEW_GAME_CONFIG);
+  });
+
+  it('start：树内含 score 引用 → 响应带 score，仅 visible 轴且顺序同 config', async () => {
+    mockScoreDialogue();
+
+    const view = await service.start(PLAYER_ID, 'score_view_demo');
+
+    expect(view.score).toEqual({
+      'view-game': [
+        { id: 'alpha', label: '甲', value: 0 },
+        { id: 'beta', label: '乙', value: 0 },
+      ],
+    });
+  });
+
+  it('choose：score 动作加成后值最新（alpha=7），推进分支同样携带', async () => {
+    mockScoreDialogue();
+
+    const view = await service.choose(PLAYER_ID, {
+      code: 'score_view_demo',
+      nodeKey: 'root',
+      optionIndex: 0,
+    });
+
+    expect(view.finished).toBe(false);
+    expect(view.nodeKey).toBe('after');
+    expect(view.score).toEqual({
+      'view-game': [
+        { id: 'alpha', label: '甲', value: 7 },
+        { id: 'beta', label: '乙', value: 0 },
+      ],
+    });
+  });
+
+  it('树内无 score 引用 → start/choose 响应均不带 score 字段', async () => {
+    mockScoreDialogue([
+      {
+        key: 'root',
+        text: 'plain',
+        options: [{ text: '推进', next: 'end' }, { text: '离开' }],
+      },
+      { key: 'end', text: 'end', options: [{ text: '好' }] },
+    ]);
+
+    const startView = await service.start(PLAYER_ID, 'score_view_demo');
+    expect(startView.score).toBeUndefined();
+
+    const chooseView = await service.choose(PLAYER_ID, {
+      code: 'score_view_demo',
+      nodeKey: 'root',
+      optionIndex: 0,
+    });
+    expect(chooseView.score).toBeUndefined();
+  });
+
+  it('branch.gameId 也触发 score 下发（history-teach：仅 wisdom/wealth，初始 wealth=100）', async () => {
+    mocks.scoringService.registerGame(historyTeachConfig);
+    mockScoreDialogue([
+      {
+        key: 'root',
+        text: '求学吧。',
+        options: [
+          {
+            text: '听天由命',
+            branch: { gameId: 'history-teach', fallback: null },
+          },
+        ],
+      },
+    ]);
+
+    const view = await service.choose(PLAYER_ID, {
+      code: 'score_view_demo',
+      nodeKey: 'root',
+      optionIndex: 0,
+    });
+
+    expect(view.finished).toBe(true);
+    expect(view.score).toEqual({
+      'history-teach': [
+        { id: 'wisdom', label: '智慧', value: 0 },
+        { id: 'wealth', label: '财富', value: 100 },
+      ],
+    });
+  });
+});
+
+describe('history-teach 演示树（samples JSON 结构回归）', () => {
+  it('sample JSON 可被 assertDialogueNodes 接受（branch.fallback:null 视为缺省）', () => {
+    const raw = fs.readFileSync(
+      path.join(__dirname, 'samples', 'history-teach.dialogue.json'),
+      'utf-8',
+    );
+    const parsed = JSON.parse(raw);
+    expect(parsed.code).toBe('history_teach_demo');
+    expect(assertDialogueNodes(parsed.nodes).ok).toBe(true);
   });
 });
 
@@ -640,6 +1124,7 @@ describe('DialogueService.buildQuestMarks（D8）', () => {
 
     expect(marks.available).toEqual(['1', '4']);
     expect(marks.submittable).toEqual(['3']);
+    expectScopedFind(mocks.questTemplateRepo.find);
   });
 
   it('无任务模板/无任务记录时返回两个空数组', async () => {

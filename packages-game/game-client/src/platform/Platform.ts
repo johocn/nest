@@ -12,7 +12,7 @@ import { LoginView } from '../ui/LoginView';
 
 /** Platform.request 入参：只暴露业务代码真正需要的最小集 */
 export interface PlatformRequestOptions {
-  method: 'GET' | 'POST';
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
   url: string;
   headers?: Record<string, string>;
   body?: string;
@@ -45,7 +45,11 @@ function safeCall(fn: any, arg?: any): void {
 
 /** 清掉上一次注册的软键盘监听：off* 在小游戏基础库/假 wx 里可能缺失，缺失即跳过、不抛 */
 function offWxKeyboard(wx: any): void {
-  for (const name of ['offKeyboardInput', 'offKeyboardConfirm', 'offKeyboardComplete']) {
+  for (const name of [
+    'offKeyboardInput',
+    'offKeyboardConfirm',
+    'offKeyboardComplete',
+  ]) {
     const fn = wx[name];
     if (typeof fn !== 'function') continue;
     try {
@@ -75,7 +79,10 @@ function resolveWsUrl(): string {
 
 export const Platform = {
   isMiniGame(): boolean {
-    return typeof (globalThis as any).wx !== 'undefined' && typeof document === 'undefined';
+    return (
+      typeof (globalThis as any).wx !== 'undefined' &&
+      typeof document === 'undefined'
+    );
   },
 
   storageGet(key: string): string | null {
@@ -158,17 +165,28 @@ export const Platform = {
             resolve({
               status: res.statusCode,
               // 非字符串只是兜底（dataType:'text' 生效时 data 必为 string）
-              text: typeof res.data === 'string' ? res.data : JSON.stringify(res.data),
+              text:
+                typeof res.data === 'string'
+                  ? res.data
+                  : JSON.stringify(res.data),
             });
           },
           fail(err: any) {
-            reject(new Error(`wx.request 失败：${(err && err.errMsg) || JSON.stringify(err)}`));
+            reject(
+              new Error(
+                `wx.request 失败：${(err && err.errMsg) || JSON.stringify(err)}`,
+              ),
+            );
           },
         });
       });
     }
 
-    const res = await fetch(opts.url, { method: opts.method, headers: opts.headers, body: opts.body });
+    const res = await fetch(opts.url, {
+      method: opts.method,
+      headers: opts.headers,
+      body: opts.body,
+    });
     return { status: res.status, text: await res.text() };
   },
 
@@ -185,7 +203,10 @@ export const Platform = {
      * 登录页双端分派：小游戏端走引擎内自绘 `ui/LoginView`（无 DOM），H5 走既有 DOM 表单。
      * 定好「对象字面量内不自引用」：这里一律用 `Platform.xxx` 延迟到调用期取值。
      */
-    showLogin(handlers: { onSubmit: (username: string, password: string) => Promise<void> }): void {
+    showLogin(handlers: {
+      onSubmit: (username: string, password: string) => Promise<void>;
+      onSsoLogin: (username: string, password: string) => Promise<void>;
+    }): void {
       if (Platform.isMiniGame()) LoginView.show(handlers);
       else Platform.showLoginForm(handlers);
     },
@@ -211,16 +232,23 @@ export const Platform = {
       };
     }): boolean {
       const wx = wxApi();
-      if (!wx || typeof wx.showKeyboard !== 'function' || typeof wx.onKeyboardInput !== 'function') {
+      if (
+        !wx ||
+        typeof wx.showKeyboard !== 'function' ||
+        typeof wx.onKeyboardInput !== 'function'
+      ) {
         return false;
       }
       try {
         // 每次打开前先清掉上一次的监听：否则重复打开会叠加回调
         offWxKeyboard(wx);
-        wx.onKeyboardInput((res: any) => safeCall(opts.handlers.onInput, res?.value));
+        wx.onKeyboardInput((res: any) =>
+          safeCall(opts.handlers.onInput, res?.value),
+        );
         if (typeof wx.onKeyboardConfirm === 'function') {
           wx.onKeyboardConfirm((res: any) => {
-            if (res && typeof res.value === 'string') safeCall(opts.handlers.onInput, res.value);
+            if (res && typeof res.value === 'string')
+              safeCall(opts.handlers.onInput, res.value);
             safeCall(opts.handlers.onConfirm);
           });
         }
@@ -235,7 +263,10 @@ export const Platform = {
         });
         return true;
       } catch (e) {
-        console.warn(`[S7] wx.showKeyboard 失败（field=${opts.field}），回落引擎键盘事件`, e);
+        console.warn(
+          `[S7] wx.showKeyboard 失败（field=${opts.field}），回落引擎键盘事件`,
+          e,
+        );
         return false;
       }
     },
@@ -271,6 +302,7 @@ export const Platform = {
   // `showLoginForm` / `hideLoginForm` 是 H5 特有能力的适配，保留在此。
   showLoginForm(handlers: {
     onSubmit: (username: string, password: string) => Promise<void>;
+    onSsoLogin: (username: string, password: string) => Promise<void>;
   }): void {
     if (typeof document === 'undefined') {
       throw new Error('当前平台不支持 DOM 登录表单');
@@ -285,6 +317,7 @@ export const Platform = {
       <label for="s1-pass">密码（6-64 位）</label>
       <input id="s1-pass" type="password" value="spike123456" autocomplete="current-password" />
       <button id="s1-submit">登录 / 自动注册</button>
+      <button id="s1-sso" type="button">SSO 账号登录</button>
       <div class="err" id="s1-err"></div>
     `;
     document.body.appendChild(box);
@@ -293,21 +326,30 @@ export const Platform = {
     const pass = box.querySelector('#s1-pass') as HTMLInputElement;
     const err = box.querySelector('#s1-err') as HTMLDivElement;
     const btn = box.querySelector('#s1-submit') as HTMLButtonElement;
+    const ssoBtn = box.querySelector('#s1-sso') as HTMLButtonElement;
 
-    btn.addEventListener('click', () => {
+    const runWith = (
+      action: (u: string, p: string) => Promise<void>,
+      trigger: HTMLButtonElement,
+    ) => {
       err.textContent = '';
-      btn.disabled = true;
+      trigger.disabled = true;
       // tsconfig 的 lib 为 ES2017（无 Promise.prototype.finally），故用 try/finally 等价实现
       void (async () => {
         try {
-          await handlers.onSubmit(user.value.trim(), pass.value);
+          await action(user.value.trim(), pass.value);
         } catch (e: unknown) {
           err.textContent = e instanceof Error ? e.message : String(e);
         } finally {
-          btn.disabled = false;
+          trigger.disabled = false;
         }
       })();
-    });
+    };
+
+    btn.addEventListener('click', () => runWith(handlers.onSubmit, btn));
+    ssoBtn.addEventListener('click', () =>
+      runWith(handlers.onSsoLogin, ssoBtn),
+    );
   },
 
   hideLoginForm(): void {

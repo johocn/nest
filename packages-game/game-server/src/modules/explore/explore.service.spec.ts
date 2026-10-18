@@ -12,6 +12,7 @@ import { CacheService } from '@cache/cache.service';
 import { EventBusService } from '@event-bus/event-bus.service';
 import { GameException } from '@common/exceptions/game.exception';
 import { ErrorCodes } from '@constants/error-codes';
+import { expectScopedFind } from '../../testing/content-scope-contract.shared';
 
 describe('ExploreService', () => {
   let service: ExploreService;
@@ -90,7 +91,9 @@ describe('ExploreService', () => {
   beforeEach(async () => {
     jest.restoreAllMocks();
     jest.clearAllMocks();
-    encRepo.manager.query.mockResolvedValue([{ now: new Date(), hour: '10', day: '2026-09-20' }]);
+    encRepo.manager.query.mockResolvedValue([
+      { now: new Date(), hour: '10', day: '2026-09-20' },
+    ]);
     const mod = await Test.createTestingModule({
       providers: [
         ExploreService,
@@ -118,7 +121,11 @@ describe('ExploreService', () => {
     });
     it('夜晚时段返回 night', async () => {
       encRepo.manager.query.mockResolvedValue([
-        { now: new Date('2026-09-20T22:00:00Z'), hour: '22', day: '2026-09-20' },
+        {
+          now: new Date('2026-09-20T22:00:00Z'),
+          hour: '22',
+          day: '2026-09-20',
+        },
       ]);
       const s = await service.worldState();
       expect(s.timeOfDay).toBe('night');
@@ -146,6 +153,7 @@ describe('ExploreService', () => {
       expect(explRepo.save).toHaveBeenCalledWith(
         expect.objectContaining({ playerId: 'p1', sceneId: 's1', times: 1 }),
       );
+      expectScopedFind(sceneRepo.findOne as jest.Mock);
     });
 
     it('重复 discover 幂等：times 递增且不重复发奖', async () => {

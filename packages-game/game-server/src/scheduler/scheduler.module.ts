@@ -8,6 +8,7 @@ import { MatchmakingModule } from '@modules/matchmaking/matchmaking.module';
 import { RiskModule } from '@modules/risk/risk.module';
 import { ReconcileModule } from '@modules/reconcile/reconcile.module';
 import { TradeModule } from '@modules/trade/trade.module';
+import { QuizModule } from '@modules/quiz/quiz.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { TradeModule } from '@modules/trade/trade.module';
     RiskModule,
     ReconcileModule,
     TradeModule,
+    QuizModule,
   ],
   providers: [SchedulerService],
 })

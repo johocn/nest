@@ -13,6 +13,7 @@ import {
 } from '@constants/enums';
 import { ErrorCodes } from '@constants/error-codes';
 import { GameException } from '@common/exceptions/game.exception';
+import { expectScopedFind } from '../../../testing/content-scope-contract.shared';
 
 const SCENE_ID = '7';
 const PLAYER_ID = '1001';
@@ -153,6 +154,7 @@ describe('BuildRuleService', () => {
         service.assertCanBuild(SCENE_ID, PLAYER_ID, -1, 3),
         ErrorCodes.PARAM_INVALID,
       );
+      expectScopedFind(sceneRepo.findOne);
     });
 
     it('assertCanBuild：场景不存在抛 PARAM_INVALID', async () => {

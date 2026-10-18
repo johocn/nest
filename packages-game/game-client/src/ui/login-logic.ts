@@ -37,7 +37,13 @@ export interface LoginKeyResult {
 }
 
 /** 切换焦点的键（Tab 与四个方向键） */
-const FOCUS_TOGGLE_KEYS = new Set(['tab', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright']);
+const FOCUS_TOGGLE_KEYS = new Set([
+  'tab',
+  'arrowup',
+  'arrowdown',
+  'arrowleft',
+  'arrowright',
+]);
 
 function fieldValue(state: LoginState, field: LoginField): string {
   return field === 'username' ? state.username : state.password;
@@ -52,7 +58,11 @@ function maxLenOf(field: LoginField): number {
 }
 
 /** 写入字段并清掉上一次的错误文案（继续编辑即视为重试） */
-function withField(state: LoginState, field: LoginField, value: string): LoginState {
+function withField(
+  state: LoginState,
+  field: LoginField,
+  value: string,
+): LoginState {
   return field === 'username'
     ? { ...state, username: value, error: '' }
     : { ...state, password: value, error: '' };
@@ -62,7 +72,11 @@ function withField(state: LoginState, field: LoginField, value: string): LoginSt
  * 直接置字段文本（软键盘 onInput 给的是**整串**而非增量，故需整体替换）；超长按上限截断。
  * 与 `applyKey` 同为纯函数。
  */
-export function setFieldText(state: LoginState, field: LoginField, text: string): LoginState {
+export function setFieldText(
+  state: LoginState,
+  field: LoginField,
+  text: string,
+): LoginState {
   const limit = maxLenOf(field);
   const value = String(text ?? '').slice(0, limit);
   return withField(state, field, value);
@@ -140,14 +154,18 @@ export interface LoginLayout {
   passLabel: LoginRect;
   passBox: LoginRect;
   button: LoginRect;
+  ssoButton: LoginRect;
   error: LoginRect;
 }
 
 /**
- * 布局计算（纯函数）：面板居中，内部自上而下为 标题 / 账号(标签+框) / 密码(标签+框) / 按钮 / 错误行。
+ * 布局计算（纯函数）：面板居中，内部自上而下为 标题 / 账号(标签+框) / 密码(标签+框) / 主按钮 / SSO 按钮 / 错误行。
  * 全宽元素左右各留 `padX`；面板高度由内容累加得出，故不会与控件脱节。
  */
-export function loginLayout(stageWidth: number, stageHeight: number): LoginLayout {
+export function loginLayout(
+  stageWidth: number,
+  stageHeight: number,
+): LoginLayout {
   const panelWidth = Math.min(
     L.panelMaxWidth,
     Math.max(L.panelWidthMin, stageWidth - L.panelMarginX * 2),
@@ -162,31 +180,78 @@ export function loginLayout(stageWidth: number, stageHeight: number): LoginLayou
     L.gapBetweenFields +
     L.gapBeforeButton +
     L.buttonHeight +
+    L.gapBeforeSsoButton +
+    L.ssoButtonHeight +
     L.gapBeforeError +
     L.errorHeight;
 
   const panelX = Math.round((stageWidth - panelWidth) / 2);
-  const panelY = Math.round(Math.max(L.panelMarginY, (stageHeight - panelHeight) / 2));
+  const panelY = Math.round(
+    Math.max(L.panelMarginY, (stageHeight - panelHeight) / 2),
+  );
   const contentX = panelX + L.padX;
 
   let y = panelY + L.padY;
-  const title: LoginRect = { x: contentX, y, w: contentWidth, h: L.titleHeight };
+  const title: LoginRect = {
+    x: contentX,
+    y,
+    w: contentWidth,
+    h: L.titleHeight,
+  };
   y += L.titleHeight + L.gapAfterTitle;
 
-  const userLabel: LoginRect = { x: contentX, y, w: contentWidth, h: L.labelHeight };
+  const userLabel: LoginRect = {
+    x: contentX,
+    y,
+    w: contentWidth,
+    h: L.labelHeight,
+  };
   y += L.labelHeight + L.gapAfterLabel;
-  const userBox: LoginRect = { x: contentX, y, w: contentWidth, h: L.inputHeight };
+  const userBox: LoginRect = {
+    x: contentX,
+    y,
+    w: contentWidth,
+    h: L.inputHeight,
+  };
   y += L.inputHeight + L.gapBetweenFields;
 
-  const passLabel: LoginRect = { x: contentX, y, w: contentWidth, h: L.labelHeight };
+  const passLabel: LoginRect = {
+    x: contentX,
+    y,
+    w: contentWidth,
+    h: L.labelHeight,
+  };
   y += L.labelHeight + L.gapAfterLabel;
-  const passBox: LoginRect = { x: contentX, y, w: contentWidth, h: L.inputHeight };
+  const passBox: LoginRect = {
+    x: contentX,
+    y,
+    w: contentWidth,
+    h: L.inputHeight,
+  };
   y += L.inputHeight + L.gapBeforeButton;
 
-  const button: LoginRect = { x: contentX, y, w: contentWidth, h: L.buttonHeight };
-  y += L.buttonHeight + L.gapBeforeError;
+  const button: LoginRect = {
+    x: contentX,
+    y,
+    w: contentWidth,
+    h: L.buttonHeight,
+  };
+  y += L.buttonHeight + L.gapBeforeSsoButton;
 
-  const error: LoginRect = { x: contentX, y, w: contentWidth, h: L.errorHeight };
+  const ssoButton: LoginRect = {
+    x: contentX,
+    y,
+    w: contentWidth,
+    h: L.ssoButtonHeight,
+  };
+  y += L.ssoButtonHeight + L.gapBeforeError;
+
+  const error: LoginRect = {
+    x: contentX,
+    y,
+    w: contentWidth,
+    h: L.errorHeight,
+  };
 
   return {
     panel: { x: panelX, y: panelY, w: panelWidth, h: panelHeight },
@@ -197,6 +262,7 @@ export function loginLayout(stageWidth: number, stageHeight: number): LoginLayou
     passLabel,
     passBox,
     button,
+    ssoButton,
     error,
   };
 }

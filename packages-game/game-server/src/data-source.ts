@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import 'tsconfig-paths/register';
 import { DataSource } from 'typeorm';
 import { join } from 'path';
 

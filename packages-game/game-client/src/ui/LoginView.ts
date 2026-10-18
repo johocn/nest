@@ -27,15 +27,22 @@ const L = AppConfig.login;
 export class LoginView {
   private static root: Laya.Sprite | null = null;
   private static state: LoginState = createLoginState();
-  private static handlers: { onSubmit: (username: string, password: string) => Promise<void> } | null =
-    null;
+  private static handlers: {
+    onSubmit: (username: string, password: string) => Promise<void>;
+    onSsoLogin: (username: string, password: string) => Promise<void>;
+  } | null = null;
   private static opened = false;
   private static busy = false;
+  /** 当前忙的是哪个提交通道（决定按钮文案与禁用态） */
+  private static busyKind: 'local' | 'sso' = 'local';
   /** 平台软键盘是否已接管输入（true 时视图不再订阅引擎键盘事件） */
   private static softKeyboard = false;
 
   /** 打开登录页；重复调用不叠加节点（已打开则只更新回调并重绘） */
-  static show(handlers: { onSubmit: (username: string, password: string) => Promise<void> }): void {
+  static show(handlers: {
+    onSubmit: (username: string, password: string) => Promise<void>;
+    onSsoLogin: (username: string, password: string) => Promise<void>;
+  }): void {
     if (typeof Laya === 'undefined' || !Laya.stage) {
       console.log('[S7] LoginView 未就绪（引擎未初始化），跳过打开');
       return;
@@ -88,11 +95,12 @@ export class LoginView {
   private static openSoftKeyboard(): boolean {
     LoginView.softKeyboard = Platform.ui.showKeyboard({
       defaultValue: LoginView.fieldText(LoginView.state.focus),
-      maxLength: LoginView.state.focus === 'username' ? L.maxUserLen : L.maxPassLen,
+      maxLength:
+        LoginView.state.focus === 'username' ? L.maxUserLen : L.maxPassLen,
       field: LoginView.state.focus,
       handlers: {
-        onInput: (value) => LoginView.applyPlatformInput(value),
-        onConfirm: () => void LoginView.submit(),
+        onInput: value => LoginView.applyPlatformInput(value),
+        onConfirm: () => void LoginView.submit('local'),
         onComplete: () => {
           LoginView.softKeyboard = false;
         },
@@ -111,7 +119,11 @@ export class LoginView {
 
   /** 平台软键盘给的是**整串**文本（非增量），故整体替换当前焦点字段 */
   private static applyPlatformInput(value: string): void {
-    LoginView.state = setFieldText(LoginView.state, LoginView.state.focus, value);
+    LoginView.state = setFieldText(
+      LoginView.state,
+      LoginView.state.focus,
+      value,
+    );
     LoginView.rebuild();
   }
 
@@ -119,8 +131,16 @@ export class LoginView {
 
   private static onKeyDown(e: Laya.Event): void {
     if (!LoginView.opened) return;
-    const ev = e as unknown as { keyCode?: number; key?: string; shiftKey?: boolean };
-    const token = keyTokenFromEvent(ev.keyCode ?? 0, ev.key ?? null, ev.shiftKey === true);
+    const ev = e as unknown as {
+      keyCode?: number;
+      key?: string;
+      shiftKey?: boolean;
+    };
+    const token = keyTokenFromEvent(
+      ev.keyCode ?? 0,
+      ev.key ?? null,
+      ev.shiftKey === true,
+    );
     if (!token) return;
 
     const before = LoginView.state.focus;
@@ -130,7 +150,7 @@ export class LoginView {
     if (result.state.focus !== before) LoginView.reopenSoftKeyboard();
 
     if (result.intent === 'submit') {
-      void LoginView.submit();
+      void LoginView.submit('local');
       return;
     }
     LoginView.rebuild();
@@ -159,7 +179,7 @@ export class LoginView {
 
   // ── 提交 ────────────────────────────────────────────────────────────────
 
-  private static async submit(): Promise<void> {
+  private static async submit(kind: 'local' | 'sso'): Promise<void> {
     if (LoginView.busy) return;
 
     const error = validateLogin(LoginView.state);
@@ -175,10 +195,21 @@ export class LoginView {
 
     LoginView.closeSoftKeyboard();
     LoginView.busy = true;
+    LoginView.busyKind = kind;
     LoginView.rebuild();
 
     try {
-      await handlers.onSubmit(LoginView.state.username, LoginView.state.password);
+      if (kind === 'sso') {
+        await handlers.onSsoLogin(
+          LoginView.state.username,
+          LoginView.state.password,
+        );
+      } else {
+        await handlers.onSubmit(
+          LoginView.state.username,
+          LoginView.state.password,
+        );
+      }
     } catch (e: unknown) {
       LoginView.state = {
         ...LoginView.state,
@@ -194,7 +225,9 @@ export class LoginView {
   // ── 渲染 ────────────────────────────────────────────────────────────────
 
   private static fieldText(field: LoginField): string {
-    return field === 'username' ? LoginView.state.username : LoginView.state.password;
+    return field === 'username'
+      ? LoginView.state.username
+      : LoginView.state.password;
   }
 
   private static rebuild(): void {
@@ -223,7 +256,14 @@ export class LoginView {
     );
     root.addChild(panel);
 
-    root.addChild(LoginView.makeText('江湖录 · 登录', layout.title, L.titleFontSize, L.titleColor));
+    root.addChild(
+      LoginView.makeText(
+        '江湖录 · 登录',
+        layout.title,
+        L.titleFontSize,
+        L.titleColor,
+      ),
+    );
     root.addChild(
       LoginView.makeText(
         `账号（3-${L.maxUserLen} 位字母/数字/下划线）`,
@@ -241,7 +281,13 @@ export class LoginView {
       ),
     );
 
-    LoginView.drawField(root, layout.userBox, 'username', state.username, state.focus === 'username');
+    LoginView.drawField(
+      root,
+      layout.userBox,
+      'username',
+      state.username,
+      state.focus === 'username',
+    );
     LoginView.drawField(
       root,
       layout.passBox,
@@ -249,6 +295,9 @@ export class LoginView {
       L.maskChar.repeat(state.password.length),
       state.focus === 'password',
     );
+
+    const localBusy = LoginView.busy && LoginView.busyKind === 'local';
+    const ssoBusy = LoginView.busy && LoginView.busyKind === 'sso';
 
     const button = new Laya.Sprite();
     button.pos(layout.button.x, layout.button.y);
@@ -259,22 +308,62 @@ export class LoginView {
       0,
       layout.button.w,
       layout.button.h,
-      LoginView.busy ? L.buttonDisabledBgColor : L.buttonBgColor,
+      localBusy ? L.buttonDisabledBgColor : L.buttonBgColor,
     );
     button.addChild(
       LoginView.makeText(
-        LoginView.busy ? L.buttonBusyText : L.buttonIdleText,
-        { x: 0, y: Math.round((layout.button.h - L.buttonFontSize) / 2), w: layout.button.w, h: L.buttonFontSize },
+        localBusy ? L.buttonBusyText : L.buttonIdleText,
+        {
+          x: 0,
+          y: Math.round((layout.button.h - L.buttonFontSize) / 2),
+          w: layout.button.w,
+          h: L.buttonFontSize,
+        },
         L.buttonFontSize,
-        LoginView.busy ? L.buttonDisabledColor : L.buttonColor,
+        localBusy ? L.buttonDisabledColor : L.buttonColor,
         'center',
       ),
     );
-    button.on(Laya.Event.CLICK, null, () => void LoginView.submit());
+    button.on(Laya.Event.CLICK, null, () => void LoginView.submit('local'));
     root.addChild(button);
 
+    const ssoButton = new Laya.Sprite();
+    ssoButton.pos(layout.ssoButton.x, layout.ssoButton.y);
+    ssoButton.size(layout.ssoButton.w, layout.ssoButton.h);
+    ssoButton.mouseEnabled = !LoginView.busy;
+    ssoButton.graphics.drawRect(
+      0,
+      0,
+      layout.ssoButton.w,
+      layout.ssoButton.h,
+      L.ssoButtonBgColor,
+    );
+    ssoButton.addChild(
+      LoginView.makeText(
+        ssoBusy ? L.ssoButtonBusyText : 'SSO 账号登录',
+        {
+          x: 0,
+          y: Math.round((layout.ssoButton.h - L.ssoButtonFontSize) / 2),
+          w: layout.ssoButton.w,
+          h: L.ssoButtonFontSize,
+        },
+        L.ssoButtonFontSize,
+        ssoBusy ? L.buttonDisabledColor : L.ssoButtonColor,
+        'center',
+      ),
+    );
+    ssoButton.on(Laya.Event.CLICK, null, () => void LoginView.submit('sso'));
+    root.addChild(ssoButton);
+
     if (state.error) {
-      root.addChild(LoginView.makeText(state.error, layout.error, L.errorFontSize, L.errorColor));
+      root.addChild(
+        LoginView.makeText(
+          state.error,
+          layout.error,
+          L.errorFontSize,
+          L.errorColor,
+        ),
+      );
     }
   }
 
@@ -290,7 +379,13 @@ export class LoginView {
     box.pos(rect.x, rect.y);
     box.size(rect.w, rect.h);
     box.mouseEnabled = true;
-    box.graphics.drawRect(0, 0, rect.w, rect.h, focused ? L.inputFocusBgColor : L.inputBgColor);
+    box.graphics.drawRect(
+      0,
+      0,
+      rect.w,
+      rect.h,
+      focused ? L.inputFocusBgColor : L.inputBgColor,
+    );
     box.graphics.drawRect(
       0,
       0,

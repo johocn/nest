@@ -1,4 +1,4 @@
-import { Test, TestingModule } from '@nestjs/testing';
+﻿import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { InventoryService } from './inventory.service';
@@ -176,9 +176,9 @@ describe('InventoryService', () => {
       inventoryItemRepo.findOne.mockResolvedValue(null);
       inventoryItemRepo.count.mockResolvedValue(100);
 
-      await expect(service.addItem('p1', '100', 1, 'test')).rejects.toMatchObject(
-        { response: { code: ErrorCodes.BAG_FULL } },
-      );
+      await expect(
+        service.addItem('p1', '100', 1, 'test'),
+      ).rejects.toMatchObject({ response: { code: ErrorCodes.BAG_FULL } });
       expect(inventoryItemRepo.save).not.toHaveBeenCalled();
     });
 
@@ -196,7 +196,9 @@ describe('InventoryService', () => {
     });
 
     it('should stack onto existing item even when bag is full', async () => {
-      itemTemplateRepo.findOne.mockResolvedValue(makeTemplate({ maxStack: 99 }));
+      itemTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({ maxStack: 99 }),
+      );
       inventoryItemRepo.findOne.mockResolvedValue({
         id: '1',
         playerId: 'p1',
@@ -228,9 +230,9 @@ describe('InventoryService', () => {
       } as any);
       inventoryItemRepo.count.mockResolvedValue(100);
 
-      await expect(service.addItem('p1', '100', 1, 'test')).rejects.toMatchObject(
-        { response: { code: ErrorCodes.BAG_FULL } },
-      );
+      await expect(
+        service.addItem('p1', '100', 1, 'test'),
+      ).rejects.toMatchObject({ response: { code: ErrorCodes.BAG_FULL } });
     });
   });
 
@@ -304,7 +306,9 @@ describe('InventoryService', () => {
 
   describe('removeUnboundItem', () => {
     it('should deduct from unbound stack and write change log', async () => {
-      itemTemplateRepo.findOne.mockResolvedValue(makeTemplate({ canTrade: true }));
+      itemTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({ canTrade: true }),
+      );
       inventoryItemRepo.findOne.mockResolvedValue({
         id: '1',
         playerId: 'p1',
@@ -316,7 +320,12 @@ describe('InventoryService', () => {
         Promise.resolve(data),
       );
 
-      const result = await service.removeUnboundItem('p1', '100', 4, 'trade.test');
+      const result = await service.removeUnboundItem(
+        'p1',
+        '100',
+        4,
+        'trade.test',
+      );
 
       expect(result.quantity).toBe(6);
       expect(changeLogRepo.save).toHaveBeenCalledWith(
@@ -325,10 +334,15 @@ describe('InventoryService', () => {
     });
 
     it('should reject with ITEM_BOUND when only bound stack exists', async () => {
-      itemTemplateRepo.findOne.mockResolvedValue(makeTemplate({ canTrade: true }));
+      itemTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({ canTrade: true }),
+      );
       inventoryItemRepo.findOne
         .mockResolvedValueOnce(null) // UNBOUND 行不存在
-        .mockResolvedValueOnce({ id: '1', bindStatus: BindStatus.BOUND } as any);
+        .mockResolvedValueOnce({
+          id: '1',
+          bindStatus: BindStatus.BOUND,
+        } as any);
 
       await expect(
         service.removeUnboundItem('p1', '100', 1, 'trade.test'),
@@ -349,7 +363,9 @@ describe('InventoryService', () => {
     });
 
     it('should reject with ITEM_NOT_ENOUGH when unbound stack is insufficient', async () => {
-      itemTemplateRepo.findOne.mockResolvedValue(makeTemplate({ canTrade: true }));
+      itemTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({ canTrade: true }),
+      );
       inventoryItemRepo.findOne.mockResolvedValue({
         id: '1',
         playerId: 'p1',
@@ -524,6 +540,93 @@ describe('InventoryService', () => {
       const result = await service.getEquipment('c1');
 
       expect(result).toHaveLength(1);
+    });
+  });
+
+  describe('dropItem', () => {
+    const makeItem = (overrides: Partial<InventoryItem> = {}) =>
+      ({
+        id: 'inv1',
+        playerId: 'p1',
+        itemTemplateId: '100',
+        quantity: 5,
+        bindStatus: BindStatus.UNBOUND,
+        ...overrides,
+      }) as InventoryItem;
+
+    it('should soft remove whole stack when dropping full quantity', async () => {
+      inventoryItemRepo.findOne.mockResolvedValue(makeItem());
+      itemTemplateRepo.findOne.mockResolvedValue(makeTemplate());
+      (inventoryItemRepo as any).softRemove = jest
+        .fn()
+        .mockResolvedValue({ id: 'inv1' });
+
+      const result = await service.dropItem('p1', '500', 5);
+
+      expect(result).toEqual({ dropped: 5, remaining: 0 });
+      expect((inventoryItemRepo as any).softRemove).toHaveBeenCalled();
+      expect(changeLogRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          changeType: ItemChangeType.DESTROY,
+          quantity: -5,
+          balanceAfter: 0,
+        }),
+      );
+    });
+
+    it('should decrement quantity when dropping partial stack', async () => {
+      inventoryItemRepo.findOne.mockResolvedValue(makeItem());
+      itemTemplateRepo.findOne.mockResolvedValue(makeTemplate());
+      inventoryItemRepo.save.mockResolvedValue({ ...makeItem(), quantity: 3 });
+
+      const result = await service.dropItem('p1', '500', 2);
+
+      expect(result).toEqual({ dropped: 2, remaining: 3 });
+      expect(inventoryItemRepo.save).toHaveBeenCalled();
+      expect(changeLogRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          quantity: -2,
+          balanceAfter: 3,
+        }),
+      );
+    });
+
+    it('should throw when template cannot drop', async () => {
+      inventoryItemRepo.findOne.mockResolvedValue(makeItem());
+      itemTemplateRepo.findOne.mockResolvedValue(
+        makeTemplate({ canDrop: false }),
+      );
+
+      await expect(service.dropItem('p1', '500', 1)).rejects.toMatchObject({
+        response: { code: ErrorCodes.ITEM_CANNOT_DROP },
+      });
+    });
+
+    it('should throw when item is bound', async () => {
+      inventoryItemRepo.findOne.mockResolvedValue(
+        makeItem({ bindStatus: BindStatus.BOUND }),
+      );
+      itemTemplateRepo.findOne.mockResolvedValue(makeTemplate());
+
+      await expect(service.dropItem('p1', '500', 1)).rejects.toMatchObject({
+        response: { code: ErrorCodes.ITEM_CANNOT_DROP },
+      });
+    });
+
+    it('should throw when quantity exceeds stack', async () => {
+      inventoryItemRepo.findOne.mockResolvedValue(makeItem({ quantity: 2 }));
+
+      await expect(service.dropItem('p1', '500', 5)).rejects.toMatchObject({
+        response: { code: ErrorCodes.ITEM_NOT_ENOUGH },
+      });
+    });
+
+    it('should throw when item belongs to another player', async () => {
+      inventoryItemRepo.findOne.mockResolvedValue(null);
+
+      await expect(service.dropItem('p1', '500', 1)).rejects.toMatchObject({
+        response: { code: ErrorCodes.ITEM_NOT_FOUND },
+      });
     });
   });
 });

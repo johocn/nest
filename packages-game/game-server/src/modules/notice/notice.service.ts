@@ -27,7 +27,12 @@ export class NoticeService {
     noticeId: string,
     playerId: string,
     reactionType: NoticeReactionType,
-  ): Promise<{ noticeId: string; reactionType: NoticeReactionType; likes: number; acks: number }> {
+  ): Promise<{
+    noticeId: string;
+    reactionType: NoticeReactionType;
+    likes: number;
+    acks: number;
+  }> {
     const notice = await this.noticeRepo.findOne({ where: { id: noticeId } });
     if (!notice) {
       throw new GameException(ErrorCodes.NOTICE_REACTION_EXISTS, '公告不存在');
@@ -130,6 +135,10 @@ export class NoticeService {
 
   async getNotice(id: string): Promise<Notice | null> {
     return this.noticeRepo.findOne({ where: { id } });
+  }
+
+  async deleteNotice(id: string): Promise<void> {
+    await this.noticeRepo.delete(id);
   }
 
   async getNoticeList(
