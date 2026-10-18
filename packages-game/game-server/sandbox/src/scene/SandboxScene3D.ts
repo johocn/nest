@@ -1,6 +1,71 @@
-import * as THREE from 'three';
 import { SliceInfo } from '../config/GameConfig';
 import { SandboxGame } from '../core/SandboxGame';
+import { buildBenchmarks } from '../core/Benchmarks';
+import { allocationFractions } from '../core/Allocation';
+
+/** 资产配色（饼图用）：现金/存款/现金理财/封闭理财/基金 */
+const ASSET_COLORS: Record<string, string> = {
+  cash: '#b2bec3',
+  deposit: '#0984e3',
+  cash_mgmt: '#74b9ff',
+  closed_fund: '#a29bfe',
+  fund: '#fdcb6e',
+};
+
+/** 生成资产迷你曲线（内联 SVG polyline，末值≥首值绿、否则红；不足 2 点返回空） */
+function sparkSvg(values: number[], w: number, h: number): string {
+  if (values.length < 2) return '';
+  let min = Infinity;
+  let max = -Infinity;
+  for (const v of values) {
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+  const span = max - min || 1;
+  const pts = values
+    .map((v, i) => {
+      const x = (i / (values.length - 1)) * w;
+      const y = h - ((v - min) / span) * h;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(' ');
+  const up = values[values.length - 1] >= values[0];
+  const color = up ? '#00b894' : '#ff6b6b';
+  return (
+    `<svg class="asset-spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" ` +
+    `style="display:block;margin:3px auto 0;"><polyline points="${pts}" fill="none" ` +
+    `stroke="${color}" stroke-width="1.2" stroke-linejoin="round" opacity="0.9"/></svg>`
+  );
+}
+
+/** 资产配置饼图（环形，各段按占比着色；全 0 时返回空） */
+function donutSvg(
+  segments: { value: number; color: string }[],
+  size: number,
+): string {
+  const total = segments.reduce((a, s) => a + (s.value > 0 ? s.value : 0), 0);
+  if (total <= 0) return '';
+  const fracs = allocationFractions(segments.map((s) => s.value));
+  const r = size / 2 - 6;
+  const cx = size / 2;
+  const C = 2 * Math.PI * r;
+  let offset = 0;
+  const arcs = segments
+    .map((s, i) => {
+      const f = fracs[i];
+      if (f <= 0) return '';
+      const dash = `${(f * C).toFixed(2)} ${(C - f * C).toFixed(2)}`;
+      const off = (-offset * C).toFixed(2);
+      offset += f;
+      return (
+        `<circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="${s.color}" ` +
+        `stroke-width="8" stroke-dasharray="${dash}" stroke-dashoffset="${off}" ` +
+        `transform="rotate(-90 ${cx} ${cx})"/>`
+      );
+    })
+    .join('');
+  return `<svg class="alloc-donut" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${arcs}</svg>`;
+}
 
 /** 沙盘3D场景 - 使用LayaAir引擎 */
 export class SandboxScene3D {
@@ -37,7 +102,10 @@ export class SandboxScene3D {
 
     // 渲染器
     this._renderer = new THREE.WebGLRenderer({ antialias: true });
-    this._renderer.setSize(this._container.clientWidth, this._container.clientHeight);
+    this._renderer.setSize(
+      this._container.clientWidth,
+      this._container.clientHeight,
+    );
     this._renderer.shadowMap.enabled = true;
     this._renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this._container.appendChild(this._renderer.domElement);
@@ -62,7 +130,12 @@ export class SandboxScene3D {
   }
 
   /** 更新UI数据 */
-  updateUI(slice: SliceInfo, snapshot: any, holdings: any[], tradeRecords?: any[]): void {
+  updateUI(
+    slice: SliceInfo,
+    snapshot: any,
+    holdings: any[],
+    tradeRecords?: readonly any[],
+  ): void {
     this._updateHUD(slice, snapshot, holdings, tradeRecords);
     this._updateBuildingHeights(holdings);
     this._updateSliceIndicator(slice);
@@ -219,34 +292,35 @@ export class SandboxScene3D {
   }
 
   private _updateBuildingHeights(holdings: any[]): void {
-    const maxReturn = Math.max(
-      ...holdings.map(h => Math.abs(h.returnRate)),
-      0.01,
+    // 归一基准：取持仓收益率绝对值的最大值（至少 2%，避免小幅波动被放大）
+    const denom = Math.max(
+      ...holdings.map((h) => Math.abs(h.returnRate)),
+      0.02,
     );
 
     for (const b of this._buildings) {
-      const holding = holdings.find(h => {
+      const holding = holdings.find((h) => {
         const map: Record<string, string> = {
-          '存款': 'deposit', '现金理财': 'cash_mgmt', '封闭理财': 'closed_fund', '基金': 'fund',
+          存款: 'deposit',
+          现金理财: 'cash_mgmt',
+          封闭理财: 'closed_fund',
+          基金: 'fund',
         };
         return h.type === map[b.label];
       });
 
       const returnRate = holding?.returnRate ?? 0;
-      const heightScale = 1 + (returnRate / maxReturn) * 3;
-      const newHeight = Math.max(0.3, b.config.baseHeight * heightScale);
+      // 正收益拔高、负收益压低，缩放比限制在 [-0.6, +3]
+      const ratio = Math.max(-0.6, Math.min(3, returnRate / denom));
+      const newHeight = Math.max(0.3, b.config.baseHeight * (1 + ratio * 1.2));
 
       b.body.scale.y = newHeight / b.config.baseHeight;
       b.body.position.y = newHeight / 2;
 
-      // 颜色随收益变化
-      if (returnRate >= 0) {
-        const intensity = Math.min(0.5 + returnRate * 2, 1);
-        b.body.material.emissiveIntensity = intensity;
-      } else {
-        b.body.material.emissiveIntensity = 0.1;
-        b.body.material.color.setHex(0xff6b6b);
-      }
+      // 颜色随收益变化（正负均可恢复）
+      b.body.material.color.setHex(returnRate >= 0 ? b.config.color : 0xff6b6b);
+      b.body.material.emissiveIntensity =
+        returnRate >= 0 ? Math.min(0.4 + Math.abs(returnRate) * 3, 1) : 0.15;
     }
   }
 
@@ -275,7 +349,12 @@ export class SandboxScene3D {
     this._container.appendChild(fallback);
   }
 
-  private _updateHUD(slice: SliceInfo, snapshot: any, holdings: any[], tradeRecords?: any[]): void {
+  private _updateHUD(
+    slice: SliceInfo,
+    snapshot: any,
+    holdings: any[],
+    tradeRecords?: readonly any[],
+  ): void {
     const getOrCreate = (id: string, parent: HTMLElement): HTMLElement => {
       let el = this._uiElements.get(id);
       if (!el) {
@@ -287,8 +366,9 @@ export class SandboxScene3D {
       return el!;
     };
 
-    const hud = this._container.querySelector('.sandbox-hud') as HTMLElement
-      || (() => {
+    const hud =
+      (this._container.querySelector('.sandbox-hud') as HTMLElement) ||
+      (() => {
         const h = document.createElement('div');
         h.className = 'sandbox-hud';
         h.style.cssText = `
@@ -299,63 +379,131 @@ export class SandboxScene3D {
         return h;
       })();
 
+    const nameOf = (type: string) =>
+      (
+        ({
+          deposit: '存款',
+          cash_mgmt: '现金理财',
+          closed_fund: '封闭理财',
+          fund: '基金',
+        }) as Record<string, string>
+      )[type] || type;
+
+    const progress = this._game.dayProgress;
+    const paused = this._game.isPaused;
+    const compact = this._container.clientWidth < 720;
+
     // 顶部信息栏
     const topBar = getOrCreate('top-bar', hud);
     topBar.style.cssText = `
-      position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
-      background: rgba(0,0,0,0.7); border-radius: 12px; padding: 10px 24px;
-      color: #fff; font-size: 14px; display: flex; gap: 24px; align-items: center;
-      backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.1);
+      position: absolute; top: ${compact ? 12 : 16}px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.7); border-radius: 12px; padding: ${compact ? '8px 12px' : '10px 24px'};
+      color: #fff; font-size: ${compact ? 11 : 14}px; display: flex; gap: ${compact ? 10 : 18}px;
+      align-items: center; backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.1);
+      flex-wrap: wrap; justify-content: center; max-width: ${compact ? '96%' : '92%'};
     `;
     topBar.innerHTML = `
       <span>📅 ${snapshot?.date || '-'}</span>
+      <span style="opacity:0.7;font-size:12px;">D${progress.current}/${progress.total}</span>
       <span>${slice.index === -1 ? '🔴 休市' : `🔘 ${slice.index + 1}/52`}</span>
-      <span style="color: ${slice.index === -1 ? '#ff6b6b' : slice.isSuspended ? '#ff6b6b' : '#00b894'}">
-        ${slice.index === -1 ? '⏹ 休市日' : slice.isSuspended ? '⏸ 停牌' : '▶ 交易中'}
+      <span style="color: ${paused ? '#ffd166' : slice.index === -1 ? '#ff6b6b' : slice.isSuspended ? '#ff6b6b' : '#00b894'}">
+        ${paused ? '⏸ 已暂停' : slice.index === -1 ? '⏹ 休市日' : slice.isSuspended ? '⏸ 停牌' : '▶ 交易中'}
       </span>
       <span>💰 ¥${this._game.portfolio.totalAssets.toFixed(2)}</span>
       <span style="color: ${this._game.portfolio.totalReturn >= 0 ? '#00b894' : '#ff6b6b'}">
         ${this._game.portfolio.totalReturn >= 0 ? '+' : ''}${this._game.portfolio.totalReturn.toFixed(2)}
         (${(this._game.portfolio.totalReturnRate * 100).toFixed(2)}%)
       </span>
+      <span style="opacity:0.8;font-size:12px;">💵 现金 ¥${this._game.cash.toFixed(2)}</span>
     `;
+
+    // 总资产曲线
+    this._drawEquityChart(getOrCreate('equity-chart', hud));
 
     // 资产面板
     const assetPanel = getOrCreate('asset-panel', hud);
+    const cellMin = compact ? 62 : 80;
+    const cellVal = compact ? 12 : 14;
+    const sparkW = compact ? 48 : 64;
+    const sparkH = 14;
+    // 窄屏：资产面板抬到操作条上方（操作条高度即时量测）
+    const stripEl = this._container.querySelector(
+      '.control-panel',
+    ) as HTMLElement | null;
+    const stripH = compact && stripEl ? stripEl.offsetHeight : 0;
     assetPanel.style.cssText = `
-      position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
-      background: rgba(0,0,0,0.7); border-radius: 12px; padding: 12px 20px;
-      color: #fff; font-size: 12px; display: flex; gap: 20px;
+      position: absolute; bottom: ${compact ? 104 + stripH : 16}px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.7); border-radius: 12px; padding: ${compact ? '8px 10px' : '12px 20px'};
+      color: #fff; font-size: ${compact ? 11 : 12}px; display: flex; gap: ${compact ? 8 : 16}px;
       backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.1);
+      flex-wrap: wrap; justify-content: center; max-width: ${compact ? '98%' : '94%'};
     `;
-    assetPanel.innerHTML = holdings.map(h => `
-      <div style="text-align:center; min-width:80px;">
-        <div style="font-size:11px; opacity:0.6; margin-bottom:4px;">
-          ${({ deposit: '存款', cash_mgmt: '现金理财', closed_fund: '封闭理财', fund: '基金' } as Record<string, string>)[h.type] || h.type}
+    assetPanel.innerHTML = [
+      ...(compact
+        ? []
+        : [
+            `<div class="alloc-donut" title="各类资产占总资产的比例" ` +
+              `style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:72px;">
+          <div style="font-size:10px;opacity:0.6;margin-bottom:2px;">资产配置</div>
+          ${donutSvg(
+            [
+              { value: this._game.cash, color: ASSET_COLORS.cash },
+              ...holdings.map((h) => ({
+                value: h.currentValue,
+                color: ASSET_COLORS[h.type] || '#fff',
+              })),
+            ],
+            72,
+          )}
+        </div>`,
+          ]),
+      `<div style="text-align:center; min-width:${cellMin}px;">
+        <div style="font-size:${compact ? 10 : 11}px; opacity:0.6; margin-bottom:4px;">现金</div>
+        <div style="font-size:${cellVal}px; font-weight:bold;">¥${this._game.cash.toFixed(2)}</div>
+        ${sparkSvg(
+          this._game.assetHistory.map((p) => p.cash),
+          sparkW,
+          sparkH,
+        )}
+        <div style="font-size:${compact ? 10 : 11}px; opacity:0.4;">活期待投</div>
+      </div>`,
+      ...holdings.map(
+        (h) => `
+      <div data-guide="${h.type}" title="点击了解${nameOf(h.type)}" style="text-align:center; min-width:${cellMin}px; cursor:pointer;">
+        <div style="font-size:${compact ? 10 : 11}px; opacity:0.6; margin-bottom:4px;">${nameOf(h.type)} <span style="display:inline-block;width:12px;height:12px;line-height:11px;border-radius:50%;border:1px solid rgba(255,255,255,0.45);font-size:8px;text-align:center;vertical-align:middle;">?</span></div>
+        <div style="font-size:${cellVal}px; font-weight:bold;">¥${h.currentValue.toFixed(2)}</div>
+        ${sparkSvg(
+          this._game.assetHistory.map((p) => (p as any)[h.type]),
+          sparkW,
+          sparkH,
+        )}
+        <div style="font-size:${compact ? 10 : 11}px; color:${h.returnRate >= 0 ? '#00b894' : '#ff6b6b'}">
+          ${h.returnRate >= 0 ? '+' : ''}${(h.returnRate * 100).toFixed(2)}%
         </div>
-        <div style="font-size:14px; font-weight:bold;">¥${h.currentValue.toFixed(2)}</div>
-        <div style="font-size:11px; color:${h.returnRate >= 0 ? '#00b894' : '#ff6b6b'}">
-          ${(h.returnRate * 100).toFixed(2)}%
-        </div>
-      </div>
-    `).join('');
+      </div>`,
+      ),
+    ].join('');
 
-    // 风险提示
+    // 风险提示（窄屏：抬到资产面板上方；此时面板内容已写入，高度量测准确）
+    const assetH = compact ? assetPanel.offsetHeight : 0;
     const risk = getOrCreate('risk-disclaimer', hud);
     risk.style.cssText = `
-      position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%);
-      color: rgba(255,255,255,0.4); font-size: 11px; text-align: center;
-      white-space: nowrap;
+      position: absolute; bottom: ${compact ? 112 + stripH + assetH : 80}px; left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255,255,255,0.4); font-size: ${compact ? 9 : 11}px; text-align: center;
+      max-width: 94%; line-height: 1.5;
     `;
-    risk.textContent = '⚠ 本沙盘仅财商教育演示，历史回放数据不等于未来收益，不构成投资建议。';
+    risk.textContent =
+      '⚠ 本沙盘仅财商教育演示，历史回放数据不等于未来收益，不构成投资建议。';
 
     // 交易记录日志
     if (tradeRecords && tradeRecords.length > 0) {
       const logPanel = getOrCreate('trade-log', hud);
       logPanel.style.cssText = `
-        position: absolute; left: 16px; bottom: 16px;
+        position: absolute; left: ${compact ? 12 : 16}px; bottom: ${compact ? 152 : 16}px;
+        display: ${compact ? 'none' : 'block'};
         background: rgba(0,0,0,0.6); border-radius: 8px; padding: 8px 12px;
-        color: #fff; font-size: 11px; max-width: 240px;
+        color: #fff; font-size: ${compact ? 10 : 11}px; max-width: ${compact ? 140 : 240}px;
         backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,0.08);
         pointer-events: auto;
       `;
@@ -363,15 +511,192 @@ export class SandboxScene3D {
         <div style="font-size:10px;opacity:0.5;margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:4px;">
           📋 操作记录
         </div>
-        ${tradeRecords.slice(-5).reverse().map((r: any) => `
+        ${tradeRecords
+          .slice(-5)
+          .reverse()
+          .map(
+            (r: any) => `
           <div style="display:flex;gap:6px;margin-bottom:3px;line-height:1.4;">
             <span style="opacity:0.5;min-width:50px;">#${r.sliceIndex}</span>
             <span style="color:${r.action === '买入' || r.action === '存入' || r.action === '申购' ? '#00b894' : '#ff6b6b'};">${r.action}</span>
             <span>${r.description}</span>
           </div>
-        `).join('')}
+        `,
+          )
+          .join('')}
       `;
     }
+  }
+
+  /** 绘制总资产曲线（左上角小图，随屏宽自适应） */
+  private _drawEquityChart(host: HTMLElement): void {
+    const compact = this._container.clientWidth < 720;
+    const boxW = compact ? 150 : 232;
+    const cssH = compact ? 56 : 75;
+
+    host.style.cssText = `
+      position: absolute; left: ${compact ? 12 : 16}px; top: ${compact ? 110 : 16}px;
+      width: ${boxW}px; box-sizing: border-box; padding: 8px 10px 6px;
+      background: rgba(0,0,0,0.6); border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.08); backdrop-filter: blur(6px);
+    `;
+
+    let canvas = host.querySelector('canvas') as HTMLCanvasElement | null;
+    if (!canvas) {
+      const title = document.createElement('div');
+      title.style.cssText =
+        'color:#fff;font-size:11px;opacity:0.55;margin-bottom:6px;letter-spacing:0.5px;';
+      title.textContent = '总资产曲线';
+      host.appendChild(title);
+
+      const legend = document.createElement('div');
+      legend.className = 'equity-legend';
+      legend.style.cssText =
+        'display:flex;gap:8px;font-size:9px;opacity:0.75;margin-bottom:4px;color:#fff;';
+      legend.innerHTML = `
+        <span><span class="legend-actual" style="color:#00b894">●</span> 实际</span>
+        <span><span style="color:#74b9ff">●</span> 全存款</span>
+        <span><span style="color:#fdcb6e">●</span> 全基金</span>`;
+      host.appendChild(legend);
+
+      canvas = document.createElement('canvas');
+      canvas.style.display = 'block';
+      host.appendChild(canvas);
+    }
+
+    const cssW = boxW - 20;
+    if (canvas.style.width !== `${cssW}px`) {
+      canvas.width = cssW * 2; // dpr 2
+      canvas.height = cssH * 2;
+      canvas.style.width = `${cssW}px`;
+      canvas.style.height = `${cssH}px`;
+    }
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const W = canvas.width;
+    const H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    const curve = this._game.equityCurve;
+    const principal = this._game.portfolio.initialPrincipal;
+    const pts = curve.slice(-120);
+    if (pts.length < 2) {
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
+      ctx.font = '20px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('积累 2 个交易日后出图', W / 2, H / 2 + 6);
+      return;
+    }
+
+    // 策略基准（与实际曲线等长、对齐可见窗口）
+    const bench = buildBenchmarks(curve, principal);
+    const dep = bench.allDeposit.slice(-pts.length);
+    const fund = bench.allFund.slice(-pts.length);
+
+    const values = pts.map((p) => p.total).concat(principal, dep, fund);
+    let min = Math.min(...values);
+    let max = Math.max(...values);
+    const pad = Math.max((max - min) * 0.15, Math.abs(max) * 0.002, 1);
+    min -= pad;
+    max += pad;
+
+    const x = (i: number) => (i / (pts.length - 1)) * (W - 8) + 4;
+    const y = (v: number) => H - 8 - ((v - min) / (max - min)) * (H - 16);
+
+    // 本金基准线
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.setLineDash([8, 8]);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(4, y(principal));
+    ctx.lineTo(W - 4, y(principal));
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 策略基准线（全存款 / 全基金，淡色虚线）
+    const dash = (arr: number[], color: string) => {
+      if (arr.length !== pts.length) return;
+      ctx.strokeStyle = color;
+      ctx.setLineDash([4, 6]);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      arr.forEach((v, i) => {
+        const px = x(i);
+        const py = y(v);
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      });
+      ctx.stroke();
+      ctx.setLineDash([]);
+    };
+    dash(dep, 'rgba(116,185,255,0.55)');
+    dash(fund, 'rgba(253,203,110,0.55)');
+
+    // 实际曲线
+    const last = pts[pts.length - 1].total;
+    const up = last >= principal;
+    const actualColor = up ? '#00b894' : '#ff6b6b';
+    const legendActual = host.querySelector(
+      '.legend-actual',
+    ) as HTMLElement | null;
+    if (legendActual) legendActual.style.color = actualColor;
+    ctx.strokeStyle = actualColor;
+    ctx.lineWidth = 4;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    pts.forEach((p, i) => {
+      const px = x(i);
+      const py = y(p.total);
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+
+    // 末端点
+    ctx.fillStyle = up ? '#00b894' : '#ff6b6b';
+    ctx.beginPath();
+    ctx.arc(x(pts.length - 1), y(last), 6, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 买卖点标注（绿▲买入在点上、红▼卖出在点下，仅在可见窗口内）
+    const offset = curve.length - pts.length;
+    for (const m of this._game.getTradeMarkers()) {
+      const li = m.index - offset;
+      if (li < 0 || li >= pts.length) continue;
+      const px = x(li);
+      const py = y(pts[li].total);
+      ctx.fillStyle = m.kind === 'buy' ? '#00b894' : '#ff6b6b';
+      ctx.beginPath();
+      if (m.kind === 'buy') {
+        ctx.moveTo(px, py - 7);
+        ctx.lineTo(px - 4.5, py - 16);
+        ctx.lineTo(px + 4.5, py - 16);
+      } else {
+        ctx.moveTo(px, py + 7);
+        ctx.lineTo(px - 4.5, py + 16);
+        ctx.lineTo(px + 4.5, py + 16);
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // 区间文字
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.font = '18px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText(
+      `¥${Math.min(...pts.map((p) => p.total)).toFixed(0)}`,
+      6,
+      H - 6,
+    );
+    ctx.textAlign = 'right';
+    ctx.fillText(
+      `¥${Math.max(...pts.map((p) => p.total)).toFixed(0)}`,
+      W - 6,
+      H - 6,
+    );
   }
 
   private _animate(): void {

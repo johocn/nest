@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "outDir": ".smoke-out",
+    "rootDir": ".",
+    "sourceMap": false,
+    "lib": ["ES2020", "DOM"]
+  },
+  "include": [
+    "src/config/**/*",
+    "src/core/**/*",
+    "src/entities/**/*",
+    "scripts/**/*"
+  ],
+  "exclude": ["node_modules", "dist", ".smoke-out"]
+}

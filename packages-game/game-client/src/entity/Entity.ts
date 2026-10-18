@@ -26,6 +26,10 @@ export interface EntityOptions {
   y: number;
   color: string;
   texture: Laya.Texture | null;
+  /** 贴图注册表的资源 key（统一加载/占位容错用，可空） */
+  resKey?: string;
+  /** 建筑占地尺寸（单位：格），非建筑类实体不传 */
+  footprint?: { w: number; h: number } | null;
 }
 
 /**
@@ -144,14 +148,21 @@ export class Entity {
    */
   reset(opts: EntityOptions): void {
     if (opts.kind !== this.kind) {
-      throw new Error(`Entity.reset kind 不符：实体 ${this.kind} ≠ 传入 ${opts.kind}`);
+      throw new Error(
+        `Entity.reset kind 不符：实体 ${this.kind} ≠ 传入 ${opts.kind}`,
+      );
     }
     this._entityId = opts.entityId;
     this._spawnId = opts.spawnId;
     this._templateId = opts.templateId;
 
     this.getComponent(TransformComponent)?.reset(opts.x, opts.y);
-    this.getComponent(VisualComponent)?.reset(opts.kind, opts.displayName, opts.color, opts.texture);
+    this.getComponent(VisualComponent)?.reset(
+      opts.kind,
+      opts.displayName,
+      opts.color,
+      opts.texture,
+    );
 
     // 任务标记：清状态并隐藏既有 markText（复用节点，不 new、不 removeChild）
     this.questMark = null;

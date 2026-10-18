@@ -5,6 +5,8 @@ export class DepositAccount {
   readonly type: AssetType = 'deposit';
   principal: number = 0;
   private _rate: number;
+  /** 累计存入本金（不含利息，用于收益率口径） */
+  private _totalInvested: number = 0;
 
   constructor(rate: number) {
     this._rate = rate;
@@ -13,11 +15,16 @@ export class DepositAccount {
   /** 存入 */
   deposit(amount: number): void {
     this.principal += amount;
+    this._totalInvested += amount;
   }
 
   /** 取出 */
   withdraw(amount: number): number {
     const actual = Math.min(amount, this.principal);
+    if (actual <= 0) return 0;
+    // 取出时按同比例冲减本金基数（利息部分优先视为收益）
+    const ratio = this.principal > 0 ? actual / this.principal : 0;
+    this._totalInvested = Math.max(0, this._totalInvested * (1 - ratio));
     this.principal -= actual;
     return actual;
   }
@@ -29,13 +36,21 @@ export class DepositAccount {
     return interest;
   }
 
+  get totalReturn(): number {
+    return this.principal - this._totalInvested;
+  }
+
+  get returnRate(): number {
+    return this._totalInvested > 0 ? this.totalReturn / this._totalInvested : 0;
+  }
+
   toHolding(): AssetHolding {
     return {
       type: this.type,
-      principal: this.principal,
+      principal: this._totalInvested,
       currentValue: this.principal,
-      totalReturn: 0,
-      returnRate: 0,
+      totalReturn: this.totalReturn,
+      returnRate: this.returnRate,
       detail: { rate: this._rate },
     };
   }
@@ -59,7 +74,13 @@ export class CashManagement {
   /** 赎回 */
   redeem(shares: number): number {
     const actual = Math.min(shares, this.shares);
+    if (actual <= 0) return 0;
     const amount = actual * this.nav;
+    // 成本基数按赎回份额比例冲减，避免收益率虚低
+    this._totalInvested = Math.max(
+      0,
+      this._totalInvested * (1 - actual / this.shares),
+    );
     this.shares -= actual;
     return amount;
   }
@@ -162,7 +183,12 @@ export class ClosedEndFund {
       currentValue: this.currentValue,
       totalReturn: this.totalReturn,
       returnRate: this.returnRate,
-      detail: { rate: this._rate, termDays: this._termDays, elapsedDays: this._elapsedDays, isMatured: this._isMatured },
+      detail: {
+        rate: this._rate,
+        termDays: this._termDays,
+        elapsedDays: this._elapsedDays,
+        isMatured: this._isMatured,
+      },
     };
   }
 }
@@ -185,7 +211,13 @@ export class Fund {
   /** 卖出 */
   sell(shares: number): number {
     const actual = Math.min(shares, this.shares);
+    if (actual <= 0) return 0;
     const amount = actual * this.nav;
+    // 成本基数按卖出份额比例冲减，避免收益率虚低
+    this._totalInvested = Math.max(
+      0,
+      this._totalInvested * (1 - actual / this.shares),
+    );
     this.shares -= actual;
     return amount;
   }
@@ -227,31 +259,44 @@ export class PlayerPortfolio {
   fund: Fund;
   cash: number;
 
-  constructor(depositRate: number, closedRate: number, closedTerm: number, initialCash: number) {
+  /** 期初本金（用于收益口径） */
+  readonly initialPrincipal: number;
+
+  constructor(
+    depositRate: number,
+    closedRate: number,
+    closedTerm: number,
+    initialCash: number,
+  ) {
     this.deposit = new DepositAccount(depositRate);
     this.cashMgmt = new CashManagement();
     this.closedFund = new ClosedEndFund(closedRate, closedTerm);
     this.fund = new Fund();
     this.cash = initialCash;
+    this.initialPrincipal = initialCash;
   }
 
   /** 总资产 */
   get totalAssets(): number {
-    return this.cash
-      + this.deposit.principal
-      + this.cashMgmt.currentValue
-      + this.closedFund.currentValue
-      + this.fund.currentValue;
+    return (
+      this.cash +
+      this.deposit.principal +
+      this.cashMgmt.currentValue +
+      this.closedFund.currentValue +
+      this.fund.currentValue
+    );
   }
 
   /** 总收益 */
   get totalReturn(): number {
-    return this.totalAssets - 100000; // 初始本金
+    return this.totalAssets - this.initialPrincipal;
   }
 
   /** 总收益率 */
   get totalReturnRate(): number {
-    return this.totalReturn / 100000;
+    return this.initialPrincipal > 0
+      ? this.totalReturn / this.initialPrincipal
+      : 0;
   }
 
   getAllHoldings(): AssetHolding[] {

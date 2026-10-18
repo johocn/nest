@@ -3,7 +3,11 @@ import { LoginView } from './LoginView';
 import { AppConfig } from '../config/AppConfig';
 import { TextureRegistry } from '../assets/TextureRegistry';
 import { ConfigLoader } from '../config/loader';
-import type { NpcInstanceConfig, SceneConfig, ServerSpawn } from '../config/schema';
+import type {
+  NpcInstanceConfig,
+  SceneConfig,
+  ServerSpawn,
+} from '../config/schema';
 import { AiComponent } from '../entity/components/AiComponent';
 import { BuildingViewComponent } from '../entity/components/BuildComponent';
 import { Entity } from '../entity/Entity';
@@ -22,9 +26,15 @@ import { PlayerControl } from '../world/PlayerControl';
 import { InteractController } from '../world/InteractController';
 import { SceneBuilder } from '../world/SceneBuilder';
 import { BuildPanel } from '../world/BuildPanel';
-import { toBuildingSpawn, upsertBuildingEntity, viewToSpawn } from '../world/build-logic';
+import {
+  toBuildingSpawn,
+  upsertBuildingEntity,
+  viewToSpawn,
+} from '../world/build-logic';
 import { remotePlayerAdapter } from '../world/entity-pool-adapter';
+import { isWorldPaused } from '../world/worldControl';
 import { Toast } from '../ui/Toast';
+import { startWerewolf, showWerewolfEntry } from '../werewolf/startWerewolf';
 import { Hud } from '../ui/Hud';
 import { DialogueView } from '../ui/DialogueView';
 
@@ -46,15 +56,39 @@ interface EnterSceneSync {
 /** S9：进场景前批量预加载（静态物件 + 固定 NPC + 场景背景）；缺图归一为回退占位贴图，不阻塞 */
 function preloadSceneTextures(cfg: SceneConfig): Promise<void> {
   return TextureRegistry.preload([
-    ...cfg.staticEntities.map((e) => e.resKey),
-    ...cfg.fixedNpcs.map((n) => n.resKey),
+    ...cfg.staticEntities.map(e => e.resKey),
+    ...cfg.fixedNpcs.map(n => n.resKey),
     SceneBuilder.bgResKey(cfg),
     // S9：玩家默认贴图无下发来源，按工厂常量取（远端/本地同一张）
     EntityFactory.PLAYER_RES_KEY,
   ]);
 }
 
+/** 是否通过 URL / hash 指定直接进入狼人杀（?ww=1、#ww 均可） */
+function wantWerewolf(): boolean {
+  const q = `${location.search}${location.hash}`;
+  return /ww\s*=\s*1/.test(q) || /(^|[?&#])ww\b/.test(q);
+}
+
+/** F8 热键：捕获阶段注册 + 兼容 key/code/keyCode，避免被引擎输入层拦截 */
+function bindWerewolfHotkey(): void {
+  const open = (e: any) => {
+    if (e?.key === 'F8' || e?.code === 'F8' || e?.keyCode === 119) {
+      e?.preventDefault?.();
+      void startWerewolf();
+    }
+  };
+  (globalThis as any).addEventListener?.('keydown', open, true);
+}
+
 async function afterLogin(): Promise<void> {
+  // 狼人杀入口：URL/hash 指定 → 直接进；否则保留 F8 与右上角悬浮按钮
+  if (wantWerewolf()) {
+    void startWerewolf();
+    return;
+  }
+  bindWerewolfHotkey();
+
   if (Platform.isMiniGame()) {
     // S1 微信端只验收「配置包 + 静态层 + HTTP 登录」，WS 适配见 S7（Task 13）
     const cfg = await ConfigLoader.loadScene();
@@ -79,7 +113,9 @@ async function afterLogin(): Promise<void> {
   state.ws = ws;
 
   // ③ 进场景（应答 cmd 为 world.enter_scene_sync）
-  const sync = await ws.send<EnterSceneSync>('world.enter-scene', { sceneId: cfg.sceneId });
+  const sync = await ws.send<EnterSceneSync>('world.enter-scene', {
+    sceneId: cfg.sceneId,
+  });
   if (sync.code !== 0) throw new Error(`进场景失败：${sync.msg}`);
   console.log(
     `[S1] 进场景应答 cmd=${sync.cmd} scene=${sync.data.scene?.name} 服务端 spawns=${sync.data.spawns.length} triggers=${sync.data.triggers.length}`,
@@ -95,23 +131,29 @@ async function afterLogin(): Promise<void> {
   // 已在注册表中的不重复建；random/patrol 的 npcs:<ruleId>:<slot> 是新实体。
   const npcInstances = sync.data.npcs ?? [];
   // S9：NPC 实例贴图随下发数据预加载（缺图回退占位贴图）
-  await TextureRegistry.preload(npcInstances.map((n) => n.resKey));
+  await TextureRegistry.preload(npcInstances.map(n => n.resKey));
   let npcCreated = 0;
   for (const npc of npcInstances) {
     if (EntityRegistry.get(npc.npcId)) continue;
     SceneBuilder.addEntity(EntityFactory.createFromNpcInstance(npc));
     npcCreated++;
   }
-  console.log(`[S4] NPC 实例下发 ${npcInstances.length} 个（新建 ${npcCreated}）`);
+  console.log(
+    `[S4] NPC 实例下发 ${npcInstances.length} 个（新建 ${npcCreated}）`,
+  );
 
   // ⑤ 自己（addEntity 内部已登记到 EntityRegistry，无需重复 add）
-  const me = EntityFactory.createPlayer(Session.playerId!, cfg.scene.entry.x, cfg.scene.entry.y);
+  const me = EntityFactory.createPlayer(
+    Session.playerId!,
+    cfg.scene.entry.x,
+    cfg.scene.entry.y,
+  );
   SceneBuilder.addEntity(me);
   state.me = me;
   console.log(`[S1] 本地玩家 ${me.entityId} 出生于 (${me.x},${me.y})`);
 
   // ⑥ 世界广播（按 entityType 严格分流，player 分支行为零变更）
-  ws.onBroadcast((m) => {
+  ws.onBroadcast(m => {
     if (m.cmd !== 'world.entity_update') return;
     const d = m.data;
     if (!d) return;
@@ -131,7 +173,11 @@ async function afterLogin(): Promise<void> {
 
       // 不存在 → 仅此路径走对象池；acquire 内部已 reset + snapTo（池适配器），此处再对齐一次
       // 保证「新建」与「复用」都从权威位置出发（不插值队列、不排队）
-      const entity = acquire('player', { playerId: String(d.playerId), x: pos.x, y: pos.y }, remotePlayerAdapter);
+      const entity = acquire(
+        'player',
+        { playerId: String(d.playerId), x: pos.x, y: pos.y },
+        remotePlayerAdapter,
+      );
       SceneBuilder.addEntity(entity);
       entity.getComponent(RemoteInterp)?.snapTo(pos.x, pos.y);
       return;
@@ -149,14 +195,19 @@ async function afterLogin(): Promise<void> {
       // 漏包兜底：按下发数据补建
       console.warn(`[S4] 收到未登记的 NPC 校正 ${d.entityId}，按包内数据补建`);
       SceneBuilder.addEntity(
-        EntityFactory.createFromNpcUpdate(String(d.entityId), String(d.npcTemplateId ?? ''), pos.x, pos.y),
+        EntityFactory.createFromNpcUpdate(
+          String(d.entityId),
+          String(d.npcTemplateId ?? ''),
+          pos.x,
+          pos.y,
+        ),
       );
       return;
     }
 
     // S6：建筑状态广播（建造/落成/拆除）→ 复用 EntityRegistry.upsert 语义，不新增推送机制
     if (d.entityType === 'building') {
-      const res = upsertBuildingEntity(d, (u) =>
+      const res = upsertBuildingEntity(d, u =>
         EntityFactory.createFromBuilding(
           toBuildingSpawn(u, BuildPanel.templateOf(u.templateId)),
           state.buildRule,
@@ -165,13 +216,19 @@ async function afterLogin(): Promise<void> {
       if (!res) return;
       SceneBuilder.addEntity(res.entity);
       // 广播帧不带 finishAt（落成/拆除只需状态）；applyState 缺省保留既有 finishAt，进度条继续可用
-      res.entity.getComponent(BuildingViewComponent)?.applyState(res.update.state);
-      if (res.update.state === 'demolishing') BuildPanel.removeBuilding(res.update.buildingId);
+      res.entity
+        .getComponent(BuildingViewComponent)
+        ?.applyState(res.update.state);
+      if (res.update.state === 'demolishing')
+        BuildPanel.removeBuilding(res.update.buildingId);
     }
   });
 
   // ⑦ 本地移动 → 10Hz 上报
-  new PlayerControl(me, ws, { width: cfg.scene.mapWidth, height: cfg.scene.mapHeight }).attach();
+  new PlayerControl(me, ws, {
+    width: cfg.scene.mapWidth,
+    height: cfg.scene.mapHeight,
+  }).attach();
 
   // ⑧ 就近交互（F 键）
   new InteractController(me).attach();
@@ -183,16 +240,28 @@ async function afterLogin(): Promise<void> {
   //    S8 Task 4：谓词「可见才更新」—— 离屏实体不再做逐帧插值/进度计算（缺省无谓词时行为与基线一致）。
   //    例外：建筑实体始终更新 —— `BuildingViewComponent.update` 不只是视觉插值，还承担**生命周期清理**
   //    （demolishing 淡出到点后从 EntityRegistry 移除）。若把它也冻结，离屏的拆除中建筑会永不回收。
-  Laya.timer.frameLoop(1, null, () =>
+  // 狼人杀对局期间世界层已隐藏：三处循环统一早退，避免隐藏状态下仍做插值/裁剪/重排的无效开销
+  Laya.timer.frameLoop(1, null, () => {
+    if (isWorldPaused()) return;
     EntityRegistry.updateAll(
       Laya.timer.delta,
-      (e) => e.sprite.visible !== false || e.getComponent(BuildingViewComponent) !== null,
-    ),
-  );
+      e =>
+        e.sprite.visible !== false ||
+        e.getComponent(BuildingViewComponent) !== null,
+    );
+  });
   // S8 Task 4：裁剪 tick 先于 resort 注册，保证两者同帧触发时 resort 看到最新可见性
-  Laya.timer.frameLoop(AppConfig.viewport.tickFrames, null, () => SceneBuilder.cull(state.me));
-  Laya.timer.frameLoop(10, null, () => SceneBuilder.resort());
-  console.log(`[S1] 客户端版本 ${AppConfig.clientVersion}，配置包 v${cfg.version}`);
+  Laya.timer.frameLoop(AppConfig.viewport.tickFrames, null, () => {
+    if (isWorldPaused()) return;
+    SceneBuilder.cull(state.me);
+  });
+  Laya.timer.frameLoop(10, null, () => {
+    if (isWorldPaused()) return;
+    SceneBuilder.resort();
+  });
+  console.log(
+    `[S1] 客户端版本 ${AppConfig.clientVersion}，配置包 v${cfg.version}`,
+  );
 }
 
 /** 无规则行的兜底视图（与后端 `BuildRuleService.getRule` 的 forbidden 默认视图同口径，宁可禁用不可误建） */
@@ -216,10 +285,14 @@ function syncBuilding(view: BuildingView): void {
   const existing = EntityRegistry.get(spawn.entityId);
   if (existing) {
     existing.setPos(spawn.x, spawn.y);
-    existing.getComponent(BuildingViewComponent)?.applyState(view.state, view.finishAt);
+    existing
+      .getComponent(BuildingViewComponent)
+      ?.applyState(view.state, view.finishAt);
     return;
   }
-  SceneBuilder.addEntity(EntityFactory.createFromBuilding(spawn, state.buildRule));
+  SceneBuilder.addEntity(
+    EntityFactory.createFromBuilding(spawn, state.buildRule),
+  );
 }
 
 /**
@@ -248,7 +321,7 @@ async function attachBuild(me: Entity, cfg: SceneConfig): Promise<void> {
 
   state.buildRule = rule;
   // S9 Task 3：建筑贴图随蓝图预加载（`BuildingTemplate.resKey`）；缺图静默回退占位贴图，不阻塞建实体
-  await TextureRegistry.preload(templates.map((t) => t.resKey));
+  await TextureRegistry.preload(templates.map(t => t.resKey));
   BuildPanel.attach(
     me,
     SceneBuilder.layer,
@@ -281,6 +354,8 @@ async function main(): Promise<void> {
   Quality.init();
   PerfPanel.init();
   Session.load();
+  // 常驻狼人杀入口（右上角悬浮按钮），与主游戏场景共存
+  showWerewolfEntry();
 
   if (Session.token) {
     console.log('[S1] 复用本地 token');
@@ -289,11 +364,13 @@ async function main(): Promise<void> {
   }
 
   LoginView.show(() => {
-    void afterLogin().catch((err) => Toast.error(err instanceof Error ? err.message : String(err)));
+    void afterLogin().catch(err =>
+      Toast.error(err instanceof Error ? err.message : String(err)),
+    );
   });
 }
 
-main().catch((err) => {
+main().catch(err => {
   console.error('[S1] 启动失败', err);
   Toast.error(err instanceof Error ? err.message : String(err));
 });

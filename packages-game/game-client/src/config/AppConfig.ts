@@ -307,4 +307,57 @@ export const AppConfig = {
      */
     throttleSlackRatio: 0.8,
   },
+
+  /**
+   * 狼人杀（Werewolf）UI 与特效参数：与 hud/dialogue 等统一风格，集中避免魔法数字。
+   * 特效目标：夜/昼转场、死亡灰化+骷髅闪、角色翻牌、倒计时环、票数条、阶段横幅，对标主流狼人杀 App。
+   */
+  werewolf: {
+    /** 根节点 zOrder：须高于 HUD/对话框/建造面板，独立全屏层 */
+    zOrder: 11000,
+    /** 座位环形布局（椭圆） */
+    tableCenterX: 480,
+    tableCenterY: 330,
+    tableRadiusX: 360,
+    tableRadiusY: 230,
+    seatCardW: 96,
+    seatCardH: 120,
+    /** 阶段横幅 */
+    bannerZOrder: 11001,
+    bannerFontSize: 28,
+    bannerColor: '#ffd75e',
+    bannerBg: 'rgba(0,0,0,0.78)',
+    /** 夜/昼转场覆盖层颜色 */
+    nightColor: '#0b1026',
+    dayColor: '#1b2a4a',
+    transitionMs: 700,
+    /** 倒计时环 */
+    ringRadius: 26,
+    ringBgColor: 'rgba(255,255,255,0.15)',
+    ringFgColor: '#ffd75e',
+    ringDangerColor: '#e5484d',
+    /** 角色配色（与 ROLE_META 对应，客户端自绘用） */
+    roleColors: {
+      werewolf: '#e5484d',
+      seer: '#4f9dff',
+      witch: '#a371f7',
+      hunter: '#f0883e',
+      guard: '#3fb950',
+      villager: '#8b949e',
+    } as Record<string, string>,
+    /** 死亡灰化与骷髅闪 */
+    deathSkullColor: '#cfd7e0',
+    deathFadeAlpha: 0.35,
+    /** 翻牌时长 */
+    revealMs: 360,
+    /** 发言面板（左侧） */
+    chatX: 12,
+    chatY: 84,
+    chatW: 240,
+    chatH: 300,
+    chatMaxLines: 9,
+    chatBg: 'rgba(10,13,18,0.66)',
+    /** 座位上方发言气泡存活时长 */
+    bubbleMs: 2600,
+  },
 };

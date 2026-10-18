@@ -131,6 +131,9 @@ export const GameEvents = {
   EXPLORE_SCENE_DISCOVERED: 'explore.scene.discovered',
   ENCOUNTER_TRIGGERED: 'explore.encounter.triggered',
   ENCOUNTER_RESOLVED: 'explore.encounter.resolved',
+
+  // 狼人杀事件
+  WEREWOLF_BROADCAST: 'werewolf.broadcast',
 } as const;
 
 export type GameEvent = (typeof GameEvents)[keyof typeof GameEvents];

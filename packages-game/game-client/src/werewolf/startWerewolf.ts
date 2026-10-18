@@ -1,6 +1,7 @@
 import { AppConfig } from '../config/AppConfig';
 import { WerewolfClient, WerewolfSync } from './WerewolfClient';
 import { WerewolfView } from './WerewolfView';
+import { pauseWorld, resumeWorld } from '../world/worldControl';
 
 let client: WerewolfClient | null = null;
 let view: WerewolfView | null = null;
@@ -86,6 +87,9 @@ function hideWerewolfEntry(): void {
 /** 启动狼人杀（复用 nest 游戏框架的网络/UI 基础设施） */
 export async function startWerewolf(): Promise<void> {
   if (view) return; // 已在运行
+  // 先挂起主世界：否则世界层持续渲染/接收输入，表现为「狼人杀叠着主世界场景」
+  // （?ww=1 直入时世界层尚未创建，pauseWorld 为 no-op，安全）
+  pauseWorld();
   hideWerewolfEntry(); // 进入后收起悬浮入口，避免遮挡对局界面
   try {
     client = new WerewolfClient();
@@ -105,6 +109,7 @@ export async function startWerewolf(): Promise<void> {
     // 启动失败必须可见：否则表现为「点了没反应」
     view = null;
     client = null;
+    resumeWorld(); // 失败回滚：世界层必须恢复，否则主世界会被永久隐藏
     console.error('[WW] 狼人杀启动失败', err);
     flash(
       `狼人杀启动失败：${err instanceof Error ? err.message : String(err)}`,
@@ -119,6 +124,7 @@ export function stopWerewolf(): void {
   hideLobby();
   view = null;
   client = null;
+  resumeWorld(); // 退出对局后恢复主世界
   showWerewolfEntry(); // 退出后恢复入口
 }
 
@@ -127,12 +133,13 @@ function buildLobby(): void {
   if (lobby) lobby.removeSelf();
   lobby = new Laya.Sprite();
   lobby.zOrder = AppConfig.werewolf.zOrder + 100;
+  // 完全不透明：半透明背景会让底下的主世界层隐约透出（表现为「狼人杀叠着主世界场景」）
   lobby.graphics.drawRect(
     0,
     0,
     AppConfig.stageWidth,
     AppConfig.stageHeight,
-    'rgba(8,10,14,0.94)',
+    '#080a0e',
   );
 
   const title = new Laya.Text();

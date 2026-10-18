@@ -2,6 +2,7 @@ import { AppConfig } from '../config/AppConfig';
 import type { Entity } from '../entity/Entity';
 import type { WsClient } from '../net/ws';
 import { clampToMapBounds, moveDelta } from './move-step';
+import { isWorldPaused } from './worldControl';
 
 // Laya 的 KEY_DOWN/KEY_UP 事件对象不携带 keyCode，只代理 nativeEvent.key（见引擎 Event.key 定义），
 // 故用归一化后的小写字符串判定按键。
@@ -32,10 +33,15 @@ export class PlayerControl {
     Laya.stage.on(Laya.Event.KEY_DOWN, this, this.onKeyDown);
     Laya.stage.on(Laya.Event.KEY_UP, this, this.onKeyUp);
     Laya.timer.frameLoop(1, this, this.onFrame);
-    console.log('[S1] 移动控制就绪：WASD / 方向键；移动中约 10Hz 上报 world.move');
+    console.log(
+      '[S1] 移动控制就绪：WASD / 方向键；移动中约 10Hz 上报 world.move',
+    );
   }
 
   private onKeyDown(e: Laya.Event): void {
+    // 主世界挂起（狼人杀对局中）时不再接受移动按键；
+    // keyUp 故意不早退，否则暂停期间松手会残留「一直按住」的幽灵状态
+    if (isWorldPaused()) return;
     this.pressed.add(PlayerControl.normKey(e));
   }
 
@@ -53,6 +59,9 @@ export class PlayerControl {
    * 上报口径（`moveReportIntervalMs` / `moveReportThreshold`）与上报时机**逐字未改**。
    */
   private onFrame(): void {
+    // 主世界挂起（狼人杀对局中）：不再位移、也不发 world.move，
+    // 否则会出现「人在对局界面里偷偷移动」并持续占用上报带宽
+    if (isWorldPaused()) return;
     const p = this.pressed;
     let dx = 0;
     let dy = 0;
@@ -62,7 +71,12 @@ export class PlayerControl {
     if (p.has(KEY_DOWN) || p.has(KEY_ARROW_DOWN)) dy += 1;
     if (!dx && !dy) return;
 
-    const step = moveDelta(dx, dy, AppConfig.moveSpeedPxPerMs, Laya.timer.delta);
+    const step = moveDelta(
+      dx,
+      dy,
+      AppConfig.moveSpeedPxPerMs,
+      Laya.timer.delta,
+    );
     const next = clampToMapBounds(
       this.me.x + step.x,
       this.me.y + step.y,
@@ -73,12 +87,19 @@ export class PlayerControl {
 
     const now = Date.now();
     const moved = Math.hypot(this.me.x - this.lastX, this.me.y - this.lastY);
-    if (now - this.sinceReport >= AppConfig.moveReportIntervalMs && moved >= AppConfig.moveReportThreshold) {
+    if (
+      now - this.sinceReport >= AppConfig.moveReportIntervalMs &&
+      moved >= AppConfig.moveReportThreshold
+    ) {
       this.sinceReport = now;
       this.lastX = this.me.x;
       this.lastY = this.me.y;
       // fire-and-forget：expectAck=false 的 Promise 永不 settle，不要 await
-      this.ws.send('world.move', { x: this.me.x, y: this.me.y, rotation: 0, state: 'move' }, false);
+      this.ws.send(
+        'world.move',
+        { x: this.me.x, y: this.me.y, rotation: 0, state: 'move' },
+        false,
+      );
     }
   }
 }

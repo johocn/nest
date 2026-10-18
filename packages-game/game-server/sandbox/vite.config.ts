@@ -8,10 +8,21 @@ export default defineConfig({
     assetsDir: 'assets',
   },
   server: {
+    host: true,
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: 'http://localhost:8787',
+        changeOrigin: true,
+      },
+    },
+  },
+  preview: {
+    host: true,
+    port: 4173,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8787',
         changeOrigin: true,
       },
     },

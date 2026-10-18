@@ -254,6 +254,22 @@ export const ErrorCodes = {
   BUILD_NOT_FOUND: 44004, // 建筑实例不存在或不可操作
   COOP_NOT_READY: 44005, // 共建未达人数/投料门槛
   COOP_EXPIRED: 44006, // 共建已超时
+
+  // 狼人杀 45001-45099
+  WEREWOLF_NOT_IN_ROOM: 45001, // 不在房间内
+  WEREWOLF_ROOM_FULL: 45002, // 房间已满 / 人数不足无法开局
+  WEREWOLF_NOT_HOST: 45003, // 仅房主可操作
+  WEREWOLF_ALREADY_STARTED: 45004, // 对局已开始
+  WEREWOLF_NOT_YOUR_TURN: 45005, // 当前不是你的行动阶段
+  WEREWOLF_DEAD_CANNOT_ACT: 45006, // 已出局，无法行动
+  WEREWOLF_INVALID_TARGET: 45007, // 非法目标
+  WEREWOLF_WITCH_NO_ANTIDOTE: 45008, // 女巫无可用的解药
+  WEREWOLF_WITCH_NO_POISON: 45009, // 女巫无可用的毒药
+  WEREWOLF_WITCH_CANNOT_BOTH: 45010, // 女巫同一晚不能同时用两瓶药
+  WEREWOLF_GUARD_SAME_TARGET: 45011, // 守卫不能连续两晚守护同一人
+  WEREWOLF_GAME_NOT_RUNNING: 45012, // 对局未在进行中
+  WEREWOLF_CANNOT_SPEAK: 45013, // 当前阶段不可发言 / 遗言已用完
+  WEREWOLF_EMPTY_MESSAGE: 45014, // 发言内容为空
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

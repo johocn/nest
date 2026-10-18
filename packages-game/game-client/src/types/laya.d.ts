@@ -1,1 +1,1 @@
-/// <reference path="D:/Program Files/LayaAirIDE/resources/engine/types/LayaAir.d.ts" />
+/// <reference path="C:/Users/lenovo/AppData/Local/Programs/LayaAirIDE/resources/engine/types/LayaAir.d.ts" />

@@ -81,7 +81,7 @@ export class TradingStateMachine {
   subscribe(listener: StateListener): () => void {
     this._listeners.push(listener);
     return () => {
-      this._listeners = this._listeners.filter(l => l !== listener);
+      this._listeners = this._listeners.filter((l) => l !== listener);
     };
   }
 
@@ -107,9 +107,10 @@ export class TradingStateMachine {
       pre_open: ['trading', 'holiday'],
       trading: ['suspended', 'forced_close', 'holiday'],
       suspended: ['trading', 'forced_close'],
-      forced_close: ['settlement', 'holiday'],
+      forced_close: ['settlement', 'holiday', 'pre_open'],
       holiday: ['idle', 'pre_open', 'holiday'],
-      settlement: ['idle', 'holiday'],
+      // 收盘清算后可直接进入下一交易日的预开盘（跨日循环）
+      settlement: ['idle', 'holiday', 'pre_open'],
     };
     return rules[from]?.includes(to) ?? false;
   }

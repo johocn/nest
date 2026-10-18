@@ -12,6 +12,7 @@ import { BuildPanel } from './BuildPanel';
 import { DialogueView, normalizeChoose } from '../ui/DialogueView';
 import type { DialogueNodeView } from '../ui/DialogueView';
 import { Hud } from '../ui/Hud';
+import { isWorldPaused } from './worldControl';
 
 /** 交互键：Laya 的 KEY_DOWN 事件只代理 nativeEvent.key（不带 keyCode），故用归一化小写 'f' 判定 */
 const KEY_INTERACT = 'f';
@@ -55,6 +56,11 @@ export class InteractController {
    * （不每帧重写 hint：组件可能正用 hint 展示长文本，如 ReadComponent 的阅读文案。）
    */
   private pickAndHighlight(): void {
+    // 主世界挂起（狼人杀对局中）：清掉屏上高亮/提示，避免残留到对局界面之上
+    if (isWorldPaused()) {
+      this.clearHighlight();
+      return;
+    }
     const picked = this.pick();
     Hud.highlight(picked ? picked.entity : null);
 
@@ -64,16 +70,37 @@ export class InteractController {
     Hud.hint(picked ? `按 F 交互：${picked.entity.entityId}` : null);
   }
 
+  /** 清掉高亮与提示条；`lastHintId` 一并复位，保证恢复后能重新提示 */
+  private clearHighlight(): void {
+    Hud.highlight(null);
+    if (this.lastHintId !== null) {
+      this.lastHintId = null;
+      Hud.hint(null);
+    }
+  }
+
   private pick(): PickedTarget | null {
-    return pickTarget(EntityRegistry.all(), this.me, InteractController.radiusOf, Session.token ?? '');
+    return pickTarget(
+      EntityRegistry.all(),
+      this.me,
+      InteractController.radiusOf,
+      Session.token ?? '',
+    );
   }
 
   /** 交互半径按目标类型取值：人（NPC）90 / 物（object）70 */
-  private static radiusOf: RadiusOf = (e) =>
-    e.kind === 'npc' ? AppConfig.interactRadiusNpc : AppConfig.interactRadiusObject;
+  private static radiusOf: RadiusOf = e =>
+    e.kind === 'npc'
+      ? AppConfig.interactRadiusNpc
+      : AppConfig.interactRadiusObject;
 
   private async onKeyDown(e: Laya.Event): Promise<void> {
-    const key = String((e as unknown as { key?: string }).key ?? '').toLowerCase();
+    // 主世界挂起（狼人杀对局中）：屏蔽 B/F 等世界快捷键，
+    // 否则对局里打字或误触会弹出建造面板 / 触发远处交互
+    if (isWorldPaused()) return;
+    const key = String(
+      (e as unknown as { key?: string }).key ?? '',
+    ).toLowerCase();
 
     // S6 建造键 B：打开/关闭建造面板。面板自身在 forbidden 场景展示「此场景不允许建造」并禁用操作行
     if (key === KEY_BUILD) {
@@ -112,7 +139,7 @@ export class InteractController {
         me: this.me,
         target,
         token: Session.token ?? '',
-        onDialogue: (view) => this.openDialogue(target, view),
+        onDialogue: view => this.openDialogue(target, view),
       });
     } finally {
       this.busy = false;
@@ -122,7 +149,7 @@ export class InteractController {
   /** talk 成功 → 打开对话视图，并把服务端下发的任务标记画到该 NPC 头顶（D8） */
   private openDialogue(target: Entity, view: DialogueNodeView): void {
     this.dialogue = { code: view.code, nodeKey: view.nodeKey ?? '' };
-    DialogueView.open(view, (optionIndex) => void this.choose(optionIndex));
+    DialogueView.open(view, optionIndex => void this.choose(optionIndex));
     this.applyQuestMarks(target, view.questMarks);
   }
 
@@ -153,7 +180,8 @@ export class InteractController {
       void this.refreshQuestMarks(target);
     } catch (err) {
       // 失败不推进节点（D3）：红字提示，玩家可清包后重选
-      if (err instanceof ApiError) DialogueView.showError(err.code, err.message);
+      if (err instanceof ApiError)
+        DialogueView.showError(err.code, err.message);
       else DialogueView.showError(-1, String(err));
     } finally {
       this.choosing = false;
