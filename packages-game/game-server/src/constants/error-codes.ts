@@ -331,6 +331,10 @@ export const ErrorCodes = {
   WEREWOLF_GAME_NOT_RUNNING: 49012, // 对局未在进行中
   WEREWOLF_CANNOT_SPEAK: 49013, // 当前阶段不可发言 / 遗言已用完
   WEREWOLF_EMPTY_MESSAGE: 49014, // 发言内容为空
+
+  // 跨游戏记录 48001-48099
+  CROSS_GAME_TARGET_INVALID: 48001, // targetGameId 不在白名单（数据会写错游戏，拒绝）
+  CROSS_GAME_RECORD_FAILED: 48002, // 跨游戏记录写入失败（服务端异常）
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
