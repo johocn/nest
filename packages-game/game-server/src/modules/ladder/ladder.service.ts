@@ -32,6 +32,16 @@ const SEASON_REWARDS: Array<{
   { rankMin: 11, rankMax: 50, vipExp: 500, gold: 5000 },
 ];
 
+/** 斗地主三方段位摆动：地主(1) vs 农民(2)。胜方加分+连胜加成，负方扣分（地主判负扣双倍）。返回分数增量。 */
+export function computeDoudizhuLadderDelta(
+  isLandlord: boolean,
+  won: boolean,
+  streak: number,
+): number {
+  if (won) return 25 + Math.min(Math.max(streak, 0), 6) * 5;
+  return isLandlord ? -40 : -18;
+}
+
 @Injectable()
 export class LadderService {
   private readonly logger = new Logger(LadderService.name);
@@ -258,6 +268,46 @@ export class LadderService {
       });
     } catch (err) {
       this.logger.error('Ladder settle failed', (err as Error).message);
+    }
+  }
+
+  // ===== 斗地主三方段位结算 =====
+
+  /** 监听斗地主对局结束，更新三方（地主 vs 两农民）天梯分 */
+  async settleDoudizhu(payload: {
+    seats: { seat: number; playerId: string }[];
+    scores: number[];
+    landlordSeat: number;
+    landlordWin: boolean;
+  }): Promise<void> {
+    try {
+      const season = await this.getSeason();
+      for (const { seat, playerId } of payload.seats) {
+        const rec = await this.getRecord(playerId);
+        const isLandlord = seat === payload.landlordSeat;
+        const won = isLandlord ? payload.landlordWin : !payload.landlordWin;
+        const delta = computeDoudizhuLadderDelta(isLandlord, won, rec.streak);
+        if (won) {
+          rec.score += delta;
+          rec.wins += 1;
+          rec.streak += 1;
+        } else {
+          rec.score = Math.max(100, rec.score + delta);
+          rec.losses += 1;
+          rec.streak = 0;
+        }
+        await this.ladderRepo.save(rec);
+        await this.syncPlayerScore(playerId, rec.score, season);
+      }
+      this.eventBus.emit(GameEvents.LADDER_MATCH_SETTLED, {
+        mode: 'doudizhu',
+        season,
+      });
+    } catch (err) {
+      this.logger.error(
+        'Doudizhu ladder settle failed',
+        (err as Error).message,
+      );
     }
   }
 

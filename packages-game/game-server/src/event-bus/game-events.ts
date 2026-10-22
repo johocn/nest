@@ -158,6 +158,13 @@ export const GameEvents = {
   GUANDAN_TABLE_FINISHED: 'guandan.table.finished',
   GUANDAN_TABLE_TIMEOUT: 'guandan.table.timeout',
 
+  // 斗地主模块事件
+  DOUDIZHU_TABLE_CREATED: 'doudizhu.table.created',
+  DOUDIZHU_TABLE_UPDATED: 'doudizhu.table.updated',
+  DOUDIZHU_TABLE_FINISHED: 'doudizhu.table.finished',
+  DOUDIZHU_TABLE_TIMEOUT: 'doudizhu.table.timeout',
+  DOUDIZHU_MATCHED: 'doudizhu.match.matched',
+
   // 三国杀（标准身份局）模块事件
   SANGUOSHA_TABLE_CREATED: 'sanguosha.table.created',
   SANGUOSHA_TABLE_UPDATED: 'sanguosha.table.updated',

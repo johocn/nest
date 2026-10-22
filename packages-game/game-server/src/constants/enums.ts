@@ -956,6 +956,21 @@ export enum GuandanTableStatus {
   FINISHED = 'finished',
 }
 
+// ===== 斗地主模块枚举 =====
+
+/** 斗地主对局模式：ai=房主建房+2AI 补位；net=联网房（空位由 AI 补位） */
+export enum DoudizhuMode {
+  AI = 'ai',
+  NET = 'net',
+}
+
+/** 斗地主牌桌状态 */
+export enum DoudizhuTableStatus {
+  WAITING = 'waiting',
+  PLAYING = 'playing',
+  FINISHED = 'finished',
+}
+
 // ===== 三国杀（标准身份局）模块枚举 =====
 
 /** 对局模式：ai=房主建房+AI 补位；net=联网房（空位由 AI 补位） */
