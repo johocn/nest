@@ -83,6 +83,16 @@ export class AuthController {
     return this.authService.ssoPasswordLogin(dto.username, dto.password);
   }
 
+  @Public()
+  @Post('sso/token-login')
+  @ApiOperation({
+    summary: 'SSO 统一登录页 accessToken 直验换发 game JWT',
+  })
+  @RateLimit({ windowSeconds: 60, maxRequests: 20 })
+  ssoTokenLogin(@Body() body: { accessToken?: string }) {
+    return this.authService.loginWithSsoAccessToken(body?.accessToken ?? '');
+  }
+
   @UseGuards(JwtAuthGuard)
   @Post('security/verify')
   @ApiOperation({ summary: '风控确认（记录本人确认事件）' })

@@ -202,6 +202,20 @@ export class AuthService {
 
   async handleSsoCallback(code: string): Promise<AuthResult> {
     const ssoUser = await this.exchangeSsoCode(code);
+    return this.loginBySsoUser(ssoUser);
+  }
+
+  /** SSO 统一登录页回跳的 accessToken 直验换发 game JWT（与 code 回调同一条建档/绑定链路）。 */
+  async loginWithSsoAccessToken(accessToken: string): Promise<AuthResult> {
+    if (!accessToken) {
+      throw new GameException(ErrorCodes.SSO_AUTH_FAILED, '缺少 SSO token');
+    }
+    const ssoUser = await this.fetchSsoUserByToken(accessToken);
+    return this.loginBySsoUser(ssoUser);
+  }
+
+  /** 以 ssoId 幂等查找/创建本地账号与玩家，战绩与排行榜都挂在这个稳定 playerId 上。 */
+  private async loginBySsoUser(ssoUser: SsoUserInfo): Promise<AuthResult> {
     let account = await this.accountRepo.findOne({
       where: { ssoId: ssoUser.ssoId },
     });
@@ -295,6 +309,37 @@ export class AuthService {
     return {
       ssoId: String(data.user.uuid),
       username: String(data.user.username ?? ''),
+    };
+  }
+
+  /** 校验统一登录页回跳的 SSO accessToken（zhao-sso /v1/user/me），返回稳定 ssoId。 */
+  private async fetchSsoUserByToken(accessToken: string): Promise<SsoUserInfo> {
+    let response: globalThis.Response;
+    try {
+      response = await fetch(`${this.ssoBaseUrl}/api/zhao-sso/v1/user/me`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        signal: AbortSignal.timeout(3000),
+      });
+    } catch {
+      throw new GameException(ErrorCodes.SSO_AUTH_FAILED, 'SSO 认证服务不可用');
+    }
+    if (!response.ok) {
+      throw new GameException(
+        ErrorCodes.SSO_AUTH_FAILED,
+        'SSO 登录已过期，请重新登录',
+      );
+    }
+    const data = (await response.json().catch(() => null)) as {
+      uuid?: string;
+      id?: number;
+      username?: string;
+    } | null;
+    if (!data?.uuid) {
+      throw new GameException(ErrorCodes.SSO_AUTH_FAILED, 'SSO 用户信息缺失');
+    }
+    return {
+      ssoId: String(data.uuid),
+      username: String(data.username ?? ''),
     };
   }
 
