@@ -71,14 +71,14 @@ describe('DoudizhuMatchService', () => {
       }),
     );
     // 已撮合的人不应再被超时补齐重复建桌
-    await jest.advanceTimersByTimeAsync(10_000);
+    await jest.advanceTimersByTimeAsync(60_000);
     expect(table.createMatchTable).toHaveBeenCalledTimes(1);
   });
 
-  it('单人等待 10s 后用 bot 补齐开局', async () => {
+  it('单人等待 60s 后用 bot 补齐开局', async () => {
     const { service, table, eventBus } = setup();
     await service.join('1', 1000);
-    await jest.advanceTimersByTimeAsync(9_000);
+    await jest.advanceTimersByTimeAsync(59_000);
     expect(table.createMatchTable).not.toHaveBeenCalled();
 
     await jest.advanceTimersByTimeAsync(1_000);
@@ -95,12 +95,12 @@ describe('DoudizhuMatchService', () => {
     await service.join('1', 1000);
     await jest.advanceTimersByTimeAsync(3_000);
     await service.join('2', 1000);
-    await jest.advanceTimersByTimeAsync(7_000);
+    await jest.advanceTimersByTimeAsync(57_000);
 
     expect(table.createMatchTable).toHaveBeenCalledTimes(1);
     expect(table.createMatchTable).toHaveBeenCalledWith(['1', '2'], 'normal');
     // 第一个人的定时器已把两人一起带走，第二人定时器到点不应重复建桌
-    await jest.advanceTimersByTimeAsync(10_000);
+    await jest.advanceTimersByTimeAsync(60_000);
     expect(table.createMatchTable).toHaveBeenCalledTimes(1);
   });
 
@@ -108,7 +108,7 @@ describe('DoudizhuMatchService', () => {
     const { service, table } = setup();
     await service.join('1', 1000);
     await service.cancel('1');
-    await jest.advanceTimersByTimeAsync(10_000);
+    await jest.advanceTimersByTimeAsync(60_000);
     expect(table.createMatchTable).not.toHaveBeenCalled();
   });
 });

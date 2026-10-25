@@ -372,6 +372,20 @@ export class DoudizhuGateway
     }
   }
 
+  // ===== 牌桌状态变化 → 推送给同桌真人（自动补位/超时托管/回合切换等） =====
+
+  /** 牌桌更新（入座/开局/动作）后刷新各座位视角 */
+  @OnEvent('doudizhu:table:updated')
+  async onTableUpdated(payload: { tableId: string }) {
+    if (payload?.tableId) await this.pushViews(payload.tableId);
+  }
+
+  /** 回合超时后 AI 代打，刷新各座位视角 */
+  @OnEvent('doudizhu:table:timeout')
+  async onTableTimeout(payload: { tableId: string }) {
+    if (payload?.tableId) await this.pushViews(payload.tableId);
+  }
+
   // ===== 匹配（3 人撮合，独立于通用 2 人 matchmaking） =====
 
   /** 匹配成功后通知每位玩家去加入对应斗地主桌（socket 只在本命名空间注册） */

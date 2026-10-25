@@ -1,4 +1,5 @@
 import { DoudizhuTableService } from './doudizhu-table.service';
+import { DoudizhuMode, DoudizhuTableStatus } from '@constants/enums';
 
 /** 内存版缓存，仅覆盖桌态用到的 get/set */
 class FakeCache {
@@ -122,5 +123,43 @@ describe('DoudizhuTableService 匹配桌开局闸门', () => {
         choice: 'grab',
       }),
     ).rejects.toThrow();
+  });
+});
+
+describe('DoudizhuTableService 好友房自动开局', () => {
+  it('3 名真人入座后无需房主点开始，自动开局', async () => {
+    const { svc, cache } = buildService();
+    const { tableId } = await svc.createTable(
+      'host',
+      DoudizhuMode.NET,
+      'sock-host',
+    );
+    await svc.joinTable(tableId, 'f1', 'sock-f1');
+    await svc.joinTable(tableId, 'f2', 'sock-f2');
+
+    const raw = JSON.parse((await cache.get(keyOf(tableId))) as string);
+    expect(raw.status).toBe(DoudizhuTableStatus.PLAYING);
+    const view = await svc.viewBySeat(tableId, 0);
+    expect(view.state.phase).toBe('bidding');
+    expect(view.players.map((p) => p.handCount)).toEqual([17, 17, 17]);
+  });
+
+  it('1 分钟未满员：自动补 AI 开局', async () => {
+    const { svc, cache } = buildService();
+    const { tableId } = await svc.createTable(
+      'host',
+      DoudizhuMode.NET,
+      'sock-host',
+    );
+    await svc.joinTable(tableId, 'f1', 'sock-f1');
+
+    await (svc as any).autoStartRoom(tableId);
+    const raw = JSON.parse((await cache.get(keyOf(tableId))) as string);
+    expect(raw.status).toBe(DoudizhuTableStatus.PLAYING);
+    expect(raw.members.filter((m: string) => m.startsWith('bot'))).toHaveLength(
+      1,
+    );
+    const view = await svc.viewBySeat(tableId, 0);
+    expect(view.state.phase).toBe('bidding');
   });
 });

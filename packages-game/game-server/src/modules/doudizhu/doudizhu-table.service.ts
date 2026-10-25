@@ -55,6 +55,8 @@ interface DoudizhuTable {
 const TABLE_TTL = 3600; // 1 小时
 /** 匹配桌等待真人入座上限：超时则缺位按 AI 托管推进 */
 const KICK_OFF_WAIT_MS = 15_000;
+/** 好友房等待满员上限：超时自动 AI 补位开局 */
+const ROOM_AUTO_START_MS = 60_000;
 
 @Injectable()
 export class DoudizhuTableService {
@@ -67,6 +69,8 @@ export class DoudizhuTableService {
   private kickOffTimers = new Map<string, NodeJS.Timeout>();
   /** 牌桌级串行锁（入座并发保护） */
   private tableLocks = new Map<string, Promise<unknown>>();
+  /** 好友房等待满员的兜底定时器 */
+  private autoStartTimers = new Map<string, NodeJS.Timeout>();
 
   constructor(
     private readonly cache: CacheService,
@@ -163,6 +167,9 @@ export class DoudizhuTableService {
       this.scheduleTurn(table);
       await this.saveTable(table);
       this.eventBus.emit('doudizhu:table:updated', { tableId: id });
+    } else {
+      // 好友房：1 分钟内未满员则自动补 AI 开局
+      this.scheduleAutoStart(id);
     }
     return {
       tableId: id,
@@ -219,7 +226,55 @@ export class DoudizhuTableService {
     this.scheduleTurn(table);
     await this.saveTable(table);
     this.eventBus.emit('doudizhu:table:updated', { tableId });
+
+    // 好友房 3 名真人已齐：无需房主点开始，直接开局
+    if (
+      table.mode === DoudizhuMode.NET &&
+      table.status === DoudizhuTableStatus.WAITING &&
+      table.members.every((m) => !!m && !m.startsWith('bot'))
+    ) {
+      const host = table.members[0] as string;
+      await this.startTable(tableId, host).catch((err: any) =>
+        this.logger.warn(
+          `[Doudizhu] auto start ${tableId} failed: ${err?.message}`,
+        ),
+      );
+    }
     return { seat, view: await this.toView(table, seat) };
+  }
+
+  // ===== 好友房自动开局（1 分钟未满员补 AI） =====
+
+  private scheduleAutoStart(tableId: string): void {
+    this.clearAutoStart(tableId);
+    const timer = setTimeout(() => {
+      void this.autoStartRoom(tableId).catch((err: any) =>
+        this.logger.warn(
+          `[Doudizhu] auto start ${tableId} failed: ${err?.message}`,
+        ),
+      );
+    }, ROOM_AUTO_START_MS);
+    timer.unref?.();
+    this.autoStartTimers.set(tableId, timer);
+  }
+
+  private clearAutoStart(tableId: string): void {
+    const timer = this.autoStartTimers.get(tableId);
+    if (timer) {
+      clearTimeout(timer);
+      this.autoStartTimers.delete(tableId);
+    }
+  }
+
+  private async autoStartRoom(tableId: string): Promise<void> {
+    this.autoStartTimers.delete(tableId);
+    const table = await this.loadTable(tableId);
+    if (!table || table.mode !== DoudizhuMode.NET) return;
+    if (table.status !== DoudizhuTableStatus.WAITING) return;
+    const human = table.members.find((m) => !!m && !m.startsWith('bot'));
+    if (!human) return; // 无人在座，等 Redis TTL 回收
+    this.logger.log(`[Doudizhu] ${tableId} 1 分钟未满员，自动 AI 补位开局`);
+    await this.startTable(tableId, human);
   }
 
   /** 断线：清空 socket 并保留座位便于重连；若正轮到该座位则立即 AI 接管 */
@@ -266,7 +321,7 @@ export class DoudizhuTableService {
         ErrorCodes.DOUDIZHU_TABLE_NOT_FOUND,
         '牌桌不存在或已解散',
       );
-    if (table.members[0] !== playerId)
+    if (table.members[0] !== playerId && table.members[0])
       throw new GameException(ErrorCodes.DOUDIZHU_NOT_HOST, '只有房主可以开局');
     if (table.mode !== DoudizhuMode.NET)
       throw new GameException(
@@ -276,6 +331,7 @@ export class DoudizhuTableService {
     if (table.status === DoudizhuTableStatus.PLAYING)
       throw new GameException(ErrorCodes.DOUDIZHU_INVALID_ACTION, '对局已开始');
 
+    this.clearAutoStart(tableId);
     this.fillBots(table);
     const g = new DoudizhuGame({
       rng: Math.random,
@@ -734,10 +790,12 @@ export class DoudizhuTableService {
       table.sockets[seat] != null;
     if (!manual) return;
     table.turnDeadline = Date.now() + this.TURN_MS;
-    this.timers.set(
-      table.id,
-      setTimeout(() => void this.onTurnTimeout(table.id), this.TURN_MS + 250),
+    const timer = setTimeout(
+      () => void this.onTurnTimeout(table.id),
+      this.TURN_MS + 250,
     );
+    timer.unref?.();
+    this.timers.set(table.id, timer);
   }
 
   private clearTimer(tableId: string) {

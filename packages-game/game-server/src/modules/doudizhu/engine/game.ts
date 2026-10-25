@@ -135,7 +135,9 @@ export class DoudizhuGame {
     this.grabs[seat] = grab;
     this.emit({ type: 'bid', player: seat });
     this.current = this.nextSeat(this.current);
-    if (this.grabs.filter((b) => b !== undefined).length >= 3) {
+    // 注意：状态经 JSON 序列化恢复后，稀疏数组的空洞会变成 null，
+    // 这里必须把 null 视为「未操作」，否则首叫者不是 0 号座位时会被提前判定为抢完。
+    if (this.grabs.filter((b) => b !== undefined && b !== null).length >= 3) {
       let lord = -1;
       // 按轮转链从首叫者起取“最后抢者”
       let s = this.firstBidder;
@@ -195,7 +197,10 @@ export class DoudizhuGame {
     else if (action === 'super') this.multiplier *= 4;
     this.emit({ type: 'bid', player: this.current, landlord: -1 });
     this.current = this.nextSeat(this.current);
-    if (this.doubleDecisions.filter((d) => d !== undefined).length >= 3) {
+    if (
+      this.doubleDecisions.filter((d) => d !== undefined && d !== null)
+        .length >= 3
+    ) {
       this.phase = 'playing';
       return { done: true, landlord: this.landlord };
     }

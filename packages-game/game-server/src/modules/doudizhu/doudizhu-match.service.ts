@@ -12,7 +12,7 @@ const PLAYER_KEY = (pid: string) => `doudizhu:match:player:${pid}`;
 const MATCH_SIZE = 3;
 const POWER_RANGE = 0.25; // 战力差距上限 25%
 /** 队列最长等待（毫秒）：到点仍不足 3 人则用 bot 补齐开局，避免「匹配中」永久等待 */
-const FILL_WITH_BOTS_MS = 10_000;
+const FILL_WITH_BOTS_MS = 60_000;
 
 /**
  * 斗地主 3 人匹配（最小增量，独立于通用 2 人 matchmaking）：

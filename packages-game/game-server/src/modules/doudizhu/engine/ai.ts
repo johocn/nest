@@ -194,6 +194,13 @@ export function generateBeats(hand: Card[], prev: CardType | null): Card[][] {
         }
       break;
   }
+
+  // 炸弹/火箭可压任何非炸弹牌型（此前遗漏，导致 AI 危急时也不会炸）
+  if (prev.type !== 'bomb' && prev.type !== 'rocket') {
+    for (const r of ranks) if (cnt[r] === 4) tryPush(byRank(hand, r, 4));
+    if (cnt[16] && cnt[17])
+      tryPush([...byRank(hand, 16, 1), ...byRank(hand, 17, 1)]);
+  }
   return res;
 }
 
@@ -229,20 +236,37 @@ function remainingBigOut(hand: Card[], seen: Record<number, number>): number {
   return Math.max(0, out);
 }
 
+/** 该手是否「拆炸」：用了某点数 4 张中的 1-3 张（王不算）。 */
+function breaksBomb(beat: Card[], hand: Card[]): boolean {
+  const cnt = countByRank(hand);
+  const used: Record<number, number> = {};
+  for (const c of beat) used[c.rank] = (used[c.rank] || 0) + 1;
+  for (const k in used) {
+    const rank = Number(k);
+    if (rank >= 16) continue;
+    if (cnt[rank] === 4 && used[rank] < 4) return true;
+  }
+  return false;
+}
+
 /** 跟牌/自由出牌决策。prev 为 null 表示自由出牌。ctx 提供农民配合与记牌上下文。 */
 export function decidePlay(
   hand: Card[],
   prev: CardType | null,
   ctx?: AiContext,
 ): { pass: boolean; cards: Card[] } {
+  const isFarmer = !!(ctx && ctx.me !== ctx.landlord);
+  const prevPlayer = ctx ? ctx.prevPlayer : null;
   if (!prev) {
-    return { pass: false, cards: chooseFreePlay(hand) };
+    // 领出分流：农民重控制（先走散单/对，不浪费大牌），地主重清牌（优先完整结构）
+    return {
+      pass: false,
+      cards: isFarmer ? farmerLead(hand) : chooseFreePlay(hand),
+    };
   }
   const beats = generateBeats(hand, prev);
   if (beats.length === 0) return { pass: true, cards: [] };
 
-  const isFarmer = !!(ctx && ctx.me !== ctx.landlord);
-  const prevPlayer = ctx ? ctx.prevPlayer : null;
   const prevIsTeammate = !!(
     ctx &&
     isFarmer &&
@@ -255,24 +279,59 @@ export function decidePlay(
   if (prevIsTeammate) {
     const win = beats.find((b) => b.length === hand.length);
     if (win) return { pass: false, cards: win };
-    if (ctx && ctx.teammateHand <= 2) return { pass: true, cards: [] }; // 队友快走完，更不应压
     return { pass: true, cards: [] };
   }
 
-  beats.sort((a, b) => scorePlay(a) - scorePlay(b));
+  // 危急（最大威胁对手临近获胜）：能一手赢则赢，否则该炸则炸夺回控制权
+  const critical = !!ctx && ctx.threatHand <= 2;
+  if (critical) {
+    const win = beats.find((b) => b.length === hand.length);
+    if (win) return { pass: false, cards: win };
+    const bombs = beats.filter((b) => {
+      const t = identify(b)!;
+      return t.type === 'bomb' || t.type === 'rocket';
+    });
+    if (bombs.length) {
+      bombs.sort((a, b) => scorePlay(a) - scorePlay(b));
+      return { pass: false, cards: bombs[0] };
+    }
+  }
+
+  // 非危急：优先不拆炸，再按牌力最低挑选
+  beats.sort((a, b) => {
+    const ba = breaksBomb(a, hand) ? 1 : 0;
+    const bb = breaksBomb(b, hand) ? 1 : 0;
+    if (ba !== bb) return ba - bb;
+    return scorePlay(a) - scorePlay(b);
+  });
   const best = beats[0];
   const bestType = identify(best)!.type;
 
   // 能一手走完则直接获胜
   if (best.length === hand.length) return { pass: false, cards: best };
 
-  // 留炸策略（结合记牌）：仅能炸、且外面仍有大牌可控、威胁对手未临近获胜 → 保留炸弹
-  if ((bestType === 'bomb' || bestType === 'rocket') && ctx) {
-    const bigOut = ctx.seen ? remainingBigOut(hand, ctx.seen) : 0;
-    if (bigOut > 0 && ctx.threatHand > 2) return { pass: true, cards: [] };
+  // 农民跟地主、队友濒危(≤2)且下一手不是队友 → 炸停保护
+  if (ctx && isFarmer && prevPlayer === ctx.landlord) {
+    const mate = [0, 1, 2].find((i) => i !== ctx.me && i !== ctx.landlord)!;
+    const nextIsMate = (ctx.me + 1) % 3 === mate;
+    if (!nextIsMate && ctx.teammateHand <= 2) {
+      const bomb = beats.find((b) => {
+        const t = identify(b)!;
+        return t.type === 'bomb' || t.type === 'rocket';
+      });
+      if (bomb) return { pass: false, cards: bomb };
+    }
   }
 
-  // 农民跟地主：首选最小牌压；但仅有炸弹/火箭可压、且队友在下一手能接、地主未临近获胜时，留炸给队友
+  // 保存昂贵大牌：仅能靠炸弹/火箭/王压、对手牌还厚(>4)、且非一手赢 → 放弃保存实力
+  const usesJoker = best.some((c) => c.isJoker);
+  const precious = bestType === 'bomb' || bestType === 'rocket' || usesJoker;
+  if (precious && ctx && ctx.threatHand > 4 && best.length < hand.length) {
+    const bigOut = ctx.seen ? remainingBigOut(hand, ctx.seen) : 0;
+    if (bigOut > 0 || usesJoker) return { pass: true, cards: [] };
+  }
+
+  // 农民跟地主、仅有炸弹可压：下一手由队友接且队友仍在局 → 让权、保留炸弹
   const prevIsLandlord = !!(ctx && prevPlayer === ctx.landlord);
   if (
     isFarmer &&
@@ -280,18 +339,17 @@ export function decidePlay(
     (bestType === 'bomb' || bestType === 'rocket') &&
     ctx
   ) {
-    const next = ctx.me === 0 ? 2 : ctx.me === 2 ? 1 : 0; // 与引擎轮转一致：0→2→1→0
     const teammate = [0, 1, 2].find((i) => i !== ctx.me && i !== ctx.landlord)!;
-    if (next === teammate && ctx.landlordHand > 1 && ctx.teammateHand > 0) {
+    if ((ctx.me + 1) % 3 === teammate && ctx.teammateHand > 0) {
       return { pass: true, cards: [] };
     }
   }
   return { pass: false, cards: best };
 }
 
-/** 自由出牌：整手可成就直接甩出；否则顺/连对/飞机清小牌（不拆炸弹）；再出最小单/对；最后才动炸弹/王。 */
+/** 自由出牌（领出）：优先完整结构、不拆炸弹/对子/三张，减少散单。 */
 export function chooseFreePlay(hand: Card[]): Card[] {
-  // 整手若能一气呵成直接甩出（残局收割）
+  // 整手一气呵成直接甩出（残局收割）
   if (identify(hand)) return hand;
 
   const cnt = countByRank(hand);
@@ -299,90 +357,92 @@ export function chooseFreePlay(hand: Card[]): Card[] {
     .map(Number)
     .sort((a, b) => a - b);
 
-  const straight = findStraight(hand, cnt, 5);
+  // 1) 完整结构优先（零拆搭，取最长连续段）
+  const straight = longestCleanRun(hand, cnt, 5, 1, 1);
   if (straight) return straight;
-  const sp = findStraightPairs(hand, cnt, 3);
+  const sp = longestCleanRun(hand, cnt, 3, 2, 2);
   if (sp) return sp;
-  const plane = findPlanes(hand, cnt, 2);
+  const plane = longestCleanRun(hand, cnt, 2, 3, 3);
   if (plane) return plane;
 
-  // 最小非炸非王单张
-  const normalRanks = ranks.filter((r) => cnt[r] < 4 && r <= 15);
-  if (normalRanks.length) {
-    const r = normalRanks[0];
-    // 有对子时优先出对（更易清牌），否则出单
-    if (cnt[r] >= 2) return byRank(hand, r, 2);
-    return byRank(hand, r, 1);
+  // 2) 真正的散单（不拆对/三/炸）
+  const loneRanks = ranks.filter((r) => cnt[r] === 1 && r <= 15);
+  if (loneRanks.length) return byRank(hand, loneRanks[0], 1);
+  // 3) 最小的对
+  const pairRanks = ranks.filter((r) => cnt[r] === 2 && r <= 15);
+  if (pairRanks.length) return byRank(hand, pairRanks[0], 2);
+  // 4) 三张（带一张散单翼）
+  const trioRanks = ranks.filter((r) => cnt[r] === 3 && r <= 15);
+  if (trioRanks.length) {
+    const trio = byRank(hand, trioRanks[0], 3);
+    const wing = loneRanks.length ? byRank(hand, loneRanks[0], 1) : [];
+    return trio.concat(wing);
   }
-  // 只剩炸弹/王
+  // 5) 只剩 王/炸弹
   if (cnt[16] && cnt[17] && ranks.length === 1)
     return byRank(hand, 16, 1).concat(byRank(hand, 17, 1));
   const bombRank = ranks.find((r) => cnt[r] === 4);
   if (bombRank !== undefined) return byRank(hand, bombRank, 4);
+  if (cnt[17]) return byRank(hand, 17, 1);
+  if (cnt[16]) return byRank(hand, 16, 1);
   return [hand[0]];
 }
 
-function findStraight(
+/** 在 3..14 中找「最长连续段」，每点张数恰为 need、各取 take 张；零拆搭。 */
+function longestCleanRun(
   hand: Card[],
   cnt: Record<number, number>,
   minLen: number,
+  need: number,
+  take: number,
 ): Card[] | null {
-  for (let start = 3; start <= 14 - minLen + 1; start++) {
-    const seq: Card[] = [];
-    let ok = true;
-    for (let i = 0; i < minLen; i++) {
-      const r = start + i;
-      if (!(cnt[r] >= 1 && cnt[r] < 4)) {
-        ok = false;
-        break;
-      } // 不拆炸弹
-      seq.push(byRank(hand, r, 1)[0]);
+  let best: Card[] | null = null;
+  let start = 3;
+  while (start <= 14) {
+    if (cnt[start] === need) {
+      let end = start;
+      while (end + 1 <= 14 && cnt[end + 1] === need) end++;
+      const len = end - start + 1;
+      if (len >= minLen) {
+        const out: Card[] = [];
+        for (let r = start; r <= end; r++) out.push(...byRank(hand, r, take));
+        if (!best || out.length > best.length) best = out;
+      }
+      start = end + 1;
+    } else {
+      start++;
     }
-    if (ok) return seq;
   }
-  return null;
+  return best;
 }
 
-function findStraightPairs(
-  hand: Card[],
-  cnt: Record<number, number>,
-  minLen: number,
-): Card[] | null {
-  for (let start = 3; start <= 14 - minLen + 1; start++) {
-    const seq: Card[] = [];
-    let ok = true;
-    for (let i = 0; i < minLen; i++) {
-      const r = start + i;
-      if (!(cnt[r] >= 2 && cnt[r] < 4)) {
-        ok = false;
-        break;
-      } // 不拆炸弹
-      seq.push(...byRank(hand, r, 2));
-    }
-    if (ok) return seq;
-  }
-  return null;
-}
+/** 农民领出：重控制权——优先最小散单/对，不送地主、不浪费大牌。 */
+function farmerLead(hand: Card[]): Card[] {
+  if (identify(hand)) return hand; // 能一手走完直接赢
+  const cnt = countByRank(hand);
+  const ranks = Object.keys(cnt)
+    .map(Number)
+    .sort((a, b) => a - b);
 
-function findPlanes(
-  hand: Card[],
-  cnt: Record<number, number>,
-  minLen: number,
-): Card[] | null {
-  for (let start = 3; start <= 14 - minLen + 1; start++) {
-    const trios: Card[] = [];
-    let ok = true;
-    for (let i = 0; i < minLen; i++) {
-      const r = start + i;
-      if (!(cnt[r] >= 3 && cnt[r] < 4)) {
-        ok = false;
-        break;
-      } // 不拆炸弹
-      trios.push(...byRank(hand, r, 3));
-    }
-    if (ok) return trios;
-  }
-  return null;
+  const lone = ranks.filter((r) => cnt[r] === 1 && r <= 15);
+  if (lone.length) return byRank(hand, lone[0], 1);
+  const pair = ranks.filter((r) => cnt[r] === 2 && r <= 15);
+  if (pair.length) return byRank(hand, pair[0], 2);
+  const st = longestCleanRun(hand, cnt, 5, 1, 1);
+  if (st) return st;
+  const sp = longestCleanRun(hand, cnt, 3, 2, 2);
+  if (sp) return sp;
+  const pl = longestCleanRun(hand, cnt, 2, 3, 3);
+  if (pl) return pl;
+  const trio = ranks.filter((r) => cnt[r] === 3 && r <= 15);
+  if (trio.length) return byRank(hand, trio[0], 3);
+  if (cnt[16] && cnt[17] && ranks.length === 1)
+    return byRank(hand, 16, 1).concat(byRank(hand, 17, 1));
+  const bomb = ranks.find((r) => cnt[r] === 4);
+  if (bomb !== undefined) return byRank(hand, bomb, 4);
+  if (cnt[17]) return byRank(hand, 17, 1);
+  if (cnt[16]) return byRank(hand, 16, 1);
+  return [hand[0]];
 }
 
 /** 给玩家的可出提示：自由出牌返回建议一手；跟牌返回所有可压候选（UI 可循环高亮）。 */
