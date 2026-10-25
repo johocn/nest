@@ -26,6 +26,10 @@ export class DoudizhuService {
     return this.table.startTable(tableId, playerId);
   }
 
+  waitForFriends(tableId: string, playerId: string) {
+    return this.table.waitForFriends(tableId, playerId);
+  }
+
   action(tableId: string, playerId: string, dto: DoudizhuActionDto) {
     return this.table.applyAction(tableId, playerId, dto);
   }

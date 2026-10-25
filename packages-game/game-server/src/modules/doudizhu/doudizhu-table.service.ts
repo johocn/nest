@@ -266,6 +266,37 @@ export class DoudizhuTableService {
     }
   }
 
+  /** 房主选择「等待好友上线」：取消 1 分钟自动补位，牌桌保持等待；3 名真人齐仍会自动开局。 */
+  async waitForFriends(
+    tableId: string,
+    playerId: string,
+  ): Promise<{ ok: boolean }> {
+    const table = await this.loadTable(tableId);
+    if (!table)
+      throw new GameException(
+        ErrorCodes.DOUDIZHU_TABLE_NOT_FOUND,
+        '牌桌不存在或已解散',
+      );
+    if (table.members[0] !== playerId)
+      throw new GameException(
+        ErrorCodes.DOUDIZHU_NOT_HOST,
+        '只有房主可以设置等待',
+      );
+    if (table.mode !== DoudizhuMode.NET)
+      throw new GameException(
+        ErrorCodes.DOUDIZHU_INVALID_ACTION,
+        '仅联网好友房支持等待好友',
+      );
+    if (table.status === DoudizhuTableStatus.PLAYING)
+      throw new GameException(ErrorCodes.DOUDIZHU_INVALID_ACTION, '对局已开始');
+
+    this.clearAutoStart(tableId);
+    this.logger.log(
+      `[Doudizhu] ${tableId} 房主选择等待好友上线，已取消 AI 自动补位`,
+    );
+    return { ok: true };
+  }
+
   private async autoStartRoom(tableId: string): Promise<void> {
     this.autoStartTimers.delete(tableId);
     const table = await this.loadTable(tableId);

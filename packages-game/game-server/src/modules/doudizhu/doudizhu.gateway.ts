@@ -210,6 +210,28 @@ export class DoudizhuGateway
     }
   }
 
+  /** 房主选择「等待好友上线」：取消 1 分钟自动补位 */
+  @SubscribeMessage('doudizhu:wait')
+  async handleWait(client: Socket, payload: { tableId: string }) {
+    try {
+      if (!payload?.tableId)
+        throw new GameException(
+          ErrorCodes.DOUDIZHU_TABLE_NOT_FOUND,
+          '缺少 tableId',
+        );
+      const res = await this.doudizhu.waitForFriends(
+        payload.tableId,
+        client.data.playerId,
+      );
+      client.emit('doudizhu:waiting', { tableId: payload.tableId, ...res });
+    } catch (err: any) {
+      client.emit(
+        'doudizhu:error',
+        this.errPayload(err, ErrorCodes.DOUDIZHU_INVALID_ACTION),
+      );
+    }
+  }
+
   @SubscribeMessage('doudizhu:bid')
   async handleBid(
     client: Socket,
