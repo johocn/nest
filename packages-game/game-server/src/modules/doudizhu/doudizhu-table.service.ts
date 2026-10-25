@@ -48,9 +48,13 @@ interface DoudizhuTable {
   /** 动作日志（复盘用） */
   actionLog: DoudizhuActionLogEntry[];
   createdAt: string;
+  /** 匹配桌：真人全部入座后才推进首个回合（避免未连接的真人在建房瞬间被 AI 代打完整局） */
+  kickOffPending?: boolean;
 }
 
 const TABLE_TTL = 3600; // 1 小时
+/** 匹配桌等待真人入座上限：超时则缺位按 AI 托管推进 */
+const KICK_OFF_WAIT_MS = 15_000;
 
 @Injectable()
 export class DoudizhuTableService {
@@ -59,6 +63,10 @@ export class DoudizhuTableService {
   private readonly TURN_MS = 30_000; // 手动操作倒计时 30s
   private socketIndex = new Map<string, string>(); // socketId -> tableId
   private timers = new Map<string, NodeJS.Timeout>(); // tableId -> 倒计时定时器
+  /** 匹配桌等待真人入座的兜底定时器 */
+  private kickOffTimers = new Map<string, NodeJS.Timeout>();
+  /** 牌桌级串行锁（入座并发保护） */
+  private tableLocks = new Map<string, Promise<unknown>>();
 
   constructor(
     private readonly cache: CacheService,
@@ -169,6 +177,17 @@ export class DoudizhuTableService {
     playerId: string,
     socketId?: string,
   ): Promise<{ seat: number; view: DoudizhuView }> {
+    // 匹配成功后 3 名真人在同一时刻入座，串行化避免并发读写 Redis 互相覆盖座位 socket
+    return this.withTableLock(tableId, () =>
+      this.joinTableInner(tableId, playerId, socketId),
+    );
+  }
+
+  private async joinTableInner(
+    tableId: string,
+    playerId: string,
+    socketId?: string,
+  ): Promise<{ seat: number; view: DoudizhuView }> {
     const table = await this.loadTable(tableId);
     if (!table)
       throw new GameException(
@@ -181,8 +200,9 @@ export class DoudizhuTableService {
       if (socketId && table.sockets[existing] !== socketId) {
         this.setSocket(table, existing, socketId);
         table.hosted[existing] = false; // 重连后恢复手动控制
-        await this.saveTable(table);
       }
+      if (socketId) await this.tryKickOff(table);
+      await this.saveTable(table);
       return { seat: existing, view: await this.toView(table, existing) };
     }
 
@@ -195,6 +215,7 @@ export class DoudizhuTableService {
     table.members[seat] = playerId;
     this.setSocket(table, seat, socketId ?? null);
 
+    await this.tryKickOff(table);
     this.scheduleTurn(table);
     await this.saveTable(table);
     this.eventBus.emit('doudizhu:table:updated', { tableId });
@@ -320,6 +341,7 @@ export class DoudizhuTableService {
       playedCount: {},
       actionLog: [],
       createdAt: new Date().toISOString(),
+      kickOffPending: true, // 等真人入座后再推进，避免未连接座位被 AI 代打成结算态
     };
     await this.saveTable(table);
     await this.safePersist(async () => {
@@ -343,11 +365,77 @@ export class DoudizhuTableService {
       mode: DoudizhuMode.NET,
       players: members,
     });
+    this.scheduleKickOff(id);
+    return id;
+  }
+
+  // ===== 匹配桌开局闸门：真人全部入座才推进首个回合 =====
+
+  /** 同一牌桌的写操作串行执行，避免并发读改写互相覆盖 */
+  private async withTableLock<T>(
+    tableId: string,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    const prev = this.tableLocks.get(tableId) ?? Promise.resolve();
+    const task = prev.then(fn, fn);
+    const tail = task.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.tableLocks.set(tableId, tail);
+    try {
+      return await task;
+    } finally {
+      if (this.tableLocks.get(tableId) === tail) {
+        this.tableLocks.delete(tableId);
+      }
+    }
+  }
+
+  private scheduleKickOff(tableId: string): void {
+    this.clearKickOff(tableId);
+    const timer = setTimeout(() => {
+      void this.forceKickOff(tableId).catch((err: any) =>
+        this.logger.warn(
+          `[Doudizhu] force kick off failed ${tableId}: ${err?.message}`,
+        ),
+      );
+    }, KICK_OFF_WAIT_MS);
+    timer.unref?.();
+    this.kickOffTimers.set(tableId, timer);
+  }
+
+  private clearKickOff(tableId: string): void {
+    const timer = this.kickOffTimers.get(tableId);
+    if (timer) {
+      clearTimeout(timer);
+      this.kickOffTimers.delete(tableId);
+    }
+  }
+
+  /** 真人全部入座则放行首个回合 */
+  private async tryKickOff(table: DoudizhuTable): Promise<void> {
+    if (!table.kickOffPending) return;
+    for (let i = 0; i < 3; i++) {
+      const m = table.members[i];
+      if (m && !m.startsWith('bot') && table.sockets[i] == null) return;
+    }
+    table.kickOffPending = false;
+    this.clearKickOff(table.id);
+    await this.progress(table);
+  }
+
+  /** 等待超时：仍未入座的真人按 AI 托管推进，避免整桌卡死 */
+  private async forceKickOff(tableId: string): Promise<void> {
+    this.kickOffTimers.delete(tableId);
+    const table = await this.loadTable(tableId);
+    if (!table || !table.kickOffPending) return;
+    table.kickOffPending = false;
+    this.logger.warn(`[Doudizhu] ${tableId} kick off by timeout (AI 托管)`);
     await this.progress(table);
     this.scheduleTurn(table);
     await this.saveTable(table);
-    this.eventBus.emit('doudizhu:table:updated', { tableId: id });
-    return id;
+    this.eventBus.emit('doudizhu:table:updated', { tableId });
   }
 
   // ===== 应用动作：抢地主/加倍/出牌/不出，随后推进 bot 与回合切换 =====
@@ -380,21 +468,27 @@ export class DoudizhuTableService {
     const g = restoreGame(table.state);
     try {
       if (dto.type === 'bid') {
-        const r = g.grab(seat, dto.choice);
-        // 非法（非当前座位 / 非 bidding 阶段）返回 done=false 且无 redeal；redeal 为重发牌，属正常推进
-        if (!r.done && !r.redeal)
+        // 抢地主按座位轮转，未集满三家时 done=false 属正常中间态，只有非本人回合/非 bidding 才非法
+        if (g.phase !== 'bidding' || g.current !== seat)
           throw new GameException(
             ErrorCodes.DOUDIZHU_ILLEGAL_COMBO,
             '当前不能叫地主',
           );
+        const r = g.grab(seat, dto.choice);
         this.logAction(table, seat, 'bid', { choice: dto.choice });
+        if (r.redeal) {
+          // 三家都不抢：重发牌继续抢，保留累计重发次数（超过 3 次由引擎强制首叫者当地主）
+          const redealCount = g.redealCount;
+          g.start();
+          g.redealCount = redealCount;
+        }
       } else if (dto.type === 'double') {
-        const r = g.double(dto.action);
-        if (!r.done)
+        if (g.phase !== 'doubling' || g.current !== seat)
           throw new GameException(
             ErrorCodes.DOUDIZHU_ILLEGAL_COMBO,
             '当前不能加倍',
           );
+        g.double(dto.action);
         this.logAction(table, seat, 'double', { action: dto.action });
       } else if (dto.type === 'play') {
         const cards = resolveCardsById(g.hands[seat], dto.cards);

@@ -18,7 +18,6 @@ import { GameEvents } from '@event-bus/game-events';
 import { ErrorCodes } from '@constants/error-codes';
 import { GameException } from '@common/exceptions/game.exception';
 import { AuthService } from '@modules/auth/auth.service';
-import { ConnectionService } from '@modules/gateway/connection.service';
 import { PlayerService } from '@modules/player/player.service';
 import type { JwtPayload } from '@modules/auth/auth.service';
 
@@ -47,7 +46,6 @@ export class DoudizhuGateway
   constructor(
     private readonly doudizhu: DoudizhuService,
     private readonly matchService: DoudizhuMatchService,
-    private readonly connectionService: ConnectionService,
     private readonly playerService: PlayerService,
     private readonly jwtService: JwtService,
     private readonly authService: AuthService,
@@ -102,6 +100,16 @@ export class DoudizhuGateway
       this.logger.log(
         `[Doudizhu] player disconnected: ${playerId}, socket=${client.id}`,
       );
+      // 最后一个连接断开时退出匹配队列，避免离线玩家被撮合进牌桌
+      if (!this.playerSockets.has(playerId)) {
+        try {
+          await this.matchService.cancel(playerId);
+        } catch (err: any) {
+          this.logger.warn(
+            `match cancel on disconnect failed: ${err?.message}`,
+          );
+        }
+      }
     }
     try {
       await this.doudizhu.disconnect(client.id);
@@ -297,12 +305,10 @@ export class DoudizhuGateway
       this.emojiCooldown.set(pid, now);
       const targets = await this.doudizhu.broadcastTargets(tableId);
       for (const t of targets) {
-        this.server
-          .to(t.socketId)
-          .emit('doudizhu:emoji', {
-            playerId: pid,
-            emoji: payload?.emoji ?? '👍',
-          });
+        this.server.to(t.socketId).emit('doudizhu:emoji', {
+          playerId: pid,
+          emoji: payload?.emoji ?? '👍',
+        });
       }
     } catch {
       /* 表情失败不影响牌局 */
@@ -368,21 +374,18 @@ export class DoudizhuGateway
 
   // ===== 匹配（3 人撮合，独立于通用 2 人 matchmaking） =====
 
-  /** 匹配成功后通知每位玩家去加入对应斗地主桌 */
+  /** 匹配成功后通知每位玩家去加入对应斗地主桌（socket 只在本命名空间注册） */
   @OnEvent(GameEvents.DOUDIZHU_MATCHED)
   async onMatched(payload: { tableId: string; players: string[] }) {
+    const msg = { tableId: payload.tableId, players: payload.players };
     for (const pid of payload.players) {
-      try {
-        const conn = await this.connectionService.getPlayerConnection(pid);
-        if (conn?.socketId) {
-          this.server.to(conn.socketId).emit('doudizhu:matched', {
-            tableId: payload.tableId,
-            players: payload.players,
-          });
-        }
-      } catch (err: any) {
-        this.logger.warn(`notify matched failed ${pid}: ${err?.message}`);
+      const sockets = this.playerSockets.get(pid);
+      if (!sockets?.size) {
+        this.logger.warn(`[Doudizhu] matched but player offline: ${pid}`);
+        continue;
       }
+      for (const sid of sockets)
+        this.server.to(sid).emit('doudizhu:matched', msg);
     }
   }
 
